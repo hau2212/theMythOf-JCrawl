@@ -1013,8 +1013,10 @@ public final class Engine {
         if (closed) {
             return;
         }
-        r.setState(ResultState.SENDING);
-        Audit.evaluate(g, r);
+        synchronized (g) {
+            r.setState(ResultState.SENDING);
+            Audit.evaluate(g, r);
+        }
         changes.dirty(g);
         Double retryAfter = null;
         long started = System.currentTimeMillis();
@@ -1027,38 +1029,45 @@ public final class Engine {
             r.setElapsedMs(sent.elapsedMs() > 0 ? sent.elapsedMs() : System.currentTimeMillis() - started);
             r.incSent();
             byte[] resp = sent.response();
-            if (resp == null || resp.length == 0) {
-                r.setResponse(null);
-                r.setStatus(null);
-                r.setLength(null);
-                r.setState(ResultState.ERROR);
-                r.setError(sent.error() != null ? sent.error() : "No response (timeout / connection failure)");
-            } else {
-                r.setResponse(storage.put(g.gid(), GroupCodec.respName(r), resp));
-                r.setStatus(HttpBytes.statusCode(resp));
-                r.setLength(HttpBytes.bodyLength(resp));
-                r.setState(ResultState.DONE);
-                r.setError("");
-                if (r.status() != null && SendDispatcher.retryable(r.status())) {
-                    retryAfter = SendDispatcher.parseRetryAfter(HttpBytes.header(resp, "Retry-After"), System.currentTimeMillis());
-                }
-                if (r.original()) {
-                    g.setOrigMeta(r.status(), r.length());
+            Blob stored = resp == null || resp.length == 0 ? null : storage.put(g.gid(), GroupCodec.respName(r), resp);
+            synchronized (g) {   // a result is written whole before anyone evaluates it (see Audit.recalc)
+                if (resp == null || resp.length == 0) {
+                    r.setResponse(null);
+                    r.setStatus(null);
+                    r.setLength(null);
+                    r.setState(ResultState.ERROR);
+                    r.setError(sent.error() != null ? sent.error() : "No response (timeout / connection failure)");
+                } else {
+                    r.setResponse(stored);
+                    r.setStatus(HttpBytes.statusCode(resp));
+                    r.setLength(HttpBytes.bodyLength(resp));
+                    r.setState(ResultState.DONE);
+                    r.setError("");
+                    if (r.status() != null && SendDispatcher.retryable(r.status())) {
+                        retryAfter = SendDispatcher.parseRetryAfter(HttpBytes.header(resp, "Retry-After"), System.currentTimeMillis());
+                    }
+                    if (r.original()) {
+                        g.setOrigMeta(r.status(), r.length());
+                    }
                 }
             }
         } catch (RuntimeException e) {
-            r.setElapsedMs(System.currentTimeMillis() - started);
-            r.setState(ResultState.ERROR);
-            r.setError(String.valueOf(e.getMessage() != null ? e.getMessage() : e));
+            synchronized (g) {
+                r.setElapsedMs(System.currentTimeMillis() - started);
+                r.setState(ResultState.ERROR);
+                r.setError(String.valueOf(e.getMessage() != null ? e.getMessage() : e));
+            }
         }
         int status = ResultState.DONE.equals(r.state()) && r.status() != null ? r.status() : -1;
         if (dispatcher.willRetry(job, status)) {
-            r.setState(ResultState.RETRY);
-            r.setError("HTTP " + status + " - server giới hạn tốc độ, sẽ tự gửi lại (lần " + (job.retries() + 1) + "/"
-                    + config.maxRetries + ")");
+            synchronized (g) {
+                r.setState(ResultState.RETRY);
+                r.setError("HTTP " + status + " - server giới hạn tốc độ, sẽ tự gửi lại (lần " + (job.retries() + 1) + "/"
+                        + config.maxRetries + ")");
+            }
         }
+        Audit.recalc(g);   // before done(): a retry of this row can only start after these colours are set
         boolean finished = dispatcher.done(job, status, retryAfter);
-        Audit.recalc(g);
         if (finished && activeSends.updateAndGet(n -> Math.max(0, n - 1)) == 0) {
             changes.structure();
         }

@@ -163,13 +163,18 @@ public final class Audit {
         }
     }
 
-    /** Re-evaluate every row of an API then the API itself. */
+    /**
+     * Re-evaluate every row of an API then the API itself. Under the API's lock (the send threads write
+     * results under it too), so a slower thread can never put back colours from older results.
+     */
     public static void recalc(ApiGroup g) {
-        evaluate(g, g.origResult());
-        for (RoleResult r : g.results()) {
-            evaluate(g, r);
+        synchronized (g) {
+            evaluate(g, g.origResult());
+            for (RoleResult r : g.results()) {
+                evaluate(g, r);
+            }
+            evaluate(g);
         }
-        evaluate(g);
     }
 
     public static AuditLevel level(ApiGroup g) {
