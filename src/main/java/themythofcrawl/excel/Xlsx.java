@@ -1,0 +1,338 @@
+package themythofcrawl.excel;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
+
+/**
+ * Minimal .xlsx reader / writer on the JDK alone (java.util.zip + the JDK's DOM parser), so it works
+ * inside Burp's extension class loader with no third-party jar.
+ */
+public final class Xlsx {
+    private static final long MAX_PART = 40L * 1024 * 1024;
+    private static final String NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static final String NS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static final String NS_PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    private Xlsx() {
+    }
+
+    /** One worksheet: name + rows (each row a list of String / Long / Double / Boolean / null). */
+    public record Sheet(String name, List<List<Object>> rows) {
+    }
+
+    // ------------------------------------------------------------------ reading
+    private static DocumentBuilder builder() throws ParserConfigurationException {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newDefaultInstance();
+        f.setNamespaceAware(true);
+        // Spreadsheet parts never declare a DTD: refusing them rules out entity-expansion / XXE.
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        f.setXIncludeAware(false);
+        f.setExpandEntityReferences(false);
+        return f.newDocumentBuilder();
+    }
+
+    private static Element part(ZipFile z, String name) throws IOException {
+        ZipEntry e = z.getEntry(name);
+        if (e == null) {
+            throw new IOException("Thiếu phần " + name + " - đây có đúng là file .xlsx không?");
+        }
+        if (e.getSize() > MAX_PART) {
+            throw new IOException("Phần " + name + " quá lớn");
+        }
+        try (InputStream in = z.getInputStream(e)) {
+            Document doc = builder().parse(in);
+            return doc.getDocumentElement();
+        } catch (SAXException | ParserConfigurationException ex) {
+            throw new IOException("XML không hợp lệ trong " + name + ": " + ex.getMessage(), ex);
+        }
+    }
+
+    private static String local(Node n) {
+        return n.getLocalName() != null ? n.getLocalName() : n.getNodeName();
+    }
+
+    private static List<Element> descendants(Element root, String localName) {
+        List<Element> out = new ArrayList<>();
+        collect(root, localName, out);
+        return out;
+    }
+
+    private static void collect(Node n, String localName, List<Element> out) {
+        for (Node c = n.getFirstChild(); c != null; c = c.getNextSibling()) {
+            if (c.getNodeType() == Node.ELEMENT_NODE) {
+                if (localName.equals(local(c))) {
+                    out.add((Element) c);
+                }
+                collect(c, localName, out);
+            }
+        }
+    }
+
+    private static List<Element> children(Element e, String localName) {
+        List<Element> out = new ArrayList<>();
+        for (Node c = e.getFirstChild(); c != null; c = c.getNextSibling()) {
+            if (c.getNodeType() == Node.ELEMENT_NODE && localName.equals(local(c))) {
+                out.add((Element) c);
+            }
+        }
+        return out;
+    }
+
+    private static String allText(Element e, String localName) {
+        StringBuilder sb = new StringBuilder();
+        for (Element t : descendants(e, localName)) {
+            sb.append(t.getTextContent());
+        }
+        return sb.toString();
+    }
+
+    public static List<String> sheetNames(Path file) throws IOException {
+        try (ZipFile z = new ZipFile(file.toFile())) {
+            List<String> names = new ArrayList<>();
+            for (Element s : descendants(part(z, "xl/workbook.xml"), "sheet")) {
+                names.add(s.getAttribute("name"));
+            }
+            return names;
+        }
+    }
+
+    private static int columnIndex(String ref) {
+        int n = 0;
+        for (char ch : ref.toCharArray()) {
+            char u = Character.toUpperCase(ch);
+            if (u < 'A' || u > 'Z') {
+                break;
+            }
+            n = n * 26 + (u - 'A' + 1);
+        }
+        return n - 1;
+    }
+
+    public static Sheet read(Path file, int sheetIndex) throws IOException {
+        try (ZipFile z = new ZipFile(file.toFile())) {
+            List<Element> sheets = descendants(part(z, "xl/workbook.xml"), "sheet");
+            if (sheets.isEmpty()) {
+                throw new IOException("File không có sheet nào");
+            }
+            Element sheet = sheets.get(Math.max(0, Math.min(sheetIndex, sheets.size() - 1)));
+            String relId = sheet.getAttributeNS(NS_REL, "id");
+            if (relId.isEmpty()) {
+                relId = sheet.getAttributeNS("http://purl.oclc.org/ooxml/officeDocument/relationships", "id");
+            }
+            String target = "worksheets/sheet" + (sheetIndex + 1) + ".xml";
+            if (!relId.isEmpty() && z.getEntry("xl/_rels/workbook.xml.rels") != null) {
+                for (Element rel : descendants(part(z, "xl/_rels/workbook.xml.rels"), "Relationship")) {
+                    if (relId.equals(rel.getAttribute("Id"))) {
+                        target = rel.getAttribute("Target");
+                    }
+                }
+            }
+            String partName = target.startsWith("/") ? target.substring(1) : "xl/" + target;
+            List<String> shared = new ArrayList<>();
+            if (z.getEntry("xl/sharedStrings.xml") != null) {
+                for (Element si : children(part(z, "xl/sharedStrings.xml"), "si")) {
+                    shared.add(allText(si, "t"));
+                }
+            }
+            List<List<Object>> rows = new ArrayList<>();
+            for (Element row : descendants(part(z, partName), "row")) {
+                List<Object> cells = new ArrayList<>();
+                int seq = 0;
+                for (Element c : children(row, "c")) {
+                    String ref = c.getAttribute("r");
+                    int col = ref.isEmpty() ? seq : columnIndex(ref);
+                    seq = col + 1;
+                    String kind = c.getAttribute("t");
+                    List<Element> vs = children(c, "v");
+                    String v = vs.isEmpty() ? null : vs.get(0).getTextContent();
+                    Object value;
+                    switch (kind) {
+                        case "s" -> {
+                            int i = v == null ? -1 : Integer.parseInt(v.trim());
+                            value = i >= 0 && i < shared.size() ? shared.get(i) : null;
+                        }
+                        case "inlineStr" -> value = allText(c, "t");
+                        case "b" -> value = "1".equals(v);
+                        case "str", "e" -> value = v;
+                        default -> value = number(v);
+                    }
+                    while (cells.size() <= col) {
+                        cells.add(null);
+                    }
+                    cells.set(col, value);
+                }
+                rows.add(cells);
+            }
+            return new Sheet(sheet.getAttribute("name"), rows);
+        }
+    }
+
+    private static Object number(String v) {
+        if (v == null || v.isBlank()) {
+            return null;
+        }
+        try {
+            double d = Double.parseDouble(v.trim());
+            return d == Math.rint(d) && Math.abs(d) < 1e15 ? (Object) (long) d : (Object) d;
+        } catch (NumberFormatException e) {
+            return v;
+        }
+    }
+
+    // ------------------------------------------------------------------ writing
+    /** A sheet to write: header row (bold, blue, frozen, auto-filter) + data rows + column widths. */
+    public record OutSheet(String name, List<String> header, List<List<Object>> rows, int[] widths) {
+    }
+
+    private static String esc(Object value) {
+        String s = String.valueOf(value);
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0xFFFE || c == 0xFFFF) {
+                continue;
+            }
+            switch (c) {
+                case '&' -> sb.append("&amp;");
+                case '<' -> sb.append("&lt;");
+                case '>' -> sb.append("&gt;");
+                case '"' -> sb.append("&quot;");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    static String column(int index) {
+        StringBuilder sb = new StringBuilder();
+        int n = index + 1;
+        while (n > 0) {
+            int rem = (n - 1) % 26;
+            sb.insert(0, (char) ('A' + rem));
+            n = (n - 1) / 26;
+        }
+        return sb.toString();
+    }
+
+    private static String sheetXml(OutSheet s) {
+        StringBuilder x = new StringBuilder();
+        x.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+                .append("<worksheet xmlns=\"").append(NS_MAIN).append("\" xmlns:r=\"").append(NS_REL).append("\">")
+                .append("<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" ")
+                .append("activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>")
+                .append("<sheetFormatPr defaultRowHeight=\"15\"/><cols>");
+        for (int i = 0; i < s.widths().length; i++) {
+            x.append("<col min=\"").append(i + 1).append("\" max=\"").append(i + 1)
+                    .append("\" width=\"").append(s.widths()[i]).append("\" customWidth=\"1\"/>");
+        }
+        x.append("</cols><sheetData>");
+        List<List<Object>> all = new ArrayList<>();
+        all.add(new ArrayList<>(s.header()));
+        all.addAll(s.rows());
+        for (int r = 0; r < all.size(); r++) {
+            x.append("<row r=\"").append(r + 1).append("\">");
+            List<Object> row = all.get(r);
+            for (int c = 0; c < row.size(); c++) {
+                Object v = row.get(c);
+                if (v == null) {
+                    continue;
+                }
+                String ref = column(c) + (r + 1);
+                String style = r == 0 ? " s=\"1\"" : "";
+                if (r > 0 && (v instanceof Integer || v instanceof Long || v instanceof Double)) {
+                    x.append("<c r=\"").append(ref).append('"').append(style).append("><v>").append(v).append("</v></c>");
+                } else {
+                    x.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"").append(style)
+                            .append("><is><t xml:space=\"preserve\">").append(esc(v)).append("</t></is></c>");
+                }
+            }
+            x.append("</row>");
+        }
+        x.append("</sheetData><autoFilter ref=\"A1:").append(column(s.header().size() - 1))
+                .append(s.rows().size() + 1).append("\"/></worksheet>");
+        return x.toString();
+    }
+
+    public static byte[] write(List<OutSheet> sheets) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        try (ZipOutputStream z = new ZipOutputStream(buf)) {
+            StringBuilder overrides = new StringBuilder()
+                    .append("<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/")
+                    .append("vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>")
+                    .append("<Override PartName=\"/xl/styles.xml\" ContentType=\"application/")
+                    .append("vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>");
+            StringBuilder sheetTags = new StringBuilder();
+            StringBuilder rels = new StringBuilder();
+            StringBuilder names = new StringBuilder();
+            for (int i = 0; i < sheets.size(); i++) {
+                OutSheet s = sheets.get(i);
+                String name = s.name().length() > 31 ? s.name().substring(0, 31) : s.name();
+                put(z, "xl/worksheets/sheet" + (i + 1) + ".xml", sheetXml(s));
+                overrides.append("<Override PartName=\"/xl/worksheets/sheet").append(i + 1)
+                        .append(".xml\" ContentType=\"application/")
+                        .append("vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
+                sheetTags.append("<sheet name=\"").append(esc(name)).append("\" sheetId=\"").append(i + 1)
+                        .append("\" r:id=\"rId").append(i + 1).append("\"/>");
+                rels.append("<Relationship Id=\"rId").append(i + 1).append("\" Type=\"").append(NS_REL)
+                        .append("/worksheet\" Target=\"worksheets/sheet").append(i + 1).append(".xml\"/>");
+                names.append("<definedName name=\"_xlnm._FilterDatabase\" localSheetId=\"").append(i)
+                        .append("\" hidden=\"1\">&apos;").append(esc(name)).append("&apos;!$A$1:$")
+                        .append(column(s.header().size() - 1)).append('$').append(s.rows().size() + 1)
+                        .append("</definedName>");
+            }
+            rels.append("<Relationship Id=\"rId").append(sheets.size() + 1).append("\" Type=\"").append(NS_REL)
+                    .append("/styles\" Target=\"styles.xml\"/>");
+            put(z, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                    + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+                    + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+                    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" + overrides + "</Types>");
+            put(z, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\""
+                    + NS_PKG + "\"><Relationship Id=\"rId1\" Type=\"" + NS_REL
+                    + "/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
+            put(z, "xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><workbook xmlns=\""
+                    + NS_MAIN + "\" xmlns:r=\"" + NS_REL + "\"><sheets>" + sheetTags + "</sheets><definedNames>"
+                    + names + "</definedNames></workbook>");
+            put(z, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                    + "<Relationships xmlns=\"" + NS_PKG + "\">" + rels + "</Relationships>");
+            put(z, "xl/styles.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\""
+                    + NS_MAIN + "\"><fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FFFFFFFF\"/><name val=\"Calibri\"/></font></fonts>"
+                    + "<fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill>"
+                    + "<fill><patternFill patternType=\"gray125\"/></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF2563EB\"/><bgColor indexed=\"64\"/>"
+                    + "</patternFill></fill></fills>"
+                    + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
+                    + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
+                    + "<cellXfs count=\"2\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "</cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>"
+                    + "</styleSheet>");
+        }
+        return buf.toByteArray();
+    }
+
+    private static void put(ZipOutputStream z, String name, String text) throws IOException {
+        z.putNextEntry(new ZipEntry(name));
+        z.write(text.getBytes(StandardCharsets.UTF_8));
+        z.closeEntry();
+    }
+
+}

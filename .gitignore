@@ -1,0 +1,16 @@
+# Build output
+/build/
+/.gradle/
+/out/
+*.class
+
+# Captured traffic (requests may contain tokens / cookies): never commit
+/theMythOfCrawl_workspace/
+
+# A jar copied next to the sources to load it in Burp
+/*.jar
+
+# IDE
+/.idea/
+*.iml
+/.vscode/

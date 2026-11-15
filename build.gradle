@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+}
+
+group = 'themythofcrawl'
+version = '2.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Provided by Burp at runtime: never bundled into the extension jar.
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2026.7'
+    testImplementation 'net.portswigger.burp.extensions:montoya-api:2026.7'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
+}
+
+test {
+    useJUnitPlatform()
+    // File names with Vietnamese letters need a UTF-8 file-name encoding on Linux / CI.
+    environment 'LC_ALL', 'C.UTF-8'
+    systemProperty 'sun.jnu.encoding', 'UTF-8'
+    systemProperty 'file.encoding', 'UTF-8'
+    testLogging {
+        events 'failed'
+        exceptionFormat 'full'
+    }
+}
+
+jar {
+    archiveFileName = 'theMythOfCrawl.jar'
+    manifest {
+        attributes('Implementation-Title': 'theMythOfCrawl', 'Implementation-Version': project.version)
+    }
+}
