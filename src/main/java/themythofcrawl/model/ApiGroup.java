@@ -45,6 +45,7 @@ public final class ApiGroup {
     private final List<String> placeHistory = new ArrayList<>();
     private volatile AuditLevel auditLevel;
     private volatile String auditSummary;
+    private int nextResultId = 1;
 
     public ApiGroup(int gid, Service service, String method, String path, String url, String source,
                     int branchId, String branch, Blob origRequest, Blob origResponse, String created, long createdMillis) {
@@ -164,6 +165,14 @@ public final class ApiGroup {
 
     public synchronized String popPlace() {
         return placeHistory.isEmpty() ? null : placeHistory.remove(placeHistory.size() - 1);
+    }
+
+    public synchronized int nextResultId() {
+        return nextResultId++;
+    }
+
+    public synchronized void seenResultId(int id) {
+        nextResultId = Math.max(nextResultId, id + 1);
     }
 
     public AuditLevel auditLevel() { return auditLevel; }

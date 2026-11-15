@@ -10,7 +10,7 @@ import themythofcrawl.core.AuditLevel;
  * pushed (see RoleRequestBuilder), unless the user edited it by hand.
  */
 public final class RoleResult {
-    private final String roleName;     // display name, may carry a 01_ prefix
+    private volatile String roleName;  // display name, may carry a 01_ prefix
     private final String roleKey;      // the role's own name
     private final int roleIndex;       // position in the global role list (-1 for the original)
     private final boolean original;
@@ -27,6 +27,7 @@ public final class RoleResult {
     private volatile String tabName = "";
     private volatile AuditLevel auditLevel;
     private volatile String auditBadge;
+    private volatile int id;           // stable id inside its API (names its stored messages)
 
     public RoleResult(String roleName, String roleKey, int roleIndex, boolean original, boolean strippedAuth,
                       List<HeaderRule> rules) {
@@ -39,7 +40,10 @@ public final class RoleResult {
         this.state = original ? ResultState.ORIGIN : ResultState.NOT_SENT;
     }
 
+    public int id() { return id; }
+    public void setId(int i) { id = i; }
     public String roleName() { return roleName; }
+    public void setRoleName(String n) { roleName = n; }
     public String roleKey() { return roleKey; }
     public int roleIndex() { return roleIndex; }
     public boolean original() { return original; }
