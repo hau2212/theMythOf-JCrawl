@@ -1,4 +1,4 @@
-package themythofcrawl.util;
+package themythofcrawl.core;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -1,132 +1,90 @@
 package themythofcrawl.excel;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Set;
 
-import themythofcrawl.util.Json;
+import themythofcrawl.core.Json;
+import themythofcrawl.core.Text;
 
-/** API list imported from the user's Excel file: answers "which row does METHOD /path belong to?". */
+/** The API list from the user's Excel file: answers 'which row does METHOD /path belong to?'. */
 public final class TargetList {
-    public static final String ANY = "ANY";
-    private static final List<String> HTTP_METHODS =
-            List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
+    public enum QueryMode { IGNORE, NAMES, VALUES }
 
-    /** A path parameter is any bracketed token whatever its name, a whole ":name" segment, or "*". */
-    private static final Pattern PLACEHOLDER = Pattern.compile(
-            "\\{\\{[^{}/]*\\}\\}|\\$\\{[^{}/]*\\}|\\{[^{}/]*\\}|\\[[^\\[\\]/]*\\]|\\([^()/]*\\)|<[^<>/]*>"
-                    + "|%[A-Za-z_][A-Za-z0-9_\\-]*%|\\*");
+    private static final Map<String, Set<String>> ALIASES = Map.of(
+            "stt", Set.of("stt", "no", "no.", "#", "so thu tu", "so tt", "index", "idx", "order", "id"),
+            "method", Set.of("method", "protocol", "phuong thuc", "http method", "verb", "methods", "request method"),
+            "path", Set.of("path", "url", "endpoint", "api", "uri", "duong dan", "link", "route", "api path"),
+            "position", Set.of("position", "vi tri", "location", "vi tri tim thay", "man hinh", "screen", "feature",
+                    "chuc nang", "nhanh", "branch"));
+    private static final String[] FIELDS = {"stt", "method", "path", "position"};
 
-    private static final Map<String, List<String>> HEADER_ALIASES = Map.of(
-            "stt", List.of("stt", "no", "no.", "#", "so thu tu", "so tt", "index", "idx", "order", "id"),
-            "method", List.of("method", "protocol", "phuong thuc", "http method", "verb", "methods", "request method"),
-            "path", List.of("path", "url", "endpoint", "api", "uri", "duong dan", "link", "route", "api path"),
-            "position", List.of("position", "vi tri", "location", "vi tri tim thay", "man hinh", "screen",
-                    "feature", "chuc nang", "nhanh", "branch"));
-
-    /** One row of the file. */
-    public static final class Entry {
-        public final String stt;
-        public final List<String> methods;
-        public final String path;
-        public final String position;
-        public final int row;
-        final Pattern exact;
-        final Pattern prefixed;
-        final int literal;
-
-        public Entry(String stt, List<String> methods, String path, String position, int row) {
-            this.stt = stt;
-            this.methods = List.copyOf(methods);
-            this.path = path;
-            this.position = position == null ? "" : position.trim();
-            this.row = row;
-            Template t = compile(path);
-            this.exact = t.exact;
-            this.prefixed = t.prefixed;
-            this.literal = t.literal;
-        }
-
-        public String methodLabel() {
-            return String.join(", ", methods);
-        }
-
-        Map<String, Object> toJson() {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("stt", stt);
-            m.put("methods", new ArrayList<>(methods));
-            m.put("path", path);
-            m.put("position", position);
-            m.put("row", row);
-            return m;
-        }
-    }
-
-    private record Template(Pattern exact, Pattern prefixed, int literal) {
-    }
-
-    private final List<Entry> entries;
+    private final List<TargetEntry> entries;
     private final String source;
     private final String sheet;
     private final List<String> headers;
-    private final Map<String, List<Entry>> byMethod = new LinkedHashMap<>();
+    private final Map<String, List<TargetEntry>> byMethod = new HashMap<>();
 
-    public TargetList(List<Entry> entries, String source, String sheet, List<String> headers) {
+    public TargetList(List<TargetEntry> entries, String source, String sheet, List<String> headers) {
         this.entries = List.copyOf(entries);
-        this.source = source == null ? "" : source;
-        this.sheet = sheet == null ? "" : sheet;
-        this.headers = headers == null || headers.size() < 4
-                ? List.of("STT", "PROTOCOL", "PATH", "POSITION") : List.copyOf(headers);
-        for (Entry e : this.entries) {
-            for (String m : e.methods) {
+        this.source = Text.nz(source);
+        this.sheet = Text.nz(sheet);
+        this.headers = headers == null ? List.of("STT", "PROTOCOL", "PATH", "POSITION") : List.copyOf(headers);
+        for (TargetEntry e : this.entries) {
+            for (String m : e.methods()) {
                 byMethod.computeIfAbsent(m, k -> new ArrayList<>()).add(e);
             }
         }
     }
 
-    public List<Entry> entries() {
-        return entries;
+    public List<TargetEntry> entries() { return entries; }
+    public String source() { return source; }
+    public String sheet() { return sheet; }
+    public List<String> headers() { return headers; }
+    public int size() { return entries.size(); }
+
+    /** Identity used to keep the hit counters of this file across reloads. */
+    public String signature() {
+        return source + "|" + sheet + "|" + entries.size();
     }
 
-    public int size() {
-        return entries.size();
-    }
-
-    public String source() {
-        return source;
-    }
-
-    public String sheet() {
-        return sheet;
-    }
-
-    public List<String> headers() {
-        return headers;
-    }
-
-    /** Best row: exact beats prefixed, then more literal segments, then file order; null if none. */
-    public Entry match(String method, String path, boolean allowPrefix) {
-        String p = normalizePath(path);
-        List<Entry> candidates = new ArrayList<>(byMethod.getOrDefault(
-                method == null ? "" : method.toUpperCase(Locale.ROOT), List.of()));
-        candidates.addAll(byMethod.getOrDefault(ANY, List.of()));
-        Entry best = null;
+    /**
+     * Best row for this request. A row only matches if its host (full URL in the file) agrees and, with
+     * query mode NAMES / VALUES, if the request carries the row's query parameters. Ranking: exact before
+     * prefixed, then rows naming this host, more query constraints, more literal segments, earlier rows.
+     */
+    public TargetEntry match(String method, String path, boolean allowPrefix, String host, boolean idsAsParams,
+                             QueryMode queryMode) {
+        String p = PathMatch.normalize(path);
+        Map<String, List<String>> params = Text.nz(path).contains("?") ? PathMatch.parseQuery(path) : Map.of();
+        String reqHost = Text.blank(host) ? null : PathMatch.bareHost(host);
+        List<TargetEntry> candidates = new ArrayList<>(byMethod.getOrDefault(Text.nz(method).toUpperCase(Locale.ROOT), List.of()));
+        candidates.addAll(byMethod.getOrDefault(PathMatch.ANY_METHOD, List.of()));
+        TargetEntry best = null;
         int[] bestKey = null;
-        for (Entry e : candidates) {
+        for (TargetEntry e : candidates) {
+            if (e.host() != null && reqHost != null && !e.host().equals(reqHost)) {
+                continue;
+            }
+            PathMatch.Template t = e.patterns(idsAsParams);
             int kind;
-            if (e.exact.matcher(p).matches()) {
+            if (t.exact().matcher(p).matches()) {
                 kind = 2;
-            } else if (allowPrefix && e.prefixed.matcher(p).matches()) {
+            } else if (allowPrefix && t.prefixed().matcher(p).matches()) {
                 kind = 1;
             } else {
                 continue;
             }
-            int[] key = {kind, e.literal, -e.row};
+            boolean useQuery = queryMode != QueryMode.IGNORE && !e.query().isEmpty();
+            if (useQuery && !e.queryOk(params, queryMode == QueryMode.NAMES ? "names" : "values")) {
+                continue;
+            }
+            int[] key = {kind, e.host() != null && reqHost != null ? 1 : 0, useQuery ? e.query().size() : 0,
+                e.patterns(idsAsParams).literal(), -e.rowNo()};
             if (bestKey == null || compare(key, bestKey) > 0) {
                 best = e;
                 bestKey = key;
@@ -144,199 +102,131 @@ public final class TargetList {
         return 0;
     }
 
-    /** "https://h/a/b/?q#f" -> "/a/b"; placeholders untouched. */
-    public static String normalizePath(String raw) {
-        String p = raw == null ? "" : raw.trim();
-        String low = p.toLowerCase(Locale.ROOT);
-        if (low.startsWith("http://") || low.startsWith("https://")) {
-            int idx = p.indexOf('/', p.indexOf("://") + 3);
-            p = idx >= 0 ? p.substring(idx) : "/";
-        }
-        int cut = p.length();
-        for (char sep : new char[] {'?', '#'}) {
-            int i = p.indexOf(sep);
-            if (i >= 0) {
-                cut = Math.min(cut, i);
+    /** Rows declaring the same method(s) + path as an earlier row: [duplicate, first]. */
+    public List<TargetEntry[]> duplicates() {
+        Map<String, TargetEntry> seen = new HashMap<>();
+        List<TargetEntry[]> out = new ArrayList<>();
+        for (TargetEntry e : entries) {
+            List<String> ms = new ArrayList<>(e.methods());
+            ms.sort(null);
+            StringBuilder q = new StringBuilder();
+            for (String[] kv : e.query()) {
+                q.append(kv[0]).append('=').append(kv[1]).append('&');
             }
-        }
-        p = p.substring(0, cut).trim();
-        if (!p.startsWith("/")) {
-            p = "/" + p;
-        }
-        while (p.contains("//")) {
-            p = p.replace("//", "/");
-        }
-        if (p.length() > 1 && p.endsWith("/")) {
-            p = p.substring(0, p.length() - 1);
-        }
-        return p;
-    }
-
-    static Template compile(String rawPath) {
-        String path = normalizePath(rawPath);
-        StringBuilder body = new StringBuilder();
-        int literal = 0;
-        for (String seg : path.split("/")) {
-            if (seg.isEmpty()) {
-                continue;
+            String key = ms + "|" + e.norm().toLowerCase(Locale.ROOT) + "|" + q + "|" + e.host();
+            TargetEntry first = seen.putIfAbsent(key, e);
+            if (first != null) {
+                out.add(new TargetEntry[] {e, first});
             }
-            body.append('/');
-            if (seg.startsWith(":") && seg.length() > 1) {
-                body.append("[^/]+");
-                continue;
-            }
-            Matcher m = PLACEHOLDER.matcher(seg);
-            int pos = 0;
-            boolean param = false;
-            while (m.find()) {
-                body.append(Pattern.quote(seg.substring(pos, m.start())));
-                body.append("*".equals(m.group()) ? "[^/]*" : "[^/]+");
-                pos = m.end();
-                param = true;
-            }
-            body.append(Pattern.quote(seg.substring(pos)));
-            if (!param) {
-                literal++;
-            }
-        }
-        int flags = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-        return new Template(Pattern.compile("^" + body + "/?$", flags),
-                Pattern.compile("^(?:/[^/]+)*" + body + "/?$", flags), literal);
-    }
-
-    public static List<String> parseMethods(String raw) {
-        List<String> out = new ArrayList<>();
-        if (raw != null) {
-            for (String w : raw.trim().split("[\\s,;/|]+")) {
-                String u = w.trim().toUpperCase(Locale.ROOT);
-                if (HTTP_METHODS.contains(u) && !out.contains(u)) {
-                    out.add(u);
-                }
-            }
-        }
-        if (out.isEmpty()) {
-            out.add(ANY);
         }
         return out;
-    }
-
-    /** Lower-case, accent-free form used to recognise headers ("Vị trí" -> "vi tri"). */
-    static String fold(Object value) {
-        String t = String.valueOf(value).trim().toLowerCase(Locale.ROOT).replace('đ', 'd');
-        t = Normalizer.normalize(t, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
-        return String.join(" ", t.replace('_', ' ').trim().split("\\s+"));
-    }
-
-    private static String cellText(List<Object> row, Integer col) {
-        if (col == null || col >= row.size() || row.get(col) == null) {
-            return null;
-        }
-        Object v = row.get(col);
-        if (v instanceof Double d && d == Math.rint(d)) {
-            return Long.toString(d.longValue());
-        }
-        return v.toString();
-    }
-
-    /** Rows of a sheet -> list. Columns found by header name (first 15 rows) or by position A-D. */
-    public static TargetList fromRows(List<List<Object>> rows, String source, String sheet) {
-        int headerRow = -1;
-        Map<String, Integer> cols = new LinkedHashMap<>();
-        List<String> headerTexts = new ArrayList<>();
-        for (int r = 0; r < Math.min(15, rows.size()) && headerRow < 0; r++) {
-            Map<String, Integer> found = new LinkedHashMap<>();
-            List<Object> row = rows.get(r);
-            for (int c = 0; c < row.size(); c++) {
-                if (row.get(c) == null) {
-                    continue;
-                }
-                String folded = fold(row.get(c));
-                for (Map.Entry<String, List<String>> alias : HEADER_ALIASES.entrySet()) {
-                    if (!found.containsKey(alias.getKey()) && alias.getValue().contains(folded)) {
-                        found.put(alias.getKey(), c);
-                    }
-                }
-            }
-            if (found.containsKey("path")) {
-                headerRow = r;
-                cols = found;
-                for (Object v : row) {
-                    headerTexts.add(v == null ? "" : v.toString());
-                }
-            }
-        }
-        if (headerRow < 0) {
-            cols.put("stt", 0);
-            cols.put("method", 1);
-            cols.put("path", 2);
-            cols.put("position", 3);
-        }
-        List<Entry> entries = new ArrayList<>();
-        for (int r = headerRow + 1; r < rows.size(); r++) {
-            List<Object> row = rows.get(r);
-            String path = cellText(row, cols.get("path"));
-            if (path == null || path.isBlank()) {
-                continue;
-            }
-            path = path.trim();
-            if (!path.contains("/") && !path.toLowerCase(Locale.ROOT).startsWith("http")) {
-                continue;
-            }
-            String stt = cellText(row, cols.get("stt"));
-            if (stt == null || stt.isBlank()) {
-                stt = Integer.toString(entries.size() + 1);
-            }
-            entries.add(new Entry(stt.trim(), parseMethods(cellText(row, cols.get("method"))), path,
-                    cellText(row, cols.get("position")), r + 1));
-        }
-        List<String> headers = new ArrayList<>();
-        String[][] wanted = {{"stt", "STT"}, {"method", "PROTOCOL"}, {"path", "PATH"}, {"position", "POSITION"}};
-        for (String[] w : wanted) {
-            Integer c = cols.get(w[0]);
-            String text = headerRow >= 0 && c != null && c < headerTexts.size() ? headerTexts.get(c) : "";
-            headers.add(text.isBlank() ? w[1] : text);
-        }
-        return new TargetList(entries, source, sheet, headers);
     }
 
     public String toJson() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("source", source);
         m.put("sheet", sheet);
-        m.put("headers", new ArrayList<>(headers));
-        List<Object> list = new ArrayList<>();
-        for (Entry e : entries) {
-            list.add(e.toJson());
+        m.put("headers", headers);
+        List<Object> es = new ArrayList<>();
+        for (TargetEntry e : entries) {
+            es.add(e.toMap());
         }
-        m.put("entries", list);
+        m.put("entries", es);
         return Json.write(m);
     }
 
+    @SuppressWarnings("unchecked")
     public static TargetList fromJson(String text) {
         Map<String, Object> m = Json.parseObject(text);
-        List<Entry> entries = new ArrayList<>();
-        int i = 0;
-        for (Object o : Json.list(m, "entries")) {
-            i++;
-            if (!(o instanceof Map<?, ?>)) {
-                continue;
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> e = (Map<String, Object>) o;
+        List<TargetEntry> es = new ArrayList<>();
+        List<Object> raw = Json.list(m, "entries");
+        for (int i = 0; i < raw.size(); i++) {
+            Map<String, Object> d = (Map<String, Object>) raw.get(i);
             List<String> methods = new ArrayList<>();
-            for (Object x : Json.list(e, "methods")) {
-                methods.add(String.valueOf(x));
+            for (Object o : Json.list(d, "methods")) {
+                methods.add(String.valueOf(o));
             }
             if (methods.isEmpty()) {
-                methods.add(ANY);
+                methods.add(PathMatch.ANY_METHOD);
             }
-            entries.add(new Entry(Json.str(e, "stt", Integer.toString(i)), methods, Json.str(e, "path", "/"),
-                    Json.str(e, "position", ""), (int) Json.num(e, "row", i)));
+            Object stt = d.get("stt");
+            es.add(new TargetEntry(stt, methods, Json.str(d, "path", "/"), Json.str(d, "position", ""),
+                    (int) Json.num(d, "row", i + 1)));
         }
         List<String> headers = new ArrayList<>();
-        for (Object h : Json.list(m, "headers")) {
-            headers.add(String.valueOf(h));
+        for (Object o : Json.list(m, "headers")) {
+            headers.add(String.valueOf(o));
         }
-        return new TargetList(entries, Json.str(m, "source", ""), Json.str(m, "sheet", ""), headers);
+        return new TargetList(es, Json.str(m, "source", ""), Json.str(m, "sheet", ""), headers.isEmpty() ? null : headers);
+    }
+
+    /** Header row index (-1 when none), column of each field, header texts. */
+    public record Columns(int headerRow, Map<String, Integer> cols, List<String> headers) {
+    }
+
+    public static Columns detectColumns(List<List<Object>> rows) {
+        for (int r = 0; r < Math.min(15, rows.size()); r++) {
+            List<Object> row = rows.get(r);
+            Map<String, Integer> cols = new HashMap<>();
+            for (int c = 0; c < row.size(); c++) {
+                Object v = row.get(c);
+                if (v == null) {
+                    continue;
+                }
+                String folded = Text.fold(v);
+                for (String f : FIELDS) {
+                    if (!cols.containsKey(f) && ALIASES.get(f).contains(folded)) {
+                        cols.put(f, c);
+                    }
+                }
+            }
+            if (cols.containsKey("path")) {
+                List<String> hs = new ArrayList<>();
+                for (Object v : row) {
+                    hs.add(v == null ? "" : String.valueOf(v));
+                }
+                return new Columns(r, cols, hs);
+            }
+        }
+        return new Columns(-1, Map.of("stt", 0, "method", 1, "path", 2, "position", 3),
+                List.of("STT", "PROTOCOL", "PATH", "POSITION"));
+    }
+
+    /** Rows of a sheet -> list (rows without a path containing '/' or an http URL are skipped). */
+    public static TargetList fromRows(List<List<Object>> rows, String source, String sheet) {
+        Columns c = detectColumns(rows);
+        List<TargetEntry> es = new ArrayList<>();
+        for (int r = c.headerRow() + 1; r < rows.size(); r++) {
+            List<Object> row = rows.get(r);
+            Object rawPath = cell(row, c.cols().get("path"));
+            if (Text.blank(rawPath)) {
+                continue;
+            }
+            String text = String.valueOf(rawPath).trim();
+            if (!text.contains("/") && !text.toLowerCase(Locale.ROOT).startsWith("http")) {
+                continue;
+            }
+            Object stt = cell(row, c.cols().get("stt"));
+            if (Text.blank(stt)) {
+                stt = (long) es.size() + 1;
+            }
+            es.add(new TargetEntry(stt, PathMatch.methods(cell(row, c.cols().get("method"))), text,
+                    Text.nz(cell(row, c.cols().get("position"))), r + 1));
+        }
+        List<String> headers = new ArrayList<>();
+        String[] defaults = {"STT", "PROTOCOL", "PATH", "POSITION"};
+        for (int i = 0; i < FIELDS.length; i++) {
+            Integer col = c.cols().get(FIELDS[i]);
+            String h = defaults[i];
+            if (c.headerRow() >= 0 && col != null && col < c.headers().size() && !c.headers().get(col).isEmpty()) {
+                h = c.headers().get(col);
+            }
+            headers.add(h);
+        }
+        return new TargetList(es, source, sheet, headers);
+    }
+
+    private static Object cell(List<Object> row, Integer c) {
+        return c != null && c < row.size() ? row.get(c) : null;
     }
 }
