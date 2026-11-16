@@ -70,12 +70,11 @@ theMythOfCrawl_workspace\
 
 Giao diện chỉ cập nhật phần thay đổi (gom mỗi 200 ms), cây chỉ tạo nút con khi mở, tab ẩn không vẽ lại.
 
-## Điểm cắm: dựng request cho từng role
+## Dựng request cho từng role
 
-`src/main/java/themythofcrawl/rolereq/RoleRules.java` là nơi duy nhất dựng request của 1 role
-(header / cookie / JWT) từ request gốc. Hiện tại nó trả về **nguyên request gốc**, nên mọi chức năng
-khác chạy đủ nhưng các role gửi giống hệt API gốc. File đó ghi hợp đồng (input / output) và chỉ tới
-các hàm tương ứng trong bản Python để port.
+`src/main/java/themythofcrawl/rolereq/RoleRules.java` dựng request của mỗi role (header / cookie / JWT)
+và của profile API gốc từ request đã bắt - giống bản Python. Hành vi được giữ bằng `RoleRulesTest`
+(chuyển từ các test của bản Python).
 
 ## Kiểm thử
 
@@ -84,6 +83,7 @@ gradlew.bat test
 ```
 
 - `CoreTest`, `EngineTest`, `SendDispatcherTest`, `WorkspaceTest`: lõi, bắt / gửi / 429 / giữ chỗ / trùng, lưu & mở lại.
+- `RoleRulesTest`: request của từng role (thay / thêm / xóa header, cookie, JWT, profile API gốc, chạy song song).
 - `UiSmokeTest`: dựng toàn bộ giao diện (không cần màn hình) và làm mới mọi tab.
 - `ExtensionLoadTest`: nạp extension đúng như Burp gọi `initialize`, cho 1 request đi qua Proxy, gỡ extension
   và kiểm tra API đã lưu ra đĩa.
