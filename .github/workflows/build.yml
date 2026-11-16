@@ -30,8 +30,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest build/libs/theMythOf-JCrawl.jar \
-            --title "Bản build mới nhất" \
-            --notes "Tự động build từ commit ${GITHUB_SHA::7}. Tải theMythOf-JCrawl.jar rồi nạp vào Burp (Extensions > Add > Java)." \
-            --prerelease --target "$GITHUB_SHA"
+          # The release is kept (never deleted): only its tag moves to this commit and the jar is replaced,
+          # so the repository page always shows it.
+          NOTES="Tự động build từ commit ${GITHUB_SHA::7}. Chỉ cần tải 1 file theMythOf-JCrawl.jar rồi nạp vào Burp (Extensions > Installed > Add > Java). Hướng dẫn: xem README."
+          git tag -f latest "$GITHUB_SHA"
+          git push -f origin refs/tags/latest
+          if gh release view latest > /dev/null 2>&1; then
+            gh release upload latest build/libs/theMythOf-JCrawl.jar --clobber
+            gh release edit latest --title "theMythOf-JCrawl (bản mới nhất)" --notes "$NOTES" --prerelease=false --latest
+          else
+            gh release create latest build/libs/theMythOf-JCrawl.jar --title "theMythOf-JCrawl (bản mới nhất)" \
+              --notes "$NOTES" --latest --target "$GITHUB_SHA"
+          fi
+          # jars of older names left on the release
+          for a in $(gh release view latest --json assets -q '.assets[].name'); do
+            [ "$a" = "theMythOf-JCrawl.jar" ] || gh release delete-asset latest "$a" --yes
+          done
