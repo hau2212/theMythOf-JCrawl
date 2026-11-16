@@ -111,10 +111,10 @@ public final class Engine {
         this.config = loadConfig();
         compileFilters(config);
         loadRoles();
-        captureExec = Executors.newSingleThreadExecutor(daemon("theMythOfCrawl-capture"));
+        captureExec = Executors.newSingleThreadExecutor(daemon("JCrawl-capture"));
         sendExec = new ThreadPoolExecutor(config.threads, config.threads, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
-                daemon("theMythOfCrawl-send"));
-        scheduler = Executors.newSingleThreadScheduledExecutor(daemon("theMythOfCrawl-timer"));
+                daemon("JCrawl-send"));
+        scheduler = Executors.newSingleThreadScheduledExecutor(daemon("JCrawl-timer"));
         dispatcher = new SendDispatcher<>(this::runJob, sendExec,
                 (task, delayMs) -> scheduler.schedule(task, delayMs, TimeUnit.MILLISECONDS),
                 () -> {
@@ -608,7 +608,7 @@ public final class Engine {
         try {
             r.run();
         } catch (RuntimeException e) {
-            bridge.err("theMythOfCrawl: " + e);
+            bridge.err(Text.EXT_NAME + ": " + e);
             log("Lỗi xử lý: " + e, null);
         }
     }
@@ -1721,7 +1721,7 @@ public final class Engine {
         try {
             flush();
         } catch (RuntimeException e) {
-            bridge.err("theMythOfCrawl: không lưu được workspace: " + e);
+            bridge.err(Text.EXT_NAME + ": không lưu được workspace: " + e);
         }
     }
 
@@ -1763,7 +1763,7 @@ public final class Engine {
             m = raw == null || raw.isBlank() ? Map.of() : Json.parseObject(raw);
         } catch (RuntimeException e) {
             m = Map.of();
-            bridge.err("theMythOfCrawl: state.json bị lỗi, bắt đầu workspace trống: " + e);
+            bridge.err(Text.EXT_NAME + ": state.json bị lỗi, bắt đầu workspace trống: " + e);
         }
         TargetList t = null;
         String tj = Json.str(m, "targets", null);
@@ -1785,7 +1785,7 @@ public final class Engine {
             try {
                 loaded.add(GroupCodec.fromJson(doc, next, byRow::get));
             } catch (RuntimeException e) {
-                bridge.err("theMythOfCrawl: bỏ qua 1 API hỏng trong workspace: " + e);
+                bridge.err(Text.EXT_NAME + ": bỏ qua 1 API hỏng trong workspace: " + e);
             }
         }
         loaded.sort(Comparator.comparingInt(ApiGroup::gid));

@@ -1,23 +1,43 @@
-# theMythOfCrawl (Java / Montoya) - 2.0
+# theMythOf-JCrawl (Java / Montoya) - 2.0
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
-[theMythOfCrawl](https://github.com/hau2212/theMythOfCrawl) (Jython) - đủ mọi chức năng của bản Python,
-nhanh hơn, có lưu dữ liệu ra đĩa (workspace) và không cần Jython.
+[theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
+nhanh hơn, có lưu dữ liệu ra đĩa (workspace) và **không cần Jython**.
 
-## Cài đặt
+## Cài đặt - chỉ cần 1 file
 
-**Cách 1 - tải file có sẵn:** vào **Releases → latest**, tải `theMythOfCrawl.jar`
-(GitHub tự build lại mỗi lần có commit mới trên `main`).
+1. Vào **Releases → latest** của repo này, tải **`theMythOf-JCrawl.jar`** (GitHub tự build lại mỗi lần có
+   commit mới trên `main`).
+2. Để file vào **một thư mục riêng**, ví dụ `D:\Tools\JCrawl\theMythOf-JCrawl.jar`.
+   Dữ liệu sẽ được lưu ngay cạnh file: `D:\Tools\JCrawl\theMythOfCrawl_workspace\`.
+3. Burp → **Extensions → Installed → Add** → Extension type **Java** → chọn file `.jar` → Next.
+   Tab **theMythOf-JCrawl** xuất hiện trên thanh tab của Burp.
 
-**Cách 2 - tự build** (cần JDK 21):
+Không cần cài Jython, Python hay thư viện nào khác. Cần Burp Suite bản mới (có sẵn Java 21; bản 2024 trở lên).
 
-```bat
-gradlew.bat build
-```
+**Cập nhật bản mới:** tải jar mới, ghi đè đúng file cũ (cùng thư mục) → trong Burp, Ctrl + click ô
+*Loaded* của extension để nạp lại. Workspace (dữ liệu đã bắt) giữ nguyên.
 
-File ra ở `build\libs\theMythOfCrawl.jar`.
+**Tự build** (cần JDK 21): `gradlew.bat build` → file ở `build\libs\theMythOf-JCrawl.jar`
+(khi chạy từ `build\libs`, workspace nằm ở thư mục gốc của repo).
 
-**Nạp vào Burp:** Extensions → Installed → **Add** → Extension type **Java** → chọn `theMythOfCrawl.jar`.
+## Dùng nhanh
+
+1. Tab **Roles**: sửa các role mẫu (token / cookie của từng tài khoản test), tắt role không dùng.
+   Profile **API gốc** (nếu cần) áp lên chính request đã bắt.
+2. Thanh trên cùng: bấm **➜ Đích** chọn nhánh, ví dụ `Toppage > contact > button "send"` - mọi request mới
+   sẽ vào nhánh này cho tới khi bạn đổi.
+3. Bật **● Capture Proxy**, duyệt web qua Proxy của Burp. Mỗi API được bắt sẽ nhân bản thành
+   1 API gốc + N role.
+4. Bấm **▶ CHỈ CRAWL** để chuyển sang **GỬI** (tự gửi mọi role, có hàng đợi chống 429), hoặc chọn API /
+   nhánh rồi **Gửi**. Màu: xanh = OK, vàng = role bị chặn / lệch, cam = nghi bypass (Guest vẫn 2xx),
+   đỏ = lỗi server, xám = chờ xác nhận vị trí.
+5. **Cần xử lý** (thanh trên cùng / tab Audit): xác nhận vị trí API mới, API quay về chỗ cũ, API trùng.
+6. (Tùy chọn) Tab **Excel** → nạp danh sách API (STT | PROTOCOL | PATH | POSITION) để theo dõi độ phủ;
+   icon 📋 / Ctrl+Shift+C copy `STT. path`.
+7. Xuất kết quả: tab Lịch sử → **Xuất ▾** (Excel 7 sheet, báo cáo .md, ma trận JSON).
+
+Mỗi nhóm nút có icon ⓘ giải thích chi tiết.
 
 ## Các tab
 

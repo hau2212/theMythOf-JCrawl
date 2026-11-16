@@ -64,8 +64,8 @@ class WorkspaceTest {
 
     @Test
     void defaultRootIsTheProjectOfTheJar() {
-        assertEquals(Path.of("/repo"), Workspaces.defaultRoot("/repo/build/libs/theMythOfCrawl.jar"));
-        assertEquals(Path.of("/downloads"), Workspaces.defaultRoot("/downloads/theMythOfCrawl.jar"));
+        assertEquals(Path.of("/repo"), Workspaces.defaultRoot("/repo/build/libs/theMythOf-JCrawl.jar"));
+        assertEquals(Path.of("/downloads"), Workspaces.defaultRoot("/downloads/theMythOf-JCrawl.jar"));
         assertEquals("a_b_c", Workspaces.safe("a:b/c"));
     }
 }

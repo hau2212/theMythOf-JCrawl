@@ -33,6 +33,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Jwt;
+import themythofcrawl.core.Text;
 import themythofcrawl.model.HeaderRule;
 import themythofcrawl.model.Role;
 import themythofcrawl.model.RoleScopes;
@@ -355,7 +356,7 @@ final class RolesTab {
     }
 
     private void exportRoles() {
-        java.io.File f = ui.save("theMythOfCrawl_roles.json", "JSON", "json");
+        java.io.File f = ui.save(Text.EXT_NAME + "_roles.json", "JSON", "json");
         if (f != null) {
             try {
                 Files.writeString(f.toPath(), Roles.toJson(engine.roles().all()), StandardCharsets.UTF_8);

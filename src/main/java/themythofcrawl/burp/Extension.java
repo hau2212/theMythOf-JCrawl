@@ -50,7 +50,7 @@ public final class Extension implements BurpExtension {
             engine.open(st);
             workspaces.remember(projectId, st);
         } catch (RuntimeException e) {
-            api.logging().logToError("theMythOfCrawl: không mở được workspace (" + e + "), dữ liệu chỉ nằm trong bộ nhớ.");
+            api.logging().logToError(Text.EXT_NAME + ": không mở được workspace (" + e + "), dữ liệu chỉ nằm trong bộ nhớ.");
         }
 
         MainPanel[] panel = new MainPanel[1];
@@ -61,7 +61,7 @@ public final class Extension implements BurpExtension {
         try {
             SwingUtilities.invokeAndWait(build);
         } catch (Exception e) {
-            api.logging().logToError("theMythOfCrawl: lỗi dựng giao diện: " + e);
+            api.logging().logToError(Text.EXT_NAME + ": lỗi dựng giao diện: " + e);
         }
 
         api.proxy().registerResponseHandler(new ProxyResponseHandler() {
@@ -78,7 +78,7 @@ public final class Extension implements BurpExtension {
                     engine.onProxyMessage(new Engine.Message(new Service(svc.host(), svc.port(), svc.secure()),
                             req.toByteArray().getBytes(), r.toByteArray().getBytes(), req.url()));
                 } catch (RuntimeException e) {
-                    api.logging().logToError("theMythOfCrawl capture: " + e);
+                    api.logging().logToError(Text.EXT_NAME + " capture: " + e);
                 }
                 return ProxyResponseToBeSentAction.continueWith(r);
             }

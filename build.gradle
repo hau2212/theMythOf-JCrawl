@@ -41,8 +41,8 @@ test {
 }
 
 jar {
-    archiveFileName = 'theMythOfCrawl.jar'
+    archiveFileName = 'theMythOf-JCrawl.jar'
     manifest {
-        attributes('Implementation-Title': 'theMythOfCrawl', 'Implementation-Version': project.version)
+        attributes('Implementation-Title': 'theMythOf-JCrawl', 'Implementation-Version': project.version)
     }
 }

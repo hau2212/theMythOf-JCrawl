@@ -179,7 +179,7 @@ final class TreeTab {
             closeWindow();
             return;
         }
-        window = new JFrame("theMythOfCrawl - Cây Sub-folder");
+        window = new JFrame(themythofcrawl.core.Text.EXT_NAME + " - Cây Sub-folder");
         window.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         window.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override

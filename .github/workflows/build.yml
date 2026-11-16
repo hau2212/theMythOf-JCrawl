@@ -23,15 +23,15 @@ jobs:
         run: ./gradlew --no-daemon build
       - uses: actions/upload-artifact@v4
         with:
-          name: theMythOfCrawl-jar
-          path: build/libs/theMythOfCrawl.jar
+          name: theMythOf-JCrawl-jar
+          path: build/libs/theMythOf-JCrawl.jar
       - name: Publish the "latest" release (jar ready to load in Burp)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest build/libs/theMythOfCrawl.jar \
+          gh release create latest build/libs/theMythOf-JCrawl.jar \
             --title "Bản build mới nhất" \
-            --notes "Tự động build từ commit ${GITHUB_SHA::7}. Tải theMythOfCrawl.jar rồi nạp vào Burp (Extensions > Add > Java)." \
+            --notes "Tự động build từ commit ${GITHUB_SHA::7}. Tải theMythOf-JCrawl.jar rồi nạp vào Burp (Extensions > Add > Java)." \
             --prerelease --target "$GITHUB_SHA"

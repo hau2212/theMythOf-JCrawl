@@ -474,7 +474,7 @@ public final class MainPanel {
             attach();
             return;
         }
-        window = new JFrame(Text.EXT_NAME + " (Java)");
+        window = new JFrame(Text.EXT_NAME);
         window.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         window.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
@@ -838,7 +838,7 @@ public final class MainPanel {
 
     // =================================================================== exports
     void exportExcel() {
-        File f = save("theMythOfCrawl_API_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmm")) + ".xlsx",
+        File f = save(Text.EXT_NAME + "_API_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmm")) + ".xlsx",
                 "Excel (.xlsx)", "xlsx");
         if (f == null) {
             return;
@@ -858,14 +858,14 @@ public final class MainPanel {
     }
 
     void exportMatrix() {
-        File f = save("theMythOfCrawl_matrix.json", "JSON", "json");
+        File f = save(Text.EXT_NAME + "_matrix.json", "JSON", "json");
         if (f != null) {
             write(f.toPath(), Reports.matrixJson(engine.groups(), engine.branches()));
         }
     }
 
     void exportHistory() {
-        File f = save("theMythOfCrawl_history.md", "Text / Markdown", "md", "txt");
+        File f = save(Text.EXT_NAME + "_history.md", "Text / Markdown", "md", "txt");
         if (f != null) {
             write(f.toPath(), Reports.history(engine.branches(), engine.groups()));
         }

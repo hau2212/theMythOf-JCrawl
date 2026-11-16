@@ -115,7 +115,7 @@ class ExtensionLoadTest {
 
     @Test
     void loadsCapturesAndSavesLikeInBurp(@TempDir Path dir) throws Exception {
-        Path jar = dir.resolve("build/libs/theMythOfCrawl.jar");
+        Path jar = dir.resolve("build/libs/theMythOf-JCrawl.jar");
         Files.createDirectories(jar.getParent());
         Stub stub = new Stub(jar.toString());
         stub.prefs.put(themythofcrawl.app.Engine.PREF_CONFIG, "{\"capture_enabled\": true}");   // off by default, as in Python
