@@ -96,6 +96,9 @@ public final class UiPreview {
 
         @Override
         public void applyTheme(Component c) {
+            if (System.getProperty("laf") != null) {
+                SwingUtilities.updateComponentTreeUI(c);   // what a host theme pass does to a component tree
+            }
         }
 
         @Override
@@ -107,6 +110,10 @@ public final class UiPreview {
     public static void main(String[] args) throws Exception {
         Path out = Path.of(args.length > 0 ? args[0] : "build/preview");
         Files.createDirectories(out);
+        String laf = System.getProperty("laf");
+        if (laf != null) {
+            javax.swing.UIManager.setLookAndFeel(laf);
+        }
         Path root = Files.createTempDirectory("tmoc-ws");
         Prefs prefs = Prefs.memory();
         Workspaces ws = new Workspaces(prefs, Prefs.memory(), root.resolve("x.jar").toString());
