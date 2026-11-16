@@ -6,8 +6,8 @@ nhanh hơn, có lưu dữ liệu ra đĩa (workspace) và **không cần Jython*
 
 ## Cài đặt - chỉ cần 1 file
 
-1. Vào **Releases → latest** của repo này, tải **`theMythOf-JCrawl.jar`** (GitHub tự build lại mỗi lần có
-   commit mới trên `main`).
+1. Tải **`theMythOf-JCrawl.jar`**: [link tải trực tiếp](https://github.com/hau2212/theMythOf-JCrawl/releases/latest/download/theMythOf-JCrawl.jar)
+   (hoặc mục **Releases** bên phải trang repo). GitHub tự build lại mỗi lần có commit mới trên `main`.
 2. Để file vào **một thư mục riêng**, ví dụ `D:\Tools\JCrawl\theMythOf-JCrawl.jar`.
    Dữ liệu sẽ được lưu ngay cạnh file: `D:\Tools\JCrawl\theMythOfCrawl_workspace\`.
 3. Burp → **Extensions → Installed → Add** → Extension type **Java** → chọn file `.jar` → Next.
