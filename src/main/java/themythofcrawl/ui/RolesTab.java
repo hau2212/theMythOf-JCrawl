@@ -461,6 +461,17 @@ final class RolesTab {
         dirty.setText(" ");
     }
 
+    void selectOriginal() {
+        editOriginal();
+    }
+
+    void selectRole(int idx) {
+        if (idx >= 0 && idx < model.getRowCount()) {
+            MainPanel.selectRow(table, idx);
+            load(idx);
+        }
+    }
+
     private void save() {
         if (rulesTable.isEditing()) {
             rulesTable.getCellEditor().stopCellEditing();

@@ -118,6 +118,8 @@ final class SettingsTab {
     private final JLabel diagColors = new JLabel(" ");
     private final JLabel diagScale = new JLabel(" ");
     private final JLabel diagCopyNote = Ui.muted(" ");
+    private final JComboBox<String> fontScaleBox = new JComboBox<>(new String[] {"90%", "100%", "115%"});
+    private final JCheckBox animationsBox = new JCheckBox("Hiệu ứng trượt toast & mở thẻ nhẹ (<= 150 ms)", true);
     private final JLabel saved = Ui.muted(" ");
 
     SettingsTab(MainPanel ui) {
@@ -182,8 +184,12 @@ final class SettingsTab {
                         ui.flash("Đã copy đường dẫn workspace");
                     }
                 }), workspaceInfo)));
+        fontScaleBox.setToolTipText("Đổi cỡ chữ toàn bộ giao diện theMythOf-JCrawl (90% / 100% / 115%)");
+        animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
         sections.add(section("8.  Giới thiệu & chẩn đoán", t -> t.info,
-                "Phiên bản, Look & Feel của Burp, màu nền / accent và scale để kiểm tra hiển thị.",
+                "Phiên bản, Look & Feel của Burp, cỡ chữ, hiệu ứng nhẹ, màu nền / accent và scale.",
+                field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("90% / 100% / 115% (áp dụng ngay)")),
+                row(animationsBox),
                 field("Phiên bản:", diagVersion, null),
                 field("Look & Feel (LAF):", diagLaf, null),
                 field("Màu theme:", diagColors, null),
@@ -204,6 +210,8 @@ final class SettingsTab {
                         Config d = new Config();
                         d.copyCounter = engine.config().copyCounter;
                         engine.applyConfig(d.normalized());
+                        UiPrefs.setAnimationsEnabled(ui.uiPrefs, true);
+                        UiPrefs.setFontScalePercent(ui.uiPrefs, 100);
                         load();
                         ui.syncHeader();
                     }
@@ -237,6 +245,30 @@ final class SettingsTab {
             b.addActionListener(e -> apply());
             b.setOpaque(false);
         }
+        animationsBox.setOpaque(false);
+        animationsBox.addActionListener(e -> {
+            if (!loading) {
+                UiPrefs.setAnimationsEnabled(ui.uiPrefs, animationsBox.isSelected());
+                saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+            }
+        });
+        fontScaleBox.addActionListener(e -> {
+            if (!loading) {
+                Object sel = fontScaleBox.getSelectedItem();
+                int pct = UiPrefs.fontScalePercent(null);
+                if (sel != null) {
+                    try {
+                        pct = Integer.parseInt(sel.toString().replace("%", "").trim());
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                UiPrefs.setFontScalePercent(ui.uiPrefs, pct);
+                refreshDiagnostics();
+                ui.syncHeader();
+                relayoutSections();
+                saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+            }
+        });
         for (JComboBox<?> c : new JComboBox<?>[] {profile, queryMode, copyFallback}) {
             c.addActionListener(e -> apply());
         }
@@ -394,6 +426,8 @@ final class SettingsTab {
                     : "Đã nạp " + engine.targets().size() + " API từ " + engine.targets().source());
             workspaceInfo.setText(engine.workspaceName() + " - " + engine.workspaceLocation());
             validateRegexOutline();
+            animationsBox.setSelected(UiPrefs.animationsEnabled(ui.uiPrefs));
+            fontScaleBox.setSelectedItem(UiPrefs.fontScalePercent(ui.uiPrefs) + "%");
             refreshDiagnostics();
         } finally {
             loading = false;
@@ -406,7 +440,9 @@ final class SettingsTab {
         diagColors.setText("Panel.background=" + Diagnostics.colorHex("Panel.background")
                 + " · Table.background=" + Diagnostics.colorHex("Table.background")
                 + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor"));
-        diagScale.setText("sun.java2d.uiScale=" + Diagnostics.uiScale() + " · font=" + Diagnostics.fontSummary());
+        int scalePct = ui != null ? UiPrefs.fontScalePercent(ui.uiPrefs) : 100;
+        diagScale.setText("sun.java2d.uiScale=" + Diagnostics.uiScale()
+                + " · font=" + Diagnostics.fontSummary() + " · uiScale=" + scalePct + "%");
     }
 
     private int num(JTextField f, int def) {
@@ -484,6 +520,14 @@ final class SettingsTab {
 
     JCheckBox regexCheckBox() {
         return regexOn;
+    }
+
+    JComboBox<String> fontScaleBox() {
+        return fontScaleBox;
+    }
+
+    JCheckBox animationsCheckBox() {
+        return animationsBox;
     }
 
     int sectionCount() {

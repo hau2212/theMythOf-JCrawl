@@ -51,6 +51,7 @@ final class TreeTab {
         this.ui = ui;
         this.engine = ui.engine;
         tree = new BranchTree(engine);
+        tree.onMove(ui::moveViaDragDrop);
         tree.onChip((c, g, t, x, y) -> ui.chip(c, g, t, x, y));
         tree.tree.addTreeSelectionListener(e -> onSelected());
         tree.tree.addMouseListener(ApiTab.treePopup(tree.tree, e -> {

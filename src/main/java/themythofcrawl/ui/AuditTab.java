@@ -87,12 +87,27 @@ final class AuditTab {
                 r -> r.pathCols(0).timeCols(6), 1);
         logTable = table(logModel, new int[] {54, 110, 230, 70, 65, 260, 240, 240, 300}, 2, 4,
                 r -> r.pathCols(5).numberCols(0).timeCols(1), 0);
+        ColumnMemory.install(decideTable, "audit_decide", ui.uiPrefs);
+        ColumnMemory.install(placeTable, "audit_places", ui.uiPrefs);
+        ColumnMemory.install(dupTable, "audit_dups", ui.uiPrefs);
+        ColumnMemory.install(logTable, "audit_log", ui.uiPrefs);
         tabs.addTab("Cần xử lý (0)", decidePanel());
         tabs.addTab("Giữ chỗ (0)", placesPanel());
         tabs.addTab("API trùng & ẩn (0)", dupsPanel());
         tabs.addTab("Nhật ký (0)", logPanel());
         tabs.addChangeListener(e -> reload());
         panel.add(tabs, BorderLayout.CENTER);
+    }
+
+    SearchField activeSearchField() {
+        int sec = tabs.getSelectedIndex();
+        if (sec == 1) {
+            return placeFilter;
+        }
+        if (sec == 3) {
+            return logFilter;
+        }
+        return null;
     }
 
     private static JTable table(RowsModel<?> m, int[] widths, int auditCol, Integer methodCol,

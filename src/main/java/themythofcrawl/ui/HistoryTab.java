@@ -27,6 +27,7 @@ final class HistoryTab {
         this.ui = ui;
         this.engine = ui.engine;
         tree = new BranchTree(engine);
+        tree.onMove(ui::moveViaDragDrop);
         report = new HistoryReportView(ui::jumpToGroup, ui::flash);
         tree.onChip((c, g, t, x, y) -> ui.chip(c, g, t, x, y));
         tree.tree.addTreeSelectionListener(e -> {
@@ -51,11 +52,11 @@ final class HistoryTab {
             }
         });
         JPanel bar = Ui.flow(FlowLayout.LEFT,
-                Ui.button("Gửi mục đang chọn", t -> Icons.send(t.fg), () -> {
+                Ui.button("Gửi mục đang chọn", t -> Icons.send(t.fg), "Gửi mục đang chọn (Ctrl+Enter)", () -> {
                     ui.useSource(tree);
                     ui.send(ui.scope().groups());
                 }),
-                Ui.button("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), () -> {
+                Ui.button("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), "Đẩy sang Burp Repeater (Ctrl+R)", () -> {
                     ui.useSource(tree);
                     ui.push(ui.scope().groups());
                 }),

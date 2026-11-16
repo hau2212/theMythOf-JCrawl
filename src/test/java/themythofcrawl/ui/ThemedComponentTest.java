@@ -861,6 +861,259 @@ class ThemedComponentTest {
         e.close();
     }
 
+    @Test
+    void phase6ShortcutsSpotlightDragDropColumnMemoryScaleAndAnimations(@TempDir java.nio.file.Path dir) throws Exception {
+        Prefs prefs = Prefs.memory();
+        Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+        ws.setRoot(dir);
+        java.util.concurrent.atomic.AtomicInteger repeaterPushes = new java.util.concurrent.atomic.AtomicInteger();
+        themythofcrawl.app.Bridge countingBridge = new themythofcrawl.app.Bridge() {
+            @Override
+            public boolean inScope(String url) {
+                return true;
+            }
+
+            @Override
+            public Sent send(themythofcrawl.model.Service s, byte[] request) {
+                return UiSmokeTest.BRIDGE.send(s, request);
+            }
+
+            @Override
+            public void toRepeater(themythofcrawl.model.Service s, byte[] request, String tabName) {
+                repeaterPushes.incrementAndGet();
+            }
+
+            @Override
+            public void out(String line) {
+            }
+
+            @Override
+            public void err(String line) {
+            }
+        };
+
+        Engine e = new Engine(countingBridge, prefs, null);
+        try {
+            e.open(ws.start("p6", "Project6"));
+            themythofcrawl.core.Config cfg = e.config().copy();
+            cfg.confirmNewApis = false;
+            cfg.captureEnabled = true;
+            e.applyConfig(cfg);
+
+            e.roles().setAll(List.of(
+                    new themythofcrawl.model.Role("01_Admin", true, List.of(
+                            themythofcrawl.model.HeaderRule.of("X-Role", "admin", "ADD"))),
+                    new themythofcrawl.model.Role("02_Guest", true, List.of(
+                            themythofcrawl.model.HeaderRule.of("Authorization", "[REMOVE]", "REMOVE")))));
+            e.saveRoles();
+
+            e.setDestination("Toppage > src");
+            e.process(UiSmokeTest.msg("GET", "/api/v1/alpha"), "Proxy", true, e.activeBranch().id());
+            e.process(UiSmokeTest.msg("POST", "/api/v1/beta"), "Proxy", true, e.activeBranch().id());
+            e.setDestination("Toppage > orders");
+            e.process(UiSmokeTest.msg("GET", "/api/v1/orders"), "Proxy", true, e.activeBranch().id());
+
+            List<ApiGroup> gs = e.groups();
+            assertEquals(3, gs.size());
+            ApiGroup gAlpha = gs.get(0);
+            ApiGroup gBeta = gs.get(1);
+
+            SwingUtilities.invokeAndWait(() -> {
+                MainPanel ui = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p6");
+                try {
+                    ui.root().setSize(1280, 820);
+                    ui.root().doLayout();
+                    ui.tick(true);
+
+                    // 1. Header compact constraint still holds with Spotlight button
+                    java.awt.Dimension pref = ui.headerPanel().getPreferredSize();
+                    assertTrue(pref.height <= 64, "header height must stay <= 64, was " + pref.height);
+                    assertTrue(pref.width <= 1100, "header width must fit 1100px, was " + pref.width);
+
+                    // 2. Tab tooltips + Alt+1..8 tab switching
+                    assertTrue(ui.tabs.getToolTipTextAt(0).contains("Alt+1"));
+                    assertTrue(ui.tabs.getToolTipTextAt(7).contains("Alt+8"));
+                    assertTrue(ui.dispatchShortcut("alt 4"));
+                    assertSame(ui.settings.panel, ui.tabs.getSelectedComponent());
+                    assertSame(ui.settings.searchField(), ui.activeSearchField());
+                    assertTrue(ui.dispatchShortcut("alt 5"));
+                    assertSame(ui.log.panel, ui.tabs.getSelectedComponent());
+                    assertSame(ui.log.searchField(), ui.activeSearchField());
+                    assertTrue(ui.dispatchShortcut("alt 8"));
+                    assertSame(ui.audit.panel, ui.tabs.getSelectedComponent());
+                    ui.audit.tabs().setSelectedIndex(1);
+                    assertSame(ui.audit.placeSearch(), ui.activeSearchField());
+                    ui.audit.tabs().setSelectedIndex(3);
+                    assertSame(ui.audit.logSearch(), ui.activeSearchField());
+                    assertTrue(ui.dispatchShortcut("alt 1"));
+                    assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
+                    assertSame(ui.api.searchField(), ui.activeSearchField());
+
+                    // 3. ApiTab inline search filter + Ctrl+F
+                    assertTrue(ui.dispatchShortcut("ctrl F"));
+                    ui.api.searchField().setText("#" + gBeta.gid());
+                    assertEquals(1, ui.api.groupModel.getRowCount());
+                    assertSame(gBeta, ui.api.groupModel.at(0));
+                    ui.api.searchField().setText("");
+                    assertEquals(3, ui.api.groupModel.getRowCount());
+
+                    // 4. Ctrl+K Spotlight search (API #gid, Branch, Role, API gốc)
+                    assertTrue(ui.dispatchShortcut("ctrl K"));
+                    assertTrue(ui.spotlight.isVisible());
+                    ui.toastPane.doLayout();
+                    java.awt.image.BufferedImage spotImg = new java.awt.image.BufferedImage(760, 440,
+                            java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    java.awt.Graphics2D sg = spotImg.createGraphics();
+                    try {
+                        ui.spotlight.paint(sg);
+                    } finally {
+                        sg.dispose();
+                    }
+
+                    ui.spotlight.searchField().setText("#" + gBeta.gid());
+                    assertTrue(ui.spotlight.itemCount() >= 1);
+                    assertTrue(ui.spotlight.executeSelected());
+                    assertFalse(ui.spotlight.isVisible());
+                    assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
+                    assertSame(gBeta, ui.api.currentGroup());
+
+                    ui.spotlight.open();
+                    ui.spotlight.searchField().setText("Toppage > orders");
+                    assertTrue(ui.spotlight.itemCount() >= 1);
+                    assertTrue(ui.spotlight.executeSelected());
+                    assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
+                    assertEquals("Toppage > orders", ui.api.tree.selectedBranch());
+
+                    ui.spotlight.open();
+                    ui.spotlight.searchField().setText("01_Admin");
+                    assertTrue(ui.spotlight.itemCount() >= 1);
+                    assertTrue(ui.spotlight.executeSelected());
+                    assertSame(ui.roles.panel, ui.tabs.getSelectedComponent());
+                    assertEquals(0, ui.roles.roleTable().getSelectedRow());
+
+                    ui.spotlight.open();
+                    ui.spotlight.searchField().setText("original");
+                    assertTrue(ui.spotlight.executeSelected());
+                    assertSame(ui.roles.panel, ui.tabs.getSelectedComponent());
+                    assertEquals(-1, ui.roles.roleTable().getSelectedRow());
+
+                    // 5. Ctrl+Shift+C, Ctrl+Enter, Ctrl+R, Delete with confirmation
+                    assertTrue(ui.dispatchShortcut("alt 1"));
+                    ui.api.select(gAlpha, null);
+                    assertTrue(ui.dispatchShortcut("ctrl shift C"));
+                    assertTrue(ui.toastPane.isToastVisible());
+                    assertTrue(ui.toastPane.lastMessage().contains("Đã copy"));
+
+                    assertTrue(ui.dispatchShortcut("ctrl R"));
+                    e.awaitCaptures();
+                    assertTrue(repeaterPushes.get() > 0, "Ctrl+R must push to Repeater");
+
+                    assertTrue(ui.dispatchShortcut("ctrl ENTER"));
+                    assertTrue(ui.toastPane.lastMessage().contains("Xếp hàng gửi")
+                            || e.queue().queued() + e.queue().inFlight() > 0);
+
+                    java.util.concurrent.atomic.AtomicInteger confirmCalls = new java.util.concurrent.atomic.AtomicInteger();
+                    ui.setConfirmHook(q -> {
+                        confirmCalls.incrementAndGet();
+                        return false;
+                    });
+                    assertTrue(ui.dispatchShortcut("DELETE"));
+                    assertEquals(1, confirmCalls.get());
+                    assertEquals(3, e.groups().size(), "declining Delete confirmation must keep APIs");
+
+                    // 6. BranchTree Drag & Drop + Undo toast
+                    ui.api.tree.rebuild(false);
+                    ui.api.tree.expandFolders(true);
+                    ui.api.tree.selectGroup(gAlpha);
+                    java.awt.datatransfer.Transferable payload = ui.api.tree.createTransferableForSelection();
+                    assertNotNull(payload, "GROUP selection must create DnD Transferable");
+                    assertTrue(ui.api.tree.selectBranchPath("Toppage > orders"));
+                    javax.swing.TransferHandler.TransferSupport support =
+                            new javax.swing.TransferHandler.TransferSupport(ui.api.tree.tree, payload);
+                    assertTrue(ui.api.tree.tree.getTransferHandler().canImport(support));
+                    assertTrue(ui.api.tree.tree.getTransferHandler().importData(support));
+                    assertEquals("Toppage > orders", gAlpha.branch());
+                    assertTrue(ui.toastPane.hasAction(), "drag & drop must show Undo toast action");
+                    ui.toastPane.triggerAction();
+                    assertEquals("Toppage > src", gAlpha.branch(), "Undo toast must revert drag & drop");
+
+                    // Delete confirmed removes selected group
+                    ui.api.select(gBeta, null);
+                    ui.setConfirmHook(q -> {
+                        confirmCalls.incrementAndGet();
+                        return true;
+                    });
+                    assertTrue(ui.dispatchShortcut("DELETE"));
+                    assertEquals(2, confirmCalls.get());
+                    assertEquals(2, e.groups().size(), "confirming Delete must remove selected API");
+
+                    // 7. ColumnMemory save / restore across panels + popup menu + resetDefaults
+                    ColumnMemory cm = ColumnMemory.of(ui.api.table);
+                    assertNotNull(cm);
+                    int lastModelCol = ui.api.table.getModel().getColumnCount() - 1;
+                    int resizedModel = ui.api.table.convertColumnIndexToModel(1);
+                    ui.api.table.getColumnModel().getColumn(1).setPreferredWidth(213);
+                    ui.api.table.getColumnModel().getColumn(1).setWidth(213);
+                    int movedModel = ui.api.table.convertColumnIndexToModel(2);
+                    ui.api.table.getColumnModel().moveColumn(2, 1);
+                    cm.setColumnVisible(lastModelCol, false);
+                    cm.saveNow();
+
+                    String colJson = ui.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api");
+                    assertNotNull(colJson);
+                    assertTrue(colJson.contains("213"));
+                    assertFalse(cm.isColumnVisible(lastModelCol));
+
+                    MainPanel ui2 = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p6");
+                    try {
+                        ColumnMemory cm2 = ColumnMemory.of(ui2.api.table);
+                        assertNotNull(cm2);
+                        assertFalse(cm2.isColumnVisible(lastModelCol), "hidden column must restore across instances");
+                        assertEquals(movedModel, ui2.api.table.convertColumnIndexToModel(1),
+                                "column order must restore across instances");
+                        int viewOfResized = ui2.api.table.convertColumnIndexToView(resizedModel);
+                        assertEquals(213, ui2.api.table.getColumnModel().getColumn(viewOfResized).getPreferredWidth(),
+                                "column width must restore across instances");
+
+                        javax.swing.JPopupMenu colMenu = cm2.buildColumnPopupMenu();
+                        assertTrue(colMenu.getComponentCount() >= lastModelCol);
+                        cm2.resetDefaults();
+                        assertTrue(cm2.isColumnVisible(lastModelCol));
+                        assertNull(ui2.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api"));
+                    } finally {
+                        ui2.dispose();
+                    }
+
+                    // 8. Font scale (90% / 100% / 115%) & animations toggle in Settings Section 8
+                    assertEquals(8, ui.settings.sectionCount());
+                    ui.settings.animationsCheckBox().doClick();
+                    assertFalse(UiPrefs.animationsEnabled(ui.uiPrefs));
+                    assertFalse(themythofcrawl.ui.kit.ToastPane.animationsEnabled());
+                    ui.settings.animationsCheckBox().doClick();
+                    assertTrue(UiPrefs.animationsEnabled(ui.uiPrefs));
+                    assertTrue(themythofcrawl.ui.kit.ToastPane.animationsEnabled());
+
+                    ui.settings.fontScaleBox().setSelectedItem("90%");
+                    float smallSize = themythofcrawl.ui.theme.Theme.current().baseFont.getSize2D();
+                    assertEquals(90, UiPrefs.fontScalePercent(ui.uiPrefs));
+                    assertEquals(0.90f, themythofcrawl.ui.theme.Theme.fontScaleMultiplier(), 0.01f);
+
+                    ui.settings.fontScaleBox().setSelectedItem("115%");
+                    float largeSize = themythofcrawl.ui.theme.Theme.current().baseFont.getSize2D();
+                    assertEquals(115, UiPrefs.fontScalePercent(ui.uiPrefs));
+                    assertEquals(1.15f, themythofcrawl.ui.theme.Theme.fontScaleMultiplier(), 0.01f);
+                    assertTrue(largeSize > smallSize, "115% scale font must exceed 90% scale font");
+                } finally {
+                    UiPrefs.setAnimationsEnabled(ui.uiPrefs, true);
+                    UiPrefs.setFontScalePercent(ui.uiPrefs, 100);
+                    ui.dispose();
+                }
+            });
+        } finally {
+            e.close();
+        }
+    }
+
     private static <T> List<T> collect(Component root, Class<T> type) {
         List<T> out = new ArrayList<>();
         if (type.isInstance(root)) {

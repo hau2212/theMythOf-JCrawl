@@ -737,6 +737,20 @@ public final class HistoryReportView extends JPanel {
             revalidate();
         }
 
+        void repositionFromEntry(BranchEntry changed) {
+            Theme t = Theme.current();
+            int gap = t.scaled(Theme.SPACE_2);
+            int y = 0;
+            for (BranchEntry be : entries) {
+                be.yOffset = y;
+                y += be.height + gap;
+            }
+            totalHeight = Math.max(t.scaled(120), y);
+            setPreferredSize(new Dimension(Math.max(480, getWidth()), totalHeight));
+            revalidate();
+            doLayout();
+        }
+
         void onScrollOrResize() {
             ensureVisibleCards(false);
             doLayout();
@@ -912,16 +926,58 @@ public final class HistoryReportView extends JPanel {
             if (entry == null) {
                 return;
             }
-            entry.collapsed = !entry.collapsed;
-            if (entry.collapsed) {
+            boolean targetCollapsed = !entry.collapsed;
+            if (!themythofcrawl.ui.kit.ToastPane.animationsEnabled() || !cardList.isShowing() || entry.rows.isEmpty()) {
+                entry.collapsed = targetCollapsed;
+                if (targetCollapsed) {
+                    collapsedBranches.put(entry.branchId, Boolean.TRUE);
+                } else {
+                    collapsedBranches.remove(entry.branchId);
+                }
+                cardList.recomputeLayout();
+                sync(entry);
+                cardList.ensureVisibleCards(true);
+                cardList.repaint();
+                return;
+            }
+
+            Theme t = Theme.current();
+            int startH = entry.height;
+            int headerH = t.scaled(62);
+            int rowH = t.scaled(Theme.ROW_TABLE);
+            int padVert = t.scaled(Theme.SPACE_3 * 2 + Theme.SPACE_2);
+            int expandedH = headerH + padVert / 3 + entry.rows.size() * rowH + t.scaled(4);
+            int targetH = targetCollapsed ? headerH : expandedH;
+
+            entry.collapsed = targetCollapsed;
+            if (targetCollapsed) {
                 collapsedBranches.put(entry.branchId, Boolean.TRUE);
             } else {
                 collapsedBranches.remove(entry.branchId);
+                sync(entry);
             }
-            cardList.recomputeLayout();
-            sync(entry);
-            cardList.ensureVisibleCards(true);
-            cardList.repaint();
+
+            int[] step = {0};
+            final int totalSteps = 8; // 8 * 15 ms = 120 ms <= 150 ms
+            javax.swing.Timer anim = new javax.swing.Timer(15, null);
+            anim.addActionListener(e -> {
+                step[0]++;
+                double p = Math.min(1.0, (double) step[0] / totalSteps);
+                double eased = 1.0 - (1.0 - p) * (1.0 - p);
+                int curH = (int) Math.round(startH + (targetH - startH) * eased);
+                entry.height = curH;
+                cardList.repositionFromEntry(entry);
+                if (step[0] >= totalSteps) {
+                    anim.stop();
+                    cardList.recomputeLayout();
+                    if (targetCollapsed) {
+                        sync(entry);
+                    }
+                    cardList.ensureVisibleCards(true);
+                }
+                cardList.repaint();
+            });
+            anim.start();
         }
 
         void sync(BranchEntry next) {

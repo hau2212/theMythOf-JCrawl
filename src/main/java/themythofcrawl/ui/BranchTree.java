@@ -2,6 +2,9 @@ package themythofcrawl.ui;
 
 import java.awt.Cursor;
 import java.awt.Rectangle;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -14,10 +17,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import javax.swing.DropMode;
+import javax.swing.JComponent;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeWillExpandListener;
@@ -58,6 +65,7 @@ public final class BranchTree {
     private final Set<Object> expanded = new HashSet<>();
     private boolean restoring;
     private ChipHandler chips;
+    private BiConsumer<List<ApiGroup>, String> moveHandler;
 
     public BranchTree(Engine engine) {
         this.engine = engine;
@@ -68,6 +76,11 @@ public final class BranchTree {
         tree.setLargeModel(true);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.setToggleClickCount(2);
+        if (!java.awt.GraphicsEnvironment.isHeadless()) {
+            tree.setDragEnabled(true);
+        }
+        tree.setDropMode(DropMode.ON);
+        tree.setTransferHandler(new BranchTransferHandler());
         tree.addTreeWillExpandListener(new TreeWillExpandListener() {
             @Override
             public void treeWillExpand(TreeExpansionEvent e) {
@@ -126,6 +139,10 @@ public final class BranchTree {
         chips = h;
     }
 
+    public void onMove(BiConsumer<List<ApiGroup>, String> handler) {
+        this.moveHandler = handler;
+    }
+
     public boolean restoring() {
         return restoring;
     }
@@ -133,6 +150,141 @@ public final class BranchTree {
     /** Keep an API open in this tree (a returning API shows its 'vị trí cũ / vừa gặp tại' rows). */
     public void expandApi(int gid) {
         expanded.add("G" + gid);
+    }
+
+    Transferable createTransferableForSelection() {
+        return tree.getTransferHandler() instanceof BranchTransferHandler bth ? bth.createTransferable(tree) : null;
+    }
+
+    static final class DragPayload {
+        static final DataFlavor FLAVOR = createFlavor();
+        final List<ApiGroup> groups;
+
+        DragPayload(List<ApiGroup> groups) {
+            this.groups = List.copyOf(groups);
+        }
+
+        private static DataFlavor createFlavor() {
+            return new DataFlavor(DragPayload.class, "theMythOfCrawl APIs");
+        }
+    }
+
+    private final class BranchTransferHandler extends TransferHandler {
+        @Override
+        public int getSourceActions(JComponent c) {
+            return MOVE;
+        }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            List<ApiGroup> picked = collectDraggableGroups();
+            if (picked.isEmpty()) {
+                return null;
+            }
+            DragPayload payload = new DragPayload(picked);
+            return new Transferable() {
+                @Override
+                public DataFlavor[] getTransferDataFlavors() {
+                    return new DataFlavor[] {DragPayload.FLAVOR};
+                }
+
+                @Override
+                public boolean isDataFlavorSupported(DataFlavor flavor) {
+                    return DragPayload.FLAVOR.equals(flavor);
+                }
+
+                @Override
+                public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+                    if (!isDataFlavorSupported(flavor)) {
+                        throw new UnsupportedFlavorException(flavor);
+                    }
+                    return payload;
+                }
+            };
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            if (!support.isDataFlavorSupported(DragPayload.FLAVOR)) {
+                return false;
+            }
+            String target = resolveTargetBranch(support);
+            if (target == null || target.isBlank()) {
+                return false;
+            }
+            List<ApiGroup> groups = extractGroups(support.getTransferable());
+            if (groups.isEmpty()) {
+                return false;
+            }
+            String targetKey = Hierarchy.key(target);
+            for (ApiGroup g : groups) {
+                if (!Hierarchy.key(g.branch()).equals(targetKey)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            String target = resolveTargetBranch(support);
+            List<ApiGroup> groups = extractGroups(support.getTransferable());
+            if (target == null || groups.isEmpty()) {
+                return false;
+            }
+            if (moveHandler != null) {
+                moveHandler.accept(groups, target);
+            } else {
+                engine.moveToPath(groups, target, "kéo thả");
+            }
+            return true;
+        }
+
+        private List<ApiGroup> collectDraggableGroups() {
+            Set<ApiGroup> out = new LinkedHashSet<>();
+            TreePath[] paths = tree.getSelectionPaths();
+            if (paths != null) {
+                for (TreePath p : paths) {
+                    Node n = (Node) p.getLastPathComponent();
+                    if (n.kind == Node.Kind.GROUP && n.payload instanceof ApiGroup g) {
+                        out.add(g);
+                    }
+                }
+            }
+            return new ArrayList<>(out);
+        }
+
+        private List<ApiGroup> extractGroups(Transferable t) {
+            try {
+                Object data = t.getTransferData(DragPayload.FLAVOR);
+                if (data instanceof DragPayload dp) {
+                    return dp.groups;
+                }
+            } catch (Exception ignored) {
+                // Unsupported or unavailable transferable
+            }
+            return List.of();
+        }
+
+        private String resolveTargetBranch(TransferSupport support) {
+            TreePath path = null;
+            if (support.isDrop() && support.getDropLocation() instanceof JTree.DropLocation dl) {
+                path = dl.getPath();
+            } else {
+                path = tree.getSelectionPath();
+            }
+            if (path == null || !(path.getLastPathComponent() instanceof Node n)) {
+                return null;
+            }
+            if (n.kind == Node.Kind.FOLDER && n.payload instanceof String s) {
+                return s;
+            }
+            ApiGroup g = groupOf(n);
+            return g != null ? g.branch() : null;
+        }
     }
 
     // ------------------------------------------------------------------ labels

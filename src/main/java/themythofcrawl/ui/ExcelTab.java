@@ -150,6 +150,7 @@ final class ExcelTab {
         TableColumnModel cm = table.getColumnModel();
         cm.moveColumn(CoverageModel.HITS_COL, 5);
         cm.moveColumn(CoverageModel.PLACES_COL, 6);
+        ColumnMemory.install(table, "excel", ui.uiPrefs);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showHits();
@@ -197,6 +198,7 @@ final class ExcelTab {
             hitTable.getColumnModel().getColumn(c).setPreferredWidth(hw[c]);
             hitTable.getColumnModel().getColumn(c).setCellRenderer(hr);
         }
+        ColumnMemory.install(hitTable, "excel_hits", ui.uiPrefs);
         Ui.onDoubleClick(hitTable, () -> {
             int v = hitTable.getSelectedRow();
             int mr = v < 0 ? -1 : hitTable.convertRowIndexToModel(v);

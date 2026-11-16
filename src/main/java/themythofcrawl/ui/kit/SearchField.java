@@ -69,6 +69,12 @@ public class SearchField extends JTextField {
         putClientProperty("JComponent.outline", error ? "error" : null);
     }
 
+    /** Focuses the search field and selects any existing query text. */
+    public void focusField() {
+        requestFocusInWindow();
+        selectAll();
+    }
+
     @Override
     public void updateUI() {
         super.updateUI();

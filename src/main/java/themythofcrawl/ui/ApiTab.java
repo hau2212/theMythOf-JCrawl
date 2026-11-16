@@ -48,6 +48,7 @@ import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.model.RoleScopes;
 import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SearchField;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
@@ -68,6 +69,7 @@ final class ApiTab {
     private final EnumSet<AuditLevel> activeFilters = EnumSet.noneOf(AuditLevel.class);
     private final Pill filterAll = new Pill("Tất cả", t -> t.accent).setSolidWhenActive(true).setActive(true);
     private final Map<AuditLevel, Pill> filterPills = new EnumMap<>(AuditLevel.class);
+    private final SearchField search = new SearchField("Tìm API (#, method, path)...", 16);
     private final JLabel filterCount = Ui.muted("0 API");
     private final Pill resOkPill = new Pill("OK 0", t -> t.success, t -> Icons.check(t.success.text(), 12));
     private final Pill resInfoPill = new Pill("Lệch 0", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 12));
@@ -107,6 +109,7 @@ final class ApiTab {
         this.ui = ui;
         this.engine = ui.engine;
         tree = new BranchTree(engine);
+        tree.onMove(ui::moveViaDragDrop);
         groupModel = new GroupTableModel(engine, g -> engine.hits().count(g.target()));
         table = new ThemedTable(groupModel);
         branchModel = new BranchTableModel(engine);
@@ -136,6 +139,7 @@ final class ApiTab {
             branchTable.getColumnModel().getColumn(i).setCellRenderer(br);
         }
         Ui.widths(branchTable, 64, 165, 54, 165, 115);
+        ColumnMemory.install(branchTable, "branches", ui.uiPrefs);
         Ui.onPopup(branchTable, e -> branchMenu().show(e.getComponent(), e.getX(), e.getY()));
         leftTabs.addTab("Cây Sub-folder", MainPanel.scroll(tree.tree));
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
@@ -198,6 +202,7 @@ final class ApiTab {
         cm.moveColumn(GroupTableModel.COPY_COL, 0);
         cm.moveColumn(GroupTableModel.EXCEL_COL, 6);
         cm.moveColumn(GroupTableModel.DUP_COL, 7);
+        ColumnMemory.install(table, "api", ui.uiPrefs);
         MouseAdapter cells = new MouseAdapter() {
             private int[] cell(MouseEvent e) {
                 int vr = table.rowAtPoint(e.getPoint());
@@ -254,6 +259,7 @@ final class ApiTab {
             results.getColumnModel().getColumn(i).setCellRenderer(rr);
         }
         Ui.widths(results, 72, 185, 220, 82, 58, 78, 92, 74, 54, 340);
+        ColumnMemory.install(results, "results", ui.uiPrefs);
         JPanel resPanel = new JPanel(new BorderLayout());
         resPanel.setBorder(BorderFactory.createTitledBorder(
                 "So sánh 1 API GỐC (Acc Crawl) & N Roles (Click đúp hoặc Chuột phải để Gửi / Đẩy Repeater)"));
@@ -318,13 +324,14 @@ final class ApiTab {
     private JPanel actionBar() {
         JButton sendApi = Ui.accent("Gửi API (N Roles)", t -> Icons.send(t.critical.onSolid()), t -> t.critical,
                 () -> ui.send(selectedOrScope()));
+        sendApi.setToolTipText("Gửi API / phạm vi đang chọn với N Roles (Ctrl+Enter)");
         findSendBranch = Ui.button("Gửi Nhánh", t -> Icons.sendAll(t.fg), this::sendBranchSelection);
         JButton[] sendRef = new JButton[1];
-        JButton sendMenu = Ui.dropdown("Gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg), "Tùy chọn gửi request",
+        JButton sendMenu = Ui.dropdown("Gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg), "Tùy chọn gửi request (Ctrl+Enter)",
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] repRef = new JButton[1];
-        JButton repMenu = Ui.dropdown("Burp Repeater", t -> Icons.withChevron(Icons.repeater(t.fg), t.fg), "Đẩy sang Burp Repeater",
+        JButton repMenu = Ui.dropdown("Burp Repeater", t -> Icons.withChevron(Icons.repeater(t.fg), t.fg), "Đẩy sang Burp Repeater (Ctrl+R)",
                 () -> repeaterMenu().show(repRef[0], 0, repRef[0].getHeight()));
         repRef[0] = repMenu;
         JButton[] toolsRef = new JButton[1];
@@ -343,6 +350,12 @@ final class ApiTab {
     }
 
     private JPanel buildFilterStrip() {
+        search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh hoặc Excel STT (Ctrl+F)");
+        search.onChange(q -> {
+            groupModel.setTextFilter(q);
+            updateFilterStrip();
+        });
+
         filterAll.setPadding(1, 8, 1, 8);
         filterAll.setToolTipText("Hiển thị tất cả API (bỏ lọc trạng thái)");
         filterAll.onClick(this::clearAuditFilters);
@@ -356,6 +369,7 @@ final class ApiTab {
 
         JPanel chips = new JPanel(new WrapLayout(FlowLayout.LEFT, 4, 2));
         chips.setOpaque(false);
+        chips.add(search);
         chips.add(Ui.muted("Lọc:"));
         chips.add(filterAll);
         for (Pill p : filterPills.values()) {
@@ -368,6 +382,10 @@ final class ApiTab {
         strip.add(chips, BorderLayout.CENTER);
         strip.add(filterCount, BorderLayout.EAST);
         return strip;
+    }
+
+    SearchField searchField() {
+        return search;
     }
 
     private void registerFilterPill(AuditLevel lvl, String label, String tip,
@@ -537,6 +555,22 @@ final class ApiTab {
         MainPanel.selectRow(table, groupModel.rowOf(g));
         if (r != null) {
             MainPanel.selectRow(results, resultModel.rowOf(r));
+        }
+    }
+
+    void selectBranch(String branchPath) {
+        if (branchPath == null || branchPath.isBlank()) {
+            return;
+        }
+        leftTabs.setSelectedIndex(0);
+        if (treeStale) {
+            treeStale = false;
+            tree.rebuild(engine.config().showGhosts);
+        }
+        tree.selectBranchPath(branchPath);
+        if (viewMode.getSelectedIndex() == 1) {
+            groupModel.setBranchFilter(branchPath);
+            updateFilterStrip();
         }
     }
 

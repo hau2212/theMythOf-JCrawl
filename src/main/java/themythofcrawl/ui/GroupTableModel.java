@@ -35,6 +35,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
     /** Empty = every status; non-empty = match any toggled status (including PENDING). */
     private final EnumSet<AuditLevel> auditFilters = EnumSet.noneOf(AuditLevel.class);
     private String prefix;
+    private String textFilter = "";
     private final Engine engine;
     private final Function<ApiGroup, Integer> hits;
     private List<ApiGroup> all = new ArrayList<>();
@@ -50,6 +51,9 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
         if (prefix != null && !Hierarchy.matchesPrefix(g.branch(), prefix)) {
             return false;
         }
+        if (!textFilter.isEmpty() && !matchesText(g, textFilter)) {
+            return false;
+        }
         if (auditFilters.isEmpty()) {
             return true;
         }
@@ -59,6 +63,22 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
             }
         }
         return false;
+    }
+
+    private static boolean matchesText(ApiGroup g, String q) {
+        String gidHash = "#" + g.gid();
+        if (String.valueOf(g.gid()).contains(q)
+                || gidHash.contains(q)
+                || Text.groupId(g.gid()).toLowerCase(java.util.Locale.ROOT).contains(q)) {
+            return true;
+        }
+        if (Text.nz(g.method()).toLowerCase(java.util.Locale.ROOT).contains(q)
+                || Text.nz(g.path()).toLowerCase(java.util.Locale.ROOT).contains(q)
+                || Text.nz(g.branch()).toLowerCase(java.util.Locale.ROOT).contains(q)
+                || Text.nz(g.url()).toLowerCase(java.util.Locale.ROOT).contains(q)) {
+            return true;
+        }
+        return g.target() != null && Text.nz(g.target().sttText()).toLowerCase(java.util.Locale.ROOT).contains(q);
     }
 
     private static boolean matchesLevel(ApiGroup g, AuditLevel lvl) {
@@ -139,6 +159,20 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
 
     public String branchFilter() {
         return prefix;
+    }
+
+    public void setTextFilter(String query) {
+        String clean = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
+        if (clean.equals(textFilter)) {
+            return;
+        }
+        textFilter = clean;
+        rebuildView();
+        fireTableDataChanged();
+    }
+
+    public String textFilter() {
+        return textFilter;
     }
 
     /** null = all colours. */

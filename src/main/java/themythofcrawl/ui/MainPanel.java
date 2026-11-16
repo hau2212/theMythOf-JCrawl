@@ -6,6 +6,9 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,8 +19,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import java.awt.Color;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
@@ -33,12 +38,15 @@ import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.JTextComponent;
 
 import themythofcrawl.app.Changes;
 import themythofcrawl.app.Engine;
+import themythofcrawl.app.Prefs;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Config;
 import themythofcrawl.core.Hierarchy;
@@ -55,6 +63,7 @@ import themythofcrawl.store.FileStorage;
 import themythofcrawl.store.Workspaces;
 import themythofcrawl.ui.kit.Breadcrumb;
 import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SearchField;
 import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ToastPane;
 import themythofcrawl.ui.kit.ToolbarGroup;
@@ -77,11 +86,13 @@ public final class MainPanel {
     final Workspaces workspaces;
     final UiHost host;
     final String projectId;
+    final Prefs uiPrefs;
     private SegmentedToggle captureToggle;
     private SegmentedToggle sendModeToggle;
     private final Pill queue = new Pill("Hàng đợi: 0", t -> t.neutral, t -> Icons.clock(t.muted, 12));
     final Breadcrumb dest = new Breadcrumb();
     private final Pill todo = new Pill("Cần xử lý: 0", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 12));
+    private final JButton spotlightBtn = new JButton();
     private final JButton options = new JButton();
     private final JButton detach = new JButton();
     private final JButton workspace = new JButton();
@@ -104,6 +115,7 @@ public final class MainPanel {
     private int queuePeak;
     private int tickCount;
     private boolean pulseDim;
+    private Predicate<String> confirmHook;
     private final JPanel root = new JPanel(new BorderLayout()) {
         @Override
         public void updateUI() {
@@ -117,6 +129,7 @@ public final class MainPanel {
     PushDialog.Choice pushMemory;
     Object source;   // the JTable or BranchTree used last (what "selected" means)
 
+    final SpotlightDialog spotlight;
     final ApiTab api;
     final TreeTab treeTab;
     final HistoryTab history;
@@ -131,8 +144,12 @@ public final class MainPanel {
         this.workspaces = workspaces;
         this.host = host;
         this.projectId = projectId;
+        this.uiPrefs = UiPrefs.resolve(workspaces, engine);
+        UiPrefs.applyStartup(this.uiPrefs);
         this.headerPanel = buildHeader();
         main.add(headerPanel, BorderLayout.NORTH);
+        spotlight = new SpotlightDialog(this);
+        toastPane.setModalOverlay(spotlight);
         api = new ApiTab(this);
         history = new HistoryTab(this);
         roles = new RolesTab(this);
@@ -142,20 +159,21 @@ public final class MainPanel {
         treeTab = new TreeTab(this);
         audit = new AuditTab(this);
         Object[][] t = {
-            {"API", api.panel, "Danh sách API đã bắt, kết quả từng role, Repeater gộp"},
-            {"Lịch sử", history.panel, "Cây lịch sử theo nhánh và báo cáo"},
-            {"Roles", roles.panel, "Các role / profile (header, cookie, JWT) và profile API gốc"},
-            {"Cấu hình", settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace"},
-            {"Log", log.panel, "Nhật ký theo nhánh / API, xuất Excel"},
-            {"Excel", excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu"},
-            {"Cây", treeTab.panel, "Cây nhánh cỡ lớn, mở được cửa sổ riêng, có Request / Response"},
-            {"Audit", audit.panel, "Cần xử lý, giữ chỗ, API trùng & ẩn, nhật ký vị trí"}};
+            {"API", api.panel, "Danh sách API đã bắt, kết quả từng role, Repeater gộp (Alt+1)"},
+            {"Lịch sử", history.panel, "Cây lịch sử theo nhánh và báo cáo (Alt+2)"},
+            {"Roles", roles.panel, "Các role / profile (header, cookie, JWT) và profile API gốc (Alt+3)"},
+            {"Cấu hình", settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace (Alt+4)"},
+            {"Log", log.panel, "Nhật ký theo nhánh / API, xuất Excel (Alt+5)"},
+            {"Excel", excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu (Alt+6)"},
+            {"Cây", treeTab.panel, "Cây nhánh cỡ lớn, mở được cửa sổ riêng, có Request / Response (Alt+7)"},
+            {"Audit", audit.panel, "Cần xử lý, giữ chỗ, API trùng & ẩn, nhật ký vị trí (Alt+8)"}};
         for (Object[] x : t) {
             tabs.addTab((String) x[0], null, (Component) x[1], (String) x[2]);
         }
         tabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
         root.add(toastPane, BorderLayout.CENTER);
+        installShortcuts();
         Theme.track(root);
         try {
             host.applyTheme(root);
@@ -181,6 +199,7 @@ public final class MainPanel {
     public void dispose() {
         timer.stop();
         toastPane.dispose();
+        ColumnMemory.disposeIn(root);
         if (window != null) {
             window.dispose();
         }
@@ -215,7 +234,7 @@ public final class MainPanel {
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
 
-        queue.setPadding(2, 8, 2, 8);
+        queue.setPadding(2, 7, 2, 7);
         queue.onClick(() -> {
             if (queue.isEnabled()) {
                 engine.cancelPending("Đã hủy");
@@ -223,7 +242,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setMaxLabelChars(18);
+        dest.setMaxLabelChars(14);
         dest.onSegmentClick(seg -> {
             if (Hierarchy.normalize(seg).equals(Hierarchy.normalize(engine.activeBranch().name()))) {
                 destinationMenu();
@@ -233,23 +252,27 @@ public final class MainPanel {
         });
         dest.onDropdown(this::destinationMenu);
 
-        todo.setPadding(2, 8, 2, 8);
+        todo.setPadding(2, 7, 2, 7);
         todo.onClick(this::todoMenu);
 
+        spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
+        spotlightBtn.setToolTipText("Tìm kiếm toàn cục API (#, path), Nhánh, Role (Ctrl+K)");
+        spotlightBtn.setMargin(new Insets(2, 4, 2, 4));
+        spotlightBtn.addActionListener(e -> spotlight.open());
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
         options.setToolTipText("Tùy chọn: phạm vi bắt, regex, tự gửi, xác nhận vị trí, giữ chỗ, API trùng...");
-        options.setMargin(new Insets(2, 6, 2, 6));
+        options.setMargin(new Insets(2, 4, 2, 4));
         options.addActionListener(e -> optionsMenu());
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
-        detach.setMargin(new Insets(2, 6, 2, 6));
+        detach.setMargin(new Insets(2, 4, 2, 4));
         detach.setToolTipText("Tách cả extension ra cửa sổ riêng (bấm lại / đóng cửa sổ để gắn vào tab Burp)");
         detach.addActionListener(e -> toggleDetach());
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
-        workspace.setMargin(new Insets(2, 6, 2, 6));
+        workspace.setMargin(new Insets(2, 5, 2, 5));
         workspace.addActionListener(e -> workspaceMenu());
 
-        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         leftZone.setOpaque(false);
         leftZone.add(captureToggle);
         leftZone.add(sendModeToggle);
@@ -264,23 +287,23 @@ public final class MainPanel {
             }
         };
         destLabel.setFont(Theme.current().smallBoldFont);
-        JPanel centerZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel centerZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         centerZone.setOpaque(false);
         centerZone.add(vSep());
         centerZone.add(destLabel);
         centerZone.add(dest);
         centerZone.add(Ui.info(Help.DEST, "Đích của request mới"));
 
-        ToolbarGroup actions = new ToolbarGroup(options, detach, workspace);
+        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, options, detach, workspace);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
-        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
         rightZone.setOpaque(false);
         rightZone.add(todo);
         rightZone.add(Ui.info(Help.TODO, "Cần xử lý"));
         rightZone.add(vSep());
         rightZone.add(actions);
 
-        JPanel row1 = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
+        JPanel row1 = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         row1.setOpaque(false);
         row1.add(leftZone, BorderLayout.WEST);
         row1.add(centerZone, BorderLayout.CENTER);
@@ -976,6 +999,23 @@ public final class MainPanel {
         }
     }
 
+    void moveViaDragDrop(List<ApiGroup> gs, String targetPath) {
+        if (gs == null || gs.isEmpty() || targetPath == null || targetPath.isBlank()) {
+            return;
+        }
+        int n = engine.moveToPath(gs, targetPath, "kéo thả");
+        if (n <= 0) {
+            return;
+        }
+        tick(true);
+        List<ApiGroup> moved = List.copyOf(gs);
+        toastPane.showUndoToast("Đã chuyển " + n + " API sang " + Hierarchy.normalize(targetPath),
+                "Hoàn tác", () -> {
+                    revert(moved);
+                    tick(true);
+                });
+    }
+
     void jumpToGroup(ApiGroup g) {
         jumpToGroup(g, null);
     }
@@ -992,6 +1032,23 @@ public final class MainPanel {
         api.select(g, r);
     }
 
+    void jumpToBranch(String branchPath) {
+        if (branchPath == null || branchPath.isBlank()) {
+            return;
+        }
+        tabs.setSelectedComponent(api.panel);
+        api.selectBranch(branchPath);
+    }
+
+    void jumpToRole(int roleIndex) {
+        tabs.setSelectedComponent(roles.panel);
+        if (roleIndex < 0) {
+            roles.selectOriginal();
+        } else {
+            roles.selectRole(roleIndex);
+        }
+    }
+
     void jumpToTarget(TargetEntry e) {
         tabs.setSelectedComponent(excel.panel);
         excel.select(e);
@@ -1005,6 +1062,151 @@ public final class MainPanel {
     void showPlaceOf(String key) {
         tabs.setSelectedComponent(audit.panel);
         audit.show(1, key);
+    }
+
+    // =================================================================== global shortcuts
+    private void installShortcuts() {
+        registerRootShortcut("ctrl K", "tmoc.spotlight", () -> spotlight.toggle());
+        registerRootShortcut("ctrl F", "tmoc.find", () -> {
+            if (spotlight.isVisible()) {
+                spotlight.close();
+            }
+            focusActiveSearch();
+        });
+        registerRootShortcut("ctrl shift C", "tmoc.copy", () -> {
+            List<ApiGroup> gs = shortcutTargetGroups();
+            if (!gs.isEmpty()) {
+                copy(gs);
+            }
+        });
+        registerRootShortcut("ctrl ENTER", "tmoc.send", () -> {
+            if (spotlight.isVisible()) {
+                return;
+            }
+            List<ApiGroup> gs = shortcutTargetGroups();
+            if (!gs.isEmpty()) {
+                send(gs);
+            }
+        });
+        registerRootShortcut("ctrl R", "tmoc.repeater", () -> {
+            if (spotlight.isVisible()) {
+                return;
+            }
+            List<ApiGroup> gs = shortcutTargetGroups();
+            if (!gs.isEmpty()) {
+                push(gs);
+            }
+        });
+        registerRootShortcut("DELETE", "tmoc.delete", () -> {
+            if (spotlight.isVisible() || isTextEditingFocus()) {
+                return;
+            }
+            List<ApiGroup> gs = shortcutTargetGroups();
+            if (!gs.isEmpty() && confirmDialog("Xóa " + gs.size() + " API? (vị trí của chúng vẫn được giữ chỗ)")) {
+                engine.remove(gs, "");
+                api.showGroup(null);
+                tick(true);
+            }
+        });
+        for (int i = 0; i < tabs.getTabCount() && i < 9; i++) {
+            int idx = i;
+            registerRootShortcut("alt " + (i + 1), "tmoc.tab." + (i + 1), () -> {
+                if (spotlight.isVisible()) {
+                    spotlight.close();
+                }
+                tabs.setSelectedIndex(idx);
+            });
+        }
+    }
+
+    private void registerRootShortcut(String stroke, String key, Runnable action) {
+        KeyStroke ks = KeyStroke.getKeyStroke(stroke);
+        if (ks == null) {
+            return;
+        }
+        root.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(ks, key);
+        root.getActionMap().put(key, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+    SearchField activeSearchField() {
+        Component sel = tabs.getSelectedComponent();
+        if (sel == api.panel) {
+            return api.searchField();
+        }
+        if (sel == settings.panel) {
+            return settings.searchField();
+        }
+        if (sel == log.panel) {
+            return log.searchField();
+        }
+        if (sel == audit.panel) {
+            return audit.activeSearchField();
+        }
+        return null;
+    }
+
+    boolean focusActiveSearch() {
+        SearchField sf = activeSearchField();
+        if (sf != null) {
+            sf.focusField();
+            return true;
+        }
+        spotlight.open();
+        return false;
+    }
+
+    private List<ApiGroup> shortcutTargetGroups() {
+        Component sel = tabs.getSelectedComponent();
+        if (sel == api.panel) {
+            List<ApiGroup> fromTable = api.selectedGroups();
+            if (!fromTable.isEmpty()) {
+                return fromTable;
+            }
+            return scope().groups();
+        }
+        if (sel == history.panel) {
+            useSource(history.tree);
+            return scope().groups();
+        }
+        if (sel == treeTab.panel) {
+            useSource(treeTab.tree);
+            return scope().groups();
+        }
+        return scope().groups();
+    }
+
+    private static boolean isTextEditingFocus() {
+        Component focus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (focus instanceof JTextComponent tc && tc.isEditable()) {
+            return true;
+        }
+        if (focus instanceof JTable t && t.isEditing()) {
+            return true;
+        }
+        return false;
+    }
+
+    /** Invokes a registered root shortcut by KeyStroke string (for tests). */
+    boolean dispatchShortcut(String stroke) {
+        KeyStroke ks = KeyStroke.getKeyStroke(stroke);
+        if (ks == null) {
+            return false;
+        }
+        Object actionKey = root.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).get(ks);
+        if (actionKey == null) {
+            return false;
+        }
+        javax.swing.Action act = root.getActionMap().get(actionKey);
+        if (act == null || !act.isEnabled()) {
+            return false;
+        }
+        act.actionPerformed(new ActionEvent(root, ActionEvent.ACTION_PERFORMED, String.valueOf(actionKey)));
+        return true;
     }
 
     /** Click on a copy glyph / Excel badge / duplicate badge (table or tree). */
@@ -1102,7 +1304,14 @@ public final class MainPanel {
         return v == null ? null : v.toString();
     }
 
+    void setConfirmHook(Predicate<String> hook) {
+        this.confirmHook = hook;
+    }
+
     boolean confirmDialog(String q) {
+        if (confirmHook != null) {
+            return confirmHook.test(q);
+        }
         return JOptionPane.showConfirmDialog(root, q, Text.EXT_NAME, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
 
