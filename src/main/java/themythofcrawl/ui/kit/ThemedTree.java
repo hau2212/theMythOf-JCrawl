@@ -29,19 +29,28 @@ public class ThemedTree extends JTree {
     public ThemedTree() {
         super();
         ready = true;
+        applyTreeClientProperties();
     }
 
     public ThemedTree(TreeModel model) {
         super(model);
         ready = true;
+        applyTreeClientProperties();
     }
 
     public ThemedTree(TreeModel model, TreeCellRenderer renderer) {
         super(model);
         ready = true;
+        applyTreeClientProperties();
         if (renderer != null) {
             setCellRenderer(renderer);
         }
+    }
+
+    private void applyTreeClientProperties() {
+        putClientProperty("JTree.paintLines", Boolean.TRUE);
+        putClientProperty("JTree.wideSelection", Boolean.FALSE);
+        putClientProperty("JTree.lineStyle", "Angled");
     }
 
     public static boolean isExtensionRenderer(Object r) {
@@ -104,6 +113,7 @@ public class ThemedTree extends JTree {
         }
         updatingUi = true;
         try {
+            applyTreeClientProperties();
             if (extensionRenderer != null) {
                 if (extensionRenderer instanceof JComponent jc) {
                     jc.updateUI();

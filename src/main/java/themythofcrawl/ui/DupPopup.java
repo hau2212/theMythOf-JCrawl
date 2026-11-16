@@ -38,8 +38,8 @@ final class DupPopup {
         model.set(rows);
         JTable t = new ThemedTable(model);
         Ui.style(t);
-        Ui.widths(t, 45, 70, 300, 120, 60);
-        AuditRenderer r = new AuditRenderer(model, null, null, null);
+        Ui.widths(t, 52, 70, 290, 130, 60);
+        AuditRenderer r = new AuditRenderer(model, null, 3, null, 0);
         for (int i = 0; i < t.getColumnCount(); i++) {
             t.getColumnModel().getColumn(i).setCellRenderer(r);
         }

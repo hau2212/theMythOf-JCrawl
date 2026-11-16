@@ -182,7 +182,7 @@ public final class Ui {
         }
     }
 
-    /** Taller rows, hairline row separators, no vertical grid, bold header. */
+    /** Taller rows, hairline row separators, no vertical grid, bold left header with sort glyph, row hover. */
     public static void style(JTable t) {
         Theme th = Theme.current();
         t.setRowHeight(Theme.ROW_TABLE);
@@ -191,10 +191,14 @@ public final class Ui {
         t.setIntercellSpacing(new Dimension(0, 1));
         t.setFillsViewportHeight(true);
         t.setGridColor(Theme.of(t.getBackground(), t.getForeground()).grid);
+        AuditRenderer.installHover(t);
+        AuditRenderer.HeaderRenderer hdr = new AuditRenderer.HeaderRenderer();
         if (t.getTableHeader() != null) {
             t.getTableHeader().setFont(th.boldFont);
+            t.getTableHeader().setDefaultRenderer(hdr);
         }
         if (t instanceof themythofcrawl.ui.kit.ThemedTable tt) {
+            tt.setExtensionHeaderRenderer(hdr);
             tt.markStyled();
         }
     }

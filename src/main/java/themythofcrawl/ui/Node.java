@@ -8,12 +8,20 @@ import themythofcrawl.core.AuditLevel;
 public final class Node extends DefaultMutableTreeNode {
     public enum Kind { ROOT, FOLDER, GROUP, ORIG, ROLE, PLACE, GHOSTS, GHOST, LOADING, LOGBRANCH, LOGAPI, LOGSYS, LOGLINE }
 
+    /** Precomputed chip labels for folder / root rows so TreeRenderer allocates nothing while painting. */
+    public record FolderMeta(String name, String levelChip, String countChip, String verdictChip, String pendingChip,
+                             String ghostChip) {
+    }
+
     public final Kind kind;
     public final Object payload;
     public final String label;
     public final AuditLevel level;
     public final Object key;
     public final int depth;
+    public FolderMeta folderMeta;
+    public Object renderCache;
+    public int renderStamp;
     public boolean loaded = true;
 
     public Node(Kind kind, Object payload, String label, AuditLevel level, Object key, int depth) {
@@ -24,6 +32,11 @@ public final class Node extends DefaultMutableTreeNode {
         this.level = level == null ? AuditLevel.NONE : level;
         this.key = key;
         this.depth = depth;
+    }
+
+    public Node(Kind kind, Object payload, String label, AuditLevel level, Object key, int depth, FolderMeta folderMeta) {
+        this(kind, payload, label, level, key, depth);
+        this.folderMeta = folderMeta;
     }
 
     public static Node placeholder() {

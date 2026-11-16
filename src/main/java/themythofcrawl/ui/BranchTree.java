@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.event.TreeExpansionEvent;
@@ -207,8 +206,10 @@ public final class BranchTree {
                 }
             }
         }
+        Node.FolderMeta rootMeta = new Node.FolderMeta("Tất cả Group & API", null,
+                branches.size() + " Nhánh · " + groups.size() + " API", null, null, null);
         Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API)",
-                AuditLevel.NONE, "ROOT", 0);
+                AuditLevel.NONE, "ROOT", 0, rootMeta);
         Map<Object, Node> nodes = new HashMap<>();
         nodes.put(root.key, root);
         Set<Node> open = new LinkedHashSet<>();
@@ -228,7 +229,8 @@ public final class BranchTree {
         paths.forEach(ensure);
         for (ApiGroup g : groups) {
             Node leaf = nodes.get("F" + Hierarchy.key(g.branch()));
-            Node n = new Node(Node.Kind.GROUP, g, groupLabel(g), Audit.display(g), "G" + g.gid(), 0);
+            Node n = new Node(Node.Kind.GROUP, g, Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 48),
+                    Audit.display(g), "G" + g.gid(), 0);
             nodes.put(n.key, n);
             if (Boolean.TRUE.equals(reachable.get(leaf)) && expanded.contains(n.key)) {
                 fillGroup(n, nodes);
@@ -285,10 +287,14 @@ public final class BranchTree {
             if (n == null) {
                 int[] c = counts.getOrDefault(k, new int[3]);
                 Audit.Verdict v = Audit.fromCounts(c[0], c[1], c[2]);
-                String extra = (pend.containsKey(k) ? "   ·   " + pend.get(k) + " chờ xác nhận" : "")
-                        + (ghostCount.containsKey(k) ? "   ·   " + ghostCount.get(k) + " đã xóa (giữ chỗ)" : "");
+                Integer pCount = pend.get(k);
+                Integer gCount = ghostCount.get(k);
+                String name = parts.get(i);
+                Node.FolderMeta meta = new Node.FolderMeta(name, "Cấp " + (i + 1), c[0] + " API", v.summary(),
+                        pCount != null && pCount > 0 ? String.valueOf(pCount) : null,
+                        gCount != null && gCount > 0 ? String.valueOf(gCount) : null);
                 n = new Node(Node.Kind.FOLDER, Hierarchy.join(parts.subList(0, i + 1)),
-                        parts.get(i) + "   ·   " + c[0] + " API   ·   " + v.summary() + extra, v.level(), "F" + k, i + 1);
+                        name + " · " + c[0] + " API · " + v.summary(), v.level(), "F" + k, i + 1, meta);
                 nodes.put(n.key, n);
                 parent.add(n);
                 boolean visible = Boolean.TRUE.equals(reachable.get(parent)) && !collapsed.contains(n.key);
@@ -458,25 +464,9 @@ public final class BranchTree {
         if (b == null) {
             return null;
         }
-        TreeRenderer r = (TreeRenderer) tree.getCellRenderer().getTreeCellRendererComponent(tree, n, false, false, true,
-                tree.getRowForPath(path), false);
-        Icon icon = r.getIcon();
-        int rel = x - b.x - r.getInsets().left;
-        int iw = icon != null ? icon.getIconWidth() : 0;
-        if (icon != null && rel >= Icons.GROUP_COPY_X - 1 && rel <= iw + 1) {
-            return new Object[] {Chip.COPY, g};
-        }
-        java.awt.FontMetrics fm = r.getFontMetrics(r.getFont());
-        String text = r.getText();
-        for (Object[] c : new Object[][] {{Chip.EXCEL, excelBadge(g)}, {Chip.DUP, dupBadge(g)}}) {
-            String token = (String) c[1];
-            int at = token.isEmpty() ? -1 : text.indexOf(token);
-            if (at >= 0) {
-                int start = iw + r.getIconTextGap() + fm.stringWidth(text.substring(0, at));
-                if (rel >= start - 2 && rel <= start + fm.stringWidth(token) + 2) {
-                    return new Object[] {c[0], g};
-                }
-            }
+        if (tree.getCellRenderer() instanceof TreeRenderer r) {
+            Chip c = r.hitTestChip(tree, n, tree.getRowForPath(path), x - b.x);
+            return c != null ? new Object[] {c, g} : null;
         }
         return null;
     }

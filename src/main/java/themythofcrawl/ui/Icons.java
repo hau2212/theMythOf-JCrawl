@@ -988,16 +988,11 @@ public final class Icons {
         if (s == null || s.isEmpty()) {
             return "";
         }
+        if (!containsSymbol(s)) {
+            return s;
+        }
         String t = s.trim();
-        String[] prefixes = {"\u2714 ", "\u2705 ", "\u23F3 ", "\uD83D\uDC7B ", "\u29C9 ", "\uD83D\uDE48 ", "\uD83D\uDC41 ",
-            "\u21AA ", "\u21A9 ", "\u21B6 ", "\uD83D\uDDD1 ", "\u2716 ", "\u270F ", "\u2795 ", "\u267B ",
-            "\uD83D\uDCCD ", "\uD83C\uDD95 ", "\u2B1C ", "\uD83D\uDCC1 ", "\uD83D\uDCC2 ", "\uD83E\uDDED ",
-            "\uD83D\uDD0E ", "\uD83D\uDD0D ", "\u25B6\u25B6 ", "\u25B6 ", "\uD83D\uDCE4 ", "\uD83C\uDFAF ",
-            "\uD83D\uDCCB ", "\uD83C\uDF9B ", "\u2699 ", "\uD83D\uDDD7 ", "\uD83D\uDCCC ", "\uD83D\uDCCA ",
-            "\uD83D\uDCC4 ", "\uD83D\uDCBE ", "\uD83D\uDD04 ", "\uD83E\uDDF9 ", "\uD83C\uDF3F ", "\uD83C\uDF33 ",
-            "\uD83C\uDF10 ", "\u26A1 ", "\u279C ", "\u2B06 ", "\u2B07 ", "\uD83D\uDD58 ", "\uFF0B ",
-            "\uD83D\uDEE0 ", "\u21BA ", "\u22EF ", "\u25A0 ", "\u21BB ", "\uD83C\uDF89 "};
-        for (String p : prefixes) {
+        for (String p : LEADING_PREFIXES) {
             if (t.startsWith(p)) {
                 return stripInlineSymbols(t.substring(p.length()).trim());
             }
@@ -1010,23 +1005,46 @@ public final class Icons {
         if (s == null || s.isEmpty()) {
             return "";
         }
+        if (!containsSymbol(s)) {
+            return s;
+        }
         String out = s.replace("[\u29C9", "[#")
                 .replace("\u21AA ", "-> ")
                 .replace("\u21AA", "-> ")
                 .replace("\u2192", "->");
-        String[] remove = {"\u29C9 ", "\u29C9", "\u23F3 ", "\u23F3", "\uD83D\uDC7B ", "\uD83D\uDC7B", "\uD83D\uDE48 ",
-            "\uD83D\uDE48", "\u2714 ", "\u2714", "\u2705 ", "\u2705", "\u21A9 ", "\u21A9", "\u21B6 ", "\u21B6",
-            "\uD83D\uDCC1 ", "\uD83D\uDCC1", "\uD83D\uDCC2 ", "\uD83D\uDCC2", "\uD83D\uDCCD ", "\uD83D\uDCCD",
-            "\uD83C\uDD95 ", "\uD83C\uDD95", "\uD83C\uDF89 ", "\uD83C\uDF89", "\uD83D\uDD0E ", "\uD83D\uDD0E",
-            "\uD83D\uDD0D ", "\uD83D\uDD0D", "\uD83D\uDC41 ", "\uD83D\uDC41", "\uD83D\uDDD1 ", "\uD83D\uDDD1",
-            "\u2716 ", "\u2716", "\uD83D\uDCCB ", "\uD83D\uDCCB", "\uD83E\uDDED ", "\uD83E\uDDED", "\uD83C\uDF3F ",
-            "\uD83C\uDF3F", "\uD83D\uDCCC ", "\uD83D\uDCCC", "\uD83C\uDF10 ", "\uD83C\uDF10", "\u2B1C ", "\u2B1C",
-            "\u267B ", "\u267B", "\u270F ", "\u270F", "\u2795 ", "\u2795"};
-        for (String tok : remove) {
+        for (String tok : INLINE_REMOVE) {
             if (out.contains(tok)) {
                 out = out.replace(tok, "");
             }
         }
         return out;
     }
+
+    private static boolean containsSymbol(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x2190) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final String[] LEADING_PREFIXES = {"\u2714 ", "\u2705 ", "\u23F3 ", "\uD83D\uDC7B ", "\u29C9 ", "\uD83D\uDE48 ", "\uD83D\uDC41 ",
+        "\u21AA ", "\u21A9 ", "\u21B6 ", "\uD83D\uDDD1 ", "\u2716 ", "\u270F ", "\u2795 ", "\u267B ",
+        "\uD83D\uDCCD ", "\uD83C\uDD95 ", "\u2B1C ", "\uD83D\uDCC1 ", "\uD83D\uDCC2 ", "\uD83E\uDDED ",
+        "\uD83D\uDD0E ", "\uD83D\uDD0D ", "\u25B6\u25B6 ", "\u25B6 ", "\uD83D\uDCE4 ", "\uD83C\uDFAF ",
+        "\uD83D\uDCCB ", "\uD83C\uDF9B ", "\u2699 ", "\uD83D\uDDD7 ", "\uD83D\uDCCC ", "\uD83D\uDCCA ",
+        "\uD83D\uDCC4 ", "\uD83D\uDCBE ", "\uD83D\uDD04 ", "\uD83E\uDDF9 ", "\uD83C\uDF3F ", "\uD83C\uDF33 ",
+        "\uD83C\uDF10 ", "\u26A1 ", "\u279C ", "\u2B06 ", "\u2B07 ", "\uD83D\uDD58 ", "\uFF0B ",
+        "\uD83D\uDEE0 ", "\u21BA ", "\u22EF ", "\u25A0 ", "\u21BB ", "\uD83C\uDF89 "};
+
+    private static final String[] INLINE_REMOVE = {"\u29C9 ", "\u29C9", "\u23F3 ", "\u23F3", "\uD83D\uDC7B ", "\uD83D\uDC7B", "\uD83D\uDE48 ",
+        "\uD83D\uDE48", "\u2714 ", "\u2714", "\u2705 ", "\u2705", "\u21A9 ", "\u21A9", "\u21B6 ", "\u21B6",
+        "\uD83D\uDCC1 ", "\uD83D\uDCC1", "\uD83D\uDCC2 ", "\uD83D\uDCC2", "\uD83D\uDCCD ", "\uD83D\uDCCD",
+        "\uD83C\uDD95 ", "\uD83C\uDD95", "\uD83C\uDF89 ", "\uD83C\uDF89", "\uD83D\uDD0E ", "\uD83D\uDD0E",
+        "\uD83D\uDD0D ", "\uD83D\uDD0D", "\uD83D\uDC41 ", "\uD83D\uDC41", "\uD83D\uDDD1 ", "\uD83D\uDDD1",
+        "\u2716 ", "\u2716", "\uD83D\uDCCB ", "\uD83D\uDCCB", "\uD83E\uDDED ", "\uD83E\uDDED", "\uD83C\uDF3F ",
+        "\uD83C\uDF3F", "\uD83D\uDCCC ", "\uD83D\uDCCC", "\uD83C\uDF10 ", "\uD83C\uDF10", "\u2B1C ", "\u2B1C",
+        "\u267B ", "\u267B", "\u270F ", "\u270F", "\u2795 ", "\u2795"};
 }

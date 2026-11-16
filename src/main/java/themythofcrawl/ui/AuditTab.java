@@ -67,10 +67,14 @@ final class AuditTab {
     AuditTab(MainPanel ui) {
         this.ui = ui;
         this.engine = ui.engine;
-        decideTable = table(decideModel, new int[] {150, 80, 300, 300, 300}, 0, null, 1);
-        placeTable = table(placeModel, new int[] {65, 280, 150, 280, 80, 140, 70, 60, 90, 110, 240, 80}, 5, 0, 3);
-        dupTable = table(dupModel, new int[] {320, 70, 80, 320, 140, 70, 80}, 4, null, 1);
-        logTable = table(logModel, new int[] {45, 110, 230, 70, 65, 260, 240, 240, 300}, 2, 4, 0);
+        decideTable = table(decideModel, new int[] {160, 80, 300, 300, 300}, 0, null,
+                r -> r.pathCols(2), 1);
+        placeTable = table(placeModel, new int[] {88, 280, 150, 280, 80, 140, 70, 60, 90, 110, 240, 80}, 5, 0,
+                r -> r.pathCols(1).numberCols(6, 7, 8, 11).timeCols(9), 3);
+        dupTable = table(dupModel, new int[] {320, 70, 80, 320, 140, 70, 90}, 4, null,
+                r -> r.pathCols(0).timeCols(6), 1);
+        logTable = table(logModel, new int[] {54, 110, 230, 70, 65, 260, 240, 240, 300}, 2, 4,
+                r -> r.pathCols(5).numberCols(0).timeCols(1), 0);
         tabs.addTab("Cần xử lý", decidePanel());
         tabs.addTab("Giữ chỗ", placesPanel());
         tabs.addTab("API trùng & ẩn", dupsPanel());
@@ -79,11 +83,15 @@ final class AuditTab {
         panel.add(tabs, BorderLayout.CENTER);
     }
 
-    private static JTable table(RowsModel<?> m, int[] widths, int auditCol, Integer methodCol, int... bold) {
+    private static JTable table(RowsModel<?> m, int[] widths, int auditCol, Integer methodCol,
+                                java.util.function.Consumer<AuditRenderer> cfg, int... bold) {
         JTable t = new ThemedTable(m);
         Ui.style(t);
         t.setAutoCreateRowSorter(true);
         AuditRenderer r = new AuditRenderer(m, null, auditCol, methodCol, bold);
+        if (cfg != null) {
+            cfg.accept(r);
+        }
         for (int c = 0; c < widths.length; c++) {
             t.getColumnModel().getColumn(c).setPreferredWidth(widths[c]);
             t.getColumnModel().getColumn(c).setCellRenderer(r);

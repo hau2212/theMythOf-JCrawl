@@ -69,6 +69,7 @@ public final class Theme {
     private static volatile boolean listenerInstalled;
     private static volatile boolean refreshing;
     private static volatile float fontScaleMultiplier = 1.0f;
+    private static volatile int generation = 1;
     private static final List<Runnable> LISTENERS = new ArrayList<>();
 
     public final boolean dark;
@@ -140,9 +141,9 @@ public final class Theme {
         UIManager.addPropertyChangeListener(pcl);
     }
 
-    /** Clears cached tokens and refreshes all tracked root components when LAF or scale changes. */
     public static void onThemeChanged() {
         clearCache();
+        generation++;
         List<Runnable> callbacks;
         synchronized (LISTENERS) {
             callbacks = new ArrayList<>(LISTENERS);
@@ -184,8 +185,13 @@ public final class Theme {
         }
     }
 
+    public static int generation() {
+        return generation;
+    }
+
     public static synchronized void clearCache() {
         CACHE.clear();
+        generation++;
     }
 
     /** Registers a root component (panel, frame, dialog) to receive {@code updateComponentTreeUI} on theme changes. */
@@ -408,7 +414,7 @@ public final class Theme {
             return warning.text();
         }
         if (code >= 400 && code < 500) {
-            return warning.text();
+            return critical.text();
         }
         return code >= 500 ? danger.text() : fg;
     }

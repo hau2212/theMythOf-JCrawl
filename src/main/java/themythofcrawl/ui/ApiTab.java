@@ -9,7 +9,12 @@ import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultCellEditor;
@@ -23,8 +28,13 @@ import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
+import javax.swing.RowSorter;
+import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
+import javax.swing.event.RowSorterEvent;
+import javax.swing.event.RowSorterListener;
 import javax.swing.table.TableColumnModel;
+import javax.swing.table.TableRowSorter;
 
 import themythofcrawl.app.Changes;
 import themythofcrawl.app.Engine;
@@ -34,8 +44,10 @@ import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.Branch;
+import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.model.RoleScopes;
+import themythofcrawl.ui.kit.Pill;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
@@ -53,7 +65,15 @@ final class ApiTab {
     final JTable results;
     private final JTabbedPane leftTabs = new JTabbedPane();
     private final JComboBox<String> viewMode = new JComboBox<>(new String[] {"Theo từng API (Mặc định)", "Lọc theo Nhánh đang chọn"});
-    private final JComboBox<String> colour = new JComboBox<>(MainPanel.AUDIT_FILTER_LABELS);
+    private final EnumSet<AuditLevel> activeFilters = EnumSet.noneOf(AuditLevel.class);
+    private final Pill filterAll = new Pill("Tất cả", t -> t.accent).setSolidWhenActive(true).setActive(true);
+    private final Map<AuditLevel, Pill> filterPills = new EnumMap<>(AuditLevel.class);
+    private final JLabel filterCount = Ui.muted("0 API");
+    private final Pill resOkPill = new Pill("OK 0", t -> t.success, t -> Icons.check(t.success.text(), 12));
+    private final Pill resInfoPill = new Pill("Lệch 0", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 12));
+    private final Pill resWarnPill = new Pill("Bypass 0", t -> t.critical, t -> Icons.warn(t.critical.text(), 12));
+    private final Pill resErrPill = new Pill("Lỗi 0", t -> t.danger, t -> Icons.error(t.danger.text(), 12));
+    private final JLabel resMetaLabel = Ui.muted("Chưa chọn API");
     private final JButton pill = new JButton("Chưa chọn API Group") {
         @Override
         public void updateUI() {
@@ -111,11 +131,11 @@ final class ApiTab {
                 onBranchRowSelected();
             }
         });
-        AuditRenderer br = new AuditRenderer(branchModel, null, 3, null);
+        AuditRenderer br = new AuditRenderer(branchModel, null, 3, null).numberCols(2);
         for (int i = 0; i < branchTable.getColumnCount(); i++) {
             branchTable.getColumnModel().getColumn(i).setCellRenderer(br);
         }
-        Ui.widths(branchTable, 56, 165, 50, 155, 115);
+        Ui.widths(branchTable, 64, 165, 54, 165, 115);
         Ui.onPopup(branchTable, e -> branchMenu().show(e.getComponent(), e.getX(), e.getY()));
         leftTabs.addTab("Cây Sub-folder", MainPanel.scroll(tree.tree));
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
@@ -148,21 +168,28 @@ final class ApiTab {
             ui.useSource(table);
             ui.copy(selectedGroups());
         });
-        AuditRenderer gr = new AuditRenderer(groupModel, 7, 3, 4, 0);
-        int[] widths = {72, 46, 200, 185, 68, 130, 235, 48, 62, 95, 58, 52, 60, 230, 34, 100, 56};
+        AuditRenderer gr = new AuditRenderer(groupModel, 7, 3, 4, 0)
+                .pathCol(6, r -> {
+                    ApiGroup g = groupModel.at(r);
+                    return g == null ? null : g.url();
+                })
+                .numberCols(0, 8)
+                .timeCols(12);
+        int[] widths = {72, 46, 200, 195, 72, 130, 235, 50, 68, 95, 58, 52, 66, 230, 44, 115, 70};
         TableColumnModel cm = table.getColumnModel();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);   // keep readable widths, scroll sideways
         for (int i = 0; i < GroupTableModel.COLS.length; i++) {
             cm.getColumn(i).setPreferredWidth(widths[i]);
             cm.getColumn(i).setCellRenderer(gr);
         }
-        cm.getColumn(GroupTableModel.COPY_COL).setMaxWidth(40);
+        cm.getColumn(GroupTableModel.COPY_COL).setMinWidth(40);
+        cm.getColumn(GroupTableModel.COPY_COL).setMaxWidth(48);
         cm.getColumn(GroupTableModel.COPY_COL).setCellRenderer(new AuditRenderer(groupModel, null, null, null, AuditRenderer.Mode.COPY)
                 .tooltip(r -> "Bấm để copy: " + engine.copyLabel(groupModel.at(r), false)));
-        cm.getColumn(GroupTableModel.EXCEL_COL).setMinWidth(70);
+        cm.getColumn(GroupTableModel.EXCEL_COL).setMinWidth(84);
         cm.getColumn(GroupTableModel.EXCEL_COL).setCellRenderer(new AuditRenderer(groupModel, null, null, null, AuditRenderer.Mode.LINK)
                 .tooltip(r -> excelTip(groupModel.at(r))));
-        cm.getColumn(GroupTableModel.DUP_COL).setMinWidth(52);
+        cm.getColumn(GroupTableModel.DUP_COL).setMinWidth(62);
         cm.getColumn(GroupTableModel.DUP_COL).setCellRenderer(new AuditRenderer(groupModel, null, null, null, AuditRenderer.Mode.DUP)
                 .tooltip(r -> groupModel.at(r) != null && groupModel.at(r).dupTotal() > 1 ? "API trùng: bấm để xem nhanh các bản" : null));
         pathEditor.setEditable(true);
@@ -202,16 +229,17 @@ final class ApiTab {
         };
         table.addMouseListener(cells);
         table.addMouseMotionListener(cells);
-        JPanel groupPanel = new JPanel(new BorderLayout());
+        JPanel groupPanel = new JPanel(new BorderLayout(0, 2));
         groupPanel.setBorder(BorderFactory.createTitledBorder(
                 "Danh sách API (Click đúp cột 'Group Path' để chọn Nhánh | Chuột phải để Gửi / Đẩy Repeater)"));
+        groupPanel.add(buildFilterStrip(), BorderLayout.NORTH);
         groupPanel.add(MainPanel.scroll(table), BorderLayout.CENTER);
         JSplitPane top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, groupPanel);
         top.setResizeWeight(0.30);
 
         // bottom: API gốc + roles, grouped Repeater bar, viewers
         Ui.style(results);
-        results.setAutoCreateRowSorter(true);
+        results.setRowSorter(new PinnedOrigRowSorter(resultModel));
         results.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         results.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -221,14 +249,15 @@ final class ApiTab {
         });
         Ui.onDoubleClick(results, this::pushSelectedRoles);
         Ui.onPopup(results, e -> resultMenu().show(e.getComponent(), e.getX(), e.getY()));
-        AuditRenderer rr = new AuditRenderer(resultModel, 4, 2, null);
+        AuditRenderer rr = new AuditRenderer(resultModel, 4, 2, null).numberCols(5, 7, 8).deltaCol(6);
         for (int i = 0; i < results.getColumnCount(); i++) {
             results.getColumnModel().getColumn(i).setCellRenderer(rr);
         }
-        Ui.widths(results, 66, 185, 210, 80, 55, 75, 85, 70, 50, 340);
+        Ui.widths(results, 72, 185, 220, 82, 58, 78, 92, 74, 54, 340);
         JPanel resPanel = new JPanel(new BorderLayout());
         resPanel.setBorder(BorderFactory.createTitledBorder(
                 "So sánh 1 API GỐC (Acc Crawl) & N Roles (Click đúp hoặc Chuột phải để Gửi / Đẩy Repeater)"));
+        resPanel.add(buildResultSummaryBar(), BorderLayout.NORTH);
         resPanel.add(MainPanel.scroll(results), BorderLayout.CENTER);
 
         pill.setIcon(Icons.themed(t -> Icons.pair(Icons.folder(t.dup.text()),
@@ -305,21 +334,85 @@ final class ApiTab {
         JButton copy = Ui.button("Copy STT + Path", t -> Icons.copy(t.fg), "Copy 'STT. path' của API / nhánh đang chọn (Ctrl+Shift+C)",
                 () -> ui.copy(ui.scope().groups()));
         viewMode.addActionListener(e -> applyViewMode());
-        colour.addActionListener(e -> {
-            int i = colour.getSelectedIndex();
-            groupModel.setAuditFilter(MainPanel.AUDIT_FILTER_LEVELS[i], i == 0);
-        });
         JPanel bar = new JPanel(new BorderLayout(4, 2));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(Ui.flow(FlowLayout.LEFT, sendApi, findSendBranch, sendMenu, repMenu, tools, copy, Ui.info(Help.COPY, "Copy")),
                 BorderLayout.WEST);
-        bar.add(Ui.flow(FlowLayout.RIGHT, new JLabel("Xem:"), viewMode, new JLabel("Màu:"), colour), BorderLayout.EAST);
+        bar.add(Ui.flow(FlowLayout.RIGHT, new JLabel("Xem:"), viewMode), BorderLayout.EAST);
+        return bar;
+    }
+
+    private JPanel buildFilterStrip() {
+        filterAll.setPadding(1, 8, 1, 8);
+        filterAll.setToolTipText("Hiển thị tất cả API (bỏ lọc trạng thái)");
+        filterAll.onClick(this::clearAuditFilters);
+
+        registerFilterPill(AuditLevel.OK, "OK", "Lọc API: Tất cả Role 2xx (OK)", t -> t.success, t -> Icons.check(t.success.text(), 12));
+        registerFilterPill(AuditLevel.INFO, "Lệch", "Lọc API: Có Role lỗi / lệch body", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 12));
+        registerFilterPill(AuditLevel.WARN, "Bypass", "Lọc API: Nghi vấn Bypass (Guest 2xx)", t -> t.critical, t -> Icons.warn(t.critical.text(), 12));
+        registerFilterPill(AuditLevel.ERROR, "Lỗi", "Lọc API: Có lỗi 5xx / Mất kết nối", t -> t.danger, t -> Icons.error(t.danger.text(), 12));
+        registerFilterPill(AuditLevel.NONE, "Chưa gửi", "Lọc API: Chưa gửi / chưa replay", t -> t.neutral, t -> Icons.statusDot(t.dotNone, 10));
+        registerFilterPill(AuditLevel.PENDING, "Chờ XN", "Lọc API: Chờ xác nhận vị trí / trùng", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 11));
+
+        JPanel chips = new JPanel(new WrapLayout(FlowLayout.LEFT, 4, 2));
+        chips.setOpaque(false);
+        chips.add(Ui.muted("Lọc:"));
+        chips.add(filterAll);
+        for (Pill p : filterPills.values()) {
+            chips.add(p);
+        }
+
+        JPanel strip = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
+        strip.setOpaque(false);
+        strip.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 6));
+        strip.add(chips, BorderLayout.CENTER);
+        strip.add(filterCount, BorderLayout.EAST);
+        return strip;
+    }
+
+    private void registerFilterPill(AuditLevel lvl, String label, String tip,
+                                    java.util.function.Function<Theme, Theme.Token> token,
+                                    java.util.function.Function<Theme, javax.swing.Icon> icon) {
+        Pill p = new Pill(label, token, icon);
+        p.setPadding(1, 7, 1, 7);
+        p.setToolTipText(tip);
+        p.onClick(() -> toggleAuditFilter(lvl));
+        filterPills.put(lvl, p);
+    }
+
+    private JPanel buildResultSummaryBar() {
+        for (Pill p : new Pill[] {resOkPill, resInfoPill, resWarnPill, resErrPill}) {
+            p.setPadding(1, 7, 1, 7);
+        }
+        JPanel bar = new JPanel(new BorderLayout(Theme.SPACE_2, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().grid),
+                        BorderFactory.createEmptyBorder(2, 6, 3, 6)));
+            }
+        };
+        bar.setOpaque(false);
+        bar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().grid),
+                BorderFactory.createEmptyBorder(2, 6, 3, 6)));
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        left.setOpaque(false);
+        left.add(resOkPill);
+        left.add(resInfoPill);
+        left.add(resWarnPill);
+        left.add(resErrPill);
+        bar.add(left, BorderLayout.WEST);
+        bar.add(resMetaLabel, BorderLayout.EAST);
         return bar;
     }
 
     // =================================================================== refresh
     void reloadAll() {
         groupModel.setAll(engine.groups());
+        updateFilterStrip();
+        updateResultSummary(currentGroup());
         treeStale = true;
         branchStale = true;
         refreshVisible(true);
@@ -341,6 +434,7 @@ final class ApiTab {
             } finally {
                 selecting = false;
             }
+            updateFilterStrip();
             treeStale = true;
             branchStale = true;
             if (resultModel.group() != null && engine.group(resultModel.group().gid()) == null) {
@@ -348,6 +442,7 @@ final class ApiTab {
             }
         } else if (!b.added().isEmpty()) {
             groupModel.addAll(b.added());
+            updateFilterStrip();
             treeStale = true;
             branchStale = true;
             if (table.getSelectedRow() < 0 && table.getRowCount() > 0) {
@@ -362,6 +457,7 @@ final class ApiTab {
             if (cur != null && b.dirty().contains(cur)) {
                 RoleResult keep = selectedResult();
                 resultModel.refresh();
+                updateResultSummary(cur);
                 if (keep != null && results.getSelectedRow() < 0) {
                     MainPanel.selectRow(results, resultModel.rowOf(keep));
                 }
@@ -435,7 +531,7 @@ final class ApiTab {
     void select(ApiGroup g, RoleResult r) {
         if (groupModel.rowOf(g) < 0) {
             groupModel.setBranchFilter(null);
-            colour.setSelectedIndex(0);
+            clearAuditFilters();
             viewMode.setSelectedIndex(0);
         }
         MainPanel.selectRow(table, groupModel.rowOf(g));
@@ -453,26 +549,104 @@ final class ApiTab {
                 showResult(null);
             }
         }
+        updateResultSummary(g);
         refreshBar();
     }
 
+    private void updateResultSummary(ApiGroup g) {
+        if (g == null) {
+            resOkPill.setText("OK 0");
+            resInfoPill.setText("Lệch 0");
+            resWarnPill.setText("Bypass 0");
+            resErrPill.setText("Lỗi 0");
+            resMetaLabel.setText("Chưa chọn API");
+            return;
+        }
+        int ok = 0;
+        int info = 0;
+        int warn = 0;
+        int err = 0;
+        for (RoleResult r : g.results()) {
+            if (ResultState.ERROR.equals(r.state()) || (r.status() != null && r.status() >= 500)) {
+                err++;
+            } else {
+                AuditLevel lvl = Audit.level(g, r);
+                if (lvl == AuditLevel.WARN) {
+                    warn++;
+                } else if (lvl == AuditLevel.OK) {
+                    ok++;
+                } else if (lvl == AuditLevel.INFO || lvl == AuditLevel.REDIRECT) {
+                    info++;
+                }
+            }
+        }
+        resOkPill.setText("OK " + ok);
+        resInfoPill.setText("Lệch " + info);
+        resWarnPill.setText("Bypass " + warn);
+        resErrPill.setText("Lỗi " + err);
+        resMetaLabel.setText(Text.groupId(g.gid()) + " · " + BranchTree.rolesLabel(g));
+    }
+
     void filterPending() {
-        colour.setSelectedIndex(MainPanel.AUDIT_FILTER_LABELS.length - 1);
+        selectSingleFilter(AuditLevel.PENDING);
     }
 
     void filterLevel(AuditLevel lvl) {
-        for (int i = 0; i < MainPanel.AUDIT_FILTER_LEVELS.length; i++) {
-            if (MainPanel.AUDIT_FILTER_LEVELS[i] == lvl) {
-                colour.setSelectedIndex(i);
-                return;
-            }
+        if (lvl == null) {
+            clearAuditFilters();
+        } else {
+            selectSingleFilter(lvl);
         }
+    }
+
+    void toggleAuditFilter(AuditLevel lvl) {
+        if (lvl == null) {
+            clearAuditFilters();
+            return;
+        }
+        if (!activeFilters.add(lvl)) {
+            activeFilters.remove(lvl);
+        }
+        applyFilters();
+    }
+
+    void clearAuditFilters() {
+        activeFilters.clear();
+        applyFilters();
+    }
+
+    private void selectSingleFilter(AuditLevel lvl) {
+        activeFilters.clear();
+        if (lvl != null) {
+            activeFilters.add(lvl);
+        }
+        applyFilters();
+    }
+
+    Set<AuditLevel> activeAuditFilters() {
+        return Collections.unmodifiableSet(EnumSet.copyOf(activeFilters));
+    }
+
+    private void applyFilters() {
+        groupModel.setAuditFilters(activeFilters);
+        updateFilterStrip();
+    }
+
+    private void updateFilterStrip() {
+        filterAll.setActive(activeFilters.isEmpty());
+        for (Map.Entry<AuditLevel, Pill> en : filterPills.entrySet()) {
+            en.getValue().setActive(activeFilters.contains(en.getKey()));
+        }
+        int shown = groupModel.getRowCount();
+        int total = groupModel.total();
+        filterCount.setText(shown == total ? total + " API" : shown + " / " + total + " API");
     }
 
     private void showAll() {
         viewMode.setSelectedIndex(0);
         groupModel.setBranchFilter(null);
         branchTable.clearSelection();
+        updateFilterStrip();
     }
 
     private void applyViewMode() {
@@ -480,6 +654,130 @@ final class ApiTab {
             groupModel.setBranchFilter(null);
         } else {
             groupModel.setBranchFilter(ui.selectedBranch());
+        }
+        updateFilterStrip();
+    }
+
+    /** RowSorter wrapping {@link TableRowSorter} so model row 0 (API gốc) always stays pinned at view row 0. */
+    private static final class PinnedOrigRowSorter extends RowSorter<ResultTableModel> {
+        private final TableRowSorter<ResultTableModel> delegate;
+        private int origView;
+
+        PinnedOrigRowSorter(ResultTableModel model) {
+            this.delegate = new TableRowSorter<>(model);
+            this.delegate.addRowSorterListener(new RowSorterListener() {
+                @Override
+                public void sorterChanged(RowSorterEvent e) {
+                    recomputeOrig();
+                    if (e.getType() == RowSorterEvent.Type.SORT_ORDER_CHANGED) {
+                        fireSortOrderChanged();
+                    } else {
+                        fireRowSorterChanged(null);
+                    }
+                }
+            });
+            recomputeOrig();
+        }
+
+        private void recomputeOrig() {
+            int n = delegate.getViewRowCount();
+            origView = n > 0 ? delegate.convertRowIndexToView(0) : -1;
+        }
+
+        private boolean hasActiveSort() {
+            for (SortKey k : delegate.getSortKeys()) {
+                if (k.getSortOrder() != SortOrder.UNSORTED) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public ResultTableModel getModel() {
+            return delegate.getModel();
+        }
+
+        @Override
+        public void toggleSortOrder(int column) {
+            delegate.toggleSortOrder(column);
+        }
+
+        @Override
+        public int convertRowIndexToModel(int index) {
+            if (index <= 0 || !hasActiveSort() || origView < 0) {
+                return delegate.getViewRowCount() > 0 && index == 0 ? 0 : index;
+            }
+            int dv = index - 1 < origView ? index - 1 : index;
+            return delegate.convertRowIndexToModel(dv);
+        }
+
+        @Override
+        public int convertRowIndexToView(int index) {
+            if (index <= 0 || !hasActiveSort() || origView < 0) {
+                return index;
+            }
+            int dv = delegate.convertRowIndexToView(index);
+            if (dv < 0) {
+                return dv;
+            }
+            return dv < origView ? dv + 1 : dv;
+        }
+
+        @Override
+        public void setSortKeys(List<? extends SortKey> keys) {
+            delegate.setSortKeys(keys);
+        }
+
+        @Override
+        public List<? extends SortKey> getSortKeys() {
+            return delegate.getSortKeys();
+        }
+
+        @Override
+        public int getViewRowCount() {
+            return delegate.getViewRowCount();
+        }
+
+        @Override
+        public int getModelRowCount() {
+            return delegate.getModelRowCount();
+        }
+
+        @Override
+        public void modelStructureChanged() {
+            delegate.modelStructureChanged();
+            recomputeOrig();
+        }
+
+        @Override
+        public void allRowsChanged() {
+            delegate.allRowsChanged();
+            recomputeOrig();
+        }
+
+        @Override
+        public void rowsInserted(int firstRow, int endRow) {
+            delegate.rowsInserted(firstRow, endRow);
+            recomputeOrig();
+        }
+
+        @Override
+        public void rowsDeleted(int firstRow, int endRow) {
+            delegate.rowsDeleted(firstRow, endRow);
+            recomputeOrig();
+        }
+
+        @Override
+        public void rowsUpdated(int firstRow, int endRow) {
+            delegate.rowsUpdated(firstRow, endRow);
+            recomputeOrig();
+        }
+
+        @Override
+        public void rowsUpdated(int firstRow, int endRow, int column) {
+            delegate.rowsUpdated(firstRow, endRow, column);
+            recomputeOrig();
         }
     }
 

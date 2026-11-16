@@ -283,6 +283,183 @@ class ThemedComponentTest {
         e.close();
     }
 
+    @Test
+    void renderersHandleNullAndEmptyValuesAndHeaderTruncatesWithoutHtml(@TempDir java.nio.file.Path dir) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(320, 64, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = img.createGraphics();
+            try {
+                // Null AuditRows model + null cell value across every column mode
+                for (AuditRenderer.Mode mode : AuditRenderer.Mode.values()) {
+                    AuditRenderer r = new AuditRenderer(null, 0, 1, 2, mode, 0).pathCols(3).numberCols(4).deltaCol(5).timeCols(6);
+                    for (int col = 0; col <= 7; col++) {
+                        Component comp = r.getTableCellRendererComponent(null, null, col == 0, false, 0, col);
+                        comp.setSize(120, 28);
+                        comp.paint(g);
+                    }
+                }
+
+                // Narrow table column -> HeaderRenderer truncates & supplies full tooltip
+                RowsModel<String> m = new RowsModel<>(List.of("VeryLongHeaderColumnTitleThatOverflows", "B"));
+                ThemedTable t = new ThemedTable(m);
+                Ui.style(t);
+                t.getColumnModel().getColumn(0).setWidth(48);
+                AuditRenderer.HeaderRenderer hdr = (AuditRenderer.HeaderRenderer) t.getTableHeader().getDefaultRenderer();
+                Component hc = hdr.getTableCellRendererComponent(t, "VeryLongHeaderColumnTitleThatOverflows", false, false, -1, 0);
+                hc.setSize(48, 28);
+                hc.paint(g);
+                assertEquals("VeryLongHeaderColumnTitleThatOverflows", ((javax.swing.JComponent) hc).getToolTipText());
+
+                // TreeRenderer handles null value, plain string value, and GROUP nodes without HTML
+                TreeRenderer tr = new TreeRenderer();
+                Component nullComp = tr.getTreeCellRendererComponent(null, null, false, false, true, 0, false);
+                assertFalse(tr.getText().contains("<html>"));
+                nullComp.setSize(160, 26);
+                nullComp.paint(g);
+                Component strComp = tr.getTreeCellRendererComponent(null, "Plain", true, false, true, 1, false);
+                strComp.setSize(160, 26);
+                strComp.paint(g);
+            } finally {
+                g.dispose();
+            }
+        });
+    }
+
+    @Test
+    void multiSelectFilterChipsPinnedOrigSortAndBranchTreeChipHitTestWork(@TempDir java.nio.file.Path dir) throws Exception {
+        Prefs prefs = Prefs.memory();
+        Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+        ws.setRoot(dir);
+        Engine e = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+        e.open(ws.start("p", "Project"));
+        e.setTargets(themythofcrawl.excel.TargetList.fromRows(
+                List.of(List.of("STT", "PROTOCOL", "PATH"), List.of("1", "GET", "/api/v1/ok")),
+                "t.xlsx", "S"));
+        e.setDestination("Toppage > menu");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/ok"), "Proxy", true, e.activeBranch().id());
+        e.process(UiSmokeTest.msg("GET", "/api/v1/warn"), "Proxy", true, e.activeBranch().id());
+        // Capture duplicate of /api/v1/ok on a second branch so DUP badge renders on the tree row
+        e.setDestination("Toppage > second");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/ok"), "Proxy", true, e.activeBranch().id());
+
+        List<ApiGroup> all = e.groups();
+        assertEquals(3, all.size());
+        ApiGroup gOk = all.get(0);
+        ApiGroup gWarn = all.get(1);
+        ApiGroup gDupOk = all.get(2);
+
+        gOk.origResult().setStatus(200);
+        gOk.origResult().setLength(100);
+        gOk.setOrigMeta(200, 100);
+        // Set role results: one OK (200), one INFO (403), one WARN bypass, one ERROR
+        var r0 = gOk.results().get(0);
+        r0.setStatus(200);
+        r0.setLength(100);
+        r0.setState(themythofcrawl.model.ResultState.DONE);
+        var r1 = gOk.results().get(1);
+        r1.setStatus(403);
+        r1.setLength(15);
+        r1.setState(themythofcrawl.model.ResultState.DONE);
+        var r2 = gOk.results().get(2);
+        r2.setStatus(500);
+        r2.setLength(40);
+        r2.setState(themythofcrawl.model.ResultState.DONE);
+
+        gWarn.origResult().setStatus(200);
+        gWarn.origResult().setLength(200);
+        gWarn.setOrigMeta(200, 200);
+        boolean setDenied = false;
+        for (var r : gWarn.results()) {
+            if (!r.strippedAuth() && !setDenied) {
+                r.setStatus(403);
+                r.setLength(20);
+                setDenied = true;
+            } else {
+                r.setStatus(200);
+                r.setLength(200);
+            }
+            r.setState(themythofcrawl.model.ResultState.DONE);
+        }
+        gOk.setPending(false);
+        gWarn.setPending(false);
+        gDupOk.setPending(true);
+        themythofcrawl.core.Audit.recalc(gOk);
+        themythofcrawl.core.Audit.recalc(gWarn);
+
+        SwingUtilities.invokeAndWait(() -> {
+            MainPanel panel = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p");
+            panel.api.reloadAll();
+            panel.api.tree.rebuild(true);
+
+            // Multi-select filter chips in ApiTab
+            assertEquals(3, panel.api.groupModel.getRowCount());
+            panel.api.toggleAuditFilter(AuditLevel.PENDING);
+            assertEquals(1, panel.api.groupModel.getRowCount());
+            assertSame(gDupOk, panel.api.groupModel.at(0));
+
+            panel.api.toggleAuditFilter(AuditLevel.WARN);
+            assertEquals(2, panel.api.groupModel.getRowCount());
+            panel.api.toggleAuditFilter(AuditLevel.PENDING);
+            assertEquals(1, panel.api.groupModel.getRowCount());
+            assertSame(gWarn, panel.api.groupModel.at(0));
+            panel.api.clearAuditFilters();
+            assertEquals(3, panel.api.groupModel.getRowCount());
+
+            // Result table sorting keeps GOC pinned at view row 0 in ASC and DESC
+            panel.api.showGroup(gOk);
+            JTable res = panel.api.results;
+            res.getRowSorter().toggleSortOrder(4); // Status ASC
+            assertEquals("GỐC", res.getValueAt(0, 0));
+            res.getRowSorter().toggleSortOrder(4); // Status DESC
+            assertEquals("GỐC", res.getValueAt(0, 0));
+            res.getRowSorter().toggleSortOrder(5); // Body Len ASC
+            assertEquals("GỐC", res.getValueAt(0, 0));
+            res.getRowSorter().toggleSortOrder(5); // Body Len DESC
+            assertEquals("GỐC", res.getValueAt(0, 0));
+            res.getRowSorter().toggleSortOrder(6); // Delta DESC
+            assertEquals("GỐC", res.getValueAt(0, 0));
+
+            // BranchTree chip hit testing (Copy, Excel, Dup badges)
+            BranchTree bt = panel.api.tree;
+            bt.expandFolders(true);
+            bt.tree.setSize(720, 480);
+            bt.tree.doLayout();
+            boolean hitCopy = false;
+            boolean hitExcel = false;
+            boolean hitDup = false;
+            TreeRenderer tr = (TreeRenderer) bt.tree.getCellRenderer();
+            for (int row = 0; row < bt.tree.getRowCount(); row++) {
+                javax.swing.tree.TreePath tp = bt.tree.getPathForRow(row);
+                Node node = (Node) tp.getLastPathComponent();
+                if (node.kind == Node.Kind.GROUP && node.payload == gDupOk) {
+                    java.awt.Rectangle bounds = bt.tree.getPathBounds(tp);
+                    assertNotNull(bounds);
+                    tr.getTreeCellRendererComponent(bt.tree, node, false, false, false, row, false);
+                    assertFalse(tr.getText().contains("<html>"));
+                    int y = bounds.y + bounds.height / 2;
+                    for (int dx = 0; dx < bounds.width; dx += 4) {
+                        Object[] hit = bt.chipAt(bounds.x + dx, y);
+                        if (hit != null) {
+                            if (hit[0] == BranchTree.Chip.COPY) {
+                                hitCopy = true;
+                            } else if (hit[0] == BranchTree.Chip.EXCEL) {
+                                hitExcel = true;
+                            } else if (hit[0] == BranchTree.Chip.DUP) {
+                                hitDup = true;
+                            }
+                        }
+                    }
+                }
+            }
+            assertTrue(hitCopy, "BranchTree.chipAt must hit Copy icon on GROUP row");
+            assertTrue(hitExcel, "BranchTree.chipAt must hit Excel badge on GROUP row");
+            assertTrue(hitDup, "BranchTree.chipAt must hit Dup badge on GROUP row");
+
+            panel.dispose();
+        });
+        e.close();
+    }
+
     private static <T> List<T> collect(Component root, Class<T> type) {
         List<T> out = new ArrayList<>();
         if (type.isInstance(root)) {

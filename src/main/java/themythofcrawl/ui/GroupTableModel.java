@@ -2,9 +2,12 @@ package themythofcrawl.ui;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import javax.swing.table.AbstractTableModel;
@@ -19,7 +22,7 @@ import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.place.Decisions;
 
-/** The API list: one row per captured API, filtered by branch / colour. Rows are added incrementally. */
+/** The API list: one row per captured API, filtered by branch / audit chips. Rows are added incrementally. */
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
     public static final String[] COLS = {"API #", "Group", "Group Path (Click đúp để chọn/đổi)", "Đánh giá / Màu (Info)",
         "Method", "Host", "Path", "Orig", "Orig Len", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
@@ -29,9 +32,8 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
     public static final int EXCEL_COL = 15;
     public static final int DUP_COL = 16;
 
-    /** null = every colour; PENDING = waiting for confirmation. */
-    private AuditLevel audit;
-    private boolean auditAll = true;
+    /** Empty = every status; non-empty = match any toggled status (including PENDING). */
+    private final EnumSet<AuditLevel> auditFilters = EnumSet.noneOf(AuditLevel.class);
     private String prefix;
     private final Engine engine;
     private final Function<ApiGroup, Integer> hits;
@@ -48,19 +50,29 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
         if (prefix != null && !Hierarchy.matchesPrefix(g.branch(), prefix)) {
             return false;
         }
-        if (auditAll) {
+        if (auditFilters.isEmpty()) {
             return true;
         }
-        if (audit == AuditLevel.PENDING) {
+        for (AuditLevel lvl : auditFilters) {
+            if (matchesLevel(g, lvl)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesLevel(ApiGroup g, AuditLevel lvl) {
+        if (lvl == AuditLevel.PENDING) {
             return g.pending();
         }
-        if (audit == AuditLevel.ERROR) {
-            return g.results().stream().anyMatch(r -> ResultState.ERROR.equals(r.state()) || (r.status() != null && r.status() >= 500));
+        if (lvl == AuditLevel.ERROR) {
+            return g.results().stream()
+                    .anyMatch(r -> ResultState.ERROR.equals(r.state()) || (r.status() != null && r.status() >= 500));
         }
-        if (audit == AuditLevel.WARN) {
+        if (lvl == AuditLevel.WARN) {
             return g.results().stream().anyMatch(r -> Audit.level(g, r) == AuditLevel.WARN);
         }
-        return Audit.level(g) == audit;
+        return Audit.level(g) == lvl;
     }
 
     private void rebuildView() {
@@ -131,13 +143,30 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
 
     /** null = all colours. */
     public void setAuditFilter(AuditLevel level, boolean any) {
-        if (any == auditAll && level == audit) {
+        if (any || level == null) {
+            setAuditFilters(Set.of());
+        } else {
+            setAuditFilters(Set.of(level));
+        }
+    }
+
+    /** Empty collection shows every API; non-empty shows APIs matching any selected level. */
+    public void setAuditFilters(Collection<AuditLevel> levels) {
+        EnumSet<AuditLevel> next = EnumSet.noneOf(AuditLevel.class);
+        if (levels != null) {
+            next.addAll(levels);
+        }
+        if (next.equals(auditFilters)) {
             return;
         }
-        auditAll = any;
-        audit = level;
+        auditFilters.clear();
+        auditFilters.addAll(next);
         rebuildView();
         fireTableDataChanged();
+    }
+
+    public Set<AuditLevel> auditFilters() {
+        return Collections.unmodifiableSet(EnumSet.copyOf(auditFilters));
     }
 
     public ApiGroup at(int r) {

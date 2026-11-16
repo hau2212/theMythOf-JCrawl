@@ -99,7 +99,10 @@ final class ExcelTab {
         Ui.style(table);
         table.setAutoCreateRowSorter(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        AuditRenderer r = new AuditRenderer(coverage, null, 8, 1, 0, 4);
+        AuditRenderer r = new AuditRenderer(coverage, null, 8, 1, 0, 5)
+                .auditCols(4, 8)
+                .pathCols(2, 6)
+                .numberCols(0);
         int[] w = {64, 80, 300, 220, 150, 110, 260, 220, 240, 230, 380, 170, 300};
         for (int c = 0; c < w.length; c++) {
             table.getColumnModel().getColumn(c).setPreferredWidth(w[c]);
@@ -145,8 +148,11 @@ final class ExcelTab {
         });
 
         Ui.style(hitTable);
-        AuditRenderer hr = new AuditRenderer(hitModel, null, 2, 4, 0);
-        int[] hw = {45, 120, 130, 70, 70, 320, 160, 260, 260, 70, 200};
+        AuditRenderer hr = new AuditRenderer(hitModel, null, 2, 4, 0)
+                .numberCols(0)
+                .timeCols(1)
+                .pathCols(5);
+        int[] hw = {54, 120, 130, 70, 70, 320, 160, 260, 260, 70, 200};
         for (int c = 0; c < hw.length; c++) {
             hitTable.getColumnModel().getColumn(c).setPreferredWidth(hw[c]);
             hitTable.getColumnModel().getColumn(c).setCellRenderer(hr);

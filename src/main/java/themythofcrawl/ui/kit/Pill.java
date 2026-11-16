@@ -243,7 +243,11 @@ public class Pill extends JComponent {
             fill = tok.solidFill();
             fg = tok.onSolid();
             border = tok.solidFill();
-        } else if (active || hovered) {
+        } else if (active) {
+            fill = tok.fillStrong();
+            fg = tok.text();
+            border = tok.solidFill();
+        } else if (hovered) {
             fill = tok.fillStrong();
             fg = tok.text();
         } else {

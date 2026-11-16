@@ -46,6 +46,7 @@ public class ThemedTable extends JTable {
     private boolean hasDesiredFillsViewport;
     private boolean desiredFillsViewport;
     private boolean styled;
+    private TableCellRenderer extHeaderRenderer;
 
     public ThemedTable() {
         this(null, null, null);
@@ -105,6 +106,14 @@ public class ThemedTable extends JTable {
     /** Records that this table uses bold headers and theme hairline horizontal grid lines. */
     public void markStyled() {
         styled = true;
+    }
+
+    /** Installs and retains a custom table header renderer across {@link #updateUI()} cycles. */
+    public void setExtensionHeaderRenderer(TableCellRenderer renderer) {
+        this.extHeaderRenderer = renderer;
+        if (getTableHeader() != null && renderer != null) {
+            getTableHeader().setDefaultRenderer(renderer);
+        }
     }
 
     /** Applies an extension renderer across all current columns as well as {@code Object/Integer/String} defaults. */
@@ -285,6 +294,10 @@ public class ThemedTable extends JTable {
             }
             if (hasDesiredFillsViewport) {
                 super.setFillsViewportHeight(desiredFillsViewport);
+            }
+            if (extHeaderRenderer != null && getTableHeader() != null) {
+                updateRendererUi(extHeaderRenderer, seen);
+                getTableHeader().setDefaultRenderer(extHeaderRenderer);
             }
             if (styled) {
                 Color bg = getBackground();
