@@ -460,6 +460,15 @@ final class ApiTab {
         colour.setSelectedIndex(MainPanel.AUDIT_FILTER_LABELS.length - 1);
     }
 
+    void filterLevel(AuditLevel lvl) {
+        for (int i = 0; i < MainPanel.AUDIT_FILTER_LEVELS.length; i++) {
+            if (MainPanel.AUDIT_FILTER_LEVELS[i] == lvl) {
+                colour.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
     private void showAll() {
         viewMode.setSelectedIndex(0);
         groupModel.setBranchFilter(null);

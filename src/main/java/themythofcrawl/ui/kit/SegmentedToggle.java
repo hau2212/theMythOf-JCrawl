@@ -14,10 +14,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 
-import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JComponent;
@@ -34,13 +34,20 @@ public class SegmentedToggle extends JPanel {
         final String label;
         final String tooltip;
         final Function<Theme, Theme.Token> activeToken;
-        final Function<Theme, Icon> iconFn;
+        final BiFunction<Theme, Boolean, Icon> stateIconFn;
+        final boolean softFill;
 
         public Option(String label, String tooltip, Function<Theme, Theme.Token> activeToken, Function<Theme, Icon> iconFn) {
+            this(label, tooltip, activeToken, iconFn == null ? null : (t, sel) -> iconFn.apply(t), false);
+        }
+
+        public Option(String label, String tooltip, Function<Theme, Theme.Token> activeToken,
+                      BiFunction<Theme, Boolean, Icon> stateIconFn, boolean softFill) {
             this.label = label;
             this.tooltip = tooltip;
             this.activeToken = activeToken != null ? activeToken : t -> t.accent;
-            this.iconFn = iconFn;
+            this.stateIconFn = stateIconFn;
+            this.softFill = softFill;
         }
     }
 
@@ -66,7 +73,7 @@ public class SegmentedToggle extends JPanel {
     private static Option[] toOptions(String... labels) {
         Option[] arr = new Option[labels.length];
         for (int i = 0; i < labels.length; i++) {
-            arr[i] = new Option(labels[i], null, null, null);
+            arr[i] = new Option(labels[i], null, null, (Function<Theme, Icon>) null);
         }
         return arr;
     }
@@ -233,14 +240,14 @@ public class SegmentedToggle extends JPanel {
             Theme t = Theme.current();
             Font f = selected ? t.smallBoldFont : t.smallFont;
             FontMetrics fm = getFontMetrics(f);
-            Icon ic = opt.iconFn != null ? opt.iconFn.apply(t) : null;
+            Icon ic = opt.stateIconFn != null ? opt.stateIconFn.apply(t, selected) : null;
             int iw = ic != null ? ic.getIconWidth() + (label.isEmpty() ? 0 : Theme.SPACE_1) : 0;
             int ih = ic != null ? ic.getIconHeight() : 0;
-            Insets pad = new Insets(Math.round(3 * t.scale), Math.round(9 * t.scale),
-                    Math.round(3 * t.scale), Math.round(9 * t.scale));
+            Insets pad = new Insets(Math.round(2 * t.scale), Math.round(8 * t.scale),
+                    Math.round(2 * t.scale), Math.round(8 * t.scale));
             int w = iw + (label.isEmpty() ? 0 : fm.stringWidth(label)) + pad.left + pad.right;
             int h = Math.max(ih, fm.getHeight()) + pad.top + pad.bottom;
-            pref = new Dimension(Math.max(24, w), Math.max(22, h));
+            pref = new Dimension(Math.max(24, w), Math.max(20, h));
             return new Dimension(pref);
         }
 
@@ -253,8 +260,8 @@ public class SegmentedToggle extends JPanel {
         protected void paintComponent(Graphics g) {
             Theme t = Theme.current();
             Theme.Token tok = opt.activeToken.apply(t);
-            Color fill = selected ? tok.solidFill() : hovered ? t.hover : null;
-            Color fg = selected ? tok.onSolid() : hovered ? t.fg : t.muted;
+            Color fill = selected ? (opt.softFill ? tok.fillStrong() : tok.solidFill()) : (hovered ? t.hover : null);
+            Color fg = selected ? (opt.softFill ? tok.text() : tok.onSolid()) : (hovered ? t.fg : t.muted);
             int arc = Math.round(Theme.RADIUS_SM * 2 * t.scale);
             Graphics2D g2 = (Graphics2D) g.create();
             try {
@@ -265,9 +272,13 @@ public class SegmentedToggle extends JPanel {
                 if (fill != null) {
                     g2.setColor(fill);
                     g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                    if (selected && opt.softFill) {
+                        g2.setColor(tok.border());
+                        g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                    }
                 }
-                int x = Math.round(9 * t.scale);
-                Icon ic = opt.iconFn != null ? opt.iconFn.apply(t) : null;
+                int x = Math.round(8 * t.scale);
+                Icon ic = opt.stateIconFn != null ? opt.stateIconFn.apply(t, selected) : null;
                 if (ic != null) {
                     ic.paintIcon(this, g2, x, (h - ic.getIconHeight()) / 2);
                     x += ic.getIconWidth() + Theme.SPACE_1;

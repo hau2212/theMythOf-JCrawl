@@ -27,6 +27,7 @@ import themythofcrawl.ui.theme.Theme;
 public class Breadcrumb extends JPanel {
     private String path = "";
     private int maxSegments = 4;
+    private int maxLabelChars = 22;
     private boolean showDropdownArrow;
     private Consumer<String> onSegmentClick;
     private Runnable onDropdown;
@@ -56,6 +57,12 @@ public class Breadcrumb extends JPanel {
 
     public Breadcrumb setMaxSegments(int maxSegments) {
         this.maxSegments = Math.max(1, maxSegments);
+        rebuild();
+        return this;
+    }
+
+    public Breadcrumb setMaxLabelChars(int maxLabelChars) {
+        this.maxLabelChars = Math.max(8, maxLabelChars);
         rebuild();
         return this;
     }
@@ -111,7 +118,7 @@ public class Breadcrumb extends JPanel {
             int depth = i + 1;
             String name = parts.get(i);
             String segmentPath = Hierarchy.join(parts.subList(0, depth));
-            String shortName = name.length() <= 22 ? name : name.substring(0, 20) + "...";
+            String shortName = name.length() <= maxLabelChars ? name : name.substring(0, maxLabelChars - 2) + "...";
             Pill chip = new Pill(shortName, th -> th.level(depth));
             chip.setRadius(Theme.RADIUS_SM);
             chip.setPadding(1, 7, 1, 7);

@@ -1,11 +1,9 @@
 package themythofcrawl.ui;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -30,6 +28,7 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 
 import themythofcrawl.core.Text;
+import themythofcrawl.ui.kit.Card;
 import themythofcrawl.ui.kit.ToolbarGroup;
 import themythofcrawl.ui.theme.Theme;
 
@@ -254,27 +253,26 @@ public final class Ui {
         });
     }
 
-    /** A popover with a title and hard-wrapped text (a wrapping text area breaks popup layouts). */
+    /** A popover with a title and hard-wrapped text rendered inside a themed {@link Card}. */
     public static JPopupMenu popover(Component anchor, String title, String text) {
         Theme t = Theme.current();
+        Card card = new Card(title, null, new JLabel(Icons.themed(th -> Icons.info(th.info.text()))),
+                th -> th.info, false);
+        card.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
         JTextArea area = new JTextArea(Text.wrap(text, 64));
         area.setEditable(false);
         area.setOpaque(false);
         area.setForeground(t.fg);
         area.setFont(t.baseFont);
-        area.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
-        JPanel p = new JPanel(new BorderLayout());
-        p.setBackground(t.surfaceAlt);
-        if (title != null) {
-            JLabel h = bold(" " + title);
-            h.setForeground(t.info.text());
-            h.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 6));
-            p.add(h, BorderLayout.NORTH);
-        }
-        p.add(area, BorderLayout.CENTER);
+        area.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, 0, 0, 0));
+        card.setBody(area);
         JPopupMenu pop = new JPopupMenu();
-        pop.add(p);
-        pop.show(anchor, 0, anchor.getHeight());
+        pop.setBackground(t.surface);
+        pop.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        pop.add(card);
+        if (anchor != null && anchor.isShowing()) {
+            pop.show(anchor, 0, anchor.getHeight());
+        }
         return pop;
     }
 

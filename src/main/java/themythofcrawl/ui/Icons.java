@@ -677,13 +677,20 @@ public final class Icons {
     }
 
     public static Icon branch(Color color) {
-        return cached("branch", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 4, y + 3, x + 4, y + s - 3);
-            g.drawLine(x + 4, y + 7, x + 10, y + 7);
-            g.drawLine(x + 10, y + 7, x + 10, y + 4);
-            g.fillOval(x + 2, y + 2, 4, 4);
-            g.fillOval(x + 2, y + s - 5, 4, 4);
-            g.fillOval(x + 8, y + 2, 4, 4);
+        return branch(color, 14);
+    }
+
+    public static Icon branch(Color color, int size) {
+        return cached("branch", color, size, (c, g, x, y, s, col) -> {
+            int lx = x + Math.max(3, s / 4);
+            int rx = x + s - Math.max(4, s / 3);
+            int midY = y + s / 2;
+            g.drawLine(lx, y + 3, lx, y + s - 3);
+            g.drawLine(lx, midY, rx, midY);
+            g.drawLine(rx, midY, rx, y + 4);
+            g.fillOval(lx - 2, y + 1, 4, 4);
+            g.fillOval(lx - 2, y + s - 5, 4, 4);
+            g.fillOval(rx - 2, y + 1, 4, 4);
         });
     }
 
@@ -720,17 +727,26 @@ public final class Icons {
     }
 
     public static Icon clock(Color color) {
-        return cached("clock", color, 14, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 2, y + 2, s - 4, s - 4);
-            g.drawLine(x + s / 2, y + 4, x + s / 2, y + s / 2);
-            g.drawLine(x + s / 2, y + s / 2, x + s - 4, y + s / 2);
+        return clock(color, 14);
+    }
+
+    public static Icon clock(Color color, int size) {
+        return cached("clock", color, size, (c, g, x, y, s, col) -> {
+            int p = s >= 14 ? 2 : 1;
+            g.drawOval(x + p, y + p, s - p * 2 - (s < 14 ? 1 : 0), s - p * 2 - (s < 14 ? 1 : 0));
+            g.drawLine(x + s / 2, y + Math.max(3, s / 4), x + s / 2, y + s / 2);
+            g.drawLine(x + s / 2, y + s / 2, x + s - Math.max(3, s / 4), y + s / 2);
         });
     }
 
     public static Icon bolt(Color color) {
-        return cached("bolt", color, 14, (c, g, x, y, s, col) -> {
-            int[] xs = {x + 8, x + 3, x + 7, x + 6, x + 11, x + 7};
-            int[] ys = {y + 1, y + 8, y + 8, y + 13, y + 6, y + 6};
+        return bolt(color, 14);
+    }
+
+    public static Icon bolt(Color color, int size) {
+        return cached("bolt", color, size, (c, g, x, y, s, col) -> {
+            int[] xs = {x + (s * 8) / 14, x + (s * 3) / 14, x + (s * 7) / 14, x + (s * 6) / 14, x + (s * 11) / 14, x + (s * 7) / 14};
+            int[] ys = {y + 1, y + (s * 8) / 14, y + (s * 8) / 14, y + s - 1, y + (s * 6) / 14, y + (s * 6) / 14};
             g.drawPolygon(xs, ys, 6);
         });
     }

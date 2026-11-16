@@ -27,11 +27,14 @@ public class Pill extends JComponent {
     private String text;
     private Function<Theme, Theme.Token> tokenSupplier;
     private Function<Theme, Icon> iconSupplier;
+    private Function<Theme, Color> trailingDotSupplier;
     private Icon cachedIcon;
+    private Color cachedTrailingDot;
     private Theme.Token resolved;
     private Theme resolvedTheme;
     private int radius = Theme.RADIUS_PILL;
     private Insets padding = new Insets(2, 8, 2, 8);
+    private double progress = -1;
     private boolean hovered;
     private boolean active;
     private boolean solidWhenActive;
@@ -115,6 +118,32 @@ public class Pill extends JComponent {
         return this;
     }
 
+    /** Optional right-side status dot (e.g. dup indicator); pass {@code null} to hide. */
+    public Pill setTrailingDot(Function<Theme, Color> dotColorSupplier) {
+        boolean hadDot = this.trailingDotSupplier != null;
+        this.trailingDotSupplier = dotColorSupplier;
+        syncToken();
+        if (hadDot != (dotColorSupplier != null)) {
+            revalidate();
+        }
+        repaint();
+        return this;
+    }
+
+    /** Sets optional thin progress bar along the bottom edge ({@code -1} hides, {@code 0..1} fills). */
+    public Pill setProgress(double ratio) {
+        double next = ratio < 0 ? -1 : Math.max(0.0, Math.min(1.0, ratio));
+        if (Math.abs(this.progress - next) > 0.005 || (this.progress < 0) != (next < 0)) {
+            this.progress = next;
+            repaint();
+        }
+        return this;
+    }
+
+    public double progress() {
+        return progress;
+    }
+
     public Pill setRadius(int radius) {
         this.radius = radius;
         repaint();
@@ -167,6 +196,7 @@ public class Pill extends JComponent {
             resolved = t.neutral;
         }
         cachedIcon = iconSupplier != null ? iconSupplier.apply(t) : null;
+        cachedTrailingDot = trailingDotSupplier != null ? trailingDotSupplier.apply(t) : null;
         setFont(t.smallBoldFont);
         cachedPref = null;
     }
@@ -189,10 +219,11 @@ public class Pill extends JComponent {
         int iw = cachedIcon != null ? cachedIcon.getIconWidth() + (text.isEmpty() ? 0 : Theme.SPACE_1) : 0;
         int ih = cachedIcon != null ? cachedIcon.getIconHeight() : 0;
         int tw = text.isEmpty() ? 0 : fm.stringWidth(text);
+        int dw = cachedTrailingDot != null ? Theme.SPACE_1 + resolvedTheme.scaled(7) : 0;
         int th = fm.getHeight();
         int hPad = Math.round((padding.left + padding.right) * resolvedTheme.scale);
         int vPad = Math.round((padding.top + padding.bottom) * resolvedTheme.scale);
-        cachedPref = new Dimension(Math.max(16, iw + tw + hPad), Math.max(18, Math.max(ih, th) + vPad));
+        cachedPref = new Dimension(Math.max(16, iw + tw + dw + hPad), Math.max(18, Math.max(ih, th) + vPad));
         return new Dimension(cachedPref);
     }
 
@@ -231,6 +262,21 @@ public class Pill extends JComponent {
             int arc = radius >= Theme.RADIUS_PILL ? h : Math.min(h, Math.round(radius * 2 * resolvedTheme.scale));
             g2.setColor(fill);
             g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
+
+            if (progress >= 0) {
+                int margin = Math.max(4, Math.min(8, h / 3));
+                int barW = Math.max(4, w - margin * 2);
+                int barH = Math.max(2, resolvedTheme.scaled(2));
+                int by = h - barH - 2;
+                g2.setColor(resolvedTheme.border);
+                g2.fillRoundRect(margin, by, barW, barH, barH, barH);
+                int fillW = (int) Math.round(barW * progress);
+                if (fillW > 0) {
+                    g2.setColor(active && solidWhenActive ? tok.onSolid() : tok.solidFill());
+                    g2.fillRoundRect(margin, by, Math.max(barH, fillW), barH, barH, barH);
+                }
+            }
+
             g2.setColor(border);
             g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
 
@@ -247,6 +293,14 @@ public class Pill extends JComponent {
                 FontMetrics fm = g2.getFontMetrics();
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
                 g2.drawString(text, cx, ty);
+                cx += fm.stringWidth(text);
+            }
+            if (cachedTrailingDot != null) {
+                int d = resolvedTheme.scaled(7);
+                int dx = cx + Theme.SPACE_1;
+                int dy = (h - d) / 2;
+                g2.setColor(cachedTrailingDot);
+                g2.fillOval(dx, dy, d, d);
             }
         } finally {
             g2.dispose();

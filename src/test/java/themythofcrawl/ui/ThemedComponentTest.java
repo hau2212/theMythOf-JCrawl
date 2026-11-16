@@ -233,6 +233,56 @@ class ThemedComponentTest {
         e.close();
     }
 
+    @Test
+    void headerFitsTwoRowsAt1100PxAndToastAndPopoverWork(@TempDir java.nio.file.Path dir) throws Exception {
+        Prefs prefs = Prefs.memory();
+        Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+        ws.setRoot(dir);
+        Engine e = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+        e.open(ws.start("p", "Project"));
+        e.setTargets(themythofcrawl.excel.TargetList.fromRows(
+                List.of(List.of("STT", "PROTOCOL", "PATH"), List.of("1", "GET", "/api/v1/users/{id}")),
+                "t.xlsx", "S"));
+        e.setDestination("Toppage > menu > button \"Search\" > confirm");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/users/1"), "Proxy", true, e.activeBranch().id());
+        e.setDestination("Toppage > second");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/users/2"), "Proxy", true, e.activeBranch().id());
+
+        SwingUtilities.invokeAndWait(() -> {
+            MainPanel panel = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p");
+            panel.tick(true);
+            java.awt.Dimension pref = panel.headerPanel().getPreferredSize();
+            assertTrue(pref.height <= 64, "2-row header preferred height must be <= 64 px, was " + pref.height);
+
+            panel.root().setSize(1100, 760);
+            panel.root().doLayout();
+            panel.headerPanel().doLayout();
+            assertTrue(panel.headerPanel().getHeight() <= 68,
+                    "header at 1100px width should stay within 2 compact rows, height=" + panel.headerPanel().getHeight());
+            assertTrue(pref.width <= 1100, "header preferred width should fit 1100px window, was " + pref.width);
+
+            assertTrue(panel.status.getText().startsWith("API "), panel.status.getText());
+            assertTrue(panel.dest.path().contains(">"), panel.dest.path());
+
+            themythofcrawl.ui.kit.ToastPane.setAnimationsEnabled(false);
+            panel.flash("Đã copy đường dẫn Test");
+            assertTrue(panel.toastPane.isToastVisible(), "flash() must reveal non-blocking ToastPane toast");
+            assertEquals("Đã copy đường dẫn Test", panel.toastPane.lastMessage());
+            panel.toastPane.doLayout();
+            panel.toastPane.hideToast();
+            assertFalse(panel.toastPane.isToastVisible(), "hideToast() must hide toast");
+            themythofcrawl.ui.kit.ToastPane.setAnimationsEnabled(true);
+
+            javax.swing.JPopupMenu pop = Ui.popover(panel.status, "Trợ giúp", "Nội dung mẫu");
+            assertEquals(1, pop.getComponentCount());
+            assertInstanceOf(themythofcrawl.ui.kit.Card.class, pop.getComponent(0),
+                    "Ui.popover must render inside a themed Card");
+
+            panel.dispose();
+        });
+        e.close();
+    }
+
     private static <T> List<T> collect(Component root, Class<T> type) {
         List<T> out = new ArrayList<>();
         if (type.isInstance(root)) {
