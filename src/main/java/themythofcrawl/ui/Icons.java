@@ -535,11 +535,18 @@ public final class Icons {
     }
 
     public static Icon document(Color color) {
-        return cached("doc", color, 14, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 3, y + 1, s - 6, s - 2, 2, 2);
-            g.drawLine(x + 5, y + 5, x + s - 5, y + 5);
-            g.drawLine(x + 5, y + 8, x + s - 5, y + 8);
-            g.drawLine(x + 5, y + 11, x + s - 6, y + 11);
+        return document(color, 14);
+    }
+
+    public static Icon document(Color color, int size) {
+        return cached("doc", color, size, (c, g, x, y, s, col) -> {
+            g.drawRoundRect(x + 2, y + 1, s - 5, s - 2, 2, 2);
+            int right = x + s - 5;
+            g.drawLine(x + 4, y + Math.max(4, s / 3), right, y + Math.max(4, s / 3));
+            g.drawLine(x + 4, y + Math.max(6, (s * 7) / 12), right, y + Math.max(6, (s * 7) / 12));
+            if (s >= 13) {
+                g.drawLine(x + 4, y + s - 3, right - 1, y + s - 3);
+            }
         });
     }
 

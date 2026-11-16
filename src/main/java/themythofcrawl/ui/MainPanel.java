@@ -977,6 +977,10 @@ public final class MainPanel {
     }
 
     void jumpToGroup(ApiGroup g) {
+        jumpToGroup(g, null);
+    }
+
+    void jumpToGroup(ApiGroup g, RoleResult r) {
         if (g == null) {
             return;
         }
@@ -985,7 +989,7 @@ public final class MainPanel {
             tick(true);
         }
         tabs.setSelectedComponent(api.panel);
-        api.select(g, null);
+        api.select(g, r);
     }
 
     void jumpToTarget(TargetEntry e) {

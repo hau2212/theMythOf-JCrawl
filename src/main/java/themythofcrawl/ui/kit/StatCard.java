@@ -66,6 +66,10 @@ public class StatCard extends Card {
         return this;
     }
 
+    public String valueText() {
+        return valueLabel.getText();
+    }
+
     public StatCard setMetricToken(Function<Theme, Theme.Token> tokenFn) {
         this.metricToken = tokenFn != null ? tokenFn : t -> t.neutral;
         setAccentToken(this.metricToken, false);

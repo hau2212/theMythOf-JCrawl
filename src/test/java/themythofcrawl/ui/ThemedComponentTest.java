@@ -460,6 +460,208 @@ class ThemedComponentTest {
         e.close();
     }
 
+    @Test
+    void historyReportViewKpisModesHeatmapJumpAnd5000ApiVirtualization(@TempDir java.nio.file.Path dir) throws Exception {
+        Prefs prefs = Prefs.memory();
+        Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+        ws.setRoot(dir);
+        Engine e = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+        e.open(ws.start("p", "Project"));
+        e.setTargets(themythofcrawl.excel.TargetList.fromRows(
+                List.of(List.of("STT", "PROTOCOL", "PATH"),
+                        List.of("1", "GET", "/api/v1/ok"),
+                        List.of("2", "GET", "/api/v1/missing")),
+                "cov.xlsx", "S"));
+
+        // Branch 1 (default): ok, bypass, error
+        e.setDestination("Toppage > auth");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/ok"), "Proxy", true, e.activeBranch().id());
+        e.process(UiSmokeTest.msg("GET", "/api/v1/bypass"), "Proxy", true, e.activeBranch().id());
+        e.process(UiSmokeTest.msg("GET", "/api/v1/err"), "Proxy", true, e.activeBranch().id());
+        // Branch 2: empty branch
+        e.setDestination("Toppage > empty");
+        // Branch 3: diff + unsent
+        e.setDestination("Toppage > orders");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/diff"), "Proxy", true, e.activeBranch().id());
+        e.process(UiSmokeTest.msg("GET", "/api/v1/unsent"), "Proxy", true, e.activeBranch().id());
+
+        List<ApiGroup> gs = e.groups();
+        assertEquals(5, gs.size());
+        ApiGroup gOk = gs.get(0);
+        ApiGroup gBypass = gs.get(1);
+        ApiGroup gErr = gs.get(2);
+        ApiGroup gDiff = gs.get(3);
+        ApiGroup gUnsent = gs.get(4);
+
+        gOk.setOrigMeta(200, 100);
+        gOk.origResult().setStatus(200);
+        gOk.origResult().setLength(100);
+        for (var r : gOk.results()) {
+            r.setStatus(200);
+            r.setLength(100);
+            r.setState(themythofcrawl.model.ResultState.DONE);
+        }
+
+        gBypass.setOrigMeta(200, 120);
+        gBypass.origResult().setStatus(200);
+        gBypass.origResult().setLength(120);
+        boolean deniedOnce = false;
+        for (var r : gBypass.results()) {
+            if (!r.strippedAuth() && !deniedOnce) {
+                r.setStatus(403);
+                r.setLength(10);
+                deniedOnce = true;
+            } else {
+                r.setStatus(200);
+                r.setLength(120);
+            }
+            r.setState(themythofcrawl.model.ResultState.DONE);
+        }
+
+        gErr.setOrigMeta(200, 80);
+        gErr.origResult().setStatus(200);
+        gErr.origResult().setLength(80);
+        for (int i = 0; i < gErr.results().size(); i++) {
+            var r = gErr.results().get(i);
+            if (i == 0) {
+                r.setState(themythofcrawl.model.ResultState.ERROR);
+                r.setError("Timeout");
+            } else {
+                r.setStatus(200);
+                r.setLength(80);
+                r.setState(themythofcrawl.model.ResultState.DONE);
+            }
+        }
+
+        gDiff.setOrigMeta(200, 90);
+        gDiff.origResult().setStatus(200);
+        gDiff.origResult().setLength(90);
+        for (var r : gDiff.results()) {
+            if (r.strippedAuth()) {
+                r.setStatus(401);
+                r.setLength(20);
+            } else {
+                r.setStatus(403);
+                r.setLength(10);
+            }
+            r.setState(themythofcrawl.model.ResultState.DONE);
+        }
+
+        for (ApiGroup g : List.of(gOk, gBypass, gErr, gDiff, gUnsent)) {
+            themythofcrawl.core.Audit.recalc(g);
+        }
+
+        SwingUtilities.invokeAndWait(() -> {
+            MainPanel ui = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p");
+            ui.root().setSize(1100, 760);
+            ui.root().doLayout();
+            HistoryReportView rv = ui.history.report;
+            rv.setSize(680, 620);
+            rv.doLayout();
+            rv.setData(e.branches(), e.groups(), e.targets());
+
+            // 1. KPI strip counts & Excel coverage
+            assertEquals("5", rv.kpiValue(1)); // Total API
+            assertEquals("1", rv.kpiValue(2)); // OK
+            assertEquals("1", rv.kpiValue(3)); // Lệch
+            assertEquals("1", rv.kpiValue(4)); // Bypass
+            assertEquals("1", rv.kpiValue(5)); // Lỗi
+            assertEquals("1", rv.kpiValue(6)); // Chưa gửi
+            assertEquals("50%", rv.kpiValue(7)); // Excel 1/2
+            assertEquals(e.branches().size(), rv.branchCardCount());
+
+            // 2. Empty branch displays an EmptyState card body
+            List<themythofcrawl.ui.kit.EmptyState> emptyStates = collect(rv, themythofcrawl.ui.kit.EmptyState.class);
+            assertFalse(emptyStates.isEmpty(), "empty branch card must display an EmptyState placeholder");
+
+            // 3. Heatmap tooltip + click-to-jump onto specific (ApiGroup, RoleResult)
+            HistoryReportView.BranchRowsPanel brp = rv.rowsPanelForBranch(gDiff.branchId());
+            assertNotNull(brp);
+            brp.setSize(640, 60);
+            var hitRole = gDiff.results().get(0);
+            java.awt.Point center = brp.roleSquareCenter(0, 0);
+            assertNotNull(center);
+            java.awt.event.MouseEvent hoverEv = new java.awt.event.MouseEvent(brp,
+                    java.awt.event.MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0, center.x, center.y, 0, false);
+            String tip = brp.getToolTipText(hoverEv);
+            assertNotNull(tip);
+            assertTrue(tip.contains(hitRole.roleName() + ": 403 (10 B)"), "tooltip was: " + tip);
+
+            java.awt.event.MouseEvent clickEv = new java.awt.event.MouseEvent(brp,
+                    java.awt.event.MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(),
+                    java.awt.event.InputEvent.BUTTON1_DOWN_MASK, center.x, center.y, 1, false,
+                    java.awt.event.MouseEvent.BUTTON1);
+            brp.dispatchEvent(clickEv);
+            assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
+            assertSame(gDiff, ui.api.currentGroup());
+            assertSame(hitRole, ui.api.selectedResult());
+
+            // 4. Mode switching (Ma trận + Văn bản) & Burp renderer retention
+            ui.tabs.setSelectedComponent(ui.history.panel);
+            rv.setViewMode(HistoryReportView.MODE_MATRIX);
+            UiPreview.PlainHost.simulateBurpTheme(rv);
+            ThemedTable mat = rv.matrixTable();
+            assertEquals(5, mat.getRowCount());
+            assertTrue(mat.getColumnCount() >= 5 + gOk.results().size());
+            for (int col = 0; col < mat.getColumnCount(); col++) {
+                assertInstanceOf(ThemedTree.ExtensionRenderer.class,
+                        mat.getColumnModel().getColumn(col).getCellRenderer());
+            }
+
+            rv.setViewMode(HistoryReportView.MODE_TEXT);
+            assertTrue(rv.summaryTextArea().getText().contains("BÁO CÁO LỊCH SỬ"));
+
+            // 5. Collapse / Expand all & scrollToBranchPath
+            rv.setViewMode(HistoryReportView.MODE_CARDS);
+            rv.expandAll(false);
+            assertNull(rv.rowsPanelForBranch(gDiff.branchId()), "collapsed card hides row body");
+            assertTrue(rv.scrollToBranchPath("Toppage > orders"));
+            assertNotNull(rv.rowsPanelForBranch(gDiff.branchId()), "scrolling to branch auto-expands it");
+
+            // Paint & dynamic theme switch check
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(680, 620,
+                    java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g2 = img.createGraphics();
+            try {
+                rv.paint(g2);
+                themythofcrawl.ui.theme.Theme.onThemeChanged();
+            } finally {
+                g2.dispose();
+            }
+            ui.dispose();
+        });
+        e.close();
+
+        // 6. Scale test: 5000 APIs across 200 branches < 300 ms and virtualized card realization
+        Engine big = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+        big.open(ws.start("big-h", "BigHistory"));
+        themythofcrawl.core.Config cfg = big.config().copy();
+        cfg.captureEnabled = true;
+        cfg.confirmNewApis = false;
+        big.applyConfig(cfg);
+        for (int i = 0; i < 5000; i++) {
+            if (i % 25 == 0) {
+                big.setDestination("Toppage > m" + (i / 500) + " > b" + (i / 25));
+            }
+            big.process(UiSmokeTest.msg("GET", "/api/v1/r" + i + "/" + i), "Proxy", true, big.activeBranch().id());
+        }
+        SwingUtilities.invokeAndWait(() -> {
+            HistoryReportView bigView = new HistoryReportView(null, null);
+            bigView.setSize(720, 600);
+            bigView.doLayout();
+            long t0 = System.nanoTime();
+            bigView.setData(big.branches(), big.groups(), big.targets());
+            bigView.doLayout();
+            long elapsedMs = (System.nanoTime() - t0) / 1_000_000;
+            assertTrue(elapsedMs < 300, "5000-API HistoryReportView setData+layout must be < 300 ms, took " + elapsedMs + " ms");
+            assertEquals("5000", bigView.kpiValue(1));
+            assertTrue(bigView.branchCardCount() >= 200);
+            assertTrue(bigView.realizedCardCount() < 50,
+                    "virtualized card list should materialize only viewport cards, realized=" + bigView.realizedCardCount());
+        });
+        big.close();
+    }
+
     private static <T> List<T> collect(Component root, Class<T> type) {
         List<T> out = new ArrayList<>();
         if (type.isInstance(root)) {

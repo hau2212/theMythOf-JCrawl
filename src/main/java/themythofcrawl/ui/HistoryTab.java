@@ -6,29 +6,20 @@ import java.awt.FlowLayout;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
-import javax.swing.JTextArea;
 
 import themythofcrawl.app.Engine;
-import themythofcrawl.export.Reports;
 import themythofcrawl.model.ApiGroup;
-import themythofcrawl.ui.theme.Theme;
 
 /**
- * 'Lịch sử' tab: the branch tree (right-click for every action) next to the audit summary
- * (branches, APIs in order, the result of each role) that can be exported as a report.
+ * 'Lịch sử' tab: the branch tree (right-click for every action) next to the visual audit report
+ * (KPIs, branch cards with role heatmap, Role x API matrix, and copyable text report).
  */
 final class HistoryTab {
     final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final MainPanel ui;
     private final Engine engine;
     final BranchTree tree;
-    private final JTextArea summary = new JTextArea() {
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            setFont(Theme.current().monoFont);
-        }
-    };
+    final HistoryReportView report;
     boolean stale = true;
     private long nextOk;
 
@@ -36,10 +27,12 @@ final class HistoryTab {
         this.ui = ui;
         this.engine = ui.engine;
         tree = new BranchTree(engine);
+        report = new HistoryReportView(ui::jumpToGroup, ui::flash);
         tree.onChip((c, g, t, x, y) -> ui.chip(c, g, t, x, y));
         tree.tree.addTreeSelectionListener(e -> {
             if (!tree.restoring()) {
                 ui.useSource(tree);
+                syncReportToSelection();
             }
         });
         tree.tree.addMouseListener(ApiTab.treePopup(tree.tree, e -> {
@@ -98,15 +91,28 @@ final class HistoryTab {
         treePanel.setBorder(BorderFactory.createTitledBorder(
                 "Cây phân cấp Sub-folder & API (Chuột phải vào mục bất kỳ để Gửi / Đổi tên / Xem chi tiết)"));
         treePanel.add(MainPanel.scroll(tree.tree), BorderLayout.CENTER);
-        summary.setEditable(false);
-        summary.setFont(Theme.current().monoFont);
         JPanel sum = new JPanel(new BorderLayout());
         sum.setBorder(BorderFactory.createTitledBorder(
-                "Bản tổng hợp Audit (Danh sách Chức năng, API theo thứ tự & kết quả các Role)"));
-        sum.add(MainPanel.scroll(summary), BorderLayout.CENTER);
+                "Bản tổng hợp Audit (Thẻ theo nhánh · Ma trận Role x API · Văn bản)"));
+        sum.add(report, BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treePanel, sum);
-        split.setResizeWeight(0.42);
+        split.setResizeWeight(0.36);
         panel.add(split, BorderLayout.CENTER);
+    }
+
+    private void syncReportToSelection() {
+        Node n = tree.selectedNode();
+        if (n == null) {
+            return;
+        }
+        if (n.kind == Node.Kind.FOLDER) {
+            report.scrollToBranchPath((String) n.payload);
+        } else {
+            ApiGroup g = BranchTree.groupOf(n);
+            if (g != null) {
+                report.scrollToGroup(g);
+            }
+        }
     }
 
     private static javax.swing.JButton exportMenu(MainPanel ui) {
@@ -131,12 +137,7 @@ final class HistoryTab {
         stale = false;
         long t0 = System.nanoTime();
         tree.rebuild(engine.config().showGhosts);
-        int caret = summary.getCaretPosition();
-        String text = Reports.history(engine.branches(), engine.groups());
-        if (!text.equals(summary.getText())) {
-            summary.setText(text);
-            summary.setCaretPosition(Math.min(caret, text.length()));
-        }
+        report.setData(engine.branches(), engine.groups(), engine.targets());
         long ms = (System.nanoTime() - t0) / 1_000_000;
         nextOk = System.currentTimeMillis() + Math.min(5000, ms * 8);
     }
