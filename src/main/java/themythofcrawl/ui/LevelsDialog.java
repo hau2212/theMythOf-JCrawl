@@ -84,8 +84,12 @@ final class LevelsDialog {
         JScrollPane sp = new JScrollPane(list);
         sp.setBorder(BorderFactory.createTitledBorder("Cấp 1 ở trên cùng"));
         d.add(sp, BorderLayout.CENTER);
-        d.add(Ui.flow(FlowLayout.LEFT, Ui.button("➕ Thêm", add), Ui.button("✏ Sửa", edit), Ui.button("🗑 Xóa", del),
-                Ui.button("⬆", () -> move.accept(-1)), Ui.button("⬇", () -> move.accept(1))), BorderLayout.NORTH);
+        d.add(Ui.flow(FlowLayout.LEFT,
+                Ui.button("Thêm", t -> Icons.plus(t.success.text()), add),
+                Ui.button("Sửa", t -> Icons.edit(t.info.text()), edit),
+                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), del),
+                Ui.button("", t -> Icons.arrowUp(t.fg), "Đưa lên", () -> move.accept(-1)),
+                Ui.button("", t -> Icons.arrowDown(t.fg), "Đưa xuống", () -> move.accept(1))), BorderLayout.NORTH);
         d.add(Ui.flow(FlowLayout.RIGHT, Ui.button("Áp dụng (đổi tên đích, API trong đích đổi theo)", apply),
                 Ui.button("Hủy", d::dispose)), BorderLayout.SOUTH);
         d.setSize(new Dimension(520, 420));

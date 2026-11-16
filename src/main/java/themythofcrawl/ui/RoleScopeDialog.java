@@ -43,14 +43,14 @@ final class RoleScopeDialog {
     record Result(List<String> roles, boolean enable, RoleScopes.Scope scope, List<?> targets, boolean applyExisting) {
     }
 
-    private static final String[] SCOPE_LABELS = {"🌐 Toàn bộ (cờ Enabled của role - mọi API)",
-        "🌿 Chỉ các nhánh chọn bên dưới (gồm nhánh con, cả API bắt sau này)", "📌 Chỉ các API gốc chọn bên dưới"};
+    private static final String[] SCOPE_LABELS = {"Toàn bộ (cờ Enabled của role - mọi API)",
+        "Chỉ các nhánh chọn bên dưới (gồm nhánh con, cả API bắt sau này)", "Chỉ các API gốc chọn bên dưới"};
 
     private final Engine engine;
     private final List<ApiGroup> groups;
     private final JDialog dialog;
-    private final JRadioButton on = new JRadioButton("✅ BẬT role");
-    private final JRadioButton off = new JRadioButton("⬜ TẮT role");
+    private final JRadioButton on = new JRadioButton("BẬT role");
+    private final JRadioButton off = new JRadioButton("TẮT role");
     private final JRadioButton[] scopes = new JRadioButton[3];
     private final CheckList<String> roleList;
     private final CheckList<String> branchList;
@@ -166,8 +166,7 @@ final class RoleScopeDialog {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         rulesBox.setLayout(new BoxLayout(rulesBox, BoxLayout.Y_AXIS));
         p.add(MainPanel.scroll(rulesBox), BorderLayout.CENTER);
-        JLabel hint = new JLabel(" Thứ tự ưu tiên: cờ Enabled toàn bộ  →  nhánh (nhánh sâu hơn thắng)  →  từng API.");
-        hint.setForeground(Palette.ui().muted);
+        JLabel hint = Ui.muted(" Thứ tự ưu tiên: cờ Enabled toàn bộ  >  nhánh (nhánh sâu hơn thắng)  >  từng API.");
         p.add(hint, BorderLayout.SOUTH);
         fillRules();
         return p;
@@ -188,16 +187,20 @@ final class RoleScopeDialog {
             rulesBox.add(new JLabel("   Chưa có ngoại lệ - mọi API dùng cờ Enabled của từng role."));
         }
         for (BranchRule r : rules) {
-            JPanel row = Ui.flow(FlowLayout.LEFT, Ui.compact(Ui.button("✖", "Xóa ngoại lệ của nhánh này", () -> {
+            JLabel lbl = new JLabel(" " + r.prefix() + "   " + onOff(r.roles()));
+            lbl.setIcon(Icons.themed(t -> Icons.branch(t.teal.text())));
+            JPanel row = Ui.flow(FlowLayout.LEFT, Ui.compact(Ui.button("", t -> Icons.trash(t.danger.text()), "Xóa ngoại lệ của nhánh này", () -> {
                 engine.removeBranchRule(r.prefix(), existing.isSelected());
                 fillRules();
                 update();
-            })), new JLabel("🌿 " + r.prefix() + "   " + onOff(r.roles())));
+            })), lbl);
             row.setAlignmentX(0f);
             rulesBox.add(row);
         }
         for (ApiGroup g : over) {
-            JPanel row = Ui.flow(FlowLayout.LEFT, Ui.compact(Ui.button("✖", "Xóa ngoại lệ của API này", () -> {
+            JLabel lbl = new JLabel(" #" + g.gid() + " " + g.method() + " " + Text.stripQuery(g.path()) + "   " + onOff(g.roleOverrides()));
+            lbl.setIcon(Icons.themed(t -> Icons.pin(t.orig.text())));
+            JPanel row = Ui.flow(FlowLayout.LEFT, Ui.compact(Ui.button("", t -> Icons.trash(t.danger.text()), "Xóa ngoại lệ của API này", () -> {
                 if (existing.isSelected()) {
                     engine.clearOverrides(g);
                 } else {
@@ -205,7 +208,7 @@ final class RoleScopeDialog {
                 }
                 fillRules();
                 update();
-            })), new JLabel("📌 #" + g.gid() + " " + g.method() + " " + Text.stripQuery(g.path()) + "   " + onOff(g.roleOverrides())));
+            })), lbl);
             row.setAlignmentX(0f);
             rulesBox.add(row);
         }

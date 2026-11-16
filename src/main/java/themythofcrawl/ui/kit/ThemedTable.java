@@ -290,7 +290,7 @@ public class ThemedTable extends JTable {
                 Color bg = getBackground();
                 Color fg = getForeground();
                 if (bg != null && fg != null) {
-                    super.setGridColor(mix(bg, fg, 0.14));
+                    super.setGridColor(themythofcrawl.ui.theme.Theme.of(bg, fg).grid);
                 }
                 if (getTableHeader() != null && getTableHeader().getFont() != null) {
                     getTableHeader().setFont(getTableHeader().getFont().deriveFont(Font.BOLD));
@@ -305,11 +305,5 @@ public class ThemedTable extends JTable {
         if (r instanceof JComponent jc && seen.add(r)) {
             jc.updateUI();
         }
-    }
-
-    private static Color mix(Color a, Color b, double t) {
-        return new Color((int) (a.getRed() + (b.getRed() - a.getRed()) * t),
-                (int) (a.getGreen() + (b.getGreen() - a.getGreen()) * t),
-                (int) (a.getBlue() + (b.getBlue() - a.getBlue()) * t));
     }
 }

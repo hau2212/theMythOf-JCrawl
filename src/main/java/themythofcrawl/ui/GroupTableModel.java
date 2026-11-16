@@ -22,7 +22,7 @@ import themythofcrawl.place.Decisions;
 /** The API list: one row per captured API, filtered by branch / colour. Rows are added incrementally. */
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
     public static final String[] COLS = {"API #", "Group", "Group Path (Click đúp để chọn/đổi)", "Đánh giá / Màu (Info)",
-        "Method", "Host", "Path", "Orig", "Orig Len", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "📋 Đã copy", "Copy",
+        "Method", "Host", "Path", "Orig", "Orig Len", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
         "Excel", "Trùng"};
     public static final int PATH_COL = 2;
     public static final int COPY_COL = 14;
@@ -229,7 +229,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                 yield n > 0 ? "#" + g.target().sttText() + " · gặp " + n : "#" + g.target().sttText();
             }
             case 16 -> {
-                String b = Decisions.dupBadge(g);
+                String b = BranchTree.dupBadge(g);
                 yield b.isEmpty() ? "" : b.substring(1, b.length() - 1);
             }
             default -> "";

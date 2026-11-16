@@ -1,7 +1,7 @@
 package themythofcrawl.ui;
 
+import java.awt.Color;
 import java.awt.Component;
-import java.awt.Font;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.IntFunction;
@@ -12,11 +12,12 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.ui.kit.ThemedTree;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * Cell renderer of every data table: zebra rows tinted by audit level, a colour bar per branch in the
  * first column, coloured method / status / verdict; 'copy' cells draw the copy glyph, 'link' / 'dup'
- * cells look clickable.
+ * cells look clickable; emoji markers are replaced by drawn Java2D icons.
  */
 public class AuditRenderer extends DefaultTableCellRenderer implements ThemedTree.ExtensionRenderer {
     public enum Mode { TEXT, COPY, LINK, DUP }
@@ -61,41 +62,57 @@ public class AuditRenderer extends DefaultTableCellRenderer implements ThemedTre
         JLabel c = (JLabel) super.getTableCellRendererComponent(table, value, selected, false, row, column);
         int mr = table.convertRowIndexToModel(row);
         int mc = table.convertColumnIndexToModel(column);
-        Palette pal = Palette.of(table.getBackground(), table.getForeground());
+        Theme th = Theme.of(table.getBackground(), table.getForeground());
         Object accent = rows.accentAt(mr);
         boolean isBold = bold.contains(mc) || ("ORIG".equals(accent) && mc <= 1) || mode != Mode.TEXT;
-        c.setFont(isBold ? table.getFont().deriveFont(Font.BOLD) : table.getFont());
-        c.setBorder(column == 0 ? pal.stripe(accent) : pal.pad);
+        c.setFont(isBold ? th.boldFont : th.baseFont);
+        c.setBorder(column == 0 ? th.stripe(accent) : th.cellPad);
         c.setIcon(null);
+        c.setIconTextGap(5);
         c.setHorizontalAlignment(JLabel.LEFT);
+
+        String raw = value == null ? "" : String.valueOf(value);
+        AuditLevel lvl = rows.levelAt(mr);
         if (!selected) {
-            AuditLevel lvl = rows.levelAt(mr);
-            c.setBackground(pal.background(lvl, row));
-            java.awt.Color fg = pal.fg;
+            c.setBackground(th.rowBackground(lvl, row));
+            Color fg = th.fg;
             if (auditCol != null && mc == auditCol) {
-                fg = pal.auditFg(lvl);
+                fg = lvl == AuditLevel.NONE ? th.fg : th.audit(lvl).text();
             } else if (methodCol != null && mc == methodCol) {
-                fg = pal.methodFg(String.valueOf(value));
+                Theme.Token mt = th.method(raw);
+                fg = mt == th.pending ? th.fg : mt.text();
             } else if (statusCol != null && mc == statusCol && value != null) {
                 try {
-                    fg = pal.statusFg(Integer.parseInt(String.valueOf(value)));
+                    fg = th.statusColor(Integer.parseInt(raw));
                 } catch (NumberFormatException ignored) {
                     // not a status code
                 }
             } else if ("ORIG".equals(accent) && mc <= 1) {
-                fg = pal.origFg;
+                fg = th.orig.text();
             }
-            if (mode == Mode.LINK && value != null && !String.valueOf(value).isEmpty()) {
-                fg = pal.origFg;
-            } else if (mode == Mode.DUP && value != null && !String.valueOf(value).isEmpty()) {
-                fg = Palette.DUP_PURPLE;
+            if (mode == Mode.LINK && !raw.isEmpty()) {
+                fg = th.orig.text();
+            } else if (mode == Mode.DUP && !raw.isEmpty()) {
+                fg = th.dup.text();
             }
             c.setForeground(fg);
         }
+
         if (mode == Mode.COPY) {
-            c.setIcon(Icons.copy(selected ? c.getForeground() : pal.muted));
+            c.setIcon(Icons.copy(selected ? c.getForeground() : th.muted));
             c.setText("");
             c.setHorizontalAlignment(JLabel.CENTER);
+        } else if (mode == Mode.DUP && !raw.isEmpty()) {
+            c.setIcon(Icons.dup(selected ? c.getForeground() : th.dup.text(), 12));
+            c.setText(Icons.stripLeadingSymbol(raw));
+        } else if (!raw.isEmpty()) {
+            javax.swing.Icon symIcon = Icons.forLeadingSymbol(raw, th, selected ? c.getForeground() : null);
+            if (symIcon != null) {
+                c.setIcon(symIcon);
+                c.setText(Icons.stripLeadingSymbol(raw));
+            } else if (auditCol != null && mc == auditCol && lvl != AuditLevel.NONE) {
+                c.setIcon(Icons.forAudit(lvl, selected ? c.getForeground() : th.audit(lvl).text()));
+            }
         }
         c.setToolTipText(tooltip == null ? null : tooltip.apply(mr));
         return c;

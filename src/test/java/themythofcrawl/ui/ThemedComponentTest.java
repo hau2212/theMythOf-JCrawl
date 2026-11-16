@@ -98,7 +98,7 @@ class ThemedComponentTest {
             assertSame(copyRenderer, table.getColumn("ColA").getCellRenderer());
             assertSame(mainRenderer, table.getColumn("ColB").getCellRenderer());
             assertSame(mainRenderer, table.getColumn("ColC").getCellRenderer());
-            assertEquals(24, table.getRowHeight());
+            assertEquals(themythofcrawl.ui.theme.Theme.ROW_TABLE, table.getRowHeight());
             assertEquals(JTable.AUTO_RESIZE_OFF, table.getAutoResizeMode());
             assertTrue(table.getShowHorizontalLines());
             assertFalse(table.getShowVerticalLines());

@@ -2,7 +2,6 @@ package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
-import java.awt.Font;
 
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
@@ -12,6 +11,7 @@ import javax.swing.JTextArea;
 import themythofcrawl.app.Engine;
 import themythofcrawl.export.Reports;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * 'Lịch sử' tab: the branch tree (right-click for every action) next to the audit summary
@@ -22,7 +22,13 @@ final class HistoryTab {
     private final MainPanel ui;
     private final Engine engine;
     final BranchTree tree;
-    private final JTextArea summary = new JTextArea();
+    private final JTextArea summary = new JTextArea() {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setFont(Theme.current().monoFont);
+        }
+    };
     boolean stale = true;
     private long nextOk;
 
@@ -52,39 +58,40 @@ final class HistoryTab {
             }
         });
         JPanel bar = Ui.flow(FlowLayout.LEFT,
-                Ui.button("▶ Gửi mục đang chọn", () -> {
+                Ui.button("Gửi mục đang chọn", t -> Icons.send(t.fg), () -> {
                     ui.useSource(tree);
                     ui.send(ui.scope().groups());
                 }),
-                Ui.button("📤 Đẩy -> Burp Repeater", () -> {
+                Ui.button("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), () -> {
                     ui.useSource(tree);
                     ui.push(ui.scope().groups());
                 }),
-                Ui.button("🎯 Đẩy / Gửi có chọn Role...", () -> {
+                Ui.button("Đẩy / Gửi có chọn Role...", t -> Icons.target(t.fg), () -> {
                     ui.useSource(tree);
                     ui.pushDialog(false, null, null);
                 }),
-                Ui.button("+ Sub-folder con...", () -> {
+                Ui.button("Sub-folder con...", t -> Icons.plus(t.fg), () -> {
                     ui.useSource(tree);
                     ui.addSubfolder(ui.selectedBranch());
                 }),
-                Ui.button("+ Nhánh mới...", ui::nextSibling),
-                Ui.button("✏ Đổi tên...", () -> {
+                Ui.button("Nhánh mới...", t -> Icons.plus(t.fg), ui::nextSibling),
+                Ui.button("Đổi tên...", t -> Icons.edit(t.fg), () -> {
                     ui.useSource(tree);
                     String b = ui.selectedBranch();
                     if (b != null) {
                         ui.renameBranchDialog(b);
                     }
                 }),
-                Ui.button("🔍 Xem ở tab API", () -> ui.jumpToGroup(BranchTree.groupOf(tree.selectedNode()))),
+                Ui.button("Xem ở tab API", t -> Icons.search(t.info.text()),
+                        () -> ui.jumpToGroup(BranchTree.groupOf(tree.selectedNode()))),
                 exportMenu(ui),
-                Ui.button("↻ Refresh", () -> {
+                Ui.button("Refresh", t -> Icons.refresh(t.fg), () -> {
                     stale = true;
                     nextOk = 0;
                     refreshIfVisible();
                 }),
-                Ui.button("+", "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
-                Ui.button("−", "Thu gọn tất cả", () -> tree.expandFolders(false)),
+                Ui.button("", t -> Icons.plus(t.fg), "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
+                Ui.button("", t -> Icons.minus(t.fg), "Thu gọn tất cả", () -> tree.expandFolders(false)),
                 Ui.info(Help.SELECT, "Chọn nhiều"));
         panel.add(bar, BorderLayout.NORTH);
         JPanel treePanel = new JPanel(new BorderLayout());
@@ -92,7 +99,7 @@ final class HistoryTab {
                 "Cây phân cấp Sub-folder & API (Chuột phải vào mục bất kỳ để Gửi / Đổi tên / Xem chi tiết)"));
         treePanel.add(MainPanel.scroll(tree.tree), BorderLayout.CENTER);
         summary.setEditable(false);
-        summary.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        summary.setFont(Theme.current().monoFont);
         JPanel sum = new JPanel(new BorderLayout());
         sum.setBorder(BorderFactory.createTitledBorder(
                 "Bản tổng hợp Audit (Danh sách Chức năng, API theo thứ tự & kết quả các Role)"));
@@ -103,15 +110,16 @@ final class HistoryTab {
     }
 
     private static javax.swing.JButton exportMenu(MainPanel ui) {
-        javax.swing.JButton b = new javax.swing.JButton("📄 Xuất ▾");
-        b.setToolTipText("Xuất Excel (.xlsx), báo cáo (.txt / .md) hoặc ma trận JSON");
-        b.addActionListener(e -> {
-            javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
-            m.add(Ui.item("📊 Xuất Excel (.xlsx)...", ui::exportExcel));
-            m.add(Ui.item("📄 Export Báo cáo (.txt/.md)...", ui::exportHistory));
-            m.add(Ui.item("{ } Ma trận Role x API (.json)...", ui::exportMatrix));
-            m.show(b, 0, b.getHeight());
-        });
+        javax.swing.JButton[] ref = new javax.swing.JButton[1];
+        javax.swing.JButton b = Ui.dropdown("Xuất", t -> Icons.withChevron(Icons.export(t.fg), t.fg),
+                "Xuất Excel (.xlsx), báo cáo (.txt / .md) hoặc ma trận JSON", () -> {
+                    javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
+                    m.add(Ui.item("Xuất Excel (.xlsx)...", t -> Icons.excel(t.success.text()), ui::exportExcel));
+                    m.add(Ui.item("Export Báo cáo (.txt/.md)...", t -> Icons.document(t.info.text()), ui::exportHistory));
+                    m.add(Ui.item("Ma trận Role x API (.json)...", t -> Icons.codeBraces(t.dup.text()), ui::exportMatrix));
+                    m.show(ref[0], 0, ref[0].getHeight());
+                });
+        ref[0] = b;
         return b;
     }
 

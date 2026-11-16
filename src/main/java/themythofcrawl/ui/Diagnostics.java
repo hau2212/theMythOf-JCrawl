@@ -37,7 +37,7 @@ public final class Diagnostics {
     }
 
     public static boolean isDark() {
-        return Palette.ui().dark;
+        return themythofcrawl.ui.theme.Theme.current().dark;
     }
 
     public static String fontSummary() {

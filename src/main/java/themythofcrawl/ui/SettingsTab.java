@@ -1,17 +1,18 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -28,13 +29,20 @@ import javax.swing.Scrollable;
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Config;
 import themythofcrawl.core.Text;
+import themythofcrawl.ui.theme.Theme;
 
 /** 'Cấu hình' tab: colour-coded sections; every change is applied and saved at once. */
 final class SettingsTab {
+    private final List<Runnable> themeUpdaters = new ArrayList<>();
     final JPanel panel = new JPanel(new BorderLayout()) {
         @Override
         public void updateUI() {
             super.updateUI();
+            if (themeUpdaters != null) {
+                for (Runnable r : themeUpdaters) {
+                    r.run();
+                }
+            }
             if (diagVersion != null) {
                 refreshDiagnostics();
             }
@@ -49,7 +57,13 @@ final class SettingsTab {
     private final JTextField staticExt = new JTextField(50);
     private final JCheckBox regexOn = new JCheckBox("Chỉ bắt path khớp Regex:");
     private final JTextField regex = new JTextField(50);
-    private final JLabel regexError = new JLabel("");
+    private final JLabel regexError = new JLabel("") {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setForeground(Theme.current().danger.text());
+        }
+    };
     private final JCheckBox options = new JCheckBox("Bỏ qua OPTIONS / HEAD (CORS preflight)");
     private final JCheckBox dedup = new JCheckBox("Chỉ nhân bản mỗi endpoint 1 lần (Method + Host + Path)");
     private final JCheckBox dedupIds = new JCheckBox("Coi số / UUID / chuỗi hex dài trong path là {id} khi so trùng");
@@ -57,7 +71,7 @@ final class SettingsTab {
     private final JCheckBox confirmNew = new JCheckBox("Hỏi xác nhận vị trí API mới (màu xám, phải bấm Xác nhận)");
     private final JCheckBox restore = new JCheckBox("API đã xóa quay về chỗ cũ khi bắt lại (giữ chỗ)");
     private final JCheckBox dupNew = new JCheckBox("Gặp API trùng ở chỗ mới: tạo bản #2, #3 ... và hỏi giữ hay ẩn (màu tím)");
-    private final JCheckBox ghosts = new JCheckBox("Hiện API đã xóa (👻 giữ chỗ) trong cây");
+    private final JCheckBox ghosts = new JCheckBox("Hiện API đã xóa (giữ chỗ) trong cây");
     private final JComboBox<String> profile = new JComboBox<>();
     private final JTextField delay = new JTextField(6);
     private final JTextField jitter = new JTextField(6);
@@ -102,13 +116,13 @@ final class SettingsTab {
         Holder content = new Holder();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        content.add(section("1.  Bắt API từ Proxy", new Color(37, 99, 235),
-                "Request nào đi qua Proxy được bắt và nhân bản theo Role. Bắt thủ công (chuột phải > theMythOfCrawl) bỏ qua các bộ lọc này.",
+        content.add(section("1.  Bắt API từ Proxy", t -> t.info,
+                "Request nào đi qua Proxy được bắt và nhân bản theo Role. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
                 row(scope), pair(ignoreStatic, staticExt), pair(regexOn, regex), pair(null, regexError), row(options)));
-        content.add(section("2.  Chống trùng lặp & vị trí", new Color(147, 51, 234),
+        content.add(section("2.  Chống trùng lặp & vị trí", t -> t.dup,
                 "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại được đặt.",
                 row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts)));
-        content.add(section("3.  Gửi request & chống lỗi 429", new Color(22, 163, 74),
+        content.add(section("3.  Gửi request & chống lỗi 429", t -> t.success,
                 "Mọi request (tự gửi sau khi crawl, gửi hàng loạt, gửi lẻ) đi qua 1 hàng đợi theo từng host, giãn cách như người dùng "
                         + "thật; gặp 429 / 503 thì tạm dừng host đó (theo Retry-After), giảm tốc và tự gửi lại.",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ giữa 2 request (ms):", delay, pacing),
@@ -116,14 +130,14 @@ final class SettingsTab {
                 field("Số request song song mỗi host:", concurrency, new JLabel("1 = lần lượt như người thật")),
                 field("Tự gửi lại khi gặp 429 / 503 (lần):", retries, null), field("Tổng số luồng gửi (mọi host):", threads, null),
                 row(sendOriginal)));
-        content.add(section("4.  Danh sách API từ file Excel (tùy chọn)", Palette.PINK,
+        content.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
                 "Nạp file .xlsx gồm các cột STT | PROTOCOL (method) | PATH | POSITION. Tham số trong path như {id} [id] (id) <id> :id * "
                         + "được hiểu là giá trị bất kỳ. Không nạp file thì extension bắt API như bình thường.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
                 row(targetPrefix), row(targetIds), field("Query trong file Excel:", queryMode, null)));
-        content.add(section("5.  Burp Repeater & tên tab", Palette.ORANGE, "Cách đặt tên tab khi đẩy sang Burp Repeater.",
+        content.add(section("5.  Burp Repeater & tên tab", t -> t.critical, "Cách đặt tên tab khi đẩy sang Burp Repeater.",
                 row(number), row(branchInTab), field("Độ dài tối đa của path trong tên tab:", pathLen, null)));
-        content.add(section("6.  Copy STT + Path (để dán lên server / báo cáo)", new Color(13, 148, 136),
+        content.add(section("6.  Copy STT + Path (để dán lên server / báo cáo)", t -> t.teal,
                 "Chuột phải API / nhánh > 'Copy STT + Path', icon copy ở mỗi API, hoặc Ctrl+Shift+C. STT lấy từ file Excel (dòng khớp); "
                         + "không có thì theo lựa chọn bên dưới. Mẫu dùng được {stt} {path} {method} {endpoint} {url} {api}.",
                 field("Mẫu copy:", copyFormat, new JLabel("mặc định: {stt}. {path}")),
@@ -134,8 +148,8 @@ final class SettingsTab {
                         load();
                     }
                 }), new JLabel(" ")), row(positionCopy)));
-        content.add(section("7.  Workspace (lưu dữ liệu)", new Color(71, 85, 105), Help.WORKSPACE.split("\n")[0],
-                pair(Ui.button("📁 Mở thư mục", () -> {
+        content.add(section("7.  Workspace (lưu dữ liệu)", t -> t.slate, Help.WORKSPACE.split("\n")[0],
+                pair(Ui.button("Mở thư mục", t -> Icons.folder(t.fg), () -> {
                     try {
                         java.awt.Desktop.getDesktop().open(new java.io.File(engine.workspaceLocation()));
                     } catch (Exception e) {
@@ -143,7 +157,7 @@ final class SettingsTab {
                         ui.flash("Đã copy đường dẫn workspace");
                     }
                 }), workspaceInfo)));
-        content.add(section("8.  Giới thiệu & chẩn đoán", new Color(37, 99, 235),
+        content.add(section("8.  Giới thiệu & chẩn đoán", t -> t.info,
                 "Phiên bản đang chạy, Look & Feel (theme của Burp), màu nền / accent và thông số scale để kiểm tra khi gặp lỗi hiển thị.",
                 field("Phiên bản:", diagVersion, null),
                 field("Look & Feel (LAF):", diagLaf, null),
@@ -191,7 +205,6 @@ final class SettingsTab {
                 }
             });
         }
-        regexError.setForeground(new Color(200, 30, 30));
         load();
     }
 
@@ -325,24 +338,15 @@ final class SettingsTab {
         return new Object[] {"field", label, c, note};
     }
 
-    private static JPanel section(String title, Color accent, String desc, Object[]... rows) {
-        Palette pal = Palette.ui();
-        Color tint = Palette.mix(pal.bg, accent, pal.dark ? 0.10 : 0.05);
+    private JPanel section(String title, Function<Theme, Theme.Token> accentFn, String desc, Object[]... rows) {
         JPanel s = new JPanel(new BorderLayout(0, 6));
         s.setAlignmentX(0f);
-        s.setBackground(tint);
-        s.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(0, 0, 10, 0), BorderFactory.createMatteBorder(0, 4, 0, 0, accent)),
-                BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         JLabel t = new JLabel(title);
-        t.setFont(t.getFont().deriveFont(Font.BOLD, t.getFont().getSize2D() + 2));
-        t.setForeground(pal.dark ? Palette.mix(accent, Color.WHITE, 0.35) : accent);
         JTextArea d = new JTextArea(desc);
         d.setEditable(false);
         d.setLineWrap(true);
         d.setWrapStyleWord(true);
         d.setOpaque(false);
-        d.setForeground(pal.muted);
         JPanel head = new JPanel(new BorderLayout(0, 2));
         head.setOpaque(false);
         head.add(t, BorderLayout.NORTH);
@@ -353,6 +357,7 @@ final class SettingsTab {
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(2, 2, 2, 6);
         gc.anchor = GridBagConstraints.WEST;
+        List<JComponent> notes = new ArrayList<>();
         int y = 0;
         for (Object[] r : rows) {
             gc.gridy = y++;
@@ -383,7 +388,7 @@ final class SettingsTab {
                         gc.gridx = 2;
                         gc.weightx = 1;
                         JComponent note = (JComponent) r[3];
-                        note.setForeground(pal.muted);
+                        notes.add(note);
                         body.add(note, gc);
                     }
                 }
@@ -396,6 +401,23 @@ final class SettingsTab {
         filler.fill = GridBagConstraints.HORIZONTAL;
         body.add(javax.swing.Box.createHorizontalGlue(), filler);   // keeps every row left-aligned
         s.add(body, BorderLayout.CENTER);
+        Runnable apply = () -> {
+            Theme th = Theme.current();
+            Theme.Token tok = accentFn.apply(th);
+            s.setBackground(Theme.mix(th.bg, tok.base(), th.dark ? 0.10 : 0.05));
+            s.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createEmptyBorder(0, 0, 10, 0), BorderFactory.createMatteBorder(0, 4, 0, 0, tok.base())),
+                    BorderFactory.createEmptyBorder(8, 10, 8, 10)));
+            t.setFont(th.headingFont);
+            t.setForeground(tok.text());
+            d.setForeground(th.muted);
+            d.setFont(th.baseFont);
+            for (JComponent n : notes) {
+                n.setForeground(th.muted);
+            }
+        };
+        apply.run();
+        themeUpdaters.add(apply);
         s.setMaximumSize(new Dimension(Integer.MAX_VALUE, s.getPreferredSize().height + 400));
         return s;
     }

@@ -17,6 +17,7 @@ import javax.swing.JSplitPane;
 import themythofcrawl.app.Engine;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * 'Cây' tab: the branch tree alone, full size, with the selected API / role's request and response
@@ -29,9 +30,9 @@ final class TreeTab {
     private final MainPanel ui;
     private final Engine engine;
     final BranchTree tree;
-    private final JLabel header = new JLabel(" ");
+    private final JLabel header = Ui.muted(" ");
     private final JButton windowBtn;
-    private final JButton more = new JButton("Thao tác ▾");
+    private final JButton more;
     private final JLabel reqLabel = Ui.bold(" Request - chọn 1 API / role trong cây");
     private final JLabel respLabel = Ui.bold(" Response");
     private final UiHost.Viewer req;
@@ -56,18 +57,29 @@ final class TreeTab {
             ui.useSource(tree);
             ui.copy(ui.scope().groups());
         });
-        windowBtn = Ui.button("🗗 Mở cửa sổ riêng", this::toggleWindow);
-        windowBtn.setFont(windowBtn.getFont().deriveFont(java.awt.Font.BOLD));
-        more.addActionListener(e -> menu());
-        JPanel bar = Ui.flow(FlowLayout.LEFT, windowBtn, Ui.button("🎯 Đẩy / Gửi có chọn Role...", () -> {
-            ui.useSource(tree);
-            ui.pushDialog(false, null, null);
-        }), Ui.button("📋 Copy", "Copy 'STT. path' của API / nhánh đang chọn (Ctrl+Shift+C)", () -> {
-            ui.useSource(tree);
-            ui.copy(ui.scope().groups());
-        }), more, Ui.button("+", "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
-                Ui.button("−", "Thu gọn tất cả", () -> tree.expandFolders(false)), Ui.info(Help.SELECT, "Chọn nhiều"));
-        header.setForeground(Palette.ui().muted);
+        windowBtn = new JButton("Mở cửa sổ riêng") {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setFont(Theme.current().boldFont);
+            }
+        };
+        windowBtn.setIcon(Icons.themed(t -> Icons.window(t.fg)));
+        windowBtn.addActionListener(e -> toggleWindow());
+        more = Ui.dropdown("Thao tác", null, "Thao tác nhánh / API", this::menu);
+        JPanel bar = Ui.flow(FlowLayout.LEFT, windowBtn,
+                Ui.button("Đẩy / Gửi có chọn Role...", t -> Icons.target(t.fg), () -> {
+                    ui.useSource(tree);
+                    ui.pushDialog(false, null, null);
+                }),
+                Ui.button("Copy", t -> Icons.copy(t.fg), "Copy 'STT. path' của API / nhánh đang chọn (Ctrl+Shift+C)", () -> {
+                    ui.useSource(tree);
+                    ui.copy(ui.scope().groups());
+                }),
+                more,
+                Ui.button("", t -> Icons.plus(t.fg), "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
+                Ui.button("", t -> Icons.minus(t.fg), "Thu gọn tất cả", () -> tree.expandFolders(false)),
+                Ui.info(Help.SELECT, "Chọn nhiều"));
         header.setBorder(BorderFactory.createEmptyBorder(0, 8, 2, 8));
         JPanel head = new JPanel(new BorderLayout());
         head.add(bar, BorderLayout.NORTH);
@@ -96,12 +108,13 @@ final class TreeTab {
     private void menu() {
         ui.useSource(tree);
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("▶ Gửi mục đang chọn (nhánh / API / role)", () -> ui.send(ui.scope().groups())));
-        m.add(Ui.item("📤 Đẩy mục đang chọn -> Burp Repeater", () -> ui.push(ui.scope().groups())));
-        m.add(Ui.item("🎯 Gửi có chọn Role...", () -> ui.pushDialog(true, null, null)));
-        m.add(Ui.item("📋 Copy STT + Path (Ctrl+Shift+C)", () -> ui.copy(ui.scope().groups())));
-        m.add(Ui.item("📋 Copy path nhánh", ui::copyBranchPath));
-        m.add(Ui.item("🎛 Bật / Tắt Role cho mục đang chọn...", () -> {
+        m.add(Ui.item("Gửi mục đang chọn (nhánh / API / role)", t -> Icons.send(t.critical.text()),
+                () -> ui.send(ui.scope().groups())));
+        m.add(Ui.item("Đẩy mục đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
+        m.add(Ui.item("Gửi có chọn Role...", Icons::target, () -> ui.pushDialog(true, null, null)));
+        m.add(Ui.item("Copy STT + Path (Ctrl+Shift+C)", t -> Icons.copy(t.muted), () -> ui.copy(ui.scope().groups())));
+        m.add(Ui.item("Copy path nhánh", t -> Icons.copy(t.muted), ui::copyBranchPath));
+        m.add(Ui.item("Bật / Tắt Role cho mục đang chọn...", Icons::sliders, () -> {
             Node n = tree.selectedNode();
             if (n != null && n.kind == Node.Kind.FOLDER) {
                 ui.roleScopeDialog(false, themythofcrawl.model.RoleScopes.Scope.BRANCH, java.util.List.of((String) n.payload), null, null);
@@ -110,18 +123,19 @@ final class TreeTab {
             }
         }));
         m.addSeparator();
-        m.add(Ui.item("➜ Đặt nhánh đang chọn làm ĐÍCH cho request mới", ui::destinationFromTree));
-        m.add(Ui.item("✔ Xác nhận vị trí các API đang chọn / trong nhánh", () -> engine.confirm(tree.selectedGroups(), "")));
-        m.add(Ui.item("↪ Chuyển các API đang chọn sang đường dẫn khác...", () -> ui.moveDialog(tree.selectedGroups())));
-        m.add(Ui.item("↶ Đưa các API đang chọn về vị trí trước", () -> ui.revert(tree.selectedGroups())));
-        m.add(Ui.item("➕ Thêm Sub-folder con...", () -> ui.addSubfolder(ui.selectedBranch())));
-        m.add(Ui.item("✏ Đổi tên nhánh...", () -> {
+        m.add(Ui.item("Đặt nhánh đang chọn làm ĐÍCH cho request mới", Icons::arrowRight, ui::destinationFromTree));
+        m.add(Ui.item("Xác nhận vị trí các API đang chọn / trong nhánh", t -> Icons.check(t.success.text()),
+                () -> engine.confirm(tree.selectedGroups(), "")));
+        m.add(Ui.item("Chuyển các API đang chọn sang đường dẫn khác...", Icons::move, () -> ui.moveDialog(tree.selectedGroups())));
+        m.add(Ui.item("Đưa các API đang chọn về vị trí trước", Icons::undo, () -> ui.revert(tree.selectedGroups())));
+        m.add(Ui.item("Thêm Sub-folder con...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
+        m.add(Ui.item("Đổi tên nhánh...", Icons::edit, () -> {
             String b = ui.selectedBranch();
             if (b != null) {
                 ui.renameBranchDialog(b);
             }
         }));
-        m.add(Ui.item("🗑 Xóa nhánh...", () -> ui.deleteBranchDialog(ui.selectedBranch())));
+        m.add(Ui.item("Xóa nhánh...", t -> Icons.trash(t.danger.text()), () -> ui.deleteBranchDialog(ui.selectedBranch())));
         m.show(more, 0, more.getHeight());
     }
 
@@ -168,7 +182,7 @@ final class TreeTab {
         if (stale && tree.tree.isShowing()) {
             stale = false;
             tree.rebuild(engine.config().showGhosts);
-            header.setText("➜ Request mới sẽ vào: " + engine.activeBranch().name() + "   ·   " + engine.branches().size()
+            header.setText("Request mới sẽ vào: " + engine.activeBranch().name() + "   ·   " + engine.branches().size()
                     + " nhánh, " + engine.groups().size() + " API   ·   Chuột phải để Gửi / Đẩy / Thêm / Sửa / Xóa; "
                     + "chọn 1 API để xem Request / Response bên dưới");
         }
@@ -191,12 +205,13 @@ final class TreeTab {
         panel.add(placeholder, BorderLayout.CENTER);
         panel.revalidate();
         panel.repaint();
-        JCheckBox onTop = new JCheckBox("📌 Luôn nằm trên các cửa sổ khác");
+        JCheckBox onTop = new JCheckBox("Luôn nằm trên các cửa sổ khác");
         onTop.addActionListener(e -> window.setAlwaysOnTop(onTop.isSelected()));
         JPanel rootPanel = new JPanel(new BorderLayout());
         rootPanel.add(Ui.flow(FlowLayout.LEFT, onTop), BorderLayout.NORTH);
         rootPanel.add(content, BorderLayout.CENTER);
         window.getContentPane().add(rootPanel);
+        Theme.track(rootPanel);
         try {
             ui.host.applyTheme(rootPanel);
         } catch (RuntimeException ignored) {
@@ -205,7 +220,7 @@ final class TreeTab {
         window.setSize(new Dimension(980, 900));
         window.setLocationRelativeTo(ui.root());
         window.setVisible(true);
-        windowBtn.setText("🗗 Gắn lại vào tab");
+        windowBtn.setText("Gắn lại vào tab");
         stale = true;
         refreshIfVisible();
     }
@@ -222,7 +237,7 @@ final class TreeTab {
         panel.add(content, BorderLayout.CENTER);
         panel.revalidate();
         panel.repaint();
-        windowBtn.setText("🗗 Mở cửa sổ riêng");
+        windowBtn.setText("Mở cửa sổ riêng");
         stale = true;
     }
 

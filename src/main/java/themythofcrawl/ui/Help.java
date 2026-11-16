@@ -1,6 +1,6 @@
 package themythofcrawl.ui;
 
-/** Texts of the ⓘ icons: first line = hover summary, the whole text = click popover. */
+/** Texts of the info icons: first line = hover summary, the whole text = click popover. */
 public final class Help {
     private Help() {
     }
@@ -10,16 +10,16 @@ public final class Help {
     public static final String DEST = "Đích: mọi request MỚI sẽ vào đường dẫn này.\n\nChỉ đổi khi bạn chọn lại ở nút này (chọn từ danh "
             + "sách, lấy nhánh đang chọn trong cây, tạo nhánh mới, đổi tên). Bấm chọn chỗ khác trong cây hay bảng KHÔNG làm đổi đích."
             + "\n\nAPI đã từng xóa sẽ quay về chỗ cũ thay vì vào đích (xem Audit).";
-    public static final String TODO = "Việc cần bạn quyết định:\n\n• ⏳ API mới chờ xác nhận vị trí (màu xám).\n• ↩ API đã xóa quay lại "
-            + "chỗ cũ (kể cả khi path cũ đã bị xóa).\n• ⧉ API trùng gặp ở chỗ mới (màu tím): giữ thêm ở chỗ mới hay ẩn đi.\n\n"
+    public static final String TODO = "Việc cần bạn quyết định:\n\n• API mới chờ xác nhận vị trí (màu xám).\n• API đã xóa quay lại "
+            + "chỗ cũ (kể cả khi path cũ đã bị xóa).\n• API trùng gặp ở chỗ mới (màu tím): giữ thêm ở chỗ mới hay ẩn đi.\n\n"
             + "Chi tiết, giải thích và nút xử lý ở tab Audit > Cần xử lý.";
     public static final String COLORS = "Màu của API:\n\n• Xám: chờ xác nhận vị trí\n• Vàng: có role lỗi / lệch quyền\n• Cam: nghi "
             + "bypass (Guest được 2xx)\n• Xanh lá: mọi role 2xx\n• Đỏ: lỗi 5xx / mạng\n• Xanh dương: 3xx hoặc chưa gửi\n• Viền / nhãn "
-            + "tím ⧉2/3: API trùng (bản số 2 trong 3 bản) - bấm nhãn để xem nhanh các bản.";
+            + "tím [#2/3]: API trùng (bản số 2 trong 3 bản) - bấm nhãn để xem nhanh các bản.";
     public static final String DECIDE = "Mỗi dòng là 1 API đang chờ bạn quyết định. Chọn 1 hoặc nhiều dòng rồi bấm nút:\n\n"
-            + "• ✔ Giữ chỗ hiện tại: xác nhận (với path cũ đã mất = khôi phục path cũ; với API trùng = giữ thêm bản ở chỗ mới).\n"
-            + "• ↪ Về nơi vừa gặp: chuyển API vào đích lúc nó được bắt.\n• 📁 Path khác: chọn / tạo path rồi chuyển vào đó (gộp "
-            + "vào path có sẵn).\n• 🙈 Không giữ: ẩn khỏi màn hình crawl, vẫn xem lại được ở tab API trùng & ẩn.\n• 🗑 Xóa.";
+            + "• Giữ chỗ hiện tại: xác nhận (với path cũ đã mất = khôi phục path cũ; với API trùng = giữ thêm bản ở chỗ mới).\n"
+            + "• Về nơi vừa gặp: chuyển API vào đích lúc nó được bắt.\n• Path khác: chọn / tạo path rồi chuyển vào đó (gộp "
+            + "vào path có sẵn).\n• Không giữ: ẩn khỏi màn hình crawl, vẫn xem lại được ở tab API trùng & ẩn.\n• Xóa.";
     public static final String PLACES = "Giữ chỗ: mỗi endpoint (method + host + path) nhớ vị trí cuối cùng của nó - vị trí đã xác "
             + "nhận, hoặc nơi nó nằm lúc bị xóa. Nhớ cả khi xóa API, Xóa toàn bộ, xóa path, reset chống trùng, đóng / mở lại Burp. "
             + "Lần sau bắt lại, API quay về đúng chỗ này.\n\n• Sửa: đổi chỗ sẽ quay về.\n• Thêm: giữ chỗ trước cho 1 endpoint chưa "

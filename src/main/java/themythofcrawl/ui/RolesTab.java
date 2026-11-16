@@ -1,10 +1,8 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -41,6 +39,7 @@ import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.ThemedTree;
+import themythofcrawl.ui.theme.Theme;
 
 /** 'Roles' tab: the role list, the API gốc profile and an inline editor (rules, JWT inspector, bulk paste). */
 final class RolesTab {
@@ -55,7 +54,13 @@ final class RolesTab {
     private final JCheckBox enabled = new JCheckBox("Enabled", true);
     private final RuleModel rules = new RuleModel();
     private final JTable rulesTable = new ThemedTable(rules);
-    private final JTextArea jwt = new JTextArea(5, 50);
+    private final JTextArea jwt = new JTextArea(5, 50) {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setFont(Theme.current().monoFont);
+        }
+    };
     private final JLabel dirty = new JLabel(" ");
     private int editing = -1;          // role index, -2 = the API gốc profile
 
@@ -75,19 +80,40 @@ final class RolesTab {
         Ui.onDoubleClick(table, () -> { });
         Ui.onPopup(table, e -> roleMenu(true).show(e.getComponent(), e.getX(), e.getY()));
         Ui.widths(table, 35, 55, 160, 360);
-        JButton more = new JButton("⚙ Thao tác Role ▾");
-        more.addActionListener(e -> roleMenu(false).show(more, 0, more.getHeight()));
-        JPanel top = Ui.flow(FlowLayout.LEFT, Ui.button("+ Thêm Role...", this::addRole), Ui.button("🗑 Xóa", this::deleteRoles), more,
-                Ui.button("🎛 Bật/Tắt theo phạm vi...", "Tắt / bật role cho toàn bộ, cho từng nhánh hoặc từng API gốc",
+        JButton[] moreRef = new JButton[1];
+        JButton more = Ui.dropdown("Thao tác Role", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
+                "Các thao tác với Role", () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
+        moreRef[0] = more;
+        JPanel top = Ui.flow(FlowLayout.LEFT,
+                Ui.button("Thêm Role...", t -> Icons.plus(t.fg), this::addRole),
+                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles),
+                more,
+                Ui.button("Bật/Tắt theo phạm vi...", t -> Icons.sliders(t.fg),
+                        "Tắt / bật role cho toàn bộ, cho từng nhánh hoặc từng API gốc",
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
-        JPanel profile = new JPanel(new BorderLayout(4, 2));
-        profile.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, Palette.ui().origAccent),
-                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
-        JLabel pt = Ui.bold("📌 " + Role.ORIGINAL_PROFILE_NAME);
-        pt.setForeground(Palette.ui().origFg);
+        JPanel profile = new JPanel(new BorderLayout(4, 2)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme th = Theme.current();
+                setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, th.orig.base()),
+                        BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+            }
+        };
+        JLabel pt = new JLabel(Role.ORIGINAL_PROFILE_NAME) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme th = Theme.current();
+                setFont(th.boldFont);
+                setForeground(th.orig.text());
+            }
+        };
+        pt.setIcon(Icons.themed(t -> Icons.pin(t.orig.text())));
         profile.add(pt, BorderLayout.NORTH);
         profile.add(profileState, BorderLayout.CENTER);
-        profile.add(Ui.flow(FlowLayout.LEFT, Ui.button("✏ Sửa profile API gốc", this::editOriginal),
+        profile.add(Ui.flow(FlowLayout.LEFT,
+                Ui.button("Sửa profile API gốc", t -> Icons.edit(t.fg), this::editOriginal),
                 Ui.button("Bật / Tắt profile", () -> {
                     Role p = engine.originalProfile();
                     engine.saveOriginalProfile(p.withEnabled(!p.enabled()));
@@ -108,12 +134,11 @@ final class RolesTab {
         rulesTable.getColumnModel().getColumn(2).setCellRenderer(new ModeRenderer());
         Ui.widths(rulesTable, 180, 360, 130);
         jwt.setEditable(false);
-        jwt.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         JPanel head = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
         head.add(new JLabel("Role Name:"));
         head.add(name);
         head.add(enabled);
-        JButton save = Ui.accent("Save Profile Changes", Palette.GREEN, this::save);
+        JButton save = Ui.accent("Save Profile Changes", t -> Icons.save(t.success.onSolid()), t -> t.success, this::save);
         head.add(save);
         head.add(dirty);
         JPanel tools = new JPanel(new GridLayout(2, 5, 4, 4));
@@ -156,7 +181,8 @@ final class RolesTab {
         split.setResizeWeight(0.42);
         panel.add(split, BorderLayout.CENTER);
         rules.addTableModelListener(e -> {
-            dirty.setText("● chưa lưu");
+            dirty.setIcon(Icons.themed(t -> Icons.statusDot(t.warning.text(), 8)));
+            dirty.setText("chưa lưu");
             jwt.setText(Jwt.preview(String.join("\n", rules.list.stream().map(HeaderRule::value).toList())));
             jwt.setCaretPosition(0);
         });
@@ -168,23 +194,39 @@ final class RolesTab {
     }
 
     private JPanel modeLegend() {
-        JPanel p = new JPanel(new GridLayout(3, 2, 6, 2));
+        List<JLabel> chips = new ArrayList<>();
+        RuleMode[] modes = RuleMode.values();
+        Runnable applyChips = () -> {
+            Theme th = Theme.current();
+            for (int i = 0; i < chips.size(); i++) {
+                JLabel chip = chips.get(i);
+                Theme.Token tok = th.mode(modes[i]);
+                chip.setBackground(tok.fill());
+                chip.setForeground(tok.text());
+                chip.setFont(th.boldFont);
+                chip.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(tok.border()),
+                        BorderFactory.createEmptyBorder(1, 4, 1, 4)));
+            }
+        };
+        JPanel p = new JPanel(new GridLayout(3, 2, 6, 2)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                applyChips.run();
+            }
+        };
         p.setBorder(BorderFactory.createTitledBorder("Các chế độ (cột Mode)"));
-        Palette pal = Palette.ui();
-        for (RuleMode m : RuleMode.values()) {
-            Color[] c = pal.mode(m);
+        for (RuleMode m : modes) {
             JLabel chip = new JLabel(" " + m.name() + " ");
             chip.setOpaque(true);
-            chip.setBackground(c[0]);
-            chip.setForeground(c[1]);
-            chip.setFont(chip.getFont().deriveFont(Font.BOLD));
-            chip.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(c[2]), BorderFactory.createEmptyBorder(1, 4, 1, 4)));
+            chips.add(chip);
             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
             row.add(chip);
             row.add(new JLabel(m.hint));
             p.add(row);
         }
-        p.add(new JLabel("  Value = [REMOVE] → xóa"));
+        applyChips.run();
+        p.add(new JLabel("  Value = [REMOVE]: xóa"));
         return p;
     }
 
@@ -211,6 +253,7 @@ final class RolesTab {
         name.setEditable(true);
         enabled.setSelected(r.enabled());
         rules.set(r.rules());
+        dirty.setIcon(null);
         dirty.setText(" ");
     }
 
@@ -223,6 +266,7 @@ final class RolesTab {
         name.setEditable(false);
         enabled.setSelected(p.enabled());
         rules.set(p.rules());
+        dirty.setIcon(null);
         dirty.setText(" ");
     }
 
@@ -253,7 +297,8 @@ final class RolesTab {
             MainPanel.selectRow(table, editing);
             ui.flash("Đã lưu role " + n + " (" + clean.size() + " rule) - API bắt từ giờ dùng rule mới; API cũ: 'Rebuild Roles'");
         }
-        dirty.setText("✔ đã lưu");
+        dirty.setIcon(Icons.themed(t -> Icons.check(t.success.text(), 12)));
+        dirty.setText("đã lưu");
     }
 
     private void addRole() {
@@ -282,7 +327,7 @@ final class RolesTab {
 
     private JPopupMenu roleMenu(boolean onTable) {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("📋 Nhân bản Role đang chọn (Duplicate)", () -> {
+        m.add(Ui.item("Nhân bản Role đang chọn (Duplicate)", t -> Icons.copy(t.muted), () -> {
             int r = table.getSelectedRow();
             if (r >= 0) {
                 Role src = engine.roles().get(r);
@@ -293,23 +338,26 @@ final class RolesTab {
             }
         }));
         if (onTable) {
-            m.add(Ui.item("🗑 Xóa Role đang chọn", this::deleteRoles));
+            m.add(Ui.item("Xóa Role đang chọn", t -> Icons.trash(t.danger.text()), this::deleteRoles));
         }
         m.addSeparator();
-        m.add(Ui.item("⬆ Di chuyển lên (Move Up)", () -> moveRole(-1)));
-        m.add(Ui.item("⬇ Di chuyển xuống (Move Down)", () -> moveRole(1)));
+        m.add(Ui.item("Di chuyển lên (Move Up)", Icons::arrowUp, () -> moveRole(-1)));
+        m.add(Ui.item("Di chuyển xuống (Move Down)", Icons::arrowDown, () -> moveRole(1)));
         m.addSeparator();
-        m.add(Ui.item("✅ Bật tất cả Role (Enable All)...", () -> ui.roleScopeDialog(true, RoleScopes.Scope.GLOBAL, null, null,
-                engine.roles().all().stream().map(Role::name).toList())));
-        m.add(Ui.item("⬜ Tắt tất cả Role (Disable All)...", () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null,
-                engine.roles().all().stream().map(Role::name).toList())));
-        m.add(Ui.item("🎛 Bật / Tắt Role theo phạm vi (nhánh / API)...", () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
+        m.add(Ui.item("Bật tất cả Role (Enable All)...", t -> Icons.check(t.success.text()),
+                () -> ui.roleScopeDialog(true, RoleScopes.Scope.GLOBAL, null, null,
+                        engine.roles().all().stream().map(Role::name).toList())));
+        m.add(Ui.item("Tắt tất cả Role (Disable All)...", Icons::minus,
+                () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null,
+                        engine.roles().all().stream().map(Role::name).toList())));
+        m.add(Ui.item("Bật / Tắt Role theo phạm vi (nhánh / API)...", Icons::sliders,
+                () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
         if (!onTable) {
             m.addSeparator();
-            m.add(Ui.item("📂 Import Roles từ JSON...", this::importRoles));
-            m.add(Ui.item("💾 Export Roles ra JSON...", this::exportRoles));
+            m.add(Ui.item("Import Roles từ JSON...", Icons::folder, this::importRoles));
+            m.add(Ui.item("Export Roles ra JSON...", Icons::export, this::exportRoles));
             m.addSeparator();
-            m.add(Ui.item("⚡ Nạp mẫu 10 Roles chuẩn (Load 10-Role Template)", () -> {
+            m.add(Ui.item("Nạp mẫu 10 Roles chuẩn (Load 10-Role Template)", t -> Icons.bolt(t.warning.text()), () -> {
                 if (ui.confirmDialog("Thay danh sách role bằng mẫu 10 role chuẩn?")) {
                     engine.roles().setAll(Roles.template());
                     engine.saveRoles();
@@ -558,12 +606,18 @@ final class RolesTab {
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
             JLabel l = (JLabel) super.getTableCellRendererComponent(t, v, sel, focus, row, col);
-            if (v instanceof RuleMode m && !sel) {
-                Color[] c = Palette.of(t.getBackground(), t.getForeground()).mode(m);
-                l.setBackground(c[0]);
-                l.setForeground(c[1]);
+            Theme th = Theme.of(t.getBackground(), t.getForeground());
+            if (!sel) {
+                if (v instanceof RuleMode m) {
+                    Theme.Token tok = th.mode(m);
+                    l.setBackground(tok.fill());
+                    l.setForeground(tok.text());
+                } else {
+                    l.setBackground(t.getBackground());
+                    l.setForeground(t.getForeground());
+                }
             }
-            l.setFont(l.getFont().deriveFont(Font.BOLD));
+            l.setFont(th.boldFont);
             return l;
         }
     }

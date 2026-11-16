@@ -42,7 +42,7 @@ final class LogTab {
     private final DefaultTreeModel model;
     private final JTree tree;
     private final Set<Object> expanded = new HashSet<>();
-    private final JLabel hint = new JLabel();
+    private final JLabel hint;
     private boolean restoring;
     private long nextOk;
     boolean stale = true;
@@ -54,7 +54,7 @@ final class LogTab {
         tree = new ThemedTree(model, new TreeRenderer());
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
-        tree.setRowHeight(26);
+        tree.setRowHeight(themythofcrawl.ui.theme.Theme.ROW_TREE);
         tree.setLargeModel(true);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         tree.addTreeWillExpandListener(new TreeWillExpandListener() {
@@ -87,20 +87,20 @@ final class LogTab {
             }
         });
         Ui.onDoubleClick(tree, this::jump);
-        JPanel bar = Ui.flow(FlowLayout.LEFT, Ui.accent("Xuất Excel (.xlsx)...", Palette.GREEN, ui::exportExcel),
+        hint = Ui.muted("   Mỗi nhánh > API > chi tiết chỉ được tải khi bạn bấm mở. Click đúp 1 API để xem ở tab API.");
+        JPanel bar = Ui.flow(FlowLayout.LEFT,
+                Ui.accent("Xuất Excel (.xlsx)...", t -> Icons.excel(t.success.onSolid()), t -> t.success, ui::exportExcel),
                 Ui.button("Mở các nhánh", this::expandBranches), Ui.button("Thu gọn tất cả", this::collapseAll),
-                Ui.button("Xóa nhật ký hệ thống", () -> {
+                Ui.button("Xóa nhật ký hệ thống", t -> Icons.trash(t.danger.text()), () -> {
                     engine.logbook().clearSystem();
                     stale = true;
                     refreshIfVisible();
-                }), Ui.button("Copy dòng chọn", () -> {
+                }), Ui.button("Copy dòng chọn", t -> Icons.copy(t.fg), () -> {
                     Node n = selected();
                     if (n != null) {
                         Ui.copyToClipboard(n.label);
                     }
                 }), hint);
-        hint.setText("   Mỗi nhánh > API > chi tiết chỉ được tải khi bạn bấm mở. Click đúp 1 API để xem ở tab API.");
-        hint.setForeground(Palette.mix(Palette.ui().fg, Palette.ui().bg, 0.42));
         panel.add(bar, BorderLayout.NORTH);
         panel.add(MainPanel.scroll(tree), BorderLayout.CENTER);
     }

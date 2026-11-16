@@ -2,7 +2,6 @@ package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,6 +38,7 @@ import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.ui.kit.ThemedTable;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * 'Excel' tab: every line of the imported list with what was captured for it, how many times it was
@@ -53,7 +53,15 @@ final class ExcelTab {
     private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong danh sách");
     private final JComboBox<String> filter = new JComboBox<>(FILTERS);
     private final javax.swing.JButton clear;
-    private final JLabel summary = new JLabel(" ");
+    private final JLabel summary = new JLabel(" ") {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            Theme t = Theme.current();
+            setFont(t.boldFont);
+            setForeground(t.fg);
+        }
+    };
     private final CoverageModel coverage = new CoverageModel();
     private final JTable table = new ThemedTable(coverage);
     private final HitModel hitModel = new HitModel();
@@ -65,20 +73,23 @@ final class ExcelTab {
     ExcelTab(MainPanel ui) {
         this.ui = ui;
         this.engine = ui.engine;
-        clear = Ui.button("Bỏ danh sách", this::clear);
+        clear = Ui.button("Bỏ danh sách", t -> Icons.trash(t.danger.text()), this::clear);
         targetOnly.addActionListener(e -> setTargetOnly(targetOnly.isSelected()));
         filter.addActionListener(e -> reload());
-        JPanel bar = Ui.flow(FlowLayout.LEFT, Ui.accent("Nạp file Excel (.xlsx)...", Palette.PINK, this::load), clear,
-                Ui.button("Xuất Excel độ phủ (.xlsx)...", ui::exportExcel),
-                Ui.button("Gửi các API đã bắt trong danh sách", this::sendListed), targetOnly,
-                Ui.button("Đặt lại bộ đếm lượt gặp", () -> {
+        JPanel bar = Ui.flow(FlowLayout.LEFT,
+                Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load),
+                clear,
+                Ui.button("Xuất Excel độ phủ (.xlsx)...", t -> Icons.export(t.fg), ui::exportExcel),
+                Ui.button("Gửi các API đã bắt trong danh sách", t -> Icons.sendAll(t.fg), this::sendListed),
+                targetOnly,
+                Ui.button("Đặt lại bộ đếm lượt gặp", t -> Icons.refresh(t.fg), () -> {
                     if (engine.targets() != null && ui.confirmDialog("Đặt lại số lượt gặp của mọi dòng Excel về 0?")) {
                         engine.resetHits();
                         stale = true;
                         refreshIfVisible();
                     }
                 }), new JLabel("   Xem:"), filter, Ui.info(Help.EXCEL, "Excel"));
-        summary.setFont(summary.getFont().deriveFont(Font.BOLD, summary.getFont().getSize2D() + 1));
+        summary.setFont(Theme.current().boldFont);
         summary.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
         JPanel top = new JPanel(new BorderLayout());
         top.add(bar, BorderLayout.NORTH);
@@ -120,13 +131,16 @@ final class ExcelTab {
             TargetEntry te = coverage.entryAt(mr);
             List<ApiGroup> gs = coverage.groupsAt(mr);
             javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
-            m.add(Ui.item("🔎 Mở API đã bắt (" + gs.size() + ")", !gs.isEmpty(), () -> ui.jumpToGroup(gs.get(0))));
-            m.add(Ui.item("▶ Gửi " + gs.size() + " API của dòng này", !gs.isEmpty(), () -> ui.send(gs)));
-            m.add(Ui.item("📤 Đẩy -> Burp Repeater", !gs.isEmpty(), () -> ui.push(gs)));
-            m.add(Ui.item("📋 Copy STT + Path", !gs.isEmpty(), () -> ui.copy(gs)));
+            m.add(Ui.item("Mở API đã bắt (" + gs.size() + ")", t -> Icons.search(t.info.text()), !gs.isEmpty(),
+                    () -> ui.jumpToGroup(gs.get(0))));
+            m.add(Ui.item("Gửi " + gs.size() + " API của dòng này", t -> Icons.send(t.fg), !gs.isEmpty(),
+                    () -> ui.send(gs)));
+            m.add(Ui.item("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), !gs.isEmpty(), () -> ui.push(gs)));
+            m.add(Ui.item("Copy STT + Path", t -> Icons.copy(t.fg), !gs.isEmpty(), () -> ui.copy(gs)));
             m.addSeparator();
-            m.add(Ui.item("📋 Copy dòng: " + te.sttText() + ". " + te.methodLabel() + " " + te.path(), () -> Ui.copyToClipboard(
-                    te.sttText() + "\t" + te.methodLabel() + "\t" + te.path() + "\t" + Text.nz(te.position()))));
+            m.add(Ui.item("Copy dòng: " + te.sttText() + ". " + te.methodLabel() + " " + te.path(),
+                    t -> Icons.copy(t.muted), () -> Ui.copyToClipboard(
+                            te.sttText() + "\t" + te.methodLabel() + "\t" + te.path() + "\t" + Text.nz(te.position()))));
             m.show(e.getComponent(), e.getX(), e.getY());
         });
 
@@ -326,7 +340,7 @@ final class ExcelTab {
             extra.append("  ·  ").append(dups).append(" dòng trùng trong file");
         }
         if (copied > 0) {
-            extra.append("  ·  📋 đã copy ").append(copied);
+            extra.append("  ·  đã copy ").append(copied);
         }
         summary.setText(t.source() + "  ·  " + total + " API  ·  Đã bắt " + hit + "/" + total + " (" + (total > 0 ? hit * 100 / total : 0)
                 + "%)  ·  Còn " + (total - hit) + " chưa bắt  ·  Đã gặp " + engine.hits().rowsSeen() + "/" + total + " dòng" + extra
@@ -337,7 +351,7 @@ final class ExcelTab {
     /** One row per line of the imported list, with what was captured for it. */
     static final class CoverageModel extends AbstractTableModel implements AuditRows {
         static final String[] COLS = {"STT", "Method", "Path (trong file)", "POSITION", "Trạng thái", "API #", "Path thực tế",
-            "Vị trí tìm thấy", "Đánh giá", "📋 Đã copy", "Gợi ý gần đúng (dòng chưa bắt)", "Lượt gặp",
+            "Vị trí tìm thấy", "Đánh giá", "Đã copy", "Gợi ý gần đúng (dòng chưa bắt)", "Lượt gặp",
             "Các vị trí đã gặp (mới nhất trước)"};
         static final int HITS_COL = 11;
         static final int PLACES_COL = 12;

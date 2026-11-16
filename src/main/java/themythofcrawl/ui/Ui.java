@@ -13,9 +13,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -28,6 +30,8 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 
 import themythofcrawl.core.Text;
+import themythofcrawl.ui.kit.ToolbarGroup;
+import themythofcrawl.ui.theme.Theme;
 
 /** Small Swing helpers shared by every tab. */
 public final class Ui {
@@ -46,22 +50,80 @@ public final class Ui {
         return b;
     }
 
-    public static JButton accent(String text, Color bg, Runnable action) {
+    public static JButton button(String text, Function<Theme, Icon> iconFn, Runnable action) {
         JButton b = button(text, action);
-        b.setBackground(bg);
-        b.setForeground(Color.WHITE);
-        b.setFont(b.getFont().deriveFont(Font.BOLD));
+        if (iconFn != null) {
+            b.setIcon(Icons.themed(iconFn));
+        }
+        return b;
+    }
+
+    public static JButton button(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
+        JButton b = button(text, iconFn, action);
+        b.setToolTipText(tip);
+        return b;
+    }
+
+    public static JButton dropdown(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
+        JButton b = new JButton(text);
+        if (iconFn != null) {
+            b.setIcon(Icons.themed(iconFn));
+        } else {
+            b.setIcon(Icons.themed(t -> Icons.chevronDown(t.fg, 10)));
+            b.setHorizontalTextPosition(javax.swing.SwingConstants.LEADING);
+        }
+        if (tip != null) {
+            b.setToolTipText(tip);
+        }
+        b.addActionListener(e -> action.run());
+        return b;
+    }
+
+    public static JButton accent(String text, Function<Theme, Theme.Token> tokenSupplier, Runnable action) {
+        return accent(text, null, tokenSupplier, action);
+    }
+
+    public static JButton accent(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenSupplier,
+                                 Runnable action) {
+        Function<Theme, Theme.Token> fn = tokenSupplier != null ? tokenSupplier : t -> t.accent;
+        JButton b = new JButton(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                Theme.Token tok = fn.apply(t);
+                Color bg = tok.solidFill();
+                Color fg = tok.onSolid();
+                setBackground(bg);
+                setForeground(fg);
+                setFont(t.boldFont);
+                putClientProperty("FlatLaf.style", String.format("background: #%02X%02X%02X; foreground: #%02X%02X%02X; font: bold",
+                        bg.getRed(), bg.getGreen(), bg.getBlue(), fg.getRed(), fg.getGreen(), fg.getBlue()));
+            }
+        };
+        if (iconFn != null) {
+            b.setIcon(Icons.themed(iconFn));
+        }
+        b.addActionListener(e -> action.run());
         return b;
     }
 
     public static JButton compact(JButton b) {
         b.setMargin(new Insets(1, 6, 1, 6));
-        return b;
+        return ToolbarGroup.styleToolButton(b);
     }
 
     public static JMenuItem item(String text, Runnable action) {
         JMenuItem i = new JMenuItem(text);
         i.addActionListener(e -> action.run());
+        return i;
+    }
+
+    public static JMenuItem item(String text, Function<Theme, Icon> iconFn, Runnable action) {
+        JMenuItem i = item(text, action);
+        if (iconFn != null) {
+            i.setIcon(Icons.themed(iconFn));
+        }
         return i;
     }
 
@@ -71,15 +133,37 @@ public final class Ui {
         return i;
     }
 
+    public static JMenuItem item(String text, Function<Theme, Icon> iconFn, boolean enabled, Runnable action) {
+        JMenuItem i = item(text, iconFn, action);
+        i.setEnabled(enabled);
+        return i;
+    }
+
     public static JLabel bold(String text) {
-        JLabel l = new JLabel(text);
-        l.setFont(l.getFont().deriveFont(Font.BOLD));
+        JLabel l = new JLabel(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setFont(Theme.current().boldFont);
+            }
+        };
+        l.setFont(Theme.current().boldFont);
         return l;
     }
 
     public static JLabel muted(String text) {
-        JLabel l = new JLabel(text);
-        l.setForeground(Palette.ui().muted);
+        JLabel l = new JLabel(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setForeground(t.muted);
+                setFont(t.smallFont);
+            }
+        };
+        Theme t = Theme.current();
+        l.setForeground(t.muted);
+        l.setFont(t.smallFont);
         return l;
     }
 
@@ -101,14 +185,15 @@ public final class Ui {
 
     /** Taller rows, hairline row separators, no vertical grid, bold header. */
     public static void style(JTable t) {
-        t.setRowHeight(24);
+        Theme th = Theme.current();
+        t.setRowHeight(Theme.ROW_TABLE);
         t.setShowGrid(false);
         t.setShowHorizontalLines(true);
         t.setIntercellSpacing(new Dimension(0, 1));
         t.setFillsViewportHeight(true);
-        t.setGridColor(Palette.of(t.getBackground(), t.getForeground()).grid);
+        t.setGridColor(Theme.of(t.getBackground(), t.getForeground()).grid);
         if (t.getTableHeader() != null) {
-            t.getTableHeader().setFont(t.getTableHeader().getFont().deriveFont(Font.BOLD));
+            t.getTableHeader().setFont(th.boldFont);
         }
         if (t instanceof themythofcrawl.ui.kit.ThemedTable tt) {
             tt.markStyled();
@@ -171,12 +256,18 @@ public final class Ui {
 
     /** A popover with a title and hard-wrapped text (a wrapping text area breaks popup layouts). */
     public static JPopupMenu popover(Component anchor, String title, String text) {
+        Theme t = Theme.current();
         JTextArea area = new JTextArea(Text.wrap(text, 64));
         area.setEditable(false);
+        area.setOpaque(false);
+        area.setForeground(t.fg);
+        area.setFont(t.baseFont);
         area.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
         JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(t.surfaceAlt);
         if (title != null) {
             JLabel h = bold(" " + title);
+            h.setForeground(t.info.text());
             h.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 6));
             p.add(h, BorderLayout.NORTH);
         }
@@ -187,10 +278,9 @@ public final class Ui {
         return pop;
     }
 
-    /** 'ⓘ': hover = short help, click = the full explanation. */
+    /** Drawn info glyph: hover = short help, click = the full explanation. */
     public static JLabel info(String text, String title) {
-        Palette p = Palette.ui();
-        JLabel l = new JLabel(Icons.info(Palette.mix(p.fg, new Color(37, 99, 235), 0.55)));
+        JLabel l = new JLabel(Icons.themed(t -> Icons.info(t.info.text())));
         l.setToolTipText(text.split("\n")[0] + "  (bấm để xem đầy đủ)");
         l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         l.setBorder(BorderFactory.createEmptyBorder(0, 1, 0, 3));
@@ -205,9 +295,11 @@ public final class Ui {
 
     public static JPanel flow(int align, Component... cs) {
         JPanel p = new JPanel(new WrapLayout(align, 4, 2));
+        p.setOpaque(false);
         for (Component c : cs) {
             p.add(c);
         }
         return p;
     }
 }
+

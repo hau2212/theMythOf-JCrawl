@@ -68,8 +68,10 @@ final class CheckList<K> extends JPanel {
                 refilter();
             }
         });
-        JPanel top = Ui.flow(FlowLayout.LEFT, new JLabel("🔎"), filter, Ui.compact(Ui.button("Chọn hết", "Chọn mọi dòng đang hiện",
-                () -> setShown(true))), Ui.compact(Ui.button("Bỏ hết", "Bỏ chọn mọi dòng đang hiện", () -> setShown(false))), count);
+        JPanel top = Ui.flow(FlowLayout.LEFT,
+                new JLabel(Icons.themed(t -> Icons.search(t.muted))), filter,
+                Ui.compact(Ui.button("Chọn hết", "Chọn mọi dòng đang hiện", () -> setShown(true))),
+                Ui.compact(Ui.button("Bỏ hết", "Bỏ chọn mọi dòng đang hiện", () -> setShown(false))), count);
         add(top, BorderLayout.NORTH);
         add(MainPanel.scroll(table), BorderLayout.CENTER);
         counter();

@@ -3,7 +3,6 @@ package themythofcrawl.ui;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -19,6 +18,7 @@ import javax.swing.tree.TreeCellRenderer;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.ui.kit.ThemedTree;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * Tree rows drawn as rounded chips: folders in the colour of their level (siblings share it, parent and
@@ -56,62 +56,70 @@ public final class TreeRenderer extends JLabel implements TreeCellRenderer, Them
             setIcon(null);
             return this;
         }
-        setText(n.label);
+        String cleanLabel = Icons.stripLeadingSymbol(n.label);
+        setText(cleanLabel);
         Color bg = tree.getBackground() != null ? tree.getBackground() : UIManager.getColor("Tree.background");
         Color fgc = UIManager.getColor("Tree.textForeground") != null ? UIManager.getColor("Tree.textForeground") : tree.getForeground();
-        Palette pal = Palette.of(bg, fgc);
-        Font f = tree.getFont();
+        Theme th = Theme.of(bg, fgc);
         boolean strong = switch (n.kind) {
             case ROOT, FOLDER, GROUP, LOGBRANCH, LOGAPI, LOGSYS -> true;
             default -> false;
         };
-        if (f != null) {
-            setFont(strong ? f.deriveFont(Font.BOLD) : f.deriveFont(Font.PLAIN));
-        }
-        Color text = pal.fg;
+        setFont(n.kind == Node.Kind.GHOST || n.kind == Node.Kind.GHOSTS ? th.italicFont
+                : strong ? th.boldFont : th.baseFont);
+
+        Color text = th.fg;
         Icon icon = null;
         switch (n.kind) {
             case FOLDER, LOGBRANCH -> {
-                Color[] lv = pal.level(n.depth);
-                fill = lv[0];
-                edge = lv[1];
-                text = lv[2];
-                icon = Icons.dot(lv[3], true);
-                if (pal.tinted(n.level) && n.level != AuditLevel.PENDING) {
-                    dot = pal.dot(n.level);
+                Theme.Token lv = th.level(n.depth);
+                fill = lv.fill();
+                edge = lv.border();
+                text = lv.text();
+                icon = Icons.dot(lv.base(), true);
+                if (th.tinted(n.level) && n.level != AuditLevel.PENDING) {
+                    dot = th.audit(n.level).base();
                 }
             }
             case ROOT, LOGSYS -> {
-                fill = pal.zebra[1];
-                edge = pal.grid;
-                icon = Icons.dot(pal.dotNone, true);
+                fill = th.surfaceAlt;
+                edge = th.grid;
+                icon = Icons.dot(th.dotNone, true);
             }
             case GROUP, LOGAPI -> {
-                fill = pal.tinted(n.level) ? pal.background(n.level, 0) : pal.zebra[1];
-                icon = n.kind == Node.Kind.GROUP ? Icons.group(pal.dot(n.level), pal.muted) : Icons.dot(pal.dot(n.level), false);
+                fill = th.tinted(n.level) ? th.rowBackground(n.level, 0) : th.surfaceAlt;
+                Color dotCol = n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base();
+                icon = n.kind == Node.Kind.GROUP ? Icons.group(dotCol, th.muted) : Icons.dot(dotCol, false);
                 if (n.payload instanceof ApiGroup g && g.dupTotal() > 1) {
-                    edge = Palette.DUP_PURPLE;
+                    edge = th.dup.base();
                 }
             }
             case ORIG, ROLE, LOGLINE -> {
-                if (pal.tinted(n.level)) {
-                    fill = pal.background(n.level, 0);
+                if (th.tinted(n.level)) {
+                    fill = th.rowBackground(n.level, 0);
                 }
                 if (n.kind == Node.Kind.ORIG) {
-                    text = pal.origFg;
+                    text = th.orig.text();
                 }
-                icon = Icons.dot(n.kind == Node.Kind.ORIG ? pal.origAccent : pal.dot(n.level), false);
+                Color dotCol = n.kind == Node.Kind.ORIG ? th.orig.base()
+                        : n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base();
+                icon = Icons.dot(dotCol, false);
             }
-            default -> text = pal.muted;
+            case GHOSTS, GHOST -> {
+                text = th.muted;
+                icon = Icons.ghost(th.muted, 12);
+            }
+            case PLACE -> {
+                text = th.muted;
+                icon = n.payload instanceof Object[] arr && arr.length > 2 && "old".equals(arr[2])
+                        ? Icons.pin(th.orig.text(), 12) : Icons.plus(th.accent.text(), 12);
+            }
+            default -> text = th.muted;
         }
         if (selected) {
-            Color sb = UIManager.getColor("Tree.selectionBackground") != null ? UIManager.getColor("Tree.selectionBackground")
-                    : new Color(51, 120, 220);
-            Color sf = UIManager.getColor("Tree.selectionForeground") != null ? UIManager.getColor("Tree.selectionForeground")
-                    : Color.WHITE;
-            fill = sb;
-            edge = Palette.mix(sb, pal.fg, 0.3);
-            text = sf;
+            fill = th.selectionBg;
+            edge = Theme.mix(th.selectionBg, th.fg, 0.3);
+            text = th.selectionFg;
         }
         setForeground(text);
         setIcon(icon);

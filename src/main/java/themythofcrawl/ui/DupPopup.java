@@ -31,7 +31,7 @@ final class DupPopup {
         RowsModel<ApiGroup> model = new RowsModel<>(List.of("Bản", "API", "Đang ở", "Trạng thái", "Excel"));
         List<Decisions.Row<ApiGroup>> rows = new ArrayList<>();
         for (ApiGroup c : copies) {
-            String state = c.hidden() ? "🙈 ẩn" : c.dupPending() ? "⏳ chờ quyết định" : "đang hiện";
+            String state = c.hidden() ? "ẩn" : c.dupPending() ? "chờ quyết định" : "đang hiện";
             rows.add(new Decisions.Row<>(c, c.hidden() ? AuditLevel.PENDING : AuditLevel.NONE, List.of("#" + c.dupNo(),
                     Text.apiLabel(c.gid()), c.branch(), state, c.target() != null ? "#" + c.target().sttText() : "")));
         }
@@ -70,14 +70,17 @@ final class DupPopup {
                 default -> ui.showAudit(2);
             }
         };
-        JLabel head = Ui.bold("  ⧉ " + g.endpoint() + "  ·  " + copies.size() + " bản (số #1, #2 ... theo thứ tự gặp)");
-        head.setForeground(Palette.DUP_PURPLE);
+        themythofcrawl.ui.theme.Theme th = themythofcrawl.ui.theme.Theme.current();
+        JLabel head = Ui.bold(" " + g.endpoint() + "  ·  " + copies.size() + " bản (số #1, #2 ... theo thứ tự gặp)");
+        head.setIcon(Icons.themed(theme -> Icons.dup(theme.dup.text())));
+        head.setForeground(th.dup.text());
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        String[][] actions = {{"🔎 Mở", "open"}, {"✔ Giữ", "keep"}, {"🙈 Ẩn", "hide"}, {"👁 Hiện", "show"}, {"🗑 Xóa", "delete"},
-            {"Chi tiết ở Audit", "audit"}};
-        for (String[] a : actions) {
-            btns.add(Ui.button(a[0], () -> act.accept(a[1])));
-        }
+        btns.add(Ui.button("Mở", theme -> Icons.search(theme.info.text()), () -> act.accept("open")));
+        btns.add(Ui.button("Giữ", theme -> Icons.check(theme.success.text()), () -> act.accept("keep")));
+        btns.add(Ui.button("Ẩn", theme -> Icons.hide(theme.muted), () -> act.accept("hide")));
+        btns.add(Ui.button("Hiện", theme -> Icons.show(theme.info.text()), () -> act.accept("show")));
+        btns.add(Ui.button("Xóa", theme -> Icons.trash(theme.danger.text()), () -> act.accept("delete")));
+        btns.add(Ui.button("Chi tiết ở Audit", theme -> Icons.compass(theme.accent.text()), () -> act.accept("audit")));
         JPanel p = new JPanel(new BorderLayout(2, 2));
         p.add(head, BorderLayout.NORTH);
         p.add(sp, BorderLayout.CENTER);

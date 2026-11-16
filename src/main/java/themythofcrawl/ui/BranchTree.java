@@ -47,7 +47,7 @@ import themythofcrawl.ui.kit.ThemedTree;
 public final class BranchTree {
     public enum Chip { COPY, EXCEL, DUP }
 
-    /** Clicks on the copy glyph / [Excel #STT] / [⧉n/m] of an API row. */
+    /** Clicks on the copy glyph / [Excel #STT] / duplicate badge [#n/m] of an API row. */
     public interface ChipHandler {
         void chip(Chip chip, ApiGroup g, JTree tree, int x, int y);
     }
@@ -65,7 +65,7 @@ public final class BranchTree {
         Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API", AuditLevel.NONE, "ROOT", 0);
         model = new DefaultTreeModel(root);
         tree = new ThemedTree(model, new TreeRenderer());
-        tree.setRowHeight(26);
+        tree.setRowHeight(themythofcrawl.ui.theme.Theme.ROW_TREE);
         tree.setLargeModel(true);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.setToggleClickCount(2);
@@ -145,14 +145,18 @@ public final class BranchTree {
         return g.target() == null || g.target().sttText().isBlank() ? "" : "[Excel #" + g.target().sttText() + "]";
     }
 
+    public static String dupBadge(ApiGroup g) {
+        return g.dupTotal() <= 1 ? "" : "[#" + g.dupNo() + "/" + g.dupTotal() + "]";
+    }
+
     public static String groupLabel(ApiGroup g) {
         String badge = excelBadge(g);
-        String dup = Decisions.dupBadge(g);
+        String dup = dupBadge(g);
         String summary = Audit.summary(g);
         String text = Text.apiLabel(g.gid()) + (dup.isEmpty() ? "" : " " + dup) + "   ·   " + g.method() + " "
                 + (badge.isEmpty() ? "" : badge + " ") + Text.shortPath(g.path(), 48) + "   ·   " + rolesLabel(g);
         if (g.pending()) {
-            text = "⏳ " + text + "   ·   " + Decisions.pendingLabel(g).substring(2);
+            text = text + "   ·   " + Icons.stripLeadingSymbol(Decisions.pendingLabel(g));
         }
         if (summary != null && !summary.startsWith("API gốc")) {
             text += "   ·   " + summary;
@@ -239,7 +243,7 @@ public final class BranchTree {
             if (folder == null) {
                 return;
             }
-            Node gn = new Node(Node.Kind.GHOSTS, recs, "👻 " + recs.size()
+            Node gn = new Node(Node.Kind.GHOSTS, recs, recs.size()
                     + " API đã xóa từng nằm ở đây (giữ chỗ - bắt lại sẽ về đây)", AuditLevel.NONE, "GH" + fkey, 0);
             nodes.put(gn.key, gn);
             if (Boolean.TRUE.equals(reachable.get(folder)) && expanded.contains(gn.key)) {
@@ -281,8 +285,8 @@ public final class BranchTree {
             if (n == null) {
                 int[] c = counts.getOrDefault(k, new int[3]);
                 Audit.Verdict v = Audit.fromCounts(c[0], c[1], c[2]);
-                String extra = (pend.containsKey(k) ? "   ·   ⏳ " + pend.get(k) + " chờ xác nhận" : "")
-                        + (ghostCount.containsKey(k) ? "   ·   👻 " + ghostCount.get(k) + " đã xóa (giữ chỗ)" : "");
+                String extra = (pend.containsKey(k) ? "   ·   " + pend.get(k) + " chờ xác nhận" : "")
+                        + (ghostCount.containsKey(k) ? "   ·   " + ghostCount.get(k) + " đã xóa (giữ chỗ)" : "");
                 n = new Node(Node.Kind.FOLDER, Hierarchy.join(parts.subList(0, i + 1)),
                         parts.get(i) + "   ·   " + c[0] + " API   ·   " + v.summary() + extra, v.level(), "F" + k, i + 1);
                 nodes.put(n.key, n);
@@ -313,7 +317,7 @@ public final class BranchTree {
         List<PlacementBook.Record> recs = new ArrayList<>((List<PlacementBook.Record>) n.payload);
         recs.sort(Comparator.comparing((PlacementBook.Record r) -> Text.nz(r.path)).thenComparing(r -> Text.nz(r.method)));
         for (PlacementBook.Record r : recs) {
-            String label = "👻 " + r.method + " " + Text.shortPath(Text.nz(r.path), 60) + "   ·   xóa " + r.deleted
+            String label = r.method + " " + Text.shortPath(Text.nz(r.path), 60) + "   ·   xóa " + r.deleted
                     + " lần (lần cuối " + (r.deletedAt == null ? "-" : r.deletedAt) + ")   ·   gặp " + r.seen + " lần"
                     + (r.lastFoundAt != null ? "   ·   lần cuối gặp tại " + r.lastFoundAt : "");
             Node c = new Node(Node.Kind.GHOST, r, label, AuditLevel.NONE, "GHO" + r.key, 0);
@@ -331,10 +335,10 @@ public final class BranchTree {
         PlaceHint h = g.placeHint();
         List<Node> kids = new ArrayList<>();
         if (h != null) {
-            kids.add(new Node(Node.Kind.PLACE, new Object[] {g, h.old(), "old"}, "📍 Vị trí cũ (giữ chỗ): " + h.old()
+            kids.add(new Node(Node.Kind.PLACE, new Object[] {g, h.old(), "old"}, "Vị trí cũ (giữ chỗ): " + h.old()
                     + "   ·   đang đặt ở đây" + (h.oldMissing() ? " · nhánh cũ đã bị xóa nên được tạo lại" : ""),
                     AuditLevel.NONE, "P" + g.gid() + "old", 0));
-            kids.add(new Node(Node.Kind.PLACE, new Object[] {g, h.found(), "found"}, "🆕 Vừa gặp tại: " + h.found()
+            kids.add(new Node(Node.Kind.PLACE, new Object[] {g, h.found(), "found"}, "Vừa gặp tại: " + h.found()
                     + "   ·   chuột phải để chuyển sang đây", AuditLevel.NONE, "P" + g.gid() + "found", 0));
         }
         kids.add(new Node(Node.Kind.ORIG, new Object[] {g, g.origResult()}, resultLabel(g, g.origResult()),
@@ -464,7 +468,7 @@ public final class BranchTree {
         }
         java.awt.FontMetrics fm = r.getFontMetrics(r.getFont());
         String text = r.getText();
-        for (Object[] c : new Object[][] {{Chip.EXCEL, excelBadge(g)}, {Chip.DUP, Decisions.dupBadge(g)}}) {
+        for (Object[] c : new Object[][] {{Chip.EXCEL, excelBadge(g)}, {Chip.DUP, dupBadge(g)}}) {
             String token = (String) c[1];
             int at = token.isEmpty() ? -1 : text.indexOf(token);
             if (at >= 0) {
