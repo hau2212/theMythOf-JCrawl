@@ -243,11 +243,11 @@ public class SegmentedToggle extends JPanel {
             Icon ic = opt.stateIconFn != null ? opt.stateIconFn.apply(t, selected) : null;
             int iw = ic != null ? ic.getIconWidth() + (label.isEmpty() ? 0 : Theme.SPACE_1) : 0;
             int ih = ic != null ? ic.getIconHeight() : 0;
-            Insets pad = new Insets(Math.round(2 * t.scale), Math.round(8 * t.scale),
-                    Math.round(2 * t.scale), Math.round(8 * t.scale));
+            Insets pad = new Insets(Math.round(2 * t.scale), Math.round(6 * t.scale),
+                    Math.round(2 * t.scale), Math.round(6 * t.scale));
             int w = iw + (label.isEmpty() ? 0 : fm.stringWidth(label)) + pad.left + pad.right;
             int h = Math.max(ih, fm.getHeight()) + pad.top + pad.bottom;
-            pref = new Dimension(Math.max(24, w), Math.max(20, h));
+            pref = new Dimension(Math.max(22, w), Math.max(20, h));
             return new Dimension(pref);
         }
 
@@ -277,7 +277,7 @@ public class SegmentedToggle extends JPanel {
                         g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
                     }
                 }
-                int x = Math.round(8 * t.scale);
+                int x = Math.round(6 * t.scale);
                 Icon ic = opt.stateIconFn != null ? opt.stateIconFn.apply(t, selected) : null;
                 if (ic != null) {
                     ic.paintIcon(this, g2, x, (h - ic.getIconHeight()) / 2);

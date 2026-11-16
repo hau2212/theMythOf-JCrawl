@@ -1114,6 +1114,173 @@ class ThemedComponentTest {
         }
     }
 
+    @Test
+    void historyReportViewNullSafetyAcrossAllModes() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            HistoryReportView view = new HistoryReportView(null, null);
+            view.setSize(1024, 680);
+            view.setData(null, null, null);
+            view.doLayout();
+
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(1024, 680,
+                    java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = img.createGraphics();
+            try {
+                for (int mode : new int[] {
+                    HistoryReportView.MODE_CARDS, HistoryReportView.MODE_MATRIX, HistoryReportView.MODE_TEXT
+                }) {
+                    view.setViewMode(mode);
+                    view.doLayout();
+                    view.paint(g);
+                }
+
+                // Mixed null branches + partial ApiGroup (null path, null url, no results)
+                ApiGroup minimal = new ApiGroup(99, new themythofcrawl.model.Service("localhost", 80, false),
+                        "GET", null, null, null, 1, null, null, null, null, 0L);
+                view.setData(null, java.util.Collections.singletonList(minimal), null);
+                for (int mode : new int[] {
+                    HistoryReportView.MODE_CARDS, HistoryReportView.MODE_MATRIX, HistoryReportView.MODE_TEXT
+                }) {
+                    view.setViewMode(mode);
+                    view.doLayout();
+                    view.paint(g);
+                }
+            } finally {
+                g.dispose();
+            }
+        });
+    }
+
+    @Test
+    void flatLafRuntimeThemeSwitchUpdatesColorsAndRetainsRenderers(@TempDir java.nio.file.Path dir) throws Exception {
+        javax.swing.LookAndFeel origLaf = javax.swing.UIManager.getLookAndFeel();
+        try {
+            Prefs prefs = Prefs.memory();
+            Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+            ws.setRoot(dir);
+            Engine e = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+            e.open(ws.start("fl", "FlatLafTest"));
+            e.setDestination("Toppage > Auth");
+            e.process(UiSmokeTest.msg("POST", "/api/v1/login"), "Proxy", true, e.activeBranch().id());
+            try {
+                SwingUtilities.invokeAndWait(() -> {
+                    try {
+                        javax.swing.UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatLightLaf());
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    themythofcrawl.ui.theme.Theme.onThemeChanged();
+                    UiHost baseHost = new UiSmokeTest.HeadlessHost();
+                    MainPanel ui = new MainPanel(e, ws, new UiHost() {
+                        @Override
+                        public Viewer requestViewer(boolean editable) {
+                            return baseHost.requestViewer(editable);
+                        }
+
+                        @Override
+                        public Viewer responseViewer() {
+                            return baseHost.responseViewer();
+                        }
+
+                        @Override
+                        public void applyTheme(Component c) {
+                            SwingUtilities.updateComponentTreeUI(c);
+                        }
+
+                        @Override
+                        public String projectName() {
+                            return baseHost.projectName();
+                        }
+                    }, "fl");
+                    try {
+                        ui.root().setSize(1100, 820);
+                        ui.root().doLayout();
+                        ui.tick(true);
+                        themythofcrawl.ui.theme.Theme light = themythofcrawl.ui.theme.Theme.current();
+                        assertFalse(light.dark, "FlatLightLaf must resolve non-dark Theme");
+                        assertTrue(ui.headerPanel().getPreferredSize().width <= 1100,
+                                "FlatLightLaf header width must fit 1100px");
+
+                        javax.swing.LookAndFeel[] targets = {
+                            new com.formdev.flatlaf.FlatDarkLaf(),
+                            new com.formdev.flatlaf.FlatIntelliJLaf(),
+                            new com.formdev.flatlaf.FlatDarculaLaf(),
+                            new com.formdev.flatlaf.FlatLightLaf()
+                        };
+                        boolean[] expectedDark = {true, false, true, false};
+                        java.awt.image.BufferedImage buf = new java.awt.image.BufferedImage(1100, 820,
+                                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                        for (int i = 0; i < targets.length; i++) {
+                            try {
+                                javax.swing.UIManager.setLookAndFeel(targets[i]);
+                            } catch (Exception ex) {
+                                throw new RuntimeException(ex);
+                            }
+                            SwingUtilities.updateComponentTreeUI(ui.root());
+                            themythofcrawl.ui.theme.Theme.onThemeChanged();
+                            ui.root().validate();
+                            ui.root().doLayout();
+                            themythofcrawl.ui.theme.Theme cur = themythofcrawl.ui.theme.Theme.current();
+                            assertEquals(expectedDark[i], cur.dark,
+                                    "Dark flag mismatch after switching to " + targets[i].getName());
+                            assertInstanceOf(ThemedTree.ExtensionRenderer.class,
+                                    ui.api.tree.tree.getCellRenderer(), "Tree renderer must survive FlatLaf switch");
+                            assertInstanceOf(ThemedTree.ExtensionRenderer.class,
+                                    ui.api.table.getColumnModel().getColumn(0).getCellRenderer(),
+                                    "Table column renderer must survive FlatLaf switch");
+                            java.awt.Graphics2D g = buf.createGraphics();
+                            try {
+                                ui.root().paint(g);
+                            } finally {
+                                g.dispose();
+                            }
+                        }
+                        // Also exercise SearchField directly at non-zero bounds across FlatLight/Dark and Metal->FlatLaf
+                        themythofcrawl.ui.kit.SearchField standaloneSearch = new themythofcrawl.ui.kit.SearchField("Search...", 18);
+                        standaloneSearch.setSize(260, 28);
+                        standaloneSearch.doLayout();
+                        assertNotNull(standaloneSearch.getMargin(), "FlatLaf SearchField margin must never be null");
+                        java.awt.image.BufferedImage searchImg = new java.awt.image.BufferedImage(260, 28,
+                                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                        java.awt.Graphics2D sg = searchImg.createGraphics();
+                        try {
+                            standaloneSearch.paint(sg);
+                            standaloneSearch.setText("query");
+                            standaloneSearch.paint(sg);
+                            javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+                            SwingUtilities.updateComponentTreeUI(standaloneSearch);
+                            assertTrue(standaloneSearch.getMargin().left >= 22);
+                            standaloneSearch.paint(sg);
+                            javax.swing.UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatDarkLaf());
+                            SwingUtilities.updateComponentTreeUI(standaloneSearch);
+                            assertNotNull(standaloneSearch.getMargin());
+                            standaloneSearch.paint(sg);
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        } finally {
+                            sg.dispose();
+                        }
+                    } finally {
+                        ui.dispose();
+                    }
+                });
+            } finally {
+                e.close();
+            }
+        } finally {
+            if (origLaf != null) {
+                SwingUtilities.invokeAndWait(() -> {
+                    try {
+                        javax.swing.UIManager.setLookAndFeel(origLaf);
+                    } catch (Exception ignored) {
+                        // Restore best effort
+                    }
+                    themythofcrawl.ui.theme.Theme.onThemeChanged();
+                });
+            }
+        }
+    }
+
     private static <T> List<T> collect(Component root, Class<T> type) {
         List<T> out = new ArrayList<>();
         if (type.isInstance(root)) {

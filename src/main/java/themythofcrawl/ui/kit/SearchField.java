@@ -25,6 +25,7 @@ import themythofcrawl.ui.theme.Theme;
 public class SearchField extends JTextField {
     private String placeholder = "";
     private boolean flatLaf;
+    private boolean customMarginApplied;
 
     public SearchField(String placeholder) {
         this(placeholder, 18);
@@ -87,9 +88,13 @@ public class SearchField extends JTextField {
         if (!flatLaf) {
             Insets m = super.getMargin();
             int baseLeft = m != null ? Math.max(4, m.left) : 4;
-            setMargin(new Insets(m != null ? m.top : 2, Math.max(22, baseLeft), m != null ? m.bottom : 2, m != null ? m.right : 4));
-        } else {
-            setMargin(null);
+            super.setMargin(new Insets(m != null ? m.top : 2, Math.max(22, baseLeft),
+                    m != null ? m.bottom : 2, m != null ? m.right : 4));
+            customMarginApplied = true;
+        } else if (customMarginApplied || super.getMargin() == null) {
+            Insets uiMargin = UIManager.getInsets("TextField.margin");
+            super.setMargin(uiMargin != null ? uiMargin : new Insets(2, 6, 2, 6));
+            customMarginApplied = false;
         }
     }
 

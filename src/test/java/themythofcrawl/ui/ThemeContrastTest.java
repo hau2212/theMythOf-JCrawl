@@ -119,9 +119,7 @@ class ThemeContrastTest {
 
     @Test
     void themeRefreshesCacheAndTrackedComponentsOnUiChange() throws Exception {
-        Color origBg = UIManager.getColor("Panel.background");
-        Color origFg = UIManager.getColor("Label.foreground");
-        Color origTblBg = UIManager.getColor("Table.background");
+        javax.swing.LookAndFeel origLaf = UIManager.getLookAndFeel();
         try {
             SwingUtilities.invokeAndWait(() -> {
                 JPanel root = new JPanel();
@@ -129,26 +127,36 @@ class ThemeContrastTest {
                 root.add(pill);
                 Theme.track(root);
 
-                UIManager.put("Panel.background", new Color(0xFF, 0xFF, 0xFF));
-                UIManager.put("Table.background", new Color(0xFF, 0xFF, 0xFF));
-                UIManager.put("Label.foreground", new Color(0x1E, 0x1E, 0x1E));
+                try {
+                    UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatLightLaf());
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
                 Theme.onThemeChanged();
                 Theme light = Theme.current();
                 assertFalse(light.dark);
 
-                UIManager.put("Panel.background", new Color(0x1E, 0x1F, 0x22));
-                UIManager.put("Table.background", new Color(0x1E, 0x1F, 0x22));
-                UIManager.put("Label.foreground", new Color(0xE2, 0xE8, 0xF0));
+                try {
+                    UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatDarkLaf());
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
                 Theme.onThemeChanged();
                 Theme dark = Theme.current();
                 assertTrue(dark.dark);
                 assertNotSame(light, dark);
             });
         } finally {
-            UIManager.put("Panel.background", origBg);
-            UIManager.put("Label.foreground", origFg);
-            UIManager.put("Table.background", origTblBg);
-            Theme.onThemeChanged();
+            if (origLaf != null) {
+                SwingUtilities.invokeAndWait(() -> {
+                    try {
+                        UIManager.setLookAndFeel(origLaf);
+                    } catch (Exception ignored) {
+                        // Restore best effort
+                    }
+                    Theme.onThemeChanged();
+                });
+            }
         }
     }
 

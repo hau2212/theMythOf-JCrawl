@@ -1,10 +1,9 @@
 package themythofcrawl.ui.kit;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -13,6 +12,9 @@ import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.function.Consumer;
 
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
@@ -33,7 +35,7 @@ public class Breadcrumb extends JPanel {
     private Runnable onDropdown;
 
     public Breadcrumb() {
-        super(new FlowLayout(FlowLayout.LEFT, 3, 1));
+        setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
         setOpaque(false);
     }
 
@@ -88,6 +90,11 @@ public class Breadcrumb extends JPanel {
         }
     }
 
+    private void addInline(JComponent c) {
+        c.setAlignmentY(Component.CENTER_ALIGNMENT);
+        add(c);
+    }
+
     private void rebuild() {
         removeAll();
         Theme t = Theme.current();
@@ -110,8 +117,10 @@ public class Breadcrumb extends JPanel {
                     }
                 });
             }
-            add(ellipsis);
-            add(new JLabel(Icons.chevronRight(t.muted, 10)));
+            addInline(ellipsis);
+            add(Box.createHorizontalStrut(3));
+            addInline(new JLabel(Icons.chevronRight(t.muted, 10)));
+            add(Box.createHorizontalStrut(3));
             start = total - maxSegments;
         }
         for (int i = start; i < total; i++) {
@@ -128,15 +137,17 @@ public class Breadcrumb extends JPanel {
             } else if (onDropdown != null) {
                 chip.onClick(onDropdown);
             }
-            add(chip);
+            addInline(chip);
             if (i < total - 1) {
-                JLabel sep = new JLabel(Icons.chevronRight(t.muted, 10));
-                add(sep);
+                add(Box.createHorizontalStrut(3));
+                addInline(new JLabel(Icons.chevronRight(t.muted, 10)));
+                add(Box.createHorizontalStrut(3));
             }
         }
         if (showDropdownArrow) {
+            add(Box.createHorizontalStrut(4));
             DropdownTrigger drop = new DropdownTrigger();
-            add(drop);
+            addInline(drop);
         }
         revalidate();
         repaint();
@@ -160,6 +171,11 @@ public class Breadcrumb extends JPanel {
         @Override
         public Dimension getPreferredSize() {
             return new Dimension(20, 20);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return getPreferredSize();
         }
 
         @Override

@@ -65,7 +65,7 @@ final class ApiTab {
     final ResultTableModel resultModel = new ResultTableModel();
     final JTable results;
     private final JTabbedPane leftTabs = new JTabbedPane();
-    private final JComboBox<String> viewMode = new JComboBox<>(new String[] {"Theo từng API (Mặc định)", "Lọc theo Nhánh đang chọn"});
+    private final JComboBox<String> viewMode = new JComboBox<>(new String[] {"Tất cả API (Mặc định)", "Theo Nhánh đang chọn"});
     private final EnumSet<AuditLevel> activeFilters = EnumSet.noneOf(AuditLevel.class);
     private final Pill filterAll = new Pill("Tất cả", t -> t.accent).setSolidWhenActive(true).setActive(true);
     private final Map<AuditLevel, Pill> filterPills = new EnumMap<>(AuditLevel.class);
@@ -340,12 +340,21 @@ final class ApiTab {
         toolsRef[0] = tools;
         JButton copy = Ui.button("Copy STT + Path", t -> Icons.copy(t.fg), "Copy 'STT. path' của API / nhánh đang chọn (Ctrl+Shift+C)",
                 () -> ui.copy(ui.scope().groups()));
+        viewMode.setToolTipText("Chế độ hiển thị bảng API: Tất cả API hoặc chỉ Nhánh đang chọn");
         viewMode.addActionListener(e -> applyViewMode());
+        JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 1));
+        leftActions.setOpaque(false);
+        for (java.awt.Component comp : new java.awt.Component[] {
+                sendApi, findSendBranch, sendMenu, repMenu, tools, copy, Ui.info(Help.COPY, "Copy")}) {
+            leftActions.add(comp);
+        }
+        JPanel rightMode = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 1));
+        rightMode.setOpaque(false);
+        rightMode.add(viewMode);
         JPanel bar = new JPanel(new BorderLayout(4, 2));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        bar.add(Ui.flow(FlowLayout.LEFT, sendApi, findSendBranch, sendMenu, repMenu, tools, copy, Ui.info(Help.COPY, "Copy")),
-                BorderLayout.WEST);
-        bar.add(Ui.flow(FlowLayout.RIGHT, new JLabel("Xem:"), viewMode), BorderLayout.EAST);
+        bar.add(leftActions, BorderLayout.WEST);
+        bar.add(rightMode, BorderLayout.EAST);
         return bar;
     }
 

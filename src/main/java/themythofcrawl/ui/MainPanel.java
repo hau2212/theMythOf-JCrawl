@@ -234,7 +234,7 @@ public final class MainPanel {
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
 
-        queue.setPadding(2, 7, 2, 7);
+        queue.setPadding(2, 5, 2, 5);
         queue.onClick(() -> {
             if (queue.isEnabled()) {
                 engine.cancelPending("Đã hủy");
@@ -242,7 +242,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setMaxLabelChars(14);
+        dest.setMaxLabelChars(11);
         dest.onSegmentClick(seg -> {
             if (Hierarchy.normalize(seg).equals(Hierarchy.normalize(engine.activeBranch().name()))) {
                 destinationMenu();
@@ -252,27 +252,27 @@ public final class MainPanel {
         });
         dest.onDropdown(this::destinationMenu);
 
-        todo.setPadding(2, 7, 2, 7);
+        todo.setPadding(2, 5, 2, 5);
         todo.onClick(this::todoMenu);
 
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
         spotlightBtn.setToolTipText("Tìm kiếm toàn cục API (#, path), Nhánh, Role (Ctrl+K)");
-        spotlightBtn.setMargin(new Insets(2, 4, 2, 4));
+        spotlightBtn.setMargin(new Insets(1, 3, 1, 3));
         spotlightBtn.addActionListener(e -> spotlight.open());
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
         options.setToolTipText("Tùy chọn: phạm vi bắt, regex, tự gửi, xác nhận vị trí, giữ chỗ, API trùng...");
-        options.setMargin(new Insets(2, 4, 2, 4));
+        options.setMargin(new Insets(1, 3, 1, 3));
         options.addActionListener(e -> optionsMenu());
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
-        detach.setMargin(new Insets(2, 4, 2, 4));
+        detach.setMargin(new Insets(1, 3, 1, 3));
         detach.setToolTipText("Tách cả extension ra cửa sổ riêng (bấm lại / đóng cửa sổ để gắn vào tab Burp)");
         detach.addActionListener(e -> toggleDetach());
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
-        workspace.setMargin(new Insets(2, 5, 2, 5));
+        workspace.setMargin(new Insets(1, 4, 1, 4));
         workspace.addActionListener(e -> workspaceMenu());
 
-        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 1, 0));
         leftZone.setOpaque(false);
         leftZone.add(captureToggle);
         leftZone.add(sendModeToggle);
@@ -287,23 +287,30 @@ public final class MainPanel {
             }
         };
         destLabel.setFont(Theme.current().smallBoldFont);
-        JPanel centerZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        JPanel destPrefix = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        destPrefix.setOpaque(false);
+        destPrefix.add(vSep());
+        destPrefix.add(destLabel);
+        JPanel destTail = new JPanel(new FlowLayout(FlowLayout.LEFT, 1, 0));
+        destTail.setOpaque(false);
+        destTail.add(Ui.info(Help.DEST, "Đích của request mới"));
+        JPanel centerZone = new JPanel(new BorderLayout(2, 0));
         centerZone.setOpaque(false);
-        centerZone.add(vSep());
-        centerZone.add(destLabel);
-        centerZone.add(dest);
-        centerZone.add(Ui.info(Help.DEST, "Đích của request mới"));
+        centerZone.add(destPrefix, BorderLayout.WEST);
+        centerZone.add(dest, BorderLayout.CENTER);
+        centerZone.add(destTail, BorderLayout.EAST);
 
         ToolbarGroup actions = new ToolbarGroup(spotlightBtn, options, detach, workspace);
+        ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
-        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
+        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 1, 0));
         rightZone.setOpaque(false);
         rightZone.add(todo);
         rightZone.add(Ui.info(Help.TODO, "Cần xử lý"));
         rightZone.add(vSep());
         rightZone.add(actions);
 
-        JPanel row1 = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
+        JPanel row1 = new JPanel(new BorderLayout(2, 0));
         row1.setOpaque(false);
         row1.add(leftZone, BorderLayout.WEST);
         row1.add(centerZone, BorderLayout.CENTER);

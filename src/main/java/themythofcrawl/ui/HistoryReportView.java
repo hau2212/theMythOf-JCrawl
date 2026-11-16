@@ -474,9 +474,9 @@ public final class HistoryReportView extends JPanel {
             TableColumn c = cm.getColumn(i);
             c.setCellRenderer(mcell);
             switch (i) {
-                case 0 -> c.setPreferredWidth(52);
+                case 0 -> c.setPreferredWidth(64);
                 case 1 -> c.setPreferredWidth(140);
-                case 2 -> c.setPreferredWidth(64);
+                case 2 -> c.setPreferredWidth(74);
                 case 3 -> c.setPreferredWidth(240);
                 case 4 -> c.setPreferredWidth(54);
                 default -> c.setPreferredWidth(68);

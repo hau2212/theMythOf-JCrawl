@@ -188,7 +188,7 @@ final class SettingsTab {
         animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
         sections.add(section("8.  Giới thiệu & chẩn đoán", t -> t.info,
                 "Phiên bản, Look & Feel của Burp, cỡ chữ, hiệu ứng nhẹ, màu nền / accent và scale.",
-                field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("90% / 100% / 115% (áp dụng ngay)")),
+                field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("áp dụng ngay")),
                 row(animationsBox),
                 field("Phiên bản:", diagVersion, null),
                 field("Look & Feel (LAF):", diagLaf, null),
@@ -435,14 +435,25 @@ final class SettingsTab {
     }
 
     private void refreshDiagnostics() {
+        java.awt.Font sf = Theme.current().smallFont;
+        for (JLabel dl : new JLabel[] {diagVersion, diagLaf, diagColors, diagScale}) {
+            dl.setFont(sf);
+            dl.setMinimumSize(new Dimension(40, dl.getPreferredSize().height));
+        }
         diagVersion.setText(Text.EXT_NAME + " " + Diagnostics.VERSION);
-        diagLaf.setText(Diagnostics.lafName() + " (" + Diagnostics.lafClass() + ") · dark=" + Diagnostics.isDark());
+        String lafFull = Diagnostics.lafName() + " (" + Diagnostics.lafClass() + ") · dark=" + Diagnostics.isDark();
+        diagLaf.setText(Diagnostics.lafName() + " · dark=" + Diagnostics.isDark());
+        diagLaf.setToolTipText(lafFull);
+        String colorsFull = "Panel.background=" + Diagnostics.colorHex("Panel.background")
+                + " · Table.background=" + Diagnostics.colorHex("Table.background")
+                + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor");
         diagColors.setText("Panel.background=" + Diagnostics.colorHex("Panel.background")
                 + " · Table.background=" + Diagnostics.colorHex("Table.background")
-                + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor"));
+                + " · Accent=" + Diagnostics.colorHex("Component.accentColor"));
+        diagColors.setToolTipText(colorsFull);
         int scalePct = ui != null ? UiPrefs.fontScalePercent(ui.uiPrefs) : 100;
         diagScale.setText("sun.java2d.uiScale=" + Diagnostics.uiScale()
-                + " · font=" + Diagnostics.fontSummary() + " · uiScale=" + scalePct + "%");
+                + " · font=" + Diagnostics.fontSummary() + " · " + scalePct + "%");
     }
 
     private int num(JTextField f, int def) {
@@ -611,10 +622,17 @@ final class SettingsTab {
                 default -> {
                     String lbl = (String) r[1];
                     corpus.append(lbl).append(' ');
-                    body.add(new JLabel(lbl), gc);
+                    JLabel fl = new JLabel(lbl);
+                    fl.setMinimumSize(fl.getPreferredSize());
+                    body.add(fl, gc);
                     gc.gridx = 1;
                     Component c2 = (Component) r[2];
                     collectText(c2, corpus);
+                    if (r[3] == null && c2 instanceof JLabel) {
+                        gc.gridwidth = 2;
+                        gc.weightx = 1;
+                        gc.fill = GridBagConstraints.HORIZONTAL;
+                    }
                     body.add(c2, gc);
                     if (r[3] != null) {
                         gc.gridx = 2;

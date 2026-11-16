@@ -34,8 +34,6 @@ import themythofcrawl.model.RoleScopes;
  */
 public final class UiPreview {
     static final class DemoBridge implements Bridge {
-        volatile int status = 200;
-
         @Override
         public boolean inScope(String url) {
             return true;
@@ -43,8 +41,49 @@ public final class UiPreview {
 
         @Override
         public Sent send(Service s, byte[] request) {
-            return new Sent(("HTTP/1.1 " + status + " X\r\nContent-Type: application/json\r\n\r\n{\"ok\":" + status + "}")
-                    .getBytes(StandardCharsets.ISO_8859_1), 3, null);
+            String raw = request == null ? "" : new String(request, StandardCharsets.ISO_8859_1);
+            String firstLine = raw.split("\r?\n", 2)[0];
+            int st = 200;
+            String note = "ok";
+            if (firstLine.contains("/admin/stat")) {
+                if (raw.contains("ADMIN_TOKEN")) {
+                    st = 200;
+                    note = "admin_stats_ok";
+                } else if (raw.contains("EXPIRED_TOKEN")) {
+                    st = 401;
+                    note = "expired_token";
+                } else if (!raw.contains("Authorization:") && !raw.contains("JSESSIONID=")) {
+                    st = 200; // Guest bypass!
+                    note = "guest_bypass_warning";
+                } else {
+                    st = 403;
+                    note = "forbidden";
+                }
+            } else if (firstLine.contains("/users/")) {
+                if (raw.contains("EXPIRED_TOKEN") || (!raw.contains("Authorization:") && !raw.contains("JSESSIONID="))) {
+                    st = 401;
+                    note = "unauthorized";
+                } else if (raw.contains("USER_C_TOKEN") || raw.contains("tenant-b")) {
+                    st = 403;
+                    note = "cross_tenant_denied";
+                } else if (raw.contains("USER_B_TOKEN")) {
+                    st = 200;
+                    note = "idor_different_body_length_extra_payload_content";
+                }
+            } else if (firstLine.contains("/orders")) {
+                if (raw.contains("EXPIRED_TOKEN")) {
+                    st = 500;
+                    note = "server_error_null_principal";
+                } else if (!raw.contains("ADMIN_TOKEN") && !raw.contains("MANAGER_TOKEN") && !raw.contains("USER_A_TOKEN")) {
+                    st = 403;
+                    note = "role_blocked";
+                }
+            } else if (firstLine.contains("/login")) {
+                st = 200;
+            }
+            String body = "{\"status\":" + st + ",\"detail\":\"" + note + "\"}";
+            return new Sent(("HTTP/1.1 " + st + " X\r\nContent-Type: application/json\r\n\r\n" + body)
+                    .getBytes(StandardCharsets.ISO_8859_1), 12, null);
         }
 
         @Override
@@ -135,6 +174,7 @@ public final class UiPreview {
         String laf = System.getProperty("laf");
         if (laf != null) {
             javax.swing.UIManager.setLookAndFeel(laf);
+            themythofcrawl.ui.theme.Theme.onThemeChanged();
         }
         Path root = Files.createTempDirectory("tmoc-ws");
         Prefs prefs = Prefs.memory();
@@ -149,6 +189,23 @@ public final class UiPreview {
         c.sendDelayMs = 0;
         c.sendJitterPct = 0;
         e.applyConfig(c);
+
+        // Include a realistic expired JWT on 09_ExpiredToken so the JWT inspector showcases syntax colors + warning pill
+        List<themythofcrawl.model.Role> demoRoles = new ArrayList<>(e.roles().all());
+        for (int i = 0; i < demoRoles.size(); i++) {
+            themythofcrawl.model.Role r = demoRoles.get(i);
+            if (r.name().contains("Expired")) {
+                String sampleJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                        + "eyJzdWIiOiJ1c2VyXzQ0MiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTYwMDAwMDAwMH0."
+                        + "demoSigPlaceholder";
+                demoRoles.set(i, new themythofcrawl.model.Role(r.name(), true,
+                        List.of(themythofcrawl.model.HeaderRule.of("Authorization", "Bearer " + sampleJwt, "REPLACE"),
+                                themythofcrawl.model.HeaderRule.of("X-Expired", "true", "ADD"))));
+            }
+        }
+        e.roles().setAll(demoRoles);
+        e.saveRoles();
+
         List<List<Object>> rows = new ArrayList<>();
         rows.add(List.of("STT", "PROTOCOL", "PATH", "POSITION"));
         String[] paths = {"/api/v1/login", "/api/v1/users/{id}", "/api/v1/contact/send", "/api/v1/orders", "/api/v1/orders/{id}",
@@ -161,7 +218,7 @@ public final class UiPreview {
             {"Toppage > menu > button \"Login\"", "POST /api/v1/login", "GET /api/v1/profile"},
             {"Toppage > menu > Users", "GET /api/v1/users/15", "GET /api/v1/users/16", "GET /api/v1/search?q=a"},
             {"Toppage > contact > button \"send\"", "POST /api/v1/contact/send", "GET /api/v1/profile"},
-            {"Toppage > Orders", "GET /api/v1/orders", "GET /api/v1/orders/77", "POST /api/v1/cart", "GET /api/v1/admin/stat"},
+            {"Toppage > Orders", "GET /api/v1/orders", "GET /api/v1/orders/77", "POST /api/v1/cart", "GET /api/v1/admin/stats"},
         };
         for (String[] f : flow) {
             e.setDestination(f[0]);
@@ -172,13 +229,20 @@ public final class UiPreview {
         }
         List<ApiGroup> all = e.groups();
         e.confirm(all.subList(0, Math.min(5, all.size())), "");
-        bridge.status = 403;
-        e.replay(all.get(0), e.defaultTargets(all.get(0), true));
-        Thread.sleep(600);
-        bridge.status = 200;
-        e.replay(all.get(1), e.defaultTargets(all.get(1), true));
-        e.remove(List.of(all.get(all.size() - 1)), "demo");
-        Thread.sleep(800);
+        for (int i = 0; i < all.size(); i++) {
+            if (all.size() > 4 && i == all.size() - 3) {
+                continue; // keep one API unsent to showcase Chưa gửi badge
+            }
+            e.replay(all.get(i), e.defaultTargets(all.get(i), true));
+        }
+        for (int wait = 0; wait < 60 && e.queue().queued() + e.queue().inFlight() > 0; wait++) {
+            Thread.sleep(100);
+        }
+        Thread.sleep(300);
+        if (all.size() > 7) {
+            e.remove(List.of(all.get(all.size() - 2)), "demo");
+        }
+        Thread.sleep(300);
         MainPanel[] ui = new MainPanel[1];
         JFrame[] fr = new JFrame[1];
         SwingUtilities.invokeAndWait(() -> {
@@ -192,7 +256,12 @@ public final class UiPreview {
         javax.swing.JTabbedPane tabs = find(ui[0].root(), javax.swing.JTabbedPane.class);
         for (int i = 0; i < tabs.getTabCount(); i++) {
             int idx = i;
-            SwingUtilities.invokeAndWait(() -> tabs.setSelectedIndex(idx));
+            SwingUtilities.invokeAndWait(() -> {
+                tabs.setSelectedIndex(idx);
+                if (tabs.getComponentAt(idx) == ui[0].roles.panel && e.roles().count() > 8) {
+                    ui[0].roles.selectRole(8);
+                }
+            });
             Thread.sleep(700);
             String name = String.format("%02d_%s", i, tabs.getTitleAt(i).replaceAll("[^\\p{L}0-9]+", "_"));
             shot(fr[0], out.resolve(name + ".png").toFile());
@@ -200,15 +269,45 @@ public final class UiPreview {
         MainPanel m = ui[0];
         step(fr[0], out, "10_api_chon", () -> {
             m.tabs.setSelectedIndex(0);
-            m.api.select(all.get(0), null);
+            List<ApiGroup> cur = e.groups();
+            if (!cur.isEmpty()) {
+                m.api.select(cur.get(cur.size() - 1), null);
+            }
         });
-        step(fr[0], out, "11_audit_giu_cho", () -> m.audit.show(1, all.get(0).bookKey()));
-        step(fr[0], out, "12_audit_nhat_ky", () -> m.audit.show(3, null));
-        step(fr[0], out, "13_audit_trung", () -> m.audit.show(2, null));
+        step(fr[0], out, "11_audit_giu_cho", () -> {
+            m.tabs.setSelectedComponent(m.audit.panel);
+            m.audit.show(1, all.get(0).bookKey());
+        });
+        step(fr[0], out, "12_audit_nhat_ky", () -> {
+            m.tabs.setSelectedComponent(m.audit.panel);
+            m.audit.show(3, null);
+        });
+        step(fr[0], out, "13_audit_trung", () -> {
+            m.tabs.setSelectedComponent(m.audit.panel);
+            m.audit.show(2, null);
+        });
         step(fr[0], out, "14_cay_chon", () -> {
             m.tabs.setSelectedComponent(m.treeTab.panel);
             m.tick(true);
             m.treeTab.tree.selectGroup(all.get(0));
+        });
+        step(fr[0], out, "15_spotlight", () -> {
+            m.tabs.setSelectedIndex(0);
+            m.spotlight.open();
+            m.spotlight.searchField().setText("api");
+        });
+        step(fr[0], out, "16_history_matrix", () -> {
+            m.spotlight.close();
+            m.tabs.setSelectedComponent(m.history.panel);
+            m.history.report.setViewMode(HistoryReportView.MODE_MATRIX);
+        });
+        step(fr[0], out, "17_history_text", () -> {
+            m.tabs.setSelectedComponent(m.history.panel);
+            m.history.report.setViewMode(HistoryReportView.MODE_TEXT);
+        });
+        step(fr[0], out, "18_settings_diag", () -> {
+            m.tabs.setSelectedComponent(m.settings.panel);
+            m.settings.searchField().setText("chẩn đoán");
         });
         dialog(out, "20_dlg_role_scope", () -> m.roleScopeDialog(false, RoleScopes.Scope.BRANCH, List.of("Toppage > menu"), null, null));
         dialog(out, "21_dlg_push", () -> m.pushDialog(false, all, "Tất cả API"));
@@ -217,6 +316,27 @@ public final class UiPreview {
             m.tabs.setSelectedIndex(0);
             DupPopup.show(m, all.get(1), m.api.table, 200, 60);
         });
+        step(fr[0], out, "24_narrow_1100", () -> {
+            fr[0].setSize(new Dimension(1100, 820));
+            m.tabs.setSelectedIndex(0);
+            fr[0].validate();
+            m.headerPanel().doLayout();
+        });
+        if (laf != null && laf.contains("Flat")) {
+            String swapped = themythofcrawl.ui.theme.Theme.current().dark
+                    ? "com.formdev.flatlaf.FlatLightLaf" : "com.formdev.flatlaf.FlatDarkLaf";
+            step(fr[0], out, "25_runtime_laf_switch", () -> {
+                try {
+                    javax.swing.UIManager.setLookAndFeel(swapped);
+                    SwingUtilities.updateComponentTreeUI(fr[0]);
+                    themythofcrawl.ui.theme.Theme.onThemeChanged();
+                    fr[0].validate();
+                    fr[0].repaint();
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+        }
         SwingUtilities.invokeAndWait(() -> {
             ui[0].dispose();
             fr[0].dispose();
@@ -289,8 +409,18 @@ public final class UiPreview {
         BufferedImage[] img = new BufferedImage[1];
         SwingUtilities.invokeAndWait(() -> {
             Component c = f.getContentPane();
-            BufferedImage b = new BufferedImage(c.getWidth(), c.getHeight(), BufferedImage.TYPE_INT_RGB);
+            var tx = f.getGraphicsConfiguration() != null
+                    ? f.getGraphicsConfiguration().getDefaultTransform()
+                    : null;
+            double sx = tx != null && tx.getScaleX() > 0 ? tx.getScaleX() : 1.0;
+            double sy = tx != null && tx.getScaleY() > 0 ? tx.getScaleY() : 1.0;
+            int pw = Math.max(1, (int) Math.round(c.getWidth() * sx));
+            int ph = Math.max(1, (int) Math.round(c.getHeight() * sy));
+            BufferedImage b = new BufferedImage(pw, ph, BufferedImage.TYPE_INT_RGB);
             Graphics2D g = b.createGraphics();
+            if (sx != 1.0 || sy != 1.0) {
+                g.scale(sx, sy);
+            }
             c.paint(g);
             g.dispose();
             img[0] = b;
