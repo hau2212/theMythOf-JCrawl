@@ -27,6 +27,7 @@ import javax.swing.SwingUtilities;
 
 import themythofcrawl.app.Engine;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.ui.theme.Theme;
 
 /**
  * 'Đẩy / Gửi có chọn Role': for one API, several APIs or a whole branch choose push to Repeater or send,
@@ -46,18 +47,20 @@ public final class PushDialog {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         JDialog d = new JDialog(owner, "Đẩy / Gửi có chọn Role - " + label, JDialog.ModalityType.APPLICATION_MODAL);
         d.setLayout(new BorderLayout(6, 6));
-        themythofcrawl.ui.theme.Theme th = themythofcrawl.ui.theme.Theme.current();
+        Theme th = Theme.current();
         Choice mem = memory != null ? memory : new Choice(false, false, Set.of(), Set.of(), false, true);
-        JPanel head = new JPanel(new BorderLayout(4, 4));
-        head.setBorder(BorderFactory.createEmptyBorder(8, 10, 2, 10));
+        JPanel head = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         long branches = groups.stream().map(ApiGroup::branch).distinct().count();
-        head.add(Ui.bold(label + "  ·  " + groups.size() + " API  ·  " + branches + " nhánh"), BorderLayout.NORTH);
+        head.add(Ui.dialogHeader("Đẩy / Gửi có chọn Role - " + label,
+                groups.size() + " API  ·  " + branches + " nhánh"), BorderLayout.NORTH);
         JRadioButton push = new JRadioButton("Đẩy sang Burp Repeater", !send);
         JRadioButton sendRb = new JRadioButton("Gửi request (hàng đợi chống 429)", send);
         ButtonGroup bg = new ButtonGroup();
         bg.add(push);
         bg.add(sendRb);
-        head.add(Ui.flow(FlowLayout.LEFT, push, sendRb), BorderLayout.SOUTH);
+        JPanel modeRow = Ui.flow(FlowLayout.LEFT, push, sendRb);
+        modeRow.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
+        head.add(modeRow, BorderLayout.SOUTH);
         d.add(head, BorderLayout.NORTH);
 
         JPanel listing = new JPanel();
@@ -89,9 +92,16 @@ public final class PushDialog {
         naming.add(compact);
         naming.add(full);
         JLabel summary = Ui.bold(" ");
-        JButton ok = new JButton("Thực hiện");
-        ok.setFont(ok.getFont().deriveFont(Font.BOLD));
         Choice[] result = {null};
+        JButton ok = Ui.accent("Thực hiện", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> {
+            Set<String> chosen = new HashSet<>();
+            Set<String> un = new HashSet<>();
+            for (Object[] b : boxes) {
+                (((JCheckBox) b[1]).isSelected() ? chosen : un).add((String) b[0]);
+            }
+            result[0] = new Choice(sendRb.isSelected(), orig.isSelected(), chosen, un, flagged.isSelected(), compact.isSelected());
+            d.dispose();
+        });
         Runnable update = () -> {
             Set<String> chosen = new HashSet<>();
             for (Object[] b : boxes) {
@@ -149,19 +159,12 @@ public final class PushDialog {
         center.add(options, BorderLayout.SOUTH);
         d.add(center, BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout());
-        bottom.setBorder(BorderFactory.createEmptyBorder(4, 10, 8, 10));
+        bottom.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3));
         bottom.add(summary, BorderLayout.CENTER);
-        ok.addActionListener(e -> {
-            Set<String> chosen = new HashSet<>();
-            Set<String> un = new HashSet<>();
-            for (Object[] b : boxes) {
-                (((JCheckBox) b[1]).isSelected() ? chosen : un).add((String) b[0]);
-            }
-            result[0] = new Choice(sendRb.isSelected(), orig.isSelected(), chosen, un, flagged.isSelected(), compact.isSelected());
-            d.dispose();
-        });
-        bottom.add(Ui.flow(FlowLayout.RIGHT, ok, Ui.button("Hủy", d::dispose)), BorderLayout.EAST);
+        bottom.add(Ui.flow(FlowLayout.RIGHT, Ui.button("Hủy", d::dispose), ok), BorderLayout.EAST);
         d.add(bottom, BorderLayout.SOUTH);
+        d.getRootPane().setDefaultButton(ok);
+        Theme.track(d);
         update.run();
         d.setSize(new Dimension(720, 560));
         d.setLocationRelativeTo(owner);

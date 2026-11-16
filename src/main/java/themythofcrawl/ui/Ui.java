@@ -1,5 +1,6 @@
 package themythofcrawl.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -302,6 +303,20 @@ public final class Ui {
             p.add(c);
         }
         return p;
+    }
+
+    /** Standardized modal dialog header with bold title and muted subtitle. */
+    public static JPanel dialogHeader(String title, String subtitle) {
+        return dialogHeader(title, subtitle, null);
+    }
+
+    /** Standardized modal dialog header with bold title, muted subtitle, and optional right slot. */
+    public static JPanel dialogHeader(String title, String subtitle, Component rightSlot) {
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(false);
+        wrap.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_1, Theme.SPACE_3));
+        wrap.add(new themythofcrawl.ui.kit.SectionHeader(title, subtitle, rightSlot, null), BorderLayout.CENTER);
+        return wrap;
     }
 }
 

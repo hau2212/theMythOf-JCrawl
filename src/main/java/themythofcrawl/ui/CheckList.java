@@ -1,6 +1,8 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,19 +11,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.RowFilter;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import javax.swing.SwingConstants;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 
+import themythofcrawl.ui.kit.SearchField;
 import themythofcrawl.ui.kit.ThemedTable;
+import themythofcrawl.ui.kit.ThemedTree;
+import themythofcrawl.ui.theme.Theme;
 
-/** A filterable list of check boxes (key + label), with 'all / none' for the rows shown. */
+/** A filterable list of check boxes (key + label), with 28 px hover rows and 'all / none' toggles. */
 final class CheckList<K> extends JPanel {
     record Item<K>(K key, String label) {
     }
@@ -29,9 +34,9 @@ final class CheckList<K> extends JPanel {
     private final List<Item<K>> items;
     private final boolean[] on;
     private final Model model = new Model();
-    private final JTable table;
+    private final ThemedTable table;
     private final TableRowSorter<Model> sorter;
-    private final JTextField filter = new JTextField(18);
+    private final SearchField filter;
     private final JLabel count = new JLabel();
     private final Runnable changed;
 
@@ -40,6 +45,7 @@ final class CheckList<K> extends JPanel {
         this.items = items;
         this.on = new boolean[items.size()];
         this.changed = changed;
+        this.filter = new SearchField(filterHint, 18);
         table = new ThemedTable(model);           // after `items`: the sorter reads the row count at once
         sorter = new TableRowSorter<>(model);
         Set<K> c = checked == null ? Set.of() : new HashSet<>(checked);
@@ -48,28 +54,21 @@ final class CheckList<K> extends JPanel {
         }
         table.setRowSorter(sorter);
         table.setTableHeader(null);
-        table.setRowHeight(22);
+        table.setRowHeight(Theme.ROW_TABLE);
         table.setShowGrid(false);
-        table.getColumnModel().getColumn(0).setMaxWidth(28);
+        table.setShowHorizontalLines(true);
+        table.setIntercellSpacing(new Dimension(0, 1));
+        table.setFillsViewportHeight(true);
+        table.setGridColor(Theme.current().grid);
+        table.markStyled();
+        AuditRenderer.installHover(table);
+        table.getColumnModel().getColumn(0).setMaxWidth(Theme.current().scaled(32));
+        table.getColumnModel().getColumn(0).setCellRenderer(new CheckBoxHoverRenderer());
+        table.getColumnModel().getColumn(1).setCellRenderer(new AuditRenderer(null, null, null, null));
         filter.setToolTipText(filterHint);
-        filter.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                refilter();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                refilter();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                refilter();
-            }
-        });
+        filter.onChange(q -> refilter());
         JPanel top = Ui.flow(FlowLayout.LEFT,
-                new JLabel(Icons.themed(t -> Icons.search(t.muted))), filter,
+                filter,
                 Ui.compact(Ui.button("Chọn hết", "Chọn mọi dòng đang hiện", () -> setShown(true))),
                 Ui.compact(Ui.button("Bỏ hết", "Bỏ chọn mọi dòng đang hiện", () -> setShown(false))), count);
         add(top, BorderLayout.NORTH);
@@ -112,6 +111,33 @@ final class CheckList<K> extends JPanel {
             }
         }
         return out;
+    }
+
+    SearchField searchField() {
+        return filter;
+    }
+
+    ThemedTable listTable() {
+        return table;
+    }
+
+    private static final class CheckBoxHoverRenderer extends JCheckBox implements TableCellRenderer, ThemedTree.ExtensionRenderer {
+        CheckBoxHoverRenderer() {
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setOpaque(true);
+            setBorderPainted(false);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
+                                                       int row, int column) {
+            Theme th = table != null ? Theme.of(table.getBackground(), table.getForeground()) : Theme.current();
+            setSelected(Boolean.TRUE.equals(value));
+            boolean hovered = AuditRenderer.isHovered(table, row);
+            setBackground(isSelected ? th.selectionBg : (hovered ? th.hover : th.zebra[Math.max(0, row) & 1]));
+            setForeground(isSelected ? th.selectionFg : th.fg);
+            return this;
+        }
     }
 
     private final class Model extends AbstractTableModel {

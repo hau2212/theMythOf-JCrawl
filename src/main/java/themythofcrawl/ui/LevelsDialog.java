@@ -21,6 +21,7 @@ import javax.swing.SwingUtilities;
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Hierarchy;
 import themythofcrawl.model.Branch;
+import themythofcrawl.ui.theme.Theme;
 
 /** Edit the levels of the destination branch (add / rename / delete / reorder). Applied as a rename. */
 final class LevelsDialog {
@@ -37,6 +38,7 @@ final class LevelsDialog {
         }
         JList<String> list = new JList<>(model);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.setFixedCellHeight(Theme.current().scaled(Theme.ROW_TABLE));
         Runnable add = () -> {
             Object v = JOptionPane.showInputDialog(d, "Tên cấp mới (thêm sau cấp đang chọn):", "Subfolder_mới");
             if (v != null && !v.toString().isBlank()) {
@@ -81,18 +83,31 @@ final class LevelsDialog {
             d.dispose();
         };
         d.setLayout(new BorderLayout(6, 6));
-        JScrollPane sp = new JScrollPane(list);
-        sp.setBorder(BorderFactory.createTitledBorder("Cấp 1 ở trên cùng"));
-        d.add(sp, BorderLayout.CENTER);
-        d.add(Ui.flow(FlowLayout.LEFT,
+        JPanel north = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        north.add(Ui.dialogHeader("Các cấp của đích: " + b.name(),
+                "Cấp 1 ở trên cùng — thêm, sửa, xóa hoặc đổi thứ tự"), BorderLayout.NORTH);
+        JPanel tools = Ui.flow(FlowLayout.LEFT,
                 Ui.button("Thêm", t -> Icons.plus(t.success.text()), add),
                 Ui.button("Sửa", t -> Icons.edit(t.info.text()), edit),
                 Ui.button("Xóa", t -> Icons.trash(t.danger.text()), del),
                 Ui.button("", t -> Icons.arrowUp(t.fg), "Đưa lên", () -> move.accept(-1)),
-                Ui.button("", t -> Icons.arrowDown(t.fg), "Đưa xuống", () -> move.accept(1))), BorderLayout.NORTH);
-        d.add(Ui.flow(FlowLayout.RIGHT, Ui.button("Áp dụng (đổi tên đích, API trong đích đổi theo)", apply),
-                Ui.button("Hủy", d::dispose)), BorderLayout.SOUTH);
-        d.setSize(new Dimension(520, 420));
+                Ui.button("", t -> Icons.arrowDown(t.fg), "Đưa xuống", () -> move.accept(1)));
+        tools.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
+        north.add(tools, BorderLayout.SOUTH);
+        d.add(north, BorderLayout.NORTH);
+
+        JScrollPane sp = new JScrollPane(list);
+        sp.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_3, 0, Theme.SPACE_3));
+        d.add(sp, BorderLayout.CENTER);
+
+        javax.swing.JButton applyBtn = Ui.accent("Áp dụng (đổi tên đích, API trong đích đổi theo)",
+                t -> Icons.check(t.accent.onSolid()), t -> t.accent, apply);
+        JPanel bottom = Ui.flow(FlowLayout.RIGHT, Ui.button("Hủy", d::dispose), applyBtn);
+        bottom.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3));
+        d.add(bottom, BorderLayout.SOUTH);
+        d.getRootPane().setDefaultButton(applyBtn);
+        Theme.track(d);
+        d.setSize(new Dimension(560, 460));
         d.setLocationRelativeTo(owner);
         d.setVisible(true);
     }

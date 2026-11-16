@@ -634,32 +634,231 @@ class ThemedComponentTest {
 
         // 6. Scale test: 5000 APIs across 200 branches < 300 ms and virtualized card realization
         Engine big = new Engine(UiSmokeTest.BRIDGE, prefs, null);
-        big.open(ws.start("big-h", "BigHistory"));
         themythofcrawl.core.Config cfg = big.config().copy();
         cfg.captureEnabled = true;
         cfg.confirmNewApis = false;
         big.applyConfig(cfg);
-        for (int i = 0; i < 5000; i++) {
-            if (i % 25 == 0) {
-                big.setDestination("Toppage > m" + (i / 500) + " > b" + (i / 25));
+        try {
+            for (int i = 0; i < 5000; i++) {
+                if (i % 25 == 0) {
+                    big.setDestination("Toppage > m" + (i / 500) + " > b" + (i / 25));
+                }
+                big.process(UiSmokeTest.msg("GET", "/api/v1/r" + i + "/" + i), "Proxy", true, big.activeBranch().id());
             }
-            big.process(UiSmokeTest.msg("GET", "/api/v1/r" + i + "/" + i), "Proxy", true, big.activeBranch().id());
+            SwingUtilities.invokeAndWait(() -> {
+                HistoryReportView bigView = new HistoryReportView(null, null);
+                bigView.setSize(720, 600);
+                bigView.doLayout();
+                long t0 = System.nanoTime();
+                bigView.setData(big.branches(), big.groups(), big.targets());
+                bigView.doLayout();
+                long elapsedMs = (System.nanoTime() - t0) / 1_000_000;
+                assertTrue(elapsedMs < 300, "5000-API HistoryReportView setData+layout must be < 300 ms, took " + elapsedMs + " ms");
+                assertEquals("5000", bigView.kpiValue(1));
+                assertTrue(bigView.branchCardCount() >= 200);
+                assertTrue(bigView.realizedCardCount() < 50,
+                        "virtualized card list should materialize only viewport cards, realized=" + bigView.realizedCardCount());
+            });
+        } finally {
+            big.close();
         }
+    }
+
+    @Test
+    void phase5RolesSettingsLogExcelTreeAuditChecklistAndDupPopup(@TempDir java.nio.file.Path dir) throws Exception {
+        Prefs prefs = Prefs.memory();
+        Workspaces ws = new Workspaces(prefs, Prefs.memory(), dir.resolve("x.jar").toString());
+        ws.setRoot(dir);
+        Engine e = new Engine(UiSmokeTest.BRIDGE, prefs, null);
+        e.open(ws.start("p5", "Project5"));
+
+        // Configure two roles with multiple rules + valid/expired JWTs to exercise RoleTable & JWT inspector
+        java.util.Base64.Encoder b64 = java.util.Base64.getUrlEncoder().withoutPadding();
+        String hdr = b64.encodeToString("{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String expiredPayload = b64.encodeToString("{\"sub\":\"admin\",\"exp\":1600000000}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String validPayload = b64.encodeToString("{\"sub\":\"staff\",\"exp\":4110000000}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String expiredJwt = hdr + "." + expiredPayload + ".sig";
+        String validJwt = hdr + "." + validPayload + ".sig";
+        e.roles().setAll(List.of(
+                new themythofcrawl.model.Role("01_Admin", true, List.of(
+                        themythofcrawl.model.HeaderRule.of("Authorization", "Bearer " + expiredJwt, "REPLACE"),
+                        themythofcrawl.model.HeaderRule.of("X-Role", "admin", "ADD"),
+                        themythofcrawl.model.HeaderRule.of("X-Debug", "[REMOVE]", "REMOVE"),
+                        themythofcrawl.model.HeaderRule.of("SESSION", "s1", "COOKIE_SET"),
+                        themythofcrawl.model.HeaderRule.of("TRACK", "[REMOVE]", "COOKIE_REMOVE"))),
+                new themythofcrawl.model.Role("02_Staff", true, List.of(
+                        themythofcrawl.model.HeaderRule.of("Authorization", "Bearer " + validJwt, "REPLACE"))),
+                new themythofcrawl.model.Role("03_Disabled", false, List.of())));
+        e.saveRoles();
+
+        themythofcrawl.core.Config cfg = e.config().copy();
+        cfg.confirmNewApis = true;
+        cfg.dupNewPlace = true;
+        e.applyConfig(cfg);
+        e.setDestination("Toppage > phase5");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/users"), "Proxy", true, e.activeBranch().id());
+        e.setDestination("Toppage > second");
+        e.process(UiSmokeTest.msg("GET", "/api/v1/users"), "Proxy", true, e.activeBranch().id());
+        e.log("Lỗi kết nối upstream", null);
+
         SwingUtilities.invokeAndWait(() -> {
-            HistoryReportView bigView = new HistoryReportView(null, null);
-            bigView.setSize(720, 600);
-            bigView.doLayout();
-            long t0 = System.nanoTime();
-            bigView.setData(big.branches(), big.groups(), big.targets());
-            bigView.doLayout();
-            long elapsedMs = (System.nanoTime() - t0) / 1_000_000;
-            assertTrue(elapsedMs < 300, "5000-API HistoryReportView setData+layout must be < 300 ms, took " + elapsedMs + " ms");
-            assertEquals("5000", bigView.kpiValue(1));
-            assertTrue(bigView.branchCardCount() >= 200);
-            assertTrue(bigView.realizedCardCount() < 50,
-                    "virtualized card list should materialize only viewport cards, realized=" + bigView.realizedCardCount());
+            MainPanel ui = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "p5");
+            ui.tick(true);
+
+            // 1. RolesTab: row height, initials, JWT syntax colors + exp badge, RuleChipsRenderer paint
+            assertEquals("AD", RolesTab.initialsOf("01_Admin"));
+            assertEquals("GU", RolesTab.initialsOf("Guest"));
+            ThemedTable roleTable = ui.roles.roleTable();
+            assertEquals(themythofcrawl.ui.theme.Theme.current().scaled(36), roleTable.getRowHeight());
+            assertNotNull(ui.roles.originalProfileCard());
+            roleTable.setRowSelectionInterval(0, 0);
+            assertTrue(ui.roles.expBadge().isVisible());
+            assertTrue(ui.roles.expBadge().getText().contains("hết hạn"), ui.roles.expBadge().getText());
+            javax.swing.text.StyledDocument doc = ui.roles.jwtInspector().getStyledDocument();
+            assertTrue(doc.getLength() > 0);
+            java.util.Set<java.awt.Color> jwtColors = new java.util.HashSet<>();
+            for (int i = 0; i < doc.getLength(); i++) {
+                jwtColors.add(javax.swing.text.StyleConstants.getForeground(doc.getCharacterElement(i).getAttributes()));
+            }
+            assertTrue(jwtColors.size() >= 3, "JWT JSON syntax highlighter should produce >= 3 distinct token colors");
+
+            roleTable.setRowSelectionInterval(1, 1);
+            assertTrue(ui.roles.expBadge().isVisible());
+            assertTrue(ui.roles.expBadge().getText().contains("còn hạn"), ui.roles.expBadge().getText());
+
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(640, 120, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g2 = img.createGraphics();
+            try {
+                for (int r = 0; r < roleTable.getRowCount(); r++) {
+                    for (int c = 0; c < roleTable.getColumnCount(); c++) {
+                        Component cell = roleTable.prepareRenderer(roleTable.getCellRenderer(r, c), r, c);
+                        cell.setSize(160, roleTable.getRowHeight());
+                        cell.paint(g2);
+                    }
+                }
+            } finally {
+                g2.dispose();
+            }
+
+            // 2. SettingsTab: 8 Cards, responsive 2-col vs 1-col, search filter + EmptyState, regex outline
+            assertEquals(8, ui.settings.sectionCount());
+            assertEquals(8, ui.settings.visibleSectionCount());
+            ui.settings.panel.setSize(1100, 720);
+            ui.settings.relayoutSections();
+            assertTrue(ui.settings.isTwoColumnLayout());
+            ui.settings.panel.setSize(760, 720);
+            ui.settings.relayoutSections();
+            assertFalse(ui.settings.isTwoColumnLayout());
+
+            ui.settings.searchField().setText("429");
+            assertEquals(1, ui.settings.visibleSectionCount());
+            ui.settings.searchField().setText("no_match_xyz_999");
+            assertEquals(0, ui.settings.visibleSectionCount());
+            assertFalse(collect(ui.settings.panel, themythofcrawl.ui.kit.EmptyState.class).isEmpty());
+            ui.settings.searchField().setText("");
+            assertEquals(8, ui.settings.visibleSectionCount());
+
+            ui.settings.regexCheckBox().setSelected(true);
+            ui.settings.regexField().setText("[unclosed");
+            assertEquals("error", ui.settings.regexField().getClientProperty("JComponent.outline"));
+            ui.settings.regexField().setText("^/api/.*");
+            assertNull(ui.settings.regexField().getClientProperty("JComponent.outline"));
+
+            // 3. ExcelTab: EmptyState before load -> KPI StatCards + filters + HitModel after load
+            assertTrue(ui.excel.isShowingEmptyState());
+            assertNotNull(ui.excel.emptyState());
+            e.setTargets(themythofcrawl.excel.TargetList.fromRows(
+                    List.of(List.of("STT", "PROTOCOL", "PATH"),
+                            List.of("1", "GET", "/api/v1/users"),
+                            List.of("2", "POST", "/api/v1/orders")),
+                    "targets.xlsx", "API"));
+            ui.excel.reload();
+            assertFalse(ui.excel.isShowingEmptyState());
+            assertEquals(4, ui.excel.statCards().length);
+            assertEquals("1 / 2", ui.excel.statCards()[0].valueText());
+            assertEquals(2, ui.excel.coverageTable().getRowCount());
+            ui.excel.selectFilter(1); // Chưa bắt
+            assertEquals(1, ui.excel.coverageTable().getRowCount());
+            ui.excel.selectFilter(2); // Đã bắt
+            assertEquals(1, ui.excel.coverageTable().getRowCount());
+            ui.excel.coverageTable().setRowSelectionInterval(0, 0);
+            assertTrue(ui.excel.hitTable().getRowCount() >= 0);
+
+            // 4. LogTab: lazy tree + filter pills + search + LOGLINE typed icons
+            ui.log.rebuild();
+            JTree logTree = ui.log.logTree();
+            assertTrue(logTree.getRowCount() >= 2);
+            ui.log.setFilter(LogTab.LogKind.ERROR);
+            assertEquals(LogTab.LogKind.ERROR, ui.log.activeKind());
+            logTree.expandRow(logTree.getRowCount() - 1); // Expand Hệ thống & thao tác lazily
+            assertTrue(logTree.getRowCount() >= 2);
+            TreeRenderer ltr = (TreeRenderer) logTree.getCellRenderer();
+            for (int r = 0; r < logTree.getRowCount(); r++) {
+                Node ln = (Node) logTree.getPathForRow(r).getLastPathComponent();
+                if (ln.kind == Node.Kind.LOGLINE) {
+                    ltr.getTreeCellRendererComponent(logTree, ln, false, false, true, r, false);
+                    assertNotNull(ltr.getIcon(), "LOGLINE must carry Java2D action icon");
+                }
+            }
+            ui.log.setFilter(LogTab.LogKind.ALL);
+            ui.log.searchField().setText("upstream");
+            assertTrue(logTree.getRowCount() >= 1);
+            ui.log.searchField().setText("");
+
+            // 5. TreeTab: Breadcrumb + detached window title tracking
+            ui.treeTab.tree.rebuild(false);
+            ui.treeTab.tree.selectBranchPath("Toppage > phase5");
+            assertEquals("Toppage > phase5", ui.treeTab.currentBreadcrumbPath());
+            assertEquals("Toppage > phase5", ui.treeTab.headerBreadcrumb().path());
+            assertTrue(ui.treeTab.detachedTitle().contains("Toppage > phase5"));
+            if (!java.awt.GraphicsEnvironment.isHeadless()) {
+                ui.treeTab.toggleWindow();
+                assertNotNull(ui.treeTab.detachedWindow());
+                assertTrue(ui.treeTab.detachedWindow().getTitle().contains("Toppage > phase5"));
+                ui.treeTab.tree.selectBranchPath("Toppage > second");
+                assertTrue(ui.treeTab.detachedWindow().getTitle().contains("Toppage > second"));
+                ui.treeTab.closeWindow();
+                assertNull(ui.treeTab.detachedWindow());
+            } else {
+                ui.treeTab.tree.selectBranchPath("Toppage > second");
+                assertTrue(ui.treeTab.detachedTitle().contains("Toppage > second"));
+            }
+
+            // 6. AuditTab: card tabs + count badges + inline Card action buttons + SearchFields
+            assertEquals("card", ui.audit.tabs().getClientProperty("JTabbedPane.tabType"));
+            assertTrue(ui.audit.tabs().getTitleAt(0).contains("("));
+            assertNotNull(ui.audit.placeSearch());
+            assertNotNull(ui.audit.logSearch());
+            ui.audit.reload();
+            ui.audit.decideTable().clearSelection();
+            for (javax.swing.JButton b : ui.audit.inlineActionButtons()) {
+                assertFalse(b.isEnabled(), "inline decision button must be disabled without selection");
+            }
+            if (ui.audit.decideTable().getRowCount() > 0) {
+                ui.audit.decideTable().setRowSelectionInterval(0, 0);
+                for (javax.swing.JButton b : ui.audit.inlineActionButtons()) {
+                    assertTrue(b.isEnabled(), "inline decision button must be enabled when a pending row is selected");
+                }
+            }
+
+            // 7. CheckList & DupPopup
+            CheckList<String> cl = new CheckList<>(
+                    List.of(new CheckList.Item<>("A", "01_Admin"), new CheckList.Item<>("B", "02_Guest")),
+                    List.of("A"), () -> { }, "Lọc...");
+            assertEquals(themythofcrawl.ui.theme.Theme.ROW_TABLE, cl.listTable().getRowHeight());
+            UiPreview.PlainHost.simulateBurpTheme(cl);
+            assertInstanceOf(ThemedTree.ExtensionRenderer.class, cl.listTable().getColumnModel().getColumn(0).getCellRenderer());
+            assertInstanceOf(ThemedTree.ExtensionRenderer.class, cl.listTable().getColumnModel().getColumn(1).getCellRenderer());
+            cl.searchField().setText("Guest");
+            assertEquals(1, cl.listTable().getRowCount());
+
+            javax.swing.JPopupMenu dupPop = DupPopup.show(ui, e.groups().get(0), ui.api.table, 10, 10);
+            assertEquals(1, dupPop.getComponentCount());
+            assertInstanceOf(themythofcrawl.ui.kit.Card.class, dupPop.getComponent(0));
+
+            ui.dispose();
         });
-        big.close();
+        e.close();
     }
 
     private static <T> List<T> collect(Component root, Class<T> type) {

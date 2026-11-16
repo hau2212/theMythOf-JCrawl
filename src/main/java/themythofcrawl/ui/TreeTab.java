@@ -15,13 +15,16 @@ import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
 
 import themythofcrawl.app.Engine;
+import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.kit.Breadcrumb;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * 'Cây' tab: the branch tree alone, full size, with the selected API / role's request and response
- * below (like Proxy history). The tree + viewers can move into their own window.
+ * 'Cây' tab: the branch tree alone, full size, with Breadcrumb selection path and the selected API /
+ * role's request &amp; response below. The tree + viewers can move into their own window whose title
+ * tracks the selected Breadcrumb.
  */
 final class TreeTab {
     final JPanel panel = new JPanel(new BorderLayout());
@@ -30,7 +33,8 @@ final class TreeTab {
     private final MainPanel ui;
     private final Engine engine;
     final BranchTree tree;
-    private final JLabel header = Ui.muted(" ");
+    private final Breadcrumb headerBreadcrumb = new Breadcrumb();
+    private final JLabel headerMeta = Ui.muted(" ");
     private final JButton windowBtn;
     private final JButton more;
     private final JLabel reqLabel = Ui.bold(" Request - chọn 1 API / role trong cây");
@@ -80,10 +84,19 @@ final class TreeTab {
                 Ui.button("", t -> Icons.plus(t.fg), "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
                 Ui.button("", t -> Icons.minus(t.fg), "Thu gọn tất cả", () -> tree.expandFolders(false)),
                 Ui.info(Help.SELECT, "Chọn nhiều"));
-        header.setBorder(BorderFactory.createEmptyBorder(0, 8, 2, 8));
+
+        headerBreadcrumb.setMaxSegments(5);
+        headerBreadcrumb.onSegmentClick(seg -> tree.selectBranchPath(seg));
+        JPanel headerBar = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
+        headerBar.setOpaque(false);
+        headerBar.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_2, 2, Theme.SPACE_2));
+        headerBar.add(headerBreadcrumb, BorderLayout.WEST);
+        headerBar.add(headerMeta, BorderLayout.CENTER);
+
         JPanel head = new JPanel(new BorderLayout());
         head.add(bar, BorderLayout.NORTH);
-        head.add(header, BorderLayout.SOUTH);
+        head.add(headerBar, BorderLayout.SOUTH);
+
         req = ui.host.requestViewer(false);
         resp = ui.host.responseViewer();
         JPanel rq = new JPanel(new BorderLayout());
@@ -103,6 +116,7 @@ final class TreeTab {
         placeholder.add(new JLabel("Cây Sub-folder đang mở ở cửa sổ riêng."));
         placeholder.add(Ui.button("Gắn lại vào tab", this::closeWindow));
         panel.add(content, BorderLayout.CENTER);
+        syncHeaderBreadcrumb();
     }
 
     private void menu() {
@@ -148,6 +162,7 @@ final class TreeTab {
             ui.flash("Đang chọn " + tree.selectionCount() + " mục trong cây = " + tree.selectedGroups().size() + " API");
         }
         Node n = tree.selectedNode();
+        syncHeaderBreadcrumb();
         if (n == null) {
             return;
         }
@@ -159,11 +174,39 @@ final class TreeTab {
         showEntry(g, r);
     }
 
+    private void syncHeaderBreadcrumb() {
+        String path = currentBreadcrumbPath();
+        headerBreadcrumb.setPath(path);
+        headerMeta.setText(engine.branches().size() + " nhánh, " + engine.groups().size() + " API  ·  Đích mới: "
+                + engine.activeBranch().name());
+        if (window != null) {
+            window.setTitle(detachedTitle());
+        }
+    }
+
+    String detachedTitle() {
+        return Text.EXT_NAME + " - " + currentBreadcrumbPath();
+    }
+
+    String currentBreadcrumbPath() {
+        Node n = tree.selectedNode();
+        if (n != null) {
+            if (n.kind == Node.Kind.FOLDER && n.payload instanceof String p) {
+                return p;
+            }
+            ApiGroup g = BranchTree.groupOf(n);
+            if (g != null) {
+                return g.branch() + " > " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 32);
+            }
+        }
+        return engine.activeBranch().name();
+    }
+
     private void showEntry(ApiGroup g, RoleResult r) {
         shownGroup = g;
         shown = r;
         Object st = r.status() != null ? r.status() : r.state();
-        reqLabel.setText(" Request [" + themythofcrawl.core.Text.groupId(g.gid()) + " | " + r.roleName() + "]  " + g.endpoint());
+        reqLabel.setText(" Request [" + Text.groupId(g.gid()) + " | " + r.roleName() + "]  " + g.endpoint());
         respLabel.setText(" Response [" + r.roleName() + " | Status: " + st + " | Length: " + (r.length() != null ? r.length() : "-") + "]");
         req.show(g.service(), engine.requestOf(g, r));
         resp.show(g.service(), engine.responseOf(g, r));
@@ -182,18 +225,16 @@ final class TreeTab {
         if (stale && tree.tree.isShowing()) {
             stale = false;
             tree.rebuild(engine.config().showGhosts);
-            header.setText("Request mới sẽ vào: " + engine.activeBranch().name() + "   ·   " + engine.branches().size()
-                    + " nhánh, " + engine.groups().size() + " API   ·   Chuột phải để Gửi / Đẩy / Thêm / Sửa / Xóa; "
-                    + "chọn 1 API để xem Request / Response bên dưới");
+            syncHeaderBreadcrumb();
         }
     }
 
-    private void toggleWindow() {
+    void toggleWindow() {
         if (window != null) {
             closeWindow();
             return;
         }
-        window = new JFrame(themythofcrawl.core.Text.EXT_NAME + " - Cây Sub-folder");
+        window = new JFrame(detachedTitle());
         window.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         window.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
@@ -223,9 +264,10 @@ final class TreeTab {
         windowBtn.setText("Gắn lại vào tab");
         stale = true;
         refreshIfVisible();
+        syncHeaderBreadcrumb();
     }
 
-    private void closeWindow() {
+    void closeWindow() {
         if (window == null) {
             return;
         }
@@ -250,4 +292,14 @@ final class TreeTab {
             window.dispose();
         }
     }
+
+    // ---- Test / inspection helpers ----
+    Breadcrumb headerBreadcrumb() {
+        return headerBreadcrumb;
+    }
+
+    JFrame detachedWindow() {
+        return window;
+    }
 }
+

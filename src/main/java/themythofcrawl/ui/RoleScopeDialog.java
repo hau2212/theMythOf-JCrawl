@@ -60,7 +60,7 @@ final class RoleScopeDialog {
     private final JCheckBox existing = new JCheckBox("Cập nhật luôn các API đã bắt (dòng role của role đang bật giữ nguyên kết quả "
             + "đã nhận). Bỏ chọn = chỉ áp dụng cho API bắt sau này.", true);
     private final JLabel summary = new JLabel(" ");
-    private final JButton ok = new JButton("Áp dụng");
+    private final JButton ok;
     private Result result;
 
     static Result show(Component parent, Engine engine, boolean enable, RoleScopes.Scope scope, List<String> branches,
@@ -76,10 +76,21 @@ final class RoleScopeDialog {
         java.awt.Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         dialog = new JDialog(owner, "Bật / Tắt Role theo phạm vi", JDialog.ModalityType.APPLICATION_MODAL);
         dialog.setLayout(new BorderLayout(6, 6));
+        ok = Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> {
+            result = choice();
+            dialog.dispose();
+        });
 
         JPanel head = new JPanel();
         head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
-        head.setBorder(BorderFactory.createEmptyBorder(8, 10, 2, 10));
+        JPanel hdr = Ui.dialogHeader("Bật / Tắt Role theo phạm vi",
+                "Chọn role, thao tác BẬT / TẮT và phạm vi áp dụng (Toàn bộ, Nhánh hoặc API)");
+        hdr.setAlignmentX(0f);
+        head.add(hdr);
+
+        JPanel controls = new JPanel();
+        controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
+        controls.setBorder(BorderFactory.createEmptyBorder(0, themythofcrawl.ui.theme.Theme.SPACE_3, 2, themythofcrawl.ui.theme.Theme.SPACE_3));
         ButtonGroup g1 = new ButtonGroup();
         g1.add(off);
         g1.add(on);
@@ -88,7 +99,7 @@ final class RoleScopeDialog {
         off.addActionListener(e -> update());
         JPanel acts = Ui.flow(FlowLayout.LEFT, new JLabel("Thao tác:"), off, on);
         acts.setAlignmentX(0f);
-        head.add(acts);
+        controls.add(acts);
         ButtonGroup g2 = new ButtonGroup();
         JPanel sc = Ui.flow(FlowLayout.LEFT, new JLabel("Phạm vi:"));
         for (int i = 0; i < 3; i++) {
@@ -98,7 +109,9 @@ final class RoleScopeDialog {
             sc.add(scopes[i]);
         }
         sc.setAlignmentX(0f);
-        head.add(sc);
+        controls.add(sc);
+        controls.setAlignmentX(0f);
+        head.add(controls);
         dialog.add(head, BorderLayout.NORTH);
 
         List<CheckList.Item<String>> roleItems = new ArrayList<>();
@@ -130,6 +143,7 @@ final class RoleScopeDialog {
         }
         apiList = new CheckList<>(apiItems, apis == null ? List.of() : apis.stream().map(ApiGroup::gid).toList(), this::update,
                 "Lọc API theo #, method, path, nhánh");
+        targets.putClientProperty("JTabbedPane.tabType", "card");
         targets.addTab("Nhánh", branchList);
         targets.addTab("API gốc", apiList);
         targets.addTab("Ngoại lệ đã đặt", rulesPanel());
@@ -139,21 +153,17 @@ final class RoleScopeDialog {
         dialog.add(split, BorderLayout.CENTER);
 
         JPanel bottom = new JPanel(new BorderLayout(4, 4));
-        bottom.setBorder(BorderFactory.createEmptyBorder(4, 10, 8, 10));
+        bottom.setBorder(BorderFactory.createEmptyBorder(4, 12, 10, 12));
         existing.addActionListener(e -> update());
         bottom.add(existing, BorderLayout.NORTH);
         summary.setFont(summary.getFont().deriveFont(Font.BOLD));
         bottom.add(summary, BorderLayout.CENTER);
-        ok.setFont(ok.getFont().deriveFont(Font.BOLD));
-        ok.addActionListener(e -> {
-            result = choice();
-            dialog.dispose();
-        });
-        bottom.add(Ui.flow(FlowLayout.RIGHT, ok, Ui.button("Đóng", dialog::dispose)), BorderLayout.EAST);
+        bottom.add(Ui.flow(FlowLayout.RIGHT, Ui.button("Đóng", dialog::dispose), ok), BorderLayout.EAST);
         dialog.add(bottom, BorderLayout.SOUTH);
         dialog.setSize(new Dimension(1040, 620));
         dialog.setLocationRelativeTo(owner);
         dialog.getRootPane().setDefaultButton(ok);
+        themythofcrawl.ui.theme.Theme.track(dialog);
         onScope();
     }
 

@@ -1131,12 +1131,6 @@ public final class MainPanel {
         }
     }
 
-    static AuditLevel[] AUDIT_FILTER_LEVELS = {null, AuditLevel.INFO, AuditLevel.WARN, AuditLevel.ERROR, AuditLevel.OK,
-        AuditLevel.NONE, AuditLevel.PENDING};
-    static String[] AUDIT_FILTER_LABELS = {"Tất cả API (All)", "Vàng INFO: Có Role lỗi / Lệch quyền",
-        "Cam WARN: Nghi vấn Bypass (Guest 2xx)", "Đỏ ERROR: Có lỗi 5xx / Mất kết nối", "Xanh OK: Tất cả Role 2xx",
-        "Chưa Gửi / Chưa Replay (Pending)", "Xám: Chờ xác nhận vị trí"};
-
     static boolean in(Set<?> s, Object o) {
         return s.contains(o);
     }

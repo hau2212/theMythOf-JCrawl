@@ -1,7 +1,9 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,8 +14,8 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -37,36 +39,46 @@ import themythofcrawl.export.Reports;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.kit.EmptyState;
+import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SectionHeader;
+import themythofcrawl.ui.kit.StatCard;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * 'Excel' tab: every line of the imported list with what was captured for it, how many times it was
- * met and where; below, each time the selected line was met (real path, position, result).
+ * 'Excel' tab: KPI StatCards with coverage progress, interactive filter pills, EmptyState before
+ * loading a spreadsheet, and a vertical timeline for every hit of the selected target row.
  */
 final class ExcelTab {
     static final String[] FILTERS = {"Tất cả dòng", "Chưa bắt", "Đã bắt", "Đã gặp", "Chưa gặp lần nào"};
+    private static final String CARD_EMPTY = "empty";
+    private static final String CARD_LOADED = "loaded";
 
     final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final MainPanel ui;
     private final Engine engine;
     private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong danh sách");
-    private final JComboBox<String> filter = new JComboBox<>(FILTERS);
-    private final javax.swing.JButton clear;
-    private final JLabel summary = new JLabel(" ") {
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            Theme t = Theme.current();
-            setFont(t.boldFont);
-            setForeground(t.fg);
-        }
-    };
+    private final List<Pill> filterPills = new ArrayList<>();
+    private int filterIndex;
+    private final JButton clear;
+
+    private final StatCard cardCaptured = new StatCard("Đã bắt", "0 / 0", "0% độ phủ", t -> t.success, 0.0);
+    private final StatCard cardSeen = new StatCard("Đã gặp", "0 / 0", "0 lượt đi qua", t -> t.info, 0.0);
+    private final StatCard cardOutside = new StatCard("Ngoài danh sách", "0", "API chưa có trong file", t -> t.warning, -1);
+    private final StatCard cardDups = new StatCard("Trùng trong file", "0", "dòng lặp lại trong Excel", t -> t.dup, -1);
+    private final JLabel sourceSummary = Ui.muted(" ");
+
+    private final CardLayout deckLayout = new CardLayout();
+    private final JPanel deck = new JPanel(deckLayout);
+    private final EmptyState emptyState;
+    private boolean showingEmpty = true;
+
     private final CoverageModel coverage = new CoverageModel();
     private final JTable table = new ThemedTable(coverage);
     private final HitModel hitModel = new HitModel();
     private final JTable hitTable = new ThemedTable(hitModel);
-    private final JLabel hitsLabel = Ui.bold(" Chọn 1 dòng Excel để xem các lần đã gặp (path thực tế, vị trí, kết quả).");
+    private final JLabel hitsLabel = Ui.bold(" Chọn 1 dòng Excel để xem các lần đã gặp (timeline: icon kết quả, giờ, vị trí).");
     boolean stale = true;
     private long nextOk;
 
@@ -74,8 +86,9 @@ final class ExcelTab {
         this.ui = ui;
         this.engine = ui.engine;
         clear = Ui.button("Bỏ danh sách", t -> Icons.trash(t.danger.text()), this::clear);
+        targetOnly.setOpaque(false);
         targetOnly.addActionListener(e -> setTargetOnly(targetOnly.isSelected()));
-        filter.addActionListener(e -> reload());
+
         JPanel bar = Ui.flow(FlowLayout.LEFT,
                 Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load),
                 clear,
@@ -86,15 +99,41 @@ final class ExcelTab {
                     if (engine.targets() != null && ui.confirmDialog("Đặt lại số lượt gặp của mọi dòng Excel về 0?")) {
                         engine.resetHits();
                         stale = true;
-                        refreshIfVisible();
+                        reload();
                     }
-                }), new JLabel("   Xem:"), filter, Ui.info(Help.EXCEL, "Excel"));
-        summary.setFont(Theme.current().boldFont);
-        summary.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
-        JPanel top = new JPanel(new BorderLayout());
-        top.add(bar, BorderLayout.NORTH);
-        top.add(summary, BorderLayout.SOUTH);
-        panel.add(top, BorderLayout.NORTH);
+                }),
+                Ui.info(Help.EXCEL, "Excel"));
+
+        JPanel filterStrip = Ui.flow(FlowLayout.LEFT, Ui.muted("Lọc nhanh:"));
+        filterStrip.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_1, 0, Theme.SPACE_1));
+        for (int i = 0; i < FILTERS.length; i++) {
+            int idx = i;
+            Pill pill = new Pill(FILTERS[i], i == 0 ? t -> t.pink : t -> t.neutral);
+            pill.setSolidWhenActive(true);
+            pill.setActive(i == 0);
+            pill.onClick(() -> selectFilter(idx));
+            filterPills.add(pill);
+            filterStrip.add(pill);
+        }
+
+        JPanel north = new JPanel(new BorderLayout(0, 2));
+        north.setOpaque(false);
+        north.add(bar, BorderLayout.NORTH);
+        north.add(filterStrip, BorderLayout.SOUTH);
+        panel.add(north, BorderLayout.NORTH);
+
+        JPanel kpiGrid = new JPanel(new GridLayout(1, 4, Theme.SPACE_2, 0));
+        kpiGrid.setOpaque(false);
+        kpiGrid.add(cardCaptured);
+        kpiGrid.add(cardSeen);
+        kpiGrid.add(cardOutside);
+        kpiGrid.add(cardDups);
+
+        JPanel kpiWrap = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        kpiWrap.setOpaque(false);
+        kpiWrap.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
+        kpiWrap.add(kpiGrid, BorderLayout.CENTER);
+        kpiWrap.add(sourceSummary, BorderLayout.SOUTH);
 
         Ui.style(table);
         table.setAutoCreateRowSorter(true);
@@ -149,17 +188,19 @@ final class ExcelTab {
 
         Ui.style(hitTable);
         AuditRenderer hr = new AuditRenderer(hitModel, null, 2, 4, 0)
+                .timelineRail(true)
                 .numberCols(0)
                 .timeCols(1)
                 .pathCols(5);
-        int[] hw = {54, 120, 130, 70, 70, 320, 160, 260, 260, 70, 200};
+        int[] hw = {62, 118, 138, 70, 72, 300, 150, 260, 260, 70, 200};
         for (int c = 0; c < hw.length; c++) {
             hitTable.getColumnModel().getColumn(c).setPreferredWidth(hw[c]);
             hitTable.getColumnModel().getColumn(c).setCellRenderer(hr);
         }
         Ui.onDoubleClick(hitTable, () -> {
             int v = hitTable.getSelectedRow();
-            Integer gid = v < 0 ? null : hitModel.events.get(v).gid();
+            int mr = v < 0 ? -1 : hitTable.convertRowIndexToModel(v);
+            Integer gid = mr < 0 || mr >= hitModel.events.size() ? null : hitModel.events.get(mr).gid();
             ApiGroup g = gid == null ? null : engine.group(gid);
             if (g != null) {
                 ui.jumpToGroup(g);
@@ -168,14 +209,52 @@ final class ExcelTab {
             }
         });
         hitsLabel.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+        JPanel hitsHeader = new JPanel(new BorderLayout());
+        hitsHeader.setOpaque(false);
+        hitsHeader.add(new SectionHeader("Timeline các lần gặp",
+                "Thứ tự mới nhất trước: icon kết quả, giờ gặp, vị trí đang đứng -> nhánh lưu", null, t -> t.info),
+                BorderLayout.NORTH);
+        hitsHeader.add(hitsLabel, BorderLayout.SOUTH);
+
         JPanel hits = new JPanel(new BorderLayout());
-        hits.add(hitsLabel, BorderLayout.NORTH);
+        hits.add(hitsHeader, BorderLayout.NORTH);
         hits.add(MainPanel.scroll(hitTable), BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(table), hits);
-        split.setResizeWeight(0.62);
+        split.setResizeWeight(0.60);
         split.setOneTouchExpandable(true);
-        panel.add(split, BorderLayout.CENTER);
+
+        JPanel loadedView = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        loadedView.add(kpiWrap, BorderLayout.NORTH);
+        loadedView.add(split, BorderLayout.CENTER);
+
+        emptyState = new EmptyState(
+                t -> Icons.excel(t.pink.text(), 36),
+                "Chưa nạp file Excel đối chiếu (.xlsx)",
+                "Cần các cột: STT | PROTOCOL (method) | PATH | POSITION (tùy chọn). Tham số {id} [id] (id) <id> :id * là giá trị bất kỳ.",
+                Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load));
+
+        deck.setOpaque(false);
+        deck.add(emptyState, CARD_EMPTY);
+        deck.add(loadedView, CARD_LOADED);
+        panel.add(deck, BorderLayout.CENTER);
+
         controls(engine.groups());
+    }
+
+    void selectFilter(int idx) {
+        if (idx < 0 || idx >= FILTERS.length) {
+            return;
+        }
+        this.filterIndex = idx;
+        for (int i = 0; i < filterPills.size(); i++) {
+            Pill p = filterPills.get(i);
+            boolean on = i == filterIndex;
+            p.setToken(on ? t -> t.pink : t -> t.neutral);
+            p.setActive(on);
+        }
+        stale = true;
+        nextOk = 0;
+        reload();
     }
 
     // ------------------------------------------------------------------ actions
@@ -230,6 +309,7 @@ final class ExcelTab {
         engine.setTargets(null);
         engine.log("Đã bỏ danh sách API từ file Excel.", null);
         stale = true;
+        reload();
         ui.tick(true);
     }
 
@@ -265,16 +345,17 @@ final class ExcelTab {
         }
         stale = true;
         nextOk = 0;
-        if (filter.getSelectedIndex() != 0) {
-            filter.setSelectedIndex(0);
+        if (filterIndex != 0) {
+            selectFilter(0);
+        } else {
+            reload();
         }
-        reload();
         MainPanel.selectRow(table, coverage.rowOf(e));
     }
 
     // ------------------------------------------------------------------ refresh
     void refreshIfVisible() {
-        if (!stale || !table.isShowing() || System.currentTimeMillis() < nextOk) {
+        if (!stale || !panel.isShowing() || System.currentTimeMillis() < nextOk) {
             return;
         }
         long t0 = System.nanoTime();
@@ -282,11 +363,11 @@ final class ExcelTab {
         nextOk = System.currentTimeMillis() + Math.min(4000, (System.nanoTime() - t0) / 1_000_000 * 6);
     }
 
-    private void reload() {
+    void reload() {
         stale = false;
         TargetEntry keep = selected();
         List<ApiGroup> groups = engine.groups();
-        coverage.reload(engine.targets(), groups, filter.getSelectedIndex(), engine.hits());
+        coverage.reload(engine.targets(), groups, filterIndex, engine.hits());
         if (keep != null) {
             int r = coverage.rowOf(keep);
             if (r >= 0) {
@@ -309,7 +390,7 @@ final class ExcelTab {
         TargetEntry e = selected();
         if (e == null) {
             hitModel.set(List.of());
-            hitsLabel.setText(" Chọn 1 dòng Excel để xem các lần đã gặp (path thực tế, vị trí, kết quả).");
+            hitsLabel.setText(" Chọn 1 dòng Excel để xem timeline các lần đã gặp (path thực tế, vị trí, kết quả).");
             return;
         }
         HitLog h = engine.hits();
@@ -327,30 +408,61 @@ final class ExcelTab {
         targetOnly.setEnabled(loaded);
         clear.setEnabled(loaded);
         targetOnly.setSelected(engine.config().targetOnly);
+        showingEmpty = !loaded;
+        deckLayout.show(deck, loaded ? CARD_LOADED : CARD_EMPTY);
         if (!loaded) {
-            summary.setText("Chưa nạp file. Bấm 'Nạp file Excel' - file cần các cột STT | PROTOCOL (method) | PATH | "
-                    + "POSITION (tùy chọn); tham số {id} [id] (id) <id> :id * trong path được hiểu là giá trị bất kỳ.");
+            cardCaptured.setMetric("0 / 0", "0% độ phủ", 0.0);
+            cardSeen.setMetric("0 / 0", "0 lượt đi qua", 0.0);
+            cardOutside.setMetric(String.valueOf(groups.size()), "API ngoài danh sách", -1);
+            cardDups.setMetric("0", "Chưa nạp file", -1);
+            sourceSummary.setText(" ");
             return;
         }
         Map<TargetEntry, List<ApiGroup>> cov = Reports.coverage(t, groups);
         long hit = cov.values().stream().filter(l -> !l.isEmpty()).count();
         int total = t.size();
+        int pct = total > 0 ? (int) (hit * 100 / total) : 0;
+        double capRatio = total > 0 ? (double) hit / total : 0.0;
+        int seen = engine.hits().rowsSeen();
+        double seenRatio = total > 0 ? (double) seen / total : 0.0;
         long outside = groups.stream().filter(g -> g.target() == null).count();
         long copied = groups.stream().filter(g -> g.copiedLabel() != null).count();
         int dups = t.duplicates().size();
-        StringBuilder extra = new StringBuilder();
-        if (outside > 0) {
-            extra.append("  ·  ").append(outside).append(" API ngoài danh sách");
-        }
-        if (dups > 0) {
-            extra.append("  ·  ").append(dups).append(" dòng trùng trong file");
-        }
-        if (copied > 0) {
-            extra.append("  ·  đã copy ").append(copied);
-        }
-        summary.setText(t.source() + "  ·  " + total + " API  ·  Đã bắt " + hit + "/" + total + " (" + (total > 0 ? hit * 100 / total : 0)
-                + "%)  ·  Còn " + (total - hit) + " chưa bắt  ·  Đã gặp " + engine.hits().rowsSeen() + "/" + total + " dòng" + extra
-                + "  ·  Chế độ: " + (engine.config().targetOnly ? "chỉ bắt API trong danh sách" : "bắt mọi API (danh sách chỉ để đối chiếu)"));
+
+        cardCaptured.setMetric(hit + " / " + total, pct + "% · Còn " + (total - hit) + " chưa bắt", capRatio);
+        cardSeen.setMetric(seen + " / " + total, "Dòng Excel đã gặp qua proxy", seenRatio);
+        cardOutside.setMetric(String.valueOf(outside), "API ngoài danh sách Excel", -1);
+        cardDups.setMetric(String.valueOf(dups),
+                dups > 0 ? "Dòng trùng trong Excel" : "Không có dòng trùng", -1);
+        sourceSummary.setText(t.source() + " (sheet " + t.sheet() + ")  ·  " + total + " API"
+                + (copied > 0 ? "  ·  Đã copy " + copied : "")
+                + "  ·  Chế độ: " + (engine.config().targetOnly ? "chỉ bắt API trong danh sách"
+                        : "bắt mọi API (danh sách để đối chiếu)"));
+    }
+
+    // ---- Test / inspection helpers ----
+    boolean isShowingEmptyState() {
+        return showingEmpty;
+    }
+
+    EmptyState emptyState() {
+        return emptyState;
+    }
+
+    StatCard[] statCards() {
+        return new StatCard[] {cardCaptured, cardSeen, cardOutside, cardDups};
+    }
+
+    List<Pill> filterPills() {
+        return filterPills;
+    }
+
+    JTable coverageTable() {
+        return table;
+    }
+
+    JTable hitTable() {
+        return hitTable;
     }
 
     // ------------------------------------------------------------------ models

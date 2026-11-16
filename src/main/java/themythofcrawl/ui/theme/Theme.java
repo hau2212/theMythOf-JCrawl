@@ -442,6 +442,11 @@ public final class Theme {
         return accents[Math.floorMod(k - 1, accents.length)].base();
     }
 
+    /** Palette token for a 0-based role / category index. */
+    public Token accent(int index) {
+        return accents[Math.floorMod(index, accents.length)];
+    }
+
     public Border stripe(Object key) {
         return stripes.computeIfAbsent(key == null ? "none" : key, k -> {
             Color c = branchAccent(key);

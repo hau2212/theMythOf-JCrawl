@@ -1,19 +1,29 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.RenderingHints;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -24,10 +34,16 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Jwt;
@@ -37,37 +53,56 @@ import themythofcrawl.model.Role;
 import themythofcrawl.model.RoleScopes;
 import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
+import themythofcrawl.ui.kit.Card;
+import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SectionHeader;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.ThemedTree;
 import themythofcrawl.ui.theme.Theme;
 
-/** 'Roles' tab: the role list, the API gốc profile and an inline editor (rules, JWT inspector, bulk paste). */
+/** 'Roles' tab: pinned API gốc Card, avatar + chip role list, inline editor, and syntax-colored JWT inspector. */
 final class RolesTab {
+    private static final Pattern EXP_PATTERN = Pattern.compile("\"exp\"\\s*:\\s*(\\d{9,13})");
+
     final JPanel panel = new JPanel(new BorderLayout());
     private final MainPanel ui;
     private final Engine engine;
     private final RoleModel model = new RoleModel();
-    private final JTable table = new ThemedTable(model);
-    private final JLabel profileState = new JLabel(" ");
+    private final ThemedTable table = new ThemedTable(model) {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setRowHeight(Theme.current().scaled(36));
+        }
+    };
+    private final Card profileCard = new Card(t -> t.orig, true);
+    private final JLabel profileState = Ui.muted(" ");
+    private final Pill profileBadge = new Pill("Bật", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
     private final JLabel title = Ui.bold(" ");
     private final JTextField name = new JTextField(26);
     private final JCheckBox enabled = new JCheckBox("Enabled", true);
     private final RuleModel rules = new RuleModel();
-    private final JTable rulesTable = new ThemedTable(rules);
-    private final JTextArea jwt = new JTextArea(5, 50) {
+    private final ThemedTable rulesTable = new ThemedTable(rules);
+    private final Pill expBadge = new Pill("", t -> t.danger, t -> Icons.warn(t.danger.text(), 11));
+    private final JTextPane jwt = new JTextPane() {
         @Override
         public void updateUI() {
             super.updateUI();
             setFont(Theme.current().monoFont);
+            if (lastJwtPreview != null) {
+                renderJwt(lastJwtPreview);
+            }
         }
     };
     private final JLabel dirty = new JLabel(" ");
+    private String lastJwtPreview = "";
     private int editing = -1;          // role index, -2 = the API gốc profile
 
     RolesTab(MainPanel ui) {
         this.ui = ui;
         this.engine = ui.engine;
         Ui.style(table);
+        table.setRowHeight(Theme.current().scaled(36));
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -79,7 +114,12 @@ final class RolesTab {
         });
         Ui.onDoubleClick(table, () -> { });
         Ui.onPopup(table, e -> roleMenu(true).show(e.getComponent(), e.getX(), e.getY()));
-        Ui.widths(table, 35, 55, 160, 360);
+        table.getColumnModel().getColumn(0).setCellRenderer(new RoleIndexRenderer());
+        table.getColumnModel().getColumn(1).setCellRenderer(new SwitchRenderer());
+        table.getColumnModel().getColumn(2).setCellRenderer(new AvatarNameRenderer());
+        table.getColumnModel().getColumn(3).setCellRenderer(new RuleChipsRenderer());
+        Ui.widths(table, 36, 64, 180, 380);
+
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.dropdown("Thao tác Role", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
                 "Các thao tác với Role", () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
@@ -91,39 +131,28 @@ final class RolesTab {
                 Ui.button("Bật/Tắt theo phạm vi...", t -> Icons.sliders(t.fg),
                         "Tắt / bật role cho toàn bộ, cho từng nhánh hoặc từng API gốc",
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
-        JPanel profile = new JPanel(new BorderLayout(4, 2)) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                Theme th = Theme.current();
-                setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, th.orig.base()),
-                        BorderFactory.createEmptyBorder(4, 8, 4, 8)));
-            }
-        };
-        JLabel pt = new JLabel(Role.ORIGINAL_PROFILE_NAME) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                Theme th = Theme.current();
-                setFont(th.boldFont);
-                setForeground(th.orig.text());
-            }
-        };
-        pt.setIcon(Icons.themed(t -> Icons.pin(t.orig.text())));
-        profile.add(pt, BorderLayout.NORTH);
-        profile.add(profileState, BorderLayout.CENTER);
-        profile.add(Ui.flow(FlowLayout.LEFT,
+
+        profileCard.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
+        profileCard.setHeader(Role.ORIGINAL_PROFILE_NAME, "Profile áp lên request API gốc (Acc Crawl)", profileBadge);
+        JPanel profileBody = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        profileBody.setOpaque(false);
+        profileBody.add(profileState, BorderLayout.CENTER);
+        profileBody.add(Ui.flow(FlowLayout.LEFT,
                 Ui.button("Sửa profile API gốc", t -> Icons.edit(t.fg), this::editOriginal),
                 Ui.button("Bật / Tắt profile", () -> {
                     Role p = engine.originalProfile();
                     engine.saveOriginalProfile(p.withEnabled(!p.enabled()));
                     refreshProfile();
                 })), BorderLayout.SOUTH);
-        JPanel north = new JPanel(new BorderLayout(2, 4));
+        profileCard.setBody(profileBody);
+
+        JPanel north = new JPanel(new BorderLayout(2, Theme.SPACE_2));
+        north.setOpaque(false);
         north.add(top, BorderLayout.NORTH);
-        north.add(profile, BorderLayout.SOUTH);
-        JPanel left = new JPanel(new BorderLayout(2, 2));
-        left.setBorder(BorderFactory.createTitledBorder("Danh sách Role / Profile (Click chọn để sửa bên phải | Chuột phải để Nhân bản / Xóa / Đổi thứ tự)"));
+        north.add(profileCard, BorderLayout.SOUTH);
+
+        JPanel left = new JPanel(new BorderLayout(4, Theme.SPACE_2));
+        left.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
         left.add(north, BorderLayout.NORTH);
         left.add(MainPanel.scroll(table), BorderLayout.CENTER);
         left.add(modeLegend(), BorderLayout.SOUTH);
@@ -133,15 +162,24 @@ final class RolesTab {
         rulesTable.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(new JComboBox<>(RuleMode.values())));
         rulesTable.getColumnModel().getColumn(2).setCellRenderer(new ModeRenderer());
         Ui.widths(rulesTable, 180, 360, 130);
+
+        name.putClientProperty("JTextField.placeholderText", "VD: 01_Admin, 02_Staff, 03_Guest...");
         jwt.setEditable(false);
+        jwt.setFont(Theme.current().monoFont);
+        jwt.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
+        expBadge.setVisible(false);
+
         JPanel head = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
+        head.setOpaque(false);
         head.add(new JLabel("Role Name:"));
         head.add(name);
         head.add(enabled);
         JButton save = Ui.accent("Save Profile Changes", t -> Icons.save(t.success.onSolid()), t -> t.success, this::save);
         head.add(save);
         head.add(dirty);
+
         JPanel tools = new JPanel(new GridLayout(2, 5, 4, 4));
+        tools.setOpaque(false);
         tools.add(Ui.button("+ Header", () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
         tools.add(Ui.button("+ Strip Header ([REMOVE])", () -> {
             String n = ui.ask("Header cần xóa khỏi request của role:", "Authorization");
@@ -164,27 +202,43 @@ final class RolesTab {
         tools.add(Ui.button("Rule Up", () -> moveRule(-1)));
         tools.add(Ui.button("Rule Down", () -> moveRule(1)));
         tools.add(Ui.button("Remove Rule(s)", this::removeRules));
-        JPanel editorTop = new JPanel(new BorderLayout());
+
+        JPanel editorTop = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        editorTop.setOpaque(false);
         editorTop.add(title, BorderLayout.NORTH);
         editorTop.add(head, BorderLayout.CENTER);
         editorTop.add(tools, BorderLayout.SOUTH);
-        JPanel jwtPanel = new JPanel(new BorderLayout());
-        jwtPanel.add(new JLabel(" JWT / Token Inspector (tự giải mã mọi token eyJ... trong profile này):"), BorderLayout.NORTH);
+
+        JPanel jwtPanel = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        jwtPanel.setOpaque(false);
+        JPanel jwtHeader = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
+        jwtHeader.setOpaque(false);
+        jwtHeader.add(Ui.bold("JWT / Token Inspector (tự giải mã mọi token eyJ... trong profile này)"), BorderLayout.WEST);
+        jwtHeader.add(expBadge, BorderLayout.EAST);
+        jwtPanel.add(jwtHeader, BorderLayout.NORTH);
         jwtPanel.add(new JScrollPane(jwt), BorderLayout.CENTER);
+
         JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(rulesTable), jwtPanel);
-        rightSplit.setResizeWeight(0.65);
-        JPanel right = new JPanel(new BorderLayout(4, 4));
-        right.setBorder(BorderFactory.createTitledBorder("Chỉnh sửa Profile đang chọn (Header / Cookie / Session / JWT - bấm 'Save Profile Changes' để lưu)"));
-        right.add(editorTop, BorderLayout.NORTH);
+        rightSplit.setResizeWeight(0.62);
+        JPanel right = new JPanel(new BorderLayout(4, Theme.SPACE_2));
+        right.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
+        JPanel rightNorth = new JPanel(new BorderLayout(0, Theme.SPACE_2));
+        rightNorth.setOpaque(false);
+        rightNorth.add(new SectionHeader("Chỉnh sửa Profile đang chọn",
+                "Sửa Header / Cookie / Session / JWT rồi bấm 'Save Profile Changes' để lưu"), BorderLayout.NORTH);
+        rightNorth.add(editorTop, BorderLayout.CENTER);
+        right.add(rightNorth, BorderLayout.NORTH);
         right.add(rightSplit, BorderLayout.CENTER);
+
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
         split.setResizeWeight(0.42);
         panel.add(split, BorderLayout.CENTER);
+
         rules.addTableModelListener(e -> {
             dirty.setIcon(Icons.themed(t -> Icons.statusDot(t.warning.text(), 8)));
             dirty.setText("chưa lưu");
-            jwt.setText(Jwt.preview(String.join("\n", rules.list.stream().map(HeaderRule::value).toList())));
-            jwt.setCaretPosition(0);
+            String preview = Jwt.preview(String.join("\n", rules.list.stream().map(HeaderRule::value).toList()));
+            renderJwt(preview);
         });
         reload();
         refreshProfile();
@@ -193,40 +247,173 @@ final class RolesTab {
         }
     }
 
+    private void renderJwt(String preview) {
+        lastJwtPreview = preview == null ? "" : preview;
+        Theme th = Theme.current();
+        StyledDocument doc = jwt.getStyledDocument();
+        try {
+            doc.remove(0, doc.getLength());
+            if (lastJwtPreview.isEmpty()) {
+                expBadge.setVisible(false);
+                return;
+            }
+
+            SimpleAttributeSet plain = attr(th.fg, false);
+            SimpleAttributeSet muted = attr(th.muted, false);
+            SimpleAttributeSet head = attr(th.info.text(), true);
+            SimpleAttributeSet label = attr(th.accent.text(), true);
+            SimpleAttributeSet keyAttr = attr(th.info.text(), true);
+            SimpleAttributeSet strAttr = attr(th.success.text(), false);
+            SimpleAttributeSet numAttr = attr(th.warning.text(), true);
+            SimpleAttributeSet errAttr = attr(th.danger.text(), true);
+
+            String[] lines = lastJwtPreview.split("\n", -1);
+            for (int li = 0; li < lines.length; li++) {
+                String line = lines[li];
+                if (line.startsWith("JWT #") && line.contains("decode error")) {
+                    doc.insertString(doc.getLength(), line, errAttr);
+                } else if (line.startsWith("JWT #")) {
+                    doc.insertString(doc.getLength(), line, head);
+                } else if ("Header:".equals(line) || "Payload:".equals(line)) {
+                    doc.insertString(doc.getLength(), line, label);
+                } else if (line.startsWith("No JWT ")) {
+                    doc.insertString(doc.getLength(), line, muted);
+                } else {
+                    appendJsonLine(doc, line, plain, keyAttr, strAttr, numAttr);
+                }
+                if (li + 1 < lines.length) {
+                    doc.insertString(doc.getLength(), "\n", plain);
+                }
+            }
+
+            long nowSec = Instant.now().getEpochSecond();
+            boolean hasExp = false;
+            boolean anyExpired = false;
+            Matcher m = EXP_PATTERN.matcher(lastJwtPreview);
+            while (m.find()) {
+                try {
+                    long exp = Long.parseLong(m.group(1));
+                    if (exp > 1_000_000_000_000L) {
+                        exp /= 1000L;
+                    }
+                    hasExp = true;
+                    if (exp < nowSec) {
+                        anyExpired = true;
+                        break;
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (anyExpired) {
+                expBadge.setToken(t -> t.danger)
+                        .setIcon(t -> Icons.warn(t.danger.text(), 11))
+                        .setText("JWT hết hạn (exp)");
+                expBadge.setVisible(true);
+            } else if (hasExp) {
+                expBadge.setToken(t -> t.success)
+                        .setIcon(t -> Icons.check(t.success.text(), 11))
+                        .setText("Token còn hạn (exp)");
+                expBadge.setVisible(true);
+            } else {
+                expBadge.setVisible(false);
+            }
+        } catch (BadLocationException ignored) {
+        }
+        jwt.setCaretPosition(0);
+    }
+
+    private static SimpleAttributeSet attr(Color fg, boolean bold) {
+        SimpleAttributeSet s = new SimpleAttributeSet();
+        StyleConstants.setForeground(s, fg);
+        StyleConstants.setBold(s, bold);
+        return s;
+    }
+
+    private static void appendJsonLine(StyledDocument doc, String line, SimpleAttributeSet plain,
+                                       SimpleAttributeSet keyAttr, SimpleAttributeSet strAttr,
+                                       SimpleAttributeSet numAttr) throws BadLocationException {
+        int i = 0;
+        int n = line.length();
+        while (i < n) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                int end = i + 1;
+                while (end < n) {
+                    char ec = line.charAt(end);
+                    if (ec == '\\' && end + 1 < n) {
+                        end += 2;
+                    } else if (ec == '"') {
+                        end++;
+                        break;
+                    } else {
+                        end++;
+                    }
+                }
+                int probe = end;
+                while (probe < n && line.charAt(probe) == ' ') {
+                    probe++;
+                }
+                boolean isKey = probe < n && line.charAt(probe) == ':';
+                doc.insertString(doc.getLength(), line.substring(i, end), isKey ? keyAttr : strAttr);
+                i = end;
+            } else if (c == '-' || (c >= '0' && c <= '9')) {
+                int end = i + 1;
+                while (end < n) {
+                    char nc = line.charAt(end);
+                    if ((nc >= '0' && nc <= '9') || nc == '.' || nc == 'e' || nc == 'E' || nc == '+' || nc == '-') {
+                        end++;
+                    } else {
+                        break;
+                    }
+                }
+                doc.insertString(doc.getLength(), line.substring(i, end), numAttr);
+                i = end;
+            } else if (line.startsWith("true", i) && isBoundary(line, i + 4)) {
+                doc.insertString(doc.getLength(), "true", numAttr);
+                i += 4;
+            } else if (line.startsWith("false", i) && isBoundary(line, i + 5)) {
+                doc.insertString(doc.getLength(), "false", numAttr);
+                i += 5;
+            } else if (line.startsWith("null", i) && isBoundary(line, i + 4)) {
+                doc.insertString(doc.getLength(), "null", numAttr);
+                i += 4;
+            } else {
+                int end = i + 1;
+                while (end < n) {
+                    char next = line.charAt(end);
+                    if (next == '"' || next == '-' || (next >= '0' && next <= '9')
+                            || line.startsWith("true", end) || line.startsWith("false", end) || line.startsWith("null", end)) {
+                        break;
+                    }
+                    end++;
+                }
+                doc.insertString(doc.getLength(), line.substring(i, end), plain);
+                i = end;
+            }
+        }
+    }
+
+    private static boolean isBoundary(String s, int idx) {
+        if (idx >= s.length()) {
+            return true;
+        }
+        char c = s.charAt(idx);
+        return !Character.isLetterOrDigit(c) && c != '_';
+    }
+
     private JPanel modeLegend() {
-        List<JLabel> chips = new ArrayList<>();
-        RuleMode[] modes = RuleMode.values();
-        Runnable applyChips = () -> {
-            Theme th = Theme.current();
-            for (int i = 0; i < chips.size(); i++) {
-                JLabel chip = chips.get(i);
-                Theme.Token tok = th.mode(modes[i]);
-                chip.setBackground(tok.fill());
-                chip.setForeground(tok.text());
-                chip.setFont(th.boldFont);
-                chip.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(tok.border()),
-                        BorderFactory.createEmptyBorder(1, 4, 1, 4)));
-            }
-        };
-        JPanel p = new JPanel(new GridLayout(3, 2, 6, 2)) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                applyChips.run();
-            }
-        };
+        JPanel p = new JPanel(new GridLayout(3, 2, 6, 4));
+        p.setOpaque(false);
         p.setBorder(BorderFactory.createTitledBorder("Các chế độ (cột Mode)"));
-        for (RuleMode m : modes) {
-            JLabel chip = new JLabel(" " + m.name() + " ");
-            chip.setOpaque(true);
-            chips.add(chip);
+        for (RuleMode m : RuleMode.values()) {
+            Pill chip = Pill.badge(m.name(), t -> t.mode(m));
             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+            row.setOpaque(false);
             row.add(chip);
-            row.add(new JLabel(m.hint));
+            row.add(Ui.muted(m.hint));
             p.add(row);
         }
-        applyChips.run();
-        p.add(new JLabel("  Value = [REMOVE]: xóa"));
+        p.add(Ui.muted("Value = [REMOVE]: xóa"));
         return p;
     }
 
@@ -241,6 +428,10 @@ final class RolesTab {
     private void refreshProfile() {
         Role p = engine.originalProfile();
         int n = p.rules().size();
+        boolean active = p.enabled() && n > 0;
+        profileBadge.setToken(active ? t -> t.orig : t -> t.neutral)
+                .setIcon(t -> Icons.pin(active ? t.orig.text() : t.muted, 11))
+                .setText(p.enabled() ? (n > 0 ? n + " rule" : "Nguyên bản") : "Đang tắt");
         profileState.setText(!p.enabled() || n == 0 ? "Chưa có rule đang bật - API gốc được gửi đúng như lúc bắt"
                 : "Đang áp dụng " + n + " rule cho API gốc (API bắt từ giờ; API cũ: 'Rebuild Roles')");
     }
@@ -419,7 +610,9 @@ final class RolesTab {
 
     private void setJwt() {
         JTextField header = new JTextField("Authorization", 25);
+        header.putClientProperty("JTextField.placeholderText", "Header Name (vd: Authorization)");
         JTextField prefix = new JTextField("Bearer", 12);
+        prefix.putClientProperty("JTextField.placeholderText", "Prefix (Bearer)");
         JTextArea token = new JTextArea(5, 45);
         token.setLineWrap(true);
         JPanel p = new JPanel(new BorderLayout(4, 4));
@@ -448,7 +641,9 @@ final class RolesTab {
 
     private void setCookie() {
         JTextField k = new JTextField("JSESSIONID", 25);
+        k.putClientProperty("JTextField.placeholderText", "Cookie key");
         JTextField v = new JTextField("", 35);
+        v.putClientProperty("JTextField.placeholderText", "Cookie value");
         JPanel p = new JPanel(new GridLayout(4, 1, 4, 4));
         p.add(new JLabel("Cookie / Session Key (vd: JSESSIONID, session, token):"));
         p.add(k);
@@ -496,8 +691,51 @@ final class RolesTab {
         rules.fireTableDataChanged();
     }
 
+    // ---- Test / inspection helpers ----
+    ThemedTable roleTable() {
+        return table;
+    }
+
+    JTextPane jwtInspector() {
+        return jwt;
+    }
+
+    Pill expBadge() {
+        return expBadge;
+    }
+
+    Card originalProfileCard() {
+        return profileCard;
+    }
+
+    static String initialsOf(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return "RL";
+        }
+        String s = roleName.trim();
+        int underscore = s.indexOf('_');
+        String target = underscore >= 0 && underscore + 1 < s.length() ? s.substring(underscore + 1) : s;
+        StringBuilder out = new StringBuilder(2);
+        for (int i = 0; i < target.length() && out.length() < 2; i++) {
+            char c = target.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                out.append(Character.toUpperCase(c));
+            }
+        }
+        if (out.isEmpty()) {
+            return s.substring(0, Math.min(2, s.length())).toUpperCase(Locale.ROOT);
+        }
+        if (out.length() == 1 && s.length() > 1) {
+            char c = s.charAt(0);
+            if (Character.isLetterOrDigit(c)) {
+                return ("" + Character.toUpperCase(c) + out.charAt(0));
+            }
+        }
+        return out.toString();
+    }
+
     private final class RoleModel extends AbstractTableModel {
-        private final String[] cols = {"#", "Enabled", "Role Name", "Rules (Header / Cookie / JWT)"};
+        private final String[] cols = {"#", "Bật", "Role Name", "Rules (Header / Cookie / JWT)"};
 
         @Override
         public int getRowCount() {
@@ -599,6 +837,259 @@ final class RolesTab {
                 default -> new HeaderRule(h.name(), h.value(), v instanceof RuleMode m ? m : RuleMode.of(s, h.value()));
             });
             fireTableRowsUpdated(r, r);
+        }
+    }
+
+    private static final class RoleIndexRenderer extends DefaultTableCellRenderer implements ThemedTree.ExtensionRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
+            super.getTableCellRendererComponent(t, v, sel, focus, row, col);
+            Theme th = Theme.of(t.getBackground(), t.getForeground());
+            setHorizontalAlignment(CENTER);
+            setFont(th.monoSmallFont);
+            setForeground(sel ? th.selectionFg : th.muted);
+            setBackground(sel ? th.selectionBg : th.zebra[row & 1]);
+            return this;
+        }
+    }
+
+    private static final class SwitchRenderer extends JComponent implements TableCellRenderer, ThemedTree.ExtensionRenderer {
+        private Theme theme;
+        private boolean on;
+        private boolean selected;
+        private int row;
+
+        SwitchRenderer() {
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
+            this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
+            this.on = Boolean.TRUE.equals(v);
+            this.selected = sel;
+            this.row = row;
+            setToolTipText(on ? "Role đang bật (bấm để tắt)" : "Role đang tắt (bấm để bật)");
+            return this;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Theme th = theme != null ? theme : Theme.current();
+            int w = getWidth();
+            int h = getHeight();
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(selected ? th.selectionBg : th.zebra[row & 1]);
+                g2.fillRect(0, 0, w, h);
+
+                int sw = Math.min(w - 8, th.scaled(32));
+                int sh = Math.min(h - 8, th.scaled(18));
+                int sx = (w - sw) / 2;
+                int sy = (h - sh) / 2;
+                g2.setColor(on ? th.success.solidFill() : th.neutral.fillStrong());
+                g2.fillRoundRect(sx, sy, sw, sh, sh, sh);
+                g2.setColor(on ? th.success.border() : th.border);
+                g2.drawRoundRect(sx, sy, sw - 1, sh - 1, sh, sh);
+
+                int knob = Math.max(8, sh - 4);
+                int kx = on ? (sx + sw - knob - 2) : (sx + 2);
+                int ky = sy + (sh - knob) / 2;
+                g2.setColor(on ? th.success.onSolid() : th.surface);
+                g2.fillOval(kx, ky, knob, knob);
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    private final class AvatarNameRenderer extends JComponent implements TableCellRenderer, ThemedTree.ExtensionRenderer {
+        private Theme theme;
+        private boolean selected;
+        private boolean roleEnabled;
+        private int modelRow;
+        private String roleName = "";
+        private String initials = "RL";
+
+        AvatarNameRenderer() {
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
+            this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
+            this.selected = sel;
+            this.modelRow = t != null && row >= 0 ? t.convertRowIndexToModel(row) : row;
+            Role r = modelRow >= 0 && modelRow < engine.roles().count() ? engine.roles().get(modelRow) : null;
+            this.roleEnabled = r == null || r.enabled();
+            this.roleName = r != null ? r.name() : (v == null ? "" : v.toString());
+            this.initials = initialsOf(this.roleName);
+            setToolTipText(roleName);
+            return this;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Theme th = theme != null ? theme : Theme.current();
+            int w = getWidth();
+            int h = getHeight();
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g2.setColor(selected ? th.selectionBg : th.zebra[Math.max(0, modelRow) & 1]);
+                g2.fillRect(0, 0, w, h);
+
+                int pad = th.scaled(6);
+                int av = Math.min(h - th.scaled(8), th.scaled(24));
+                int ay = (h - av) / 2;
+                Theme.Token tok = roleEnabled ? th.accent(modelRow) : th.neutral;
+                g2.setColor(tok.solidFill());
+                g2.fillOval(pad, ay, av, av);
+
+                g2.setFont(th.smallBoldFont);
+                FontMetrics sfm = g2.getFontMetrics();
+                int itw = sfm.stringWidth(initials);
+                int ity = ay + (av - sfm.getHeight()) / 2 + sfm.getAscent();
+                g2.setColor(tok.onSolid());
+                g2.drawString(initials, pad + Math.max(1, (av - itw) / 2), ity);
+
+                int tx = pad + av + th.scaled(8);
+                g2.setFont(roleEnabled ? th.boldFont : th.baseFont);
+                FontMetrics fm = g2.getFontMetrics();
+                int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
+                g2.setColor(selected ? th.selectionFg : (roleEnabled ? th.fg : th.muted));
+                g2.drawString(roleName, tx, ty);
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    private final class RuleChipsRenderer extends JComponent implements TableCellRenderer, ThemedTree.ExtensionRenderer {
+        private Theme theme;
+        private boolean selected;
+        private int modelRow;
+        private List<HeaderRule> ruleList = List.of();
+        private final char[] buf = new char[128];
+
+        RuleChipsRenderer() {
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
+            this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
+            this.selected = sel;
+            this.modelRow = t != null && row >= 0 ? t.convertRowIndexToModel(row) : row;
+            Role r = modelRow >= 0 && modelRow < engine.roles().count() ? engine.roles().get(modelRow) : null;
+            this.ruleList = r != null ? r.rules() : List.of();
+            setToolTipText(r != null && !r.rules().isEmpty() ? r.rulesSummary() : "(không có rule - gửi giống API gốc)");
+            return this;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Theme th = theme != null ? theme : Theme.current();
+            int w = getWidth();
+            int h = getHeight();
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g2.setColor(selected ? th.selectionBg : th.zebra[Math.max(0, modelRow) & 1]);
+                g2.fillRect(0, 0, w, h);
+
+                int x = th.scaled(6);
+                if (ruleList.isEmpty()) {
+                    g2.setFont(th.italicFont);
+                    FontMetrics fm = g2.getFontMetrics();
+                    g2.setColor(selected ? th.selectionFg : th.muted);
+                    int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
+                    g2.drawString("(chưa có rule - gửi giống API gốc)", x, ty);
+                    return;
+                }
+
+                g2.setFont(th.smallBoldFont);
+                FontMetrics fm = g2.getFontMetrics();
+                int ip = th.scaled(6);
+                int gap = th.scaled(4);
+                int pillH = Math.min(h - th.scaled(8), th.scaled(20));
+                int pillY = (h - pillH) / 2;
+                int maxRight = w - th.scaled(6);
+
+                for (int i = 0; i < ruleList.size(); i++) {
+                    HeaderRule hr = ruleList.get(i);
+                    String modeLabel = compactModeName(hr.mode());
+                    int n = writeChipText(modeLabel, hr.name());
+                    int tw = fm.charsWidth(buf, 0, n);
+                    int pw = ip * 2 + tw;
+                    if (x + pw > maxRight - th.scaled(28) && i < ruleList.size() - 1) {
+                        int rem = ruleList.size() - i;
+                        int rn = writeOverflow(rem);
+                        int rpw = ip * 2 + fm.charsWidth(buf, 0, rn);
+                        if (x + rpw <= maxRight) {
+                            drawChip(g2, th.neutral, x, pillY, rpw, pillH, fm, rn);
+                        }
+                        break;
+                    }
+                    if (x + pw > maxRight) {
+                        break;
+                    }
+                    Theme.Token tok = th.mode(hr.mode());
+                    drawChip(g2, tok, x, pillY, pw, pillH, fm, n);
+                    x += pw + gap;
+                }
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        private void drawChip(Graphics2D g2, Theme.Token tok, int x, int y, int w, int h, FontMetrics fm, int len) {
+            g2.setColor(tok.fill());
+            g2.fillRoundRect(x, y, w - 1, h - 1, h, h);
+            g2.setColor(tok.border());
+            g2.drawRoundRect(x, y, w - 1, h - 1, h, h);
+            g2.setColor(tok.text());
+            int ty = y + (h - fm.getHeight()) / 2 + fm.getAscent();
+            g2.drawChars(buf, 0, len, x + (w - fm.charsWidth(buf, 0, len)) / 2, ty);
+        }
+
+        private static String compactModeName(RuleMode m) {
+            if (m == null) {
+                return "RULE";
+            }
+            return switch (m) {
+                case REPLACE -> "REPLACE";
+                case ADD -> "ADD";
+                case REMOVE -> "REMOVE";
+                case COOKIE_SET -> "COOKIE";
+                case COOKIE_REMOVE -> "DEL_CK";
+            };
+        }
+
+        private int writeChipText(String prefix, String key) {
+            int pos = 0;
+            int plen = Math.min(prefix.length(), buf.length - 4);
+            prefix.getChars(0, plen, buf, pos);
+            pos += plen;
+            if (key != null && !key.isEmpty() && pos + 3 < buf.length) {
+                buf[pos++] = ':';
+                buf[pos++] = ' ';
+                int klen = Math.min(key.length(), Math.min(24, buf.length - pos));
+                key.getChars(0, klen, buf, pos);
+                pos += klen;
+            }
+            return pos;
+        }
+
+        private int writeOverflow(int rem) {
+            buf[0] = '+';
+            String s = Integer.toString(rem);
+            int n = Math.min(s.length(), buf.length - 1);
+            s.getChars(0, n, buf, 1);
+            return 1 + n;
         }
     }
 

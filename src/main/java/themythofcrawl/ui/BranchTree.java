@@ -434,6 +434,25 @@ public final class BranchTree {
         }
     }
 
+    /** Selects and scrolls to a folder node matching {@code branchPath}, returning true if found. */
+    public boolean selectBranchPath(String branchPath) {
+        if (branchPath == null || branchPath.isBlank()) {
+            return false;
+        }
+        String want = "F" + Hierarchy.key(branchPath);
+        Node root = (Node) model.getRoot();
+        for (java.util.Enumeration<?> en = root.depthFirstEnumeration(); en.hasMoreElements(); ) {
+            Node n = (Node) en.nextElement();
+            if (n.kind == Node.Kind.FOLDER && want.equals(n.key)) {
+                TreePath p = new TreePath(n.getPath());
+                tree.setSelectionPath(p);
+                tree.scrollPathToVisible(p);
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Open (true) or close every folder. */
     public void expandFolders(boolean open) {
         if (open) {

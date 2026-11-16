@@ -74,6 +74,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         Icon pinIcon;
         int pinX = -1;
 
+        Icon midIcon;
+        int midX = -1;
+
         String primaryText;
         Font primaryFont;
         Color primaryColor;
@@ -118,6 +121,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             copyIcon = null;
             pinIcon = null;
             pinX = -1;
+            midIcon = null;
+            midX = -1;
             leadIcon = null;
             primaryText = null;
             monoPathLen = 0;
@@ -194,7 +199,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         NodeLayout nl = ensureLayout(tree, n, th);
         this.active = nl;
         this.currentText = nl.primaryText != null ? nl.primaryText : Icons.stripLeadingSymbol(n.label);
-        this.currentIcon = nl.leadIcon;
+        this.currentIcon = nl.leadIcon != null ? nl.leadIcon : nl.midIcon;
         return this;
     }
 
@@ -555,14 +560,29 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
     private int layoutLogLine(Node n, Theme th, NodeLayout nl, int x, int gap) {
         if (n.payload instanceof Logbook.Line l) {
+            LogTab.LogKind kind = LogTab.classify(l);
             nl.statusText = l.time();
             nl.statusFont = th.monoSmallFont;
             nl.statusColor = th.muted;
             nl.statusX = x;
             x += getFontMetrics(th.monoSmallFont).stringWidth(l.time()) + gap;
+
+            Icon ic = switch (kind) {
+                case ERROR -> Icons.error(th.danger.text(), 12);
+                case CAPTURE -> Icons.bolt(th.info.text(), 12);
+                case SEND -> Icons.send(th.success.text(), 12);
+                case MOVE -> Icons.move(th.warning.text(), 12);
+                default -> Icons.gear(th.muted, 12);
+            };
+            nl.midIcon = ic;
+            nl.midX = x;
+            x += ic.getIconWidth() + gap;
+
             String body = Icons.stripInlineSymbols(l.text());
-            boolean isErr = body.contains("Lỗi") || body.contains("ERROR") || body.contains("Thất bại");
-            x = addPrimary(nl, body, th.baseFont, isErr ? th.danger.text() : th.fg, x, th.scaled(4));
+            if (kind == LogTab.LogKind.ERROR) {
+                nl.fill = th.danger.fill();
+            }
+            x = addPrimary(nl, body, th.baseFont, kind == LogTab.LogKind.ERROR ? th.danger.text() : th.fg, x, th.scaled(4));
             return x;
         }
         return addPrimary(nl, Icons.stripInlineSymbols(n.label), th.baseFont, th.fg, x, th.scaled(4));
@@ -620,6 +640,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             if (nl.pinIcon != null) {
                 Icon pin = activeSelected ? Icons.pin(th.selectionFg, 12) : nl.pinIcon;
                 pin.paintIcon(this, g2, nl.pinX, (h - pin.getIconHeight()) / 2);
+            }
+            if (nl.midIcon != null) {
+                nl.midIcon.paintIcon(this, g2, nl.midX, (h - nl.midIcon.getIconHeight()) / 2);
             }
 
             if (nl.primaryText != null && !nl.primaryText.isEmpty()) {

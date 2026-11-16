@@ -75,6 +75,8 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
     private boolean isOrigRow;
     private int pathTruncFrom = -1;
 
+    private boolean timelineRail;
+
     public AuditRenderer(AuditRows rows, Integer statusCol, Integer auditCol, Integer methodCol, int... bold) {
         this(rows, statusCol, auditCol, methodCol, Mode.TEXT, bold);
     }
@@ -104,6 +106,11 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
             colKinds[statusCol] = ColKind.HTTP_STATUS;
         }
         setOpaque(true);
+    }
+
+    public AuditRenderer timelineRail(boolean on) {
+        this.timelineRail = on;
+        return this;
     }
 
     public AuditRenderer tooltip(IntFunction<String> f) {
@@ -458,6 +465,11 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
             int x = firstViewCol ? (branchColor != null ? stripeW : 0) + padX : padX;
             if (firstViewCol && (activeKind != ColKind.COPY || w >= th.scaled(34))) {
                 int dotD = Math.max(6, th.scaled(7));
+                if (timelineRail) {
+                    int railX = x + dotD / 2;
+                    g2.setColor(th.border);
+                    g2.drawLine(railX, 0, railX, h);
+                }
                 g2.setColor(dotColor != null ? dotColor : th.dotNone);
                 g2.fillOval(x, (h - dotD) / 2, dotD, dotD);
                 x += dotD + th.scaled(5);
@@ -767,6 +779,14 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
         };
         table.addMouseMotionListener(ma);
         table.addMouseListener(ma);
+    }
+
+    /** Returns true when {@code row} is currently hovered in a table instrumented with {@link #installHover}. */
+    public static boolean isHovered(JTable table, int row) {
+        if (table == null || row < 0) {
+            return false;
+        }
+        return table.getClientProperty(HOVER_ROW_PROP) instanceof Integer hi && hi == row;
     }
 
     private static void repaintRow(JTable table, int viewRow) {
