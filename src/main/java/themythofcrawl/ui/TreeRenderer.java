@@ -18,13 +18,14 @@ import javax.swing.tree.TreeCellRenderer;
 
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.ui.kit.ThemedTree;
 
 /**
  * Tree rows drawn as rounded chips: folders in the colour of their level (siblings share it, parent and
  * child never do) with a dot for the branch verdict; API / role rows tinted by audit; the original in
  * blue; duplicated APIs with a purple edge; API rows carry a copy glyph.
  */
-public final class TreeRenderer extends JLabel implements TreeCellRenderer {
+public final class TreeRenderer extends JLabel implements TreeCellRenderer, ThemedTree.ExtensionRenderer {
     private static final int ARC = 10;
     private Color fill;
     private Color edge;
@@ -36,6 +37,12 @@ public final class TreeRenderer extends JLabel implements TreeCellRenderer {
         setOpaque(false);
         setIconTextGap(5);
         setBorder(pad);
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        setOpaque(false);
     }
 
     @Override

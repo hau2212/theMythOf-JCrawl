@@ -21,6 +21,13 @@ Không cần cài Jython, Python hay thư viện nào khác. Cần Burp Suite b�
 **Tự build** (cần JDK 21): `gradlew.bat build` → file ở `build\libs\theMythOf-JCrawl.jar`
 (khi chạy từ `build\libs`, workspace nằm ở thư mục gốc của repo).
 
+### Gặp lỗi giao diện (mất màu / ô vuông emoji / vẫn thấy giao diện cũ)
+
+1. Mở **Extensions → Installed → chọn `theMythOf-JCrawl` → Output**, kiểm tra dòng nạp:
+   `theMythOf-JCrawl 2.0.0 loaded · LAF=... · dark=...`
+2. Kiểm tra tên tab trên thanh tab Burp là **`theMythOf-JCrawl`**. Nếu không có dòng Output trên hoặc tên tab vẫn là tên cũ → Burp đang nạp file `.jar` cũ; hãy **Unload / Remove** extension cũ và **Add** lại file `theMythOf-JCrawl.jar` mới nhất.
+3. Mở tab **Cấu hình → mục 8. Giới thiệu & chẩn đoán** (hoặc rê chuột vào nút **Workspace**) để xem phiên bản, LAF, màu `Panel.background` / `Table.background` / `Component.accentColor` và hệ số scale; bấm **Copy thông tin chẩn đoán** nếu cần gửi kèm ảnh chụp màn hình.
+
 ## Dùng nhanh
 
 1. Tab **Roles**: sửa các role mẫu (token / cookie của từng tài khoản test), tắt role không dùng.

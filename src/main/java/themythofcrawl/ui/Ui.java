@@ -107,7 +107,12 @@ public final class Ui {
         t.setIntercellSpacing(new Dimension(0, 1));
         t.setFillsViewportHeight(true);
         t.setGridColor(Palette.of(t.getBackground(), t.getForeground()).grid);
-        t.getTableHeader().setFont(t.getTableHeader().getFont().deriveFont(Font.BOLD));
+        if (t.getTableHeader() != null) {
+            t.getTableHeader().setFont(t.getTableHeader().getFont().deriveFont(Font.BOLD));
+        }
+        if (t instanceof themythofcrawl.ui.kit.ThemedTable tt) {
+            tt.markStyled();
+        }
     }
 
     public static void widths(JTable t, int... w) {

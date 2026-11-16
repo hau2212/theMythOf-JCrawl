@@ -37,6 +37,7 @@ class ExtensionLoadTest {
     static final class Stub implements InvocationHandler {
         final Map<String, String> prefs = new ConcurrentHashMap<>();
         final List<Object> registered = new ArrayList<>();
+        final List<String> outputs = new ArrayList<>();
         final String filename;
 
         Stub(String filename) {
@@ -61,6 +62,11 @@ class ExtensionLoadTest {
                     return "stub " + m.getDeclaringClass().getSimpleName();
                 case "filename":
                     return filename;
+                case "logToOutput":
+                    if (args != null && args.length > 0 && args[0] != null) {
+                        outputs.add(args[0].toString());
+                    }
+                    return null;
                 case "getString":
                     return prefs.get((String) args[0]);
                 case "setString":
@@ -121,6 +127,8 @@ class ExtensionLoadTest {
         stub.prefs.put(themythofcrawl.app.Engine.PREF_CONFIG, "{\"capture_enabled\": true}");   // off by default, as in Python
         MontoyaApi api = stub.make(MontoyaApi.class);
         new Extension().initialize(api);
+        assertTrue(stub.outputs.stream().anyMatch(s -> s.startsWith("theMythOf-JCrawl ") && s.contains("loaded · LAF=") && s.contains("dark=")),
+                "expected load log line in Burp Output, got: " + stub.outputs);
 
         ProxyResponseHandler handler = (ProxyResponseHandler) stub.registered.stream()
                 .filter(o -> o instanceof ProxyResponseHandler).findFirst().orElseThrow();

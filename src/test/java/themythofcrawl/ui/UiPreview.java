@@ -99,6 +99,28 @@ public final class UiPreview {
             if (System.getProperty("laf") != null) {
                 SwingUtilities.updateComponentTreeUI(c);   // what a host theme pass does to a component tree
             }
+            if (Boolean.getBoolean("simulateBurp")) {
+                simulateBurpTheme(c);
+            }
+        }
+
+        static void simulateBurpTheme(Component c) {
+            if (c instanceof javax.swing.JTree tree) {
+                tree.setCellRenderer(new javax.swing.tree.DefaultTreeCellRenderer());
+            } else if (c instanceof javax.swing.JTable table) {
+                javax.swing.table.DefaultTableCellRenderer def = new javax.swing.table.DefaultTableCellRenderer();
+                table.setDefaultRenderer(Object.class, def);
+                table.setDefaultRenderer(String.class, def);
+                table.setDefaultRenderer(Integer.class, def);
+                for (int i = 0; i < table.getColumnModel().getColumnCount(); i++) {
+                    table.getColumnModel().getColumn(i).setCellRenderer(def);
+                }
+            }
+            if (c instanceof java.awt.Container container) {
+                for (Component child : container.getComponents()) {
+                    simulateBurpTheme(child);
+                }
+            }
         }
 
         @Override

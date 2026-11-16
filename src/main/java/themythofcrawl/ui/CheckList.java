@@ -19,6 +19,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
 
+import themythofcrawl.ui.kit.ThemedTable;
+
 /** A filterable list of check boxes (key + label), with 'all / none' for the rows shown. */
 final class CheckList<K> extends JPanel {
     record Item<K>(K key, String label) {
@@ -38,7 +40,7 @@ final class CheckList<K> extends JPanel {
         this.items = items;
         this.on = new boolean[items.size()];
         this.changed = changed;
-        table = new JTable(model);           // after `items`: the sorter reads the row count at once
+        table = new ThemedTable(model);           // after `items`: the sorter reads the row count at once
         sorter = new TableRowSorter<>(model);
         Set<K> c = checked == null ? Set.of() : new HashSet<>(checked);
         for (int i = 0; i < items.size(); i++) {

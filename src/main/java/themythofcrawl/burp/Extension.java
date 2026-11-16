@@ -54,9 +54,11 @@ public final class Extension implements BurpExtension {
         }
 
         MainPanel[] panel = new MainPanel[1];
+        String[] loadLine = new String[1];
         Runnable build = () -> {
             panel[0] = new MainPanel(engine, workspaces, new MontoyaUiHost(api), projectId);
             api.userInterface().registerSuiteTab(Text.EXT_NAME, panel[0].root());
+            loadLine[0] = themythofcrawl.ui.Diagnostics.loadLogLine();
         };
         try {
             SwingUtilities.invokeAndWait(build);
@@ -129,7 +131,7 @@ public final class Extension implements BurpExtension {
             }
             engine.close();
         });
-        engine.log(Text.EXT_NAME + " " + VERSION + " (Java) loaded - " + engine.roles().count() + " role(s) configured.", null);
+        engine.log(loadLine[0] != null ? loadLine[0] : themythofcrawl.ui.Diagnostics.loadLogLine(), null);
     }
 
     private static String safeFilename(MontoyaApi api) {

@@ -39,6 +39,8 @@ import themythofcrawl.model.Role;
 import themythofcrawl.model.RoleScopes;
 import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
+import themythofcrawl.ui.kit.ThemedTable;
+import themythofcrawl.ui.kit.ThemedTree;
 
 /** 'Roles' tab: the role list, the API gốc profile and an inline editor (rules, JWT inspector, bulk paste). */
 final class RolesTab {
@@ -46,13 +48,13 @@ final class RolesTab {
     private final MainPanel ui;
     private final Engine engine;
     private final RoleModel model = new RoleModel();
-    private final JTable table = new JTable(model);
+    private final JTable table = new ThemedTable(model);
     private final JLabel profileState = new JLabel(" ");
     private final JLabel title = Ui.bold(" ");
     private final JTextField name = new JTextField(26);
     private final JCheckBox enabled = new JCheckBox("Enabled", true);
     private final RuleModel rules = new RuleModel();
-    private final JTable rulesTable = new JTable(rules);
+    private final JTable rulesTable = new ThemedTable(rules);
     private final JTextArea jwt = new JTextArea(5, 50);
     private final JLabel dirty = new JLabel(" ");
     private int editing = -1;          // role index, -2 = the API gốc profile
@@ -552,7 +554,7 @@ final class RolesTab {
         }
     }
 
-    private static final class ModeRenderer extends DefaultTableCellRenderer {
+    private static final class ModeRenderer extends DefaultTableCellRenderer implements ThemedTree.ExtensionRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
             JLabel l = (JLabel) super.getTableCellRendererComponent(t, v, sel, focus, row, col);

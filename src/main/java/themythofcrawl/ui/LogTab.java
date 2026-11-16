@@ -29,6 +29,7 @@ import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.Branch;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.kit.ThemedTree;
 
 /**
  * 'Log' tab: branch > API > (log lines + role results), plus 'Hệ thống & thao tác'. Every level is
@@ -50,12 +51,11 @@ final class LogTab {
         this.ui = ui;
         this.engine = ui.engine;
         model = new DefaultTreeModel(new Node(Node.Kind.ROOT, "", "Nhật ký", AuditLevel.NONE, "ROOT", 0));
-        tree = new JTree(model);
+        tree = new ThemedTree(model, new TreeRenderer());
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
         tree.setRowHeight(26);
         tree.setLargeModel(true);
-        tree.setCellRenderer(new TreeRenderer());
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         tree.addTreeWillExpandListener(new TreeWillExpandListener() {
             @Override

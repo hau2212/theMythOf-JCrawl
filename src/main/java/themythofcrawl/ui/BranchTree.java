@@ -37,6 +37,7 @@ import themythofcrawl.model.PlaceHint;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.place.Decisions;
 import themythofcrawl.place.PlacementBook;
+import themythofcrawl.ui.kit.ThemedTree;
 
 /**
  * The branch tree (Toppage > menu > button "Search" > API > API gốc / roles). Rebuilt from the engine
@@ -63,10 +64,9 @@ public final class BranchTree {
         this.engine = engine;
         Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API", AuditLevel.NONE, "ROOT", 0);
         model = new DefaultTreeModel(root);
-        tree = new JTree(model);
+        tree = new ThemedTree(model, new TreeRenderer());
         tree.setRowHeight(26);
         tree.setLargeModel(true);
-        tree.setCellRenderer(new TreeRenderer());
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.setToggleClickCount(2);
         tree.addTreeWillExpandListener(new TreeWillExpandListener() {

@@ -27,10 +27,19 @@ import javax.swing.Scrollable;
 
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Config;
+import themythofcrawl.core.Text;
 
 /** 'Cấu hình' tab: colour-coded sections; every change is applied and saved at once. */
 final class SettingsTab {
-    final JPanel panel = new JPanel(new BorderLayout());
+    final JPanel panel = new JPanel(new BorderLayout()) {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            if (diagVersion != null) {
+                refreshDiagnostics();
+            }
+        }
+    };
     private final MainPanel ui;
     private final Engine engine;
     private boolean loading;
@@ -71,6 +80,11 @@ final class SettingsTab {
     private final JLabel copyCounter = new JLabel(" ");
     private final JCheckBox positionCopy = new JCheckBox("Khi xuất Excel: cột POSITION còn trống được ghi theo định dạng copy (vd 200. / > contact > button \"send\")");
     private final JLabel workspaceInfo = new JLabel(" ");
+    private final JLabel diagVersion = new JLabel(" ");
+    private final JLabel diagLaf = new JLabel(" ");
+    private final JLabel diagColors = new JLabel(" ");
+    private final JLabel diagScale = new JLabel(" ");
+    private final JLabel diagCopyNote = new JLabel(" ");
     private final JLabel saved = new JLabel(" ");
 
     SettingsTab(MainPanel ui) {
@@ -129,6 +143,17 @@ final class SettingsTab {
                         ui.flash("Đã copy đường dẫn workspace");
                     }
                 }), workspaceInfo)));
+        content.add(section("8.  Giới thiệu & chẩn đoán", new Color(37, 99, 235),
+                "Phiên bản đang chạy, Look & Feel (theme của Burp), màu nền / accent và thông số scale để kiểm tra khi gặp lỗi hiển thị.",
+                field("Phiên bản:", diagVersion, null),
+                field("Look & Feel (LAF):", diagLaf, null),
+                field("Màu theme:", diagColors, null),
+                field("Scale / Font:", diagScale, null),
+                pair(Ui.button("Copy thông tin chẩn đoán", () -> {
+                    Ui.copyToClipboard(Diagnostics.fullReport(engine.workspaceName(), engine.workspaceLocation()));
+                    diagCopyNote.setText("Đã copy thông tin chẩn đoán");
+                    ui.flash("Đã copy thông tin chẩn đoán");
+                }), diagCopyNote)));
         JPanel btns = Ui.flow(FlowLayout.LEFT, Ui.button("Áp dụng", this::apply), Ui.button("Khôi phục mặc định", () -> {
             if (ui.confirmDialog("Đưa mọi tùy chọn về mặc định?")) {
                 Config d = new Config();
@@ -213,9 +238,19 @@ final class SettingsTab {
             targetInfo.setText(engine.targets() == null ? "Chưa nạp file - extension bắt API như bình thường"
                     : "Đã nạp " + engine.targets().size() + " API từ " + engine.targets().source() + " (sheet " + engine.targets().sheet() + ")");
             workspaceInfo.setText(engine.workspaceName() + " - " + engine.workspaceLocation());
+            refreshDiagnostics();
         } finally {
             loading = false;
         }
+    }
+
+    private void refreshDiagnostics() {
+        diagVersion.setText(Text.EXT_NAME + " " + Diagnostics.VERSION);
+        diagLaf.setText(Diagnostics.lafName() + " (" + Diagnostics.lafClass() + ") · dark=" + Diagnostics.isDark());
+        diagColors.setText("Panel.background=" + Diagnostics.colorHex("Panel.background")
+                + " · Table.background=" + Diagnostics.colorHex("Table.background")
+                + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor"));
+        diagScale.setText("sun.java2d.uiScale=" + Diagnostics.uiScale() + " · font=" + Diagnostics.fontSummary());
     }
 
     private int num(JTextField f, int def) {

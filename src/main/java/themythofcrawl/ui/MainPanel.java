@@ -135,6 +135,7 @@ public final class MainPanel {
         } catch (RuntimeException ignored) {
             // outside Burp
         }
+        settings.load();
         syncHeader();
         api.reloadAll();
         timer = new Timer(TICK_MS, e -> tick(false));
@@ -255,13 +256,17 @@ public final class MainPanel {
         queue.setText(q.waitSeconds() > 0.5 ? String.format("Hàng đợi: %d (chờ %.0fs)", waiting, q.waitSeconds())
                 : "Hàng đợi: " + waiting);
         queue.setEnabled(waiting > 0);
+        String diag = Diagnostics.summary();
         workspace.setText("📁 " + engine.workspaceName() + " ▾");
-        workspace.setToolTipText(engine.workspaceLocation());
+        workspace.setToolTipText(diag + " | Workspace: " + engine.workspaceLocation());
+        status.setToolTipText(diag);
         String text = (send ? "Gửi: BẬT" : "Chỉ crawl") + " | Roles: " + engine.roles().enabledCount() + "/" + engine.roles().count()
                 + " | Nhánh: " + st.branches() + " | API: " + st.apis() + " (Vàng: " + st.info() + ")"
                 + (st.hidden() > 0 ? " | 🙈 " + st.hidden() + " ẩn" : "")
                 + (engine.skippedCount() > 0 ? " | Bỏ qua: " + engine.skippedCount() + " (" + engine.lastSkipReason() + ")" : "")
-                + (engine.targets() != null ? " | Excel: " + engine.hits().rowsSeen() + "/" + engine.targets().size() + " dòng đã gặp" : "");
+                + (engine.targets() != null ? " | Excel: " + engine.hits().rowsSeen() + "/" + engine.targets().size() + " dòng đã gặp" : "")
+                + " | " + Text.EXT_NAME + " " + Diagnostics.VERSION + " · " + Diagnostics.lafName()
+                + (Diagnostics.isDark() ? " (dark)" : "");
         if (flash != null && System.currentTimeMillis() < flashUntil) {
             text = flash;
         }

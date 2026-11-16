@@ -26,6 +26,7 @@ import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.place.Decisions;
 import themythofcrawl.place.PlacementBook;
+import themythofcrawl.ui.kit.ThemedTable;
 
 /**
  * 'Audit' tab: Cần xử lý (what waits for a decision, explained) · Giữ chỗ (the remembered place of
@@ -78,7 +79,7 @@ final class AuditTab {
     }
 
     private static JTable table(RowsModel<?> m, int[] widths, int auditCol, Integer methodCol, int... bold) {
-        JTable t = new JTable(m);
+        JTable t = new ThemedTable(m);
         Ui.style(t);
         t.setAutoCreateRowSorter(true);
         AuditRenderer r = new AuditRenderer(m, null, auditCol, methodCol, bold);

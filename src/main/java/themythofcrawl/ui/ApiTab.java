@@ -38,6 +38,7 @@ import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.Branch;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.model.RoleScopes;
+import themythofcrawl.ui.kit.ThemedTable;
 
 /** 'API' tab: branch tree / table, API list, the selected API's rows (API gốc + roles), grouped Repeater, viewers. */
 final class ApiTab {
@@ -71,10 +72,10 @@ final class ApiTab {
         this.engine = ui.engine;
         tree = new BranchTree(engine);
         groupModel = new GroupTableModel(engine, g -> engine.hits().count(g.target()));
-        table = new JTable(groupModel);
+        table = new ThemedTable(groupModel);
         branchModel = new BranchTableModel(engine);
-        branchTable = new JTable(branchModel);
-        results = new JTable(resultModel);
+        branchTable = new ThemedTable(branchModel);
+        results = new ThemedTable(resultModel);
         reqViewer = ui.host.requestViewer(true);
         respViewer = ui.host.responseViewer();
         panel.add(actionBar(), BorderLayout.NORTH);

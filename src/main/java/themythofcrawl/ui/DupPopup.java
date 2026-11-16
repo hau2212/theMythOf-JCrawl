@@ -18,6 +18,7 @@ import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.place.Decisions;
+import themythofcrawl.ui.kit.ThemedTable;
 
 /** Quick look at every copy (#1 ... #n) of a duplicated API with the common actions. */
 final class DupPopup {
@@ -35,7 +36,7 @@ final class DupPopup {
                     Text.apiLabel(c.gid()), c.branch(), state, c.target() != null ? "#" + c.target().sttText() : "")));
         }
         model.set(rows);
-        JTable t = new JTable(model);
+        JTable t = new ThemedTable(model);
         Ui.style(t);
         Ui.widths(t, 45, 70, 300, 120, 60);
         AuditRenderer r = new AuditRenderer(model, null, null, null);

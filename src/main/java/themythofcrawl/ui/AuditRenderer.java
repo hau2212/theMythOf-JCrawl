@@ -11,13 +11,14 @@ import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
 
 import themythofcrawl.core.AuditLevel;
+import themythofcrawl.ui.kit.ThemedTree;
 
 /**
  * Cell renderer of every data table: zebra rows tinted by audit level, a colour bar per branch in the
  * first column, coloured method / status / verdict; 'copy' cells draw the copy glyph, 'link' / 'dup'
  * cells look clickable.
  */
-public class AuditRenderer extends DefaultTableCellRenderer {
+public class AuditRenderer extends DefaultTableCellRenderer implements ThemedTree.ExtensionRenderer {
     public enum Mode { TEXT, COPY, LINK, DUP }
 
     private final AuditRows rows;

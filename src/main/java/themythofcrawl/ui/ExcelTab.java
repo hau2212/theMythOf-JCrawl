@@ -38,6 +38,7 @@ import themythofcrawl.export.Reports;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.kit.ThemedTable;
 
 /**
  * 'Excel' tab: every line of the imported list with what was captured for it, how many times it was
@@ -54,9 +55,9 @@ final class ExcelTab {
     private final javax.swing.JButton clear;
     private final JLabel summary = new JLabel(" ");
     private final CoverageModel coverage = new CoverageModel();
-    private final JTable table = new JTable(coverage);
+    private final JTable table = new ThemedTable(coverage);
     private final HitModel hitModel = new HitModel();
-    private final JTable hitTable = new JTable(hitModel);
+    private final JTable hitTable = new ThemedTable(hitModel);
     private final JLabel hitsLabel = Ui.bold(" Chọn 1 dòng Excel để xem các lần đã gặp (path thực tế, vị trí, kết quả).");
     boolean stale = true;
     private long nextOk;
