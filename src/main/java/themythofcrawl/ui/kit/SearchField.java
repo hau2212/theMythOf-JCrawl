@@ -84,7 +84,10 @@ public class SearchField extends JTextField {
 
     private void syncLafKind() {
         LookAndFeel laf = UIManager.getLookAndFeel();
-        flatLaf = laf != null && laf.getClass().getName().toLowerCase(java.util.Locale.ROOT).contains("flatlaf");
+        String cls = laf != null ? laf.getClass().getName().toLowerCase(java.util.Locale.ROOT) : "";
+        String uiCls = String.valueOf(UIManager.get("TextFieldUI")).toLowerCase(java.util.Locale.ROOT);
+        flatLaf = cls.contains("flat") || uiCls.contains("flat") || UIManager.get("Component.arc") != null
+                || UIManager.get("TextComponent.arc") != null || UIManager.getColor("TextField.placeholderForeground") != null;
         if (!flatLaf) {
             Insets m = super.getMargin();
             int baseLeft = m != null ? Math.max(4, m.left) : 4;
@@ -101,7 +104,7 @@ public class SearchField extends JTextField {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        if (flatLaf) {
+        if (flatLaf || getUI().getClass().getName().toLowerCase(java.util.Locale.ROOT).contains("flat")) {
             return;
         }
         Theme t = Theme.current();

@@ -51,50 +51,55 @@ final class HistoryTab {
                 ui.jumpToGroup(g);
             }
         });
+        javax.swing.JButton[] actionRef = new javax.swing.JButton[1];
+        javax.swing.JButton actionBtn = Ui.dropdown("Thao tác Nhánh", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
+                "Thêm Sub-folder, Đổi tên, Xem ở tab API, Mở/Thu gọn các nhánh", () -> {
+                    ui.useSource(tree);
+                    javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
+                    m.add(Ui.item("Xem mục đang chọn ở tab API", t -> Icons.search(t.info.text()),
+                            () -> ui.jumpToGroup(BranchTree.groupOf(tree.selectedNode()))));
+                    m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target,
+                            () -> ui.pushDialog(false, null, null)));
+                    m.addSeparator();
+                    m.add(Ui.item("Thêm Sub-folder con...", Icons::plus,
+                            () -> ui.addSubfolder(ui.selectedBranch())));
+                    m.add(Ui.item("Thêm Nhánh mới cùng cấp...", Icons::plus, ui::nextSibling));
+                    m.add(Ui.item("Đổi tên Nhánh...", Icons::edit, () -> {
+                        String b = ui.selectedBranch();
+                        if (b != null) {
+                            ui.renameBranchDialog(b);
+                        }
+                    }));
+                    m.addSeparator();
+                    m.add(Ui.item("Mở tất cả các nhánh", Icons::plus, () -> tree.expandFolders(true)));
+                    m.add(Ui.item("Thu gọn tất cả", Icons::minus, () -> tree.expandFolders(false)));
+                    m.addSeparator();
+                    m.add(Ui.item("Hướng dẫn Chọn nhiều...", Icons::info,
+                            () -> Ui.popover(actionRef[0], "Chọn nhiều", Help.SELECT)));
+                    m.show(actionRef[0], 0, actionRef[0].getHeight());
+                });
+        actionRef[0] = actionBtn;
+
         JPanel bar = Ui.flow(FlowLayout.LEFT,
-                Ui.button("Gửi mục đang chọn", t -> Icons.send(t.fg), "Gửi mục đang chọn (Ctrl+Enter)", () -> {
+                Ui.accent("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     ui.useSource(tree);
                     ui.send(ui.scope().groups());
                 }),
-                Ui.button("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), "Đẩy sang Burp Repeater (Ctrl+R)", () -> {
+                Ui.button("Repeater", t -> Icons.repeater(t.fg), "Đẩy sang Burp Repeater (Ctrl+R)", () -> {
                     ui.useSource(tree);
                     ui.push(ui.scope().groups());
                 }),
-                Ui.button("Đẩy / Gửi có chọn Role...", t -> Icons.target(t.fg), () -> {
-                    ui.useSource(tree);
-                    ui.pushDialog(false, null, null);
-                }),
-                Ui.button("Sub-folder con...", t -> Icons.plus(t.fg), () -> {
-                    ui.useSource(tree);
-                    ui.addSubfolder(ui.selectedBranch());
-                }),
-                Ui.button("Nhánh mới...", t -> Icons.plus(t.fg), ui::nextSibling),
-                Ui.button("Đổi tên...", t -> Icons.edit(t.fg), () -> {
-                    ui.useSource(tree);
-                    String b = ui.selectedBranch();
-                    if (b != null) {
-                        ui.renameBranchDialog(b);
-                    }
-                }),
-                Ui.button("Xem ở tab API", t -> Icons.search(t.info.text()),
-                        () -> ui.jumpToGroup(BranchTree.groupOf(tree.selectedNode()))),
+                actionBtn,
                 exportMenu(ui),
                 Ui.button("Refresh", t -> Icons.refresh(t.fg), () -> {
                     stale = true;
                     nextOk = 0;
                     refreshIfVisible();
-                }),
-                Ui.button("", t -> Icons.plus(t.fg), "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
-                Ui.button("", t -> Icons.minus(t.fg), "Thu gọn tất cả", () -> tree.expandFolders(false)),
-                Ui.info(Help.SELECT, "Chọn nhiều"));
+                }));
         panel.add(bar, BorderLayout.NORTH);
         JPanel treePanel = new JPanel(new BorderLayout());
-        treePanel.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
-                "Cây phân cấp Sub-folder & API (Chuột phải vào mục bất kỳ để Gửi / Đổi tên / Xem chi tiết)"));
         treePanel.add(MainPanel.scroll(tree.tree), BorderLayout.CENTER);
         JPanel sum = new JPanel(new BorderLayout());
-        sum.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
-                "Bản tổng hợp Audit (Thẻ theo nhánh · Ma trận Role x API · Văn bản)"));
         sum.add(report, BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treePanel, sum);
         split.setResizeWeight(0.36);

@@ -77,10 +77,10 @@ final class RolesTab {
     };
     private final Card profileCard = new Card(t -> t.orig, true);
     private final JLabel profileState = Ui.muted(" ");
-    private final Pill profileBadge = new Pill("Bật", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
-    private final JLabel title = Ui.bold(" ");
-    private final JTextField name = new JTextField(26);
-    private final JCheckBox enabled = new JCheckBox("Enabled", true);
+    private final Pill profileBadge = new Pill("00_API GỐC", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
+    private final JLabel title = Ui.bold("Profile:");
+    private final JTextField name = new JTextField(18);
+    private final JCheckBox enabled = new JCheckBox("Bật", true);
     private final RuleModel rules = new RuleModel();
     private final ThemedTable rulesTable = new ThemedTable(rules);
     private final Pill expBadge = new Pill("", t -> t.danger, t -> Icons.warn(t.danger.text(), 11));
@@ -118,116 +118,84 @@ final class RolesTab {
         table.getColumnModel().getColumn(1).setCellRenderer(new SwitchRenderer());
         table.getColumnModel().getColumn(2).setCellRenderer(new AvatarNameRenderer());
         table.getColumnModel().getColumn(3).setCellRenderer(new RuleChipsRenderer());
-        Ui.widths(table, 36, 64, 180, 380);
+        Ui.widths(table, 32, 48, 160, 280);
 
-        JButton[] moreRef = new JButton[1];
-        JButton more = Ui.dropdown("Thao tác Role", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
-                "Các thao tác với Role", () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
-        moreRef[0] = more;
-        JPanel top = Ui.flow(FlowLayout.LEFT,
-                Ui.button("Thêm Role...", t -> Icons.plus(t.fg), this::addRole),
-                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles),
-                more,
-                Ui.button("Bật/Tắt theo phạm vi...", t -> Icons.sliders(t.fg),
-                        "Tắt / bật role cho toàn bộ, cho từng nhánh hoặc từng API gốc",
-                        () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
-
+        profileBadge.onClick(this::editOriginal);
         profileCard.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
         profileCard.setHeader(Role.ORIGINAL_PROFILE_NAME, "Profile áp lên request API gốc (Acc Crawl)", profileBadge);
-        JPanel profileBody = new JPanel(new BorderLayout(0, Theme.SPACE_1));
-        profileBody.setOpaque(false);
-        profileBody.add(profileState, BorderLayout.CENTER);
-        profileBody.add(Ui.flow(FlowLayout.LEFT,
-                Ui.button("Sửa profile API gốc", t -> Icons.edit(t.fg), this::editOriginal),
-                Ui.button("Bật / Tắt profile", () -> {
-                    Role p = engine.originalProfile();
-                    engine.saveOriginalProfile(p.withEnabled(!p.enabled()));
-                    refreshProfile();
-                })), BorderLayout.SOUTH);
-        profileCard.setBody(profileBody);
+        profileCard.setBody(profileState);
 
-        JPanel north = new JPanel(new BorderLayout(2, Theme.SPACE_2));
-        north.setOpaque(false);
-        north.add(top, BorderLayout.NORTH);
-        north.add(profileCard, BorderLayout.SOUTH);
+        JButton[] moreRef = new JButton[1];
+        JButton more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
+                "Quản lý Role, Bật/Tắt theo phạm vi, Profile API Gốc, Import/Export",
+                () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
+        moreRef[0] = more;
+        JPanel top = Ui.flow(FlowLayout.LEFT,
+                Ui.button("Thêm Role", t -> Icons.plus(t.fg), this::addRole),
+                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles),
+                profileBadge,
+                more);
 
-        JPanel left = new JPanel(new BorderLayout(4, Theme.SPACE_2));
-        left.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
-        left.add(north, BorderLayout.NORTH);
+        JPanel left = new JPanel(new BorderLayout(4, Theme.SPACE_1));
+        left.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_1));
+        left.add(top, BorderLayout.NORTH);
         left.add(MainPanel.scroll(table), BorderLayout.CENTER);
-        left.add(modeLegend(), BorderLayout.SOUTH);
 
         Ui.style(rulesTable);
         rulesTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         rulesTable.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(new JComboBox<>(RuleMode.values())));
         rulesTable.getColumnModel().getColumn(2).setCellRenderer(new ModeRenderer());
-        Ui.widths(rulesTable, 180, 360, 130);
+        Ui.widths(rulesTable, 160, 320, 120);
+        Ui.onPopup(rulesTable, e -> ruleEditorMenu().show(e.getComponent(), e.getX(), e.getY()));
 
-        name.putClientProperty("JTextField.placeholderText", "VD: 01_Admin, 02_Staff, 03_Guest...");
+        name.putClientProperty("JTextField.placeholderText", "VD: 01_Admin, 02_Staff...");
         jwt.setEditable(false);
         jwt.setFont(Theme.current().monoFont);
         jwt.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
         expBadge.setVisible(false);
 
-        JPanel head = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
-        head.setOpaque(false);
-        head.add(new JLabel("Role Name:"));
-        head.add(name);
-        head.add(enabled);
-        JButton save = Ui.accent("Save Profile Changes", t -> Icons.save(t.success.onSolid()), t -> t.success, this::save);
-        head.add(save);
-        head.add(dirty);
+        JPanel head = Ui.flow(FlowLayout.LEFT,
+                title,
+                name,
+                enabled,
+                Ui.accent("Lưu Profile", t -> Icons.save(t.success.onSolid()), t -> t.success, this::save),
+                dirty);
 
-        JPanel tools = new JPanel(new GridLayout(2, 5, 4, 4));
-        tools.setOpaque(false);
-        tools.add(Ui.button("+ Header", () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
-        tools.add(Ui.button("+ Strip Header ([REMOVE])", () -> {
-            String n = ui.ask("Header cần xóa khỏi request của role:", "Authorization");
-            HeaderRule r = n == null ? null : HeaderRule.of(n, RuleMode.REMOVE_TOKEN, "REMOVE");
-            if (r != null) {
-                rules.add(r);
-            }
-        }));
-        tools.add(Ui.button("+ Set JWT / Bearer...", this::setJwt));
-        tools.add(Ui.button("+ Set Cookie/Session Key...", this::setCookie));
-        tools.add(Ui.button("+ Strip Cookie Key...", () -> {
-            String k = ui.ask("Cookie / Session key cần xóa:", "JSESSIONID");
-            HeaderRule r = k == null ? null : HeaderRule.of(k, RuleMode.REMOVE_TOKEN, "COOKIE_REMOVE");
-            if (r != null) {
-                rules.add(r);
-            }
-        }));
-        tools.add(Ui.button("Paste Headers...", () -> paste(false)));
-        tools.add(Ui.button("Paste Cookies...", () -> paste(true)));
-        tools.add(Ui.button("Rule Up", () -> moveRule(-1)));
-        tools.add(Ui.button("Rule Down", () -> moveRule(1)));
-        tools.add(Ui.button("Remove Rule(s)", this::removeRules));
+        JButton[] ruleMoreRef = new JButton[1];
+        JButton ruleMore = Ui.dropdown("Thêm / Paste", null,
+                "Thêm rule xóa Header/Cookie, dán hàng loạt hoặc xem chú giải Mode",
+                () -> ruleEditorMenu().show(ruleMoreRef[0], 0, ruleMoreRef[0].getHeight()));
+        ruleMoreRef[0] = ruleMore;
 
-        JPanel editorTop = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        JPanel tools = Ui.flow(FlowLayout.LEFT,
+                Ui.button("Header", t -> Icons.plus(t.fg),
+                        () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))),
+                Ui.button("JWT / Bearer", t -> Icons.codeBraces(t.fg), this::setJwt),
+                Ui.button("Cookie", t -> Icons.plus(t.fg), this::setCookie),
+                ruleMore,
+                Ui.button("Lên", Icons::arrowUp, () -> moveRule(-1)),
+                Ui.button("Xuống", Icons::arrowDown, () -> moveRule(1)),
+                Ui.button("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
+
+        JPanel editorTop = new JPanel(new BorderLayout(0, 2));
         editorTop.setOpaque(false);
-        editorTop.add(title, BorderLayout.NORTH);
-        editorTop.add(head, BorderLayout.CENTER);
+        editorTop.add(head, BorderLayout.NORTH);
         editorTop.add(tools, BorderLayout.SOUTH);
 
         JPanel jwtPanel = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         jwtPanel.setOpaque(false);
         JPanel jwtHeader = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
         jwtHeader.setOpaque(false);
-        jwtHeader.add(Ui.bold("JWT / Token Inspector (tự giải mã mọi token eyJ... trong profile này)"), BorderLayout.WEST);
+        jwtHeader.add(Ui.bold("JWT / Token Inspector (tự giải mã eyJ...)"), BorderLayout.WEST);
         jwtHeader.add(expBadge, BorderLayout.EAST);
         jwtPanel.add(jwtHeader, BorderLayout.NORTH);
         jwtPanel.add(new JScrollPane(jwt), BorderLayout.CENTER);
 
         JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(rulesTable), jwtPanel);
-        rightSplit.setResizeWeight(0.62);
-        JPanel right = new JPanel(new BorderLayout(4, Theme.SPACE_2));
-        right.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
-        JPanel rightNorth = new JPanel(new BorderLayout(0, Theme.SPACE_2));
-        rightNorth.setOpaque(false);
-        rightNorth.add(new SectionHeader("Chỉnh sửa Profile đang chọn",
-                "Sửa Header / Cookie / Session / JWT rồi bấm 'Save Profile Changes' để lưu"), BorderLayout.NORTH);
-        rightNorth.add(editorTop, BorderLayout.CENTER);
-        right.add(rightNorth, BorderLayout.NORTH);
+        rightSplit.setResizeWeight(0.64);
+        JPanel right = new JPanel(new BorderLayout(4, Theme.SPACE_1));
+        right.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_2));
+        right.add(editorTop, BorderLayout.NORTH);
         right.add(rightSplit, BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
@@ -401,20 +369,13 @@ final class RolesTab {
         return !Character.isLetterOrDigit(c) && c != '_';
     }
 
-    private JPanel modeLegend() {
-        JPanel p = new JPanel(new GridLayout(3, 2, 6, 4));
-        p.setOpaque(false);
-        p.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Các chế độ (cột Mode)"));
+    private void showModeLegend() {
+        StringBuilder sb = new StringBuilder();
         for (RuleMode m : RuleMode.values()) {
-            Pill chip = Pill.badge(m.name(), t -> t.mode(m));
-            JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-            row.setOpaque(false);
-            row.add(chip);
-            row.add(Ui.muted(m.hint));
-            p.add(row);
+            sb.append("- ").append(m.name()).append(": ").append(m.hint).append('\n');
         }
-        p.add(Ui.muted("Value = [REMOVE]: xóa"));
-        return p;
+        sb.append("- Value = ").append(RuleMode.REMOVE_TOKEN).append(": xóa Header / Cookie tương ứng khỏi request");
+        Ui.popover(panel, "Các chế độ (cột Mode)", sb.toString());
     }
 
     void reload() {
@@ -429,17 +390,20 @@ final class RolesTab {
         Role p = engine.originalProfile();
         int n = p.rules().size();
         boolean active = p.enabled() && n > 0;
+        String badgeText = p.enabled() ? (n > 0 ? "API GỐC: " + n + " rule" : "API GỐC: Nguyên bản") : "API GỐC: Tắt";
+        String stateText = !p.enabled() || n == 0 ? "Chưa có rule đang bật - API gốc được gửi đúng như lúc bắt"
+                : "Đang áp dụng " + n + " rule cho API gốc (API bắt từ giờ; API cũ: 'Rebuild Roles')";
         profileBadge.setToken(active ? t -> t.orig : t -> t.neutral)
                 .setIcon(t -> Icons.pin(active ? t.orig.text() : t.muted, 11))
-                .setText(p.enabled() ? (n > 0 ? n + " rule" : "Nguyên bản") : "Đang tắt");
-        profileState.setText(!p.enabled() || n == 0 ? "Chưa có rule đang bật - API gốc được gửi đúng như lúc bắt"
-                : "Đang áp dụng " + n + " rule cho API gốc (API bắt từ giờ; API cũ: 'Rebuild Roles')");
+                .setText(badgeText);
+        profileBadge.setToolTipText(stateText + " (Bấm để sửa profile 00_API GỐC)");
+        profileState.setText(stateText);
     }
 
     private void load(int idx) {
         editing = idx;
         Role r = engine.roles().get(idx);
-        title.setText(" Đang sửa: " + r.name());
+        title.setText("Role:");
         name.setText(r.name());
         name.setEditable(true);
         enabled.setSelected(r.enabled());
@@ -452,7 +416,7 @@ final class RolesTab {
         editing = -2;
         table.clearSelection();
         Role p = engine.originalProfile();
-        title.setText(" Đang sửa: " + Role.ORIGINAL_PROFILE_NAME + " (áp lên API gốc - request của Acc Crawl)");
+        title.setText("API Gốc:");
         name.setText(Role.ORIGINAL_PROFILE_NAME);
         name.setEditable(false);
         enabled.setSelected(p.enabled());
@@ -527,8 +491,48 @@ final class RolesTab {
         reload();
     }
 
+    private JPopupMenu ruleEditorMenu() {
+        JPopupMenu m = new JPopupMenu();
+        m.add(Ui.item("+ Header mới (REPLACE)", Icons::plus,
+                () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
+        m.add(Ui.item("+ Set JWT / Bearer...", Icons::codeBraces, this::setJwt));
+        m.add(Ui.item("+ Set Cookie / Session Key...", Icons::plus, this::setCookie));
+        m.addSeparator();
+        m.add(Ui.item("+ Strip Header ([REMOVE])...", Icons::minus, () -> {
+            String n = ui.ask("Header cần xóa khỏi request của role:", "Authorization");
+            HeaderRule r = n == null ? null : HeaderRule.of(n, RuleMode.REMOVE_TOKEN, "REMOVE");
+            if (r != null) {
+                rules.add(r);
+            }
+        }));
+        m.add(Ui.item("+ Strip Cookie Key...", Icons::minus, () -> {
+            String k = ui.ask("Cookie / Session key cần xóa:", "JSESSIONID");
+            HeaderRule r = k == null ? null : HeaderRule.of(k, RuleMode.REMOVE_TOKEN, "COOKIE_REMOVE");
+            if (r != null) {
+                rules.add(r);
+            }
+        }));
+        m.addSeparator();
+        m.add(Ui.item("Paste Headers (dán nhiều dòng)...", Icons::copy, () -> paste(false)));
+        m.add(Ui.item("Paste Cookies...", Icons::copy, () -> paste(true)));
+        m.addSeparator();
+        m.add(Ui.item("Di chuyển Rule lên (Rule Up)", Icons::arrowUp, () -> moveRule(-1)));
+        m.add(Ui.item("Di chuyển Rule xuống (Rule Down)", Icons::arrowDown, () -> moveRule(1)));
+        m.add(Ui.item("Xóa Rule đang chọn", t -> Icons.trash(t.danger.text()), this::removeRules));
+        m.addSeparator();
+        m.add(Ui.item("Chú giải các chế độ (cột Mode)...", Icons::info, this::showModeLegend));
+        return m;
+    }
+
     private JPopupMenu roleMenu(boolean onTable) {
         JPopupMenu m = new JPopupMenu();
+        m.add(Ui.item("Sửa profile 00_API GỐC (Acc Crawl)...", t -> Icons.pin(t.orig.text()), this::editOriginal));
+        m.add(Ui.item("Bật / Tắt profile 00_API GỐC", Icons::sliders, () -> {
+            Role p = engine.originalProfile();
+            engine.saveOriginalProfile(p.withEnabled(!p.enabled()));
+            refreshProfile();
+        }));
+        m.addSeparator();
         m.add(Ui.item("Nhân bản Role đang chọn (Duplicate)", t -> Icons.copy(t.muted), () -> {
             int r = table.getSelectedRow();
             if (r >= 0) {
@@ -546,19 +550,18 @@ final class RolesTab {
         m.add(Ui.item("Di chuyển lên (Move Up)", Icons::arrowUp, () -> moveRole(-1)));
         m.add(Ui.item("Di chuyển xuống (Move Down)", Icons::arrowDown, () -> moveRole(1)));
         m.addSeparator();
+        m.add(Ui.item("Bật / Tắt Role theo phạm vi (nhánh / API)...", Icons::sliders,
+                () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
         m.add(Ui.item("Bật tất cả Role (Enable All)...", t -> Icons.check(t.success.text()),
                 () -> ui.roleScopeDialog(true, RoleScopes.Scope.GLOBAL, null, null,
                         engine.roles().all().stream().map(Role::name).toList())));
         m.add(Ui.item("Tắt tất cả Role (Disable All)...", Icons::minus,
                 () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null,
                         engine.roles().all().stream().map(Role::name).toList())));
-        m.add(Ui.item("Bật / Tắt Role theo phạm vi (nhánh / API)...", Icons::sliders,
-                () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
         if (!onTable) {
             m.addSeparator();
             m.add(Ui.item("Import Roles từ JSON...", Icons::folder, this::importRoles));
             m.add(Ui.item("Export Roles ra JSON...", Icons::export, this::exportRoles));
-            m.addSeparator();
             m.add(Ui.item("Nạp mẫu 10 Roles chuẩn (Load 10-Role Template)", t -> Icons.bolt(t.warning.text()), () -> {
                 if (ui.confirmDialog("Thay danh sách role bằng mẫu 10 role chuẩn?")) {
                     engine.roles().setAll(Roles.template());
@@ -567,6 +570,8 @@ final class RolesTab {
                 }
             }));
         }
+        m.addSeparator();
+        m.add(Ui.item("Chú giải các chế độ (cột Mode)...", Icons::info, this::showModeLegend));
         return m;
     }
 

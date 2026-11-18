@@ -58,7 +58,7 @@ final class ExcelTab {
     final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final MainPanel ui;
     private final Engine engine;
-    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong danh sách");
+    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt trong DS");
     private final List<Pill> filterPills = new ArrayList<>();
     private int filterIndex;
     private final JButton clear;
@@ -87,25 +87,11 @@ final class ExcelTab {
         this.engine = ui.engine;
         clear = Ui.button("Bỏ danh sách", t -> Icons.trash(t.danger.text()), this::clear);
         targetOnly.setOpaque(false);
+        targetOnly.setToolTipText("Chỉ bắt các API có trong danh sách Excel đã nạp");
         targetOnly.addActionListener(e -> setTargetOnly(targetOnly.isSelected()));
 
-        JPanel bar = Ui.flow(FlowLayout.LEFT,
-                Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load),
-                clear,
-                Ui.button("Xuất Excel độ phủ (.xlsx)...", t -> Icons.export(t.fg), ui::exportExcel),
-                Ui.button("Gửi các API đã bắt trong danh sách", t -> Icons.sendAll(t.fg), this::sendListed),
-                targetOnly,
-                Ui.button("Đặt lại bộ đếm lượt gặp", t -> Icons.refresh(t.fg), () -> {
-                    if (engine.targets() != null && ui.confirmDialog("Đặt lại số lượt gặp của mọi dòng Excel về 0?")) {
-                        engine.resetHits();
-                        stale = true;
-                        reload();
-                    }
-                }),
-                Ui.info(Help.EXCEL, "Excel"));
-
-        JPanel filterStrip = Ui.flow(FlowLayout.LEFT, Ui.muted("Lọc nhanh:"));
-        filterStrip.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_1, 0, Theme.SPACE_1));
+        JPanel filterStrip = Ui.flow(FlowLayout.LEFT,
+                Ui.accent("Nạp Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load));
         for (int i = 0; i < FILTERS.length; i++) {
             int idx = i;
             Pill pill = new Pill(FILTERS[i], i == 0 ? t -> t.pink : t -> t.neutral);
@@ -116,10 +102,18 @@ final class ExcelTab {
             filterStrip.add(pill);
         }
 
-        JPanel north = new JPanel(new BorderLayout(0, 2));
+        JButton[] moreRef = new JButton[1];
+        JButton more = Ui.dropdown("Thao tác Excel", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
+                "Xuất độ phủ, Gửi các API trong danh sách, Đặt lại bộ đếm, Bỏ danh sách",
+                () -> excelMenu().show(moreRef[0], 0, moreRef[0].getHeight()));
+        moreRef[0] = more;
+
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, targetOnly, more);
+        JPanel north = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         north.setOpaque(false);
-        north.add(bar, BorderLayout.NORTH);
-        north.add(filterStrip, BorderLayout.SOUTH);
+        north.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_1, 2, Theme.SPACE_1));
+        north.add(filterStrip, BorderLayout.CENTER);
+        north.add(rightBar, BorderLayout.EAST);
         panel.add(north, BorderLayout.NORTH);
 
         JPanel kpiGrid = new JPanel(new GridLayout(1, 4, Theme.SPACE_2, 0));
@@ -211,18 +205,11 @@ final class ExcelTab {
             }
         });
         hitsLabel.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
-        JPanel hitsHeader = new JPanel(new BorderLayout());
-        hitsHeader.setOpaque(false);
-        hitsHeader.add(new SectionHeader("Timeline các lần gặp",
-                "Thứ tự mới nhất trước: icon kết quả, giờ gặp, vị trí đang đứng -> nhánh lưu", null, t -> t.info),
-                BorderLayout.NORTH);
-        hitsHeader.add(hitsLabel, BorderLayout.SOUTH);
-
         JPanel hits = new JPanel(new BorderLayout());
-        hits.add(hitsHeader, BorderLayout.NORTH);
+        hits.add(hitsLabel, BorderLayout.NORTH);
         hits.add(MainPanel.scroll(hitTable), BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(table), hits);
-        split.setResizeWeight(0.60);
+        split.setResizeWeight(0.62);
         split.setOneTouchExpandable(true);
 
         JPanel loadedView = new JPanel(new BorderLayout(0, Theme.SPACE_1));
@@ -241,6 +228,26 @@ final class ExcelTab {
         panel.add(deck, BorderLayout.CENTER);
 
         controls(engine.groups());
+    }
+
+    private javax.swing.JPopupMenu excelMenu() {
+        javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
+        boolean hasTargets = engine.targets() != null;
+        m.add(Ui.item("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.text()), this::load));
+        m.add(Ui.item("Xuất Excel độ phủ (.xlsx)...", Icons::export, ui::exportExcel));
+        m.add(Ui.item("Gửi các API đã bắt trong danh sách", Icons::sendAll, hasTargets, this::sendListed));
+        m.addSeparator();
+        m.add(Ui.item("Đặt lại bộ đếm lượt gặp về 0", Icons::refresh, hasTargets, () -> {
+            if (engine.targets() != null && ui.confirmDialog("Đặt lại số lượt gặp của mọi dòng Excel về 0?")) {
+                engine.resetHits();
+                stale = true;
+                reload();
+            }
+        }));
+        m.add(Ui.item("Bỏ danh sách Excel hiện tại", t -> Icons.trash(t.danger.text()), hasTargets, this::clear));
+        m.addSeparator();
+        m.add(Ui.item("Hướng dẫn đối chiếu Excel...", Icons::info, () -> Ui.popover(panel, "Excel", Help.EXCEL)));
+        return m;
     }
 
     void selectFilter(int idx) {

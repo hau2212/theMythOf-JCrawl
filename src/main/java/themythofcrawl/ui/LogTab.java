@@ -15,8 +15,10 @@ import java.util.function.Function;
 
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JTree;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
@@ -69,7 +71,7 @@ final class LogTab {
     private final DefaultTreeModel model;
     private final JTree tree;
     private final Set<Object> expanded = new HashSet<>();
-    private final SearchField search = new SearchField("Tìm log (API, path, nội dung)...", 24);
+    private final SearchField search = new SearchField("Tìm log (API, path, nội dung)...", 16);
     private final Map<LogKind, Pill> filterPills = new EnumMap<>(LogKind.class);
     private LogKind activeKind = LogKind.ALL;
     private final JLabel hint;
@@ -117,24 +119,10 @@ final class LogTab {
             }
         });
         Ui.onDoubleClick(tree, this::jump);
+        tree.addMouseListener(ApiTab.treePopup(tree, e -> logMenu().show(e.getComponent(), e.getX(), e.getY())));
         hint = Ui.muted("  Mỗi nhánh > API > chi tiết tải lười khi mở. Click đúp API để nhảy tới.");
-        JPanel actions = Ui.flow(FlowLayout.LEFT,
-                Ui.accent("Xuất Excel (.xlsx)...", t -> Icons.excel(t.success.onSolid()), t -> t.success, ui::exportExcel),
-                Ui.button("Mở các nhánh", this::expandBranches), Ui.button("Thu gọn tất cả", this::collapseAll),
-                Ui.button("Xóa nhật ký hệ thống", t -> Icons.trash(t.danger.text()), () -> {
-                    engine.logbook().clearSystem();
-                    stale = true;
-                    nextOk = 0;
-                    rebuild();
-                }), Ui.button("Copy dòng chọn", t -> Icons.copy(t.fg), () -> {
-                    Node n = selected();
-                    if (n != null) {
-                        Ui.copyToClipboard(n.label);
-                    }
-                }), hint);
 
         JPanel filterBar = Ui.flow(FlowLayout.LEFT, search);
-        filterBar.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_1, 2, Theme.SPACE_1));
         for (LogKind k : LogKind.values()) {
             Pill p = new Pill(k.label, k.token, k.icon);
             p.setSolidWhenActive(true);
@@ -149,13 +137,48 @@ final class LogTab {
             rebuild();
         });
 
-        JPanel north = new JPanel(new BorderLayout(0, 2));
+        JButton[] moreRef = new JButton[1];
+        JButton more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
+                "Mở/Thu gọn nhánh, Copy dòng chọn, Xóa nhật ký hệ thống",
+                () -> logMenu().show(moreRef[0], 0, moreRef[0].getHeight()));
+        moreRef[0] = more;
+
+        JPanel actions = Ui.flow(FlowLayout.RIGHT,
+                Ui.accent("Xuất Excel", t -> Icons.excel(t.success.onSolid()), t -> t.success, ui::exportExcel),
+                more);
+
+        JPanel north = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         north.setOpaque(false);
-        north.add(actions, BorderLayout.NORTH);
-        north.add(filterBar, BorderLayout.SOUTH);
+        north.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_1, 2, Theme.SPACE_1));
+        north.add(filterBar, BorderLayout.CENTER);
+        north.add(actions, BorderLayout.EAST);
 
         panel.add(north, BorderLayout.NORTH);
         panel.add(MainPanel.scroll(tree), BorderLayout.CENTER);
+    }
+
+    private JPopupMenu logMenu() {
+        JPopupMenu m = new JPopupMenu();
+        Node sel = selected();
+        m.add(Ui.item("Mở API ở tab API (Click đúp)", Icons::search, sel != null && sel.payload instanceof ApiGroup, this::jump));
+        m.add(Ui.item("Copy dòng đang chọn", Icons::copy, sel != null, () -> {
+            Node n = selected();
+            if (n != null) {
+                Ui.copyToClipboard(n.label);
+            }
+        }));
+        m.addSeparator();
+        m.add(Ui.item("Mở tất cả các nhánh", Icons::plus, this::expandBranches));
+        m.add(Ui.item("Thu gọn tất cả", Icons::minus, this::collapseAll));
+        m.addSeparator();
+        m.add(Ui.item("Xuất Excel (.xlsx)...", Icons::excel, ui::exportExcel));
+        m.add(Ui.item("Xóa nhật ký hệ thống", t -> Icons.trash(t.danger.text()), () -> {
+            engine.logbook().clearSystem();
+            stale = true;
+            nextOk = 0;
+            rebuild();
+        }));
+        return m;
     }
 
     static LogKind classify(Logbook.Line l) {

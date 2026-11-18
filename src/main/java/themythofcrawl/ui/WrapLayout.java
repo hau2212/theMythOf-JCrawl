@@ -72,6 +72,21 @@ public final class WrapLayout extends FlowLayout {
         }
     }
 
+    @Override
+    public void layoutContainer(Container target) {
+        super.layoutContainer(target);
+        int prefH = preferredLayoutSize(target).height;
+        int curH = target.getHeight();
+        if (curH > 0 && Math.abs(prefH - curH) > 2 && target.getParent() != null) {
+            Container parent = target.getParent();
+            SwingUtilities.invokeLater(() -> {
+                target. invalidate();
+                parent.revalidate();
+                parent.repaint();
+            });
+        }
+    }
+
     private void addRow(Dimension dim, int rowWidth, int rowHeight) {
         dim.width = Math.max(dim.width, rowWidth);
         if (dim.height > 0) {

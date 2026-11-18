@@ -227,9 +227,9 @@ public final class MainPanel {
         captureToggle.onChange(idx -> update(x -> x.captureEnabled = idx == 1));
 
         sendModeToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("CHỈ CRAWL", "Chỉ ghi lại API từ Proxy, không tự gửi Role", t -> t.slate,
+                new SegmentedToggle.Option("Crawl", "Chỉ ghi lại API từ Proxy, không tự gửi Role", t -> t.slate,
                         (t, sel) -> Icons.hide(sel ? t.slate.onSolid() : t.muted, 12), false),
-                new SegmentedToggle.Option("GỬI", "Tự động gửi ngay 1..N Roles khi bắt được API", t -> t.success,
+                new SegmentedToggle.Option("Gửi", "Tự động gửi ngay 1..N Roles khi bắt được API", t -> t.success,
                         (t, sel) -> Icons.send(sel ? t.success.onSolid() : t.success.text(), 12), false));
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
@@ -242,7 +242,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setMaxLabelChars(11);
+        dest.setMaxLabelChars(12);
         dest.onSegmentClick(seg -> {
             if (Hierarchy.normalize(seg).equals(Hierarchy.normalize(engine.activeBranch().name()))) {
                 destinationMenu();
@@ -252,32 +252,46 @@ public final class MainPanel {
         });
         dest.onDropdown(this::destinationMenu);
 
-        todo.setPadding(2, 5, 2, 5);
+        todo.setPadding(2, 6, 2, 6);
         todo.onClick(this::todoMenu);
+
+        status.setPadding(2, 6, 2, 6);
+        status.onClick(this::statusMenu);
+
+        for (Pill chip : new Pill[] {rolesChip, branchChip, infoChip, hiddenChip, skippedChip, excelChip}) {
+            chip.setPadding(1, 7, 1, 7);
+        }
+        rolesChip.onClick(() -> tabs.setSelectedComponent(roles.panel));
+        branchChip.onClick(() -> tabs.setSelectedComponent(history.panel));
+        infoChip.onClick(() -> {
+            tabs.setSelectedComponent(api.panel);
+            api.filterLevel(AuditLevel.INFO);
+        });
+        hiddenChip.onClick(() -> showAudit(2));
+        excelChip.onClick(() -> tabs.setSelectedComponent(excel.panel));
 
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
         spotlightBtn.setToolTipText("Tìm kiếm toàn cục API (#, path), Nhánh, Role (Ctrl+K)");
-        spotlightBtn.setMargin(new Insets(1, 3, 1, 3));
+        spotlightBtn.setMargin(new Insets(1, 4, 1, 4));
         spotlightBtn.addActionListener(e -> spotlight.open());
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
-        options.setToolTipText("Tùy chọn: phạm vi bắt, regex, tự gửi, xác nhận vị trí, giữ chỗ, API trùng...");
-        options.setMargin(new Insets(1, 3, 1, 3));
+        options.setToolTipText("Tùy chọn bắt, tự gửi, giữ chỗ, trợ giúp & chẩn đoán...");
+        options.setMargin(new Insets(1, 4, 1, 4));
         options.addActionListener(e -> optionsMenu());
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
-        detach.setMargin(new Insets(1, 3, 1, 3));
-        detach.setToolTipText("Tách cả extension ra cửa sổ riêng (bấm lại / đóng cửa sổ để gắn vào tab Burp)");
+        detach.setMargin(new Insets(1, 4, 1, 4));
+        detach.setToolTipText("Tách extension ra cửa sổ riêng");
         detach.addActionListener(e -> toggleDetach());
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
         workspace.setMargin(new Insets(1, 4, 1, 4));
         workspace.addActionListener(e -> workspaceMenu());
 
-        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 1, 0));
+        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
         leftZone.setOpaque(false);
         leftZone.add(captureToggle);
         leftZone.add(sendModeToggle);
         leftZone.add(queue);
-        leftZone.add(Ui.info(Help.CAPTURE, "Bắt & gửi"));
 
         JLabel destLabel = new JLabel("Đích:", Icons.themed(t -> Icons.arrowRight(t.critical.text())), SwingConstants.LEFT) {
             @Override
@@ -291,85 +305,41 @@ public final class MainPanel {
         destPrefix.setOpaque(false);
         destPrefix.add(vSep());
         destPrefix.add(destLabel);
-        JPanel destTail = new JPanel(new FlowLayout(FlowLayout.LEFT, 1, 0));
-        destTail.setOpaque(false);
-        destTail.add(Ui.info(Help.DEST, "Đích của request mới"));
         JPanel centerZone = new JPanel(new BorderLayout(2, 0));
         centerZone.setOpaque(false);
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
-        centerZone.add(destTail, BorderLayout.EAST);
 
         ToolbarGroup actions = new ToolbarGroup(spotlightBtn, options, detach, workspace);
         ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
-        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 1, 0));
+        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         rightZone.setOpaque(false);
+        rightZone.add(status);
         rightZone.add(todo);
-        rightZone.add(Ui.info(Help.TODO, "Cần xử lý"));
         rightZone.add(vSep());
         rightZone.add(actions);
 
-        JPanel row1 = new JPanel(new BorderLayout(2, 0));
+        JPanel row1 = new JPanel(new BorderLayout(3, 0));
         row1.setOpaque(false);
         row1.add(leftZone, BorderLayout.WEST);
         row1.add(centerZone, BorderLayout.CENTER);
         row1.add(rightZone, BorderLayout.EAST);
 
-        for (Pill chip : new Pill[] {rolesChip, branchChip, status, infoChip, hiddenChip, skippedChip, excelChip}) {
-            chip.setPadding(1, 7, 1, 7);
-        }
-        rolesChip.setToolTipText("Số Role đang bật / tổng Role (bấm để mở tab Roles)");
-        rolesChip.onClick(() -> tabs.setSelectedComponent(roles.panel));
-        branchChip.setToolTipText("Số nhánh Sub-folder (bấm để mở tab Lịch sử)");
-        branchChip.onClick(() -> tabs.setSelectedComponent(history.panel));
-        status.onClick(() -> tabs.setSelectedComponent(api.panel));
-        infoChip.setToolTipText("Số API có Role lệch quyền / lỗi (bấm để lọc)");
-        infoChip.onClick(() -> {
-            tabs.setSelectedComponent(api.panel);
-            api.filterLevel(AuditLevel.INFO);
-        });
-        hiddenChip.setToolTipText("Số API trùng đang ẩn (bấm để mở Audit > API trùng & ẩn)");
-        hiddenChip.onClick(() -> showAudit(2));
-        excelChip.setToolTipText("Độ phủ danh sách Excel (bấm để mở tab Excel)");
-        excelChip.onClick(() -> tabs.setSelectedComponent(excel.panel));
-
-        JPanel statsZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        statsZone.setOpaque(false);
-        statsZone.add(Ui.info(Help.COLORS, "Màu & nhãn"));
-        statsZone.add(rolesChip);
-        statsZone.add(branchChip);
-        statsZone.add(status);
-        statsZone.add(infoChip);
-        statsZone.add(hiddenChip);
-        statsZone.add(skippedChip);
-        statsZone.add(excelChip);
-
-        JPanel diagZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        diagZone.setOpaque(false);
-        diagZone.add(diagBadge);
-        diagZone.add(Ui.info(Help.WORKSPACE, "Workspace"));
-
-        JPanel row2 = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
-        row2.setOpaque(false);
-        row2.add(statsZone, BorderLayout.WEST);
-        row2.add(diagZone, BorderLayout.EAST);
-
-        JPanel top = new JPanel(new BorderLayout(0, 2)) {
+        JPanel top = new JPanel(new BorderLayout(0, 0)) {
             @Override
             public void updateUI() {
                 super.updateUI();
                 Theme t = Theme.current();
                 setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 0, 1, 0, t.border),
-                        BorderFactory.createEmptyBorder(2, 8, 2, 8)));
+                        BorderFactory.createEmptyBorder(3, 6, 3, 6)));
             }
         };
         top.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
-                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
-        top.add(row1, BorderLayout.NORTH);
-        top.add(row2, BorderLayout.SOUTH);
+                BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+        top.add(row1, BorderLayout.CENTER);
         return top;
     }
 
@@ -411,7 +381,7 @@ public final class MainPanel {
         }
 
         Engine.Stats st = engine.stats();
-        todo.setText("Cần xử lý: " + st.pending() + (st.dupWaiting() > 0 ? " (#" + st.dupWaiting() + ")" : ""));
+        todo.setText("Xử lý: " + st.pending() + (st.dupWaiting() > 0 ? " (#" + st.dupWaiting() + ")" : ""));
         todo.setActive(st.pending() > 0);
         todo.setTrailingDot(st.dupWaiting() > 0 ? t -> t.dup.base() : null);
         todo.setToolTipText(st.pending() > 0
@@ -425,8 +395,8 @@ public final class MainPanel {
         } else if (waiting == 0) {
             queuePeak = 0;
         }
-        queue.setText(q.waitSeconds() > 0.5 ? String.format("Hàng đợi: %d (chờ %.0fs)", waiting, q.waitSeconds())
-                : "Hàng đợi: " + waiting);
+        queue.setText(q.waitSeconds() > 0.5 ? String.format("Đợi: %d (%.0fs)", waiting, q.waitSeconds())
+                : "Đợi: " + waiting);
         queue.setEnabled(waiting > 0);
         queue.setActive(waiting > 0);
         queue.setToken(waiting > 0 ? (q.waitSeconds() > 0.5 ? t -> t.critical : t -> t.info) : t -> t.neutral);
@@ -443,13 +413,14 @@ public final class MainPanel {
 
         String diag = Diagnostics.summary();
         String wsName = engine.workspaceName();
-        workspace.setText(wsName.length() <= 16 ? wsName : wsName.substring(0, 14) + "...");
+        workspace.setText(wsName.length() <= 12 ? wsName : wsName.substring(0, 10) + "...");
         workspace.setToolTipText(diag + " | Workspace: " + engine.workspaceLocation());
 
         rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
-        status.setText("API " + st.apis());
-        status.setToolTipText(diag);
+        status.setText("API " + st.apis() + " · " + st.branches() + " nhánh · "
+                + engine.roles().enabledCount() + "/" + engine.roles().count() + "R");
+        status.setToolTipText("Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
 
         infoChip.setVisible(st.info() > 0);
         if (st.info() > 0) {
@@ -612,9 +583,51 @@ public final class MainPanel {
             m.add(it);
         }
         m.addSeparator();
+        JMenu helpMenu = new JMenu("Hướng dẫn & Trợ giúp");
+        helpMenu.add(Ui.item("Bắt & gửi (Capture / Auto-Send)", Icons::info, () -> Ui.popover(options, "Bắt & gửi", Help.CAPTURE)));
+        helpMenu.add(Ui.item("Đích của request mới (Sub-folder)", Icons::info, () -> Ui.popover(options, "Đích của request mới", Help.DEST)));
+        helpMenu.add(Ui.item("Cần xử lý & Giữ chỗ", Icons::info, () -> Ui.popover(options, "Cần xử lý", Help.TODO)));
+        helpMenu.add(Ui.item("Ý nghĩa Màu & Nhãn Audit", Icons::info, () -> Ui.popover(options, "Màu & nhãn", Help.COLORS)));
+        helpMenu.add(Ui.item("Workspace & Lưu trữ", Icons::info, () -> Ui.popover(options, "Workspace", Help.WORKSPACE)));
+        m.add(helpMenu);
         m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> tabs.setSelectedComponent(settings.panel)));
         m.add(Ui.item("Reset Dedup Cache (Cho phép bắt lại API cũ)", Icons::refresh, engine::resetDedup));
+        m.addSeparator();
+        m.add(Ui.item(diagBadge.getText(), false, () -> { }));
         m.show(options, 0, options.getHeight());
+    }
+
+    private void statusMenu() {
+        Engine.Stats st = engine.stats();
+        JPopupMenu m = new JPopupMenu();
+        m.add(Ui.item("Tổng API đã bắt: " + st.apis() + "  (mở tab API)", Icons::api, () -> tabs.setSelectedComponent(api.panel)));
+        m.add(Ui.item("Nhánh Sub-folder: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> tabs.setSelectedComponent(history.panel)));
+        m.add(Ui.item("Roles đang bật: " + engine.roles().enabledCount() + "/" + engine.roles().count() + "  (mở tab Roles)",
+                t -> Icons.role(t.fg, 12), () -> tabs.setSelectedComponent(roles.panel)));
+        if (st.info() > 0) {
+            m.add(Ui.item("API lệch / lỗi quyền: " + st.info() + "  (lọc bảng API)", t -> Icons.warn(t.warning.text(), 12), () -> {
+                tabs.setSelectedComponent(api.panel);
+                api.filterLevel(AuditLevel.INFO);
+            }));
+        }
+        if (st.hidden() > 0) {
+            m.add(Ui.item("API trùng đang ẩn: " + st.hidden() + "  (mở Audit > Trùng & ẩn)", t -> Icons.hide(t.muted, 12),
+                    () -> showAudit(2)));
+        }
+        int sk = engine.skippedCount();
+        if (sk > 0) {
+            m.add(Ui.item("Đã bỏ qua: " + sk + " (" + engine.lastSkipReason() + ")", t -> Icons.filter(t.muted, 12),
+                    () -> tabs.setSelectedComponent(log.panel)));
+        }
+        if (engine.targets() != null) {
+            int seen = engine.hits().rowsSeen();
+            m.add(Ui.item("Độ phủ Excel: " + seen + "/" + engine.targets().size() + "  (mở tab Excel)",
+                    t -> Icons.excel(t.info.text(), 12), () -> tabs.setSelectedComponent(excel.panel)));
+        }
+        m.addSeparator();
+        m.add(Ui.item("Bảng chú giải Màu & Nhãn Audit...", Icons::info, () -> Ui.popover(status, "Màu & nhãn", Help.COLORS)));
+        m.add(Ui.item(diagBadge.getText(), false, () -> { }));
+        m.show(status, 0, status.getHeight());
     }
 
     // =================================================================== workspace

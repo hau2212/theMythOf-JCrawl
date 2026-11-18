@@ -71,32 +71,25 @@ final class TreeTab {
         };
         windowBtn.setIcon(Icons.themed(t -> Icons.window(t.fg)));
         windowBtn.addActionListener(e -> toggleWindow());
-        more = Ui.dropdown("Thao tác", null, "Thao tác nhánh / API", this::menu);
-        JPanel bar = Ui.flow(FlowLayout.LEFT, windowBtn,
-                Ui.button("Đẩy / Gửi có chọn Role...", t -> Icons.target(t.fg), () -> {
+        more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg), "Thao tác nhánh / API", this::menu);
+
+        headerBreadcrumb.setMaxSegments(4);
+        headerBreadcrumb.onSegmentClick(seg -> tree.selectBranchPath(seg));
+
+        JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT,
+                Ui.accent("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     ui.useSource(tree);
-                    ui.pushDialog(false, null, null);
-                }),
-                Ui.button("Copy", t -> Icons.copy(t.fg), "Copy 'STT. path' của API / nhánh đang chọn (Ctrl+Shift+C)", () -> {
-                    ui.useSource(tree);
-                    ui.copy(ui.scope().groups());
+                    ui.send(ui.scope().groups());
                 }),
                 more,
-                Ui.button("", t -> Icons.plus(t.fg), "Mở tất cả các nhánh", () -> tree.expandFolders(true)),
-                Ui.button("", t -> Icons.minus(t.fg), "Thu gọn tất cả", () -> tree.expandFolders(false)),
-                Ui.info(Help.SELECT, "Chọn nhiều"));
+                windowBtn);
 
-        headerBreadcrumb.setMaxSegments(5);
-        headerBreadcrumb.onSegmentClick(seg -> tree.selectBranchPath(seg));
-        JPanel headerBar = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
-        headerBar.setOpaque(false);
-        headerBar.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_2, 2, Theme.SPACE_2));
-        headerBar.add(headerBreadcrumb, BorderLayout.WEST);
-        headerBar.add(headerMeta, BorderLayout.CENTER);
-
-        JPanel head = new JPanel(new BorderLayout());
-        head.add(bar, BorderLayout.NORTH);
-        head.add(headerBar, BorderLayout.SOUTH);
+        JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
+        head.setOpaque(false);
+        head.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_1, 2, Theme.SPACE_1));
+        head.add(leftBar, BorderLayout.CENTER);
+        head.add(rightBar, BorderLayout.EAST);
 
         req = ui.host.requestViewer(false);
         resp = ui.host.responseViewer();
@@ -126,7 +119,7 @@ final class TreeTab {
         m.add(Ui.item("Gửi mục đang chọn (nhánh / API / role)", t -> Icons.send(t.critical.text()),
                 () -> ui.send(ui.scope().groups())));
         m.add(Ui.item("Đẩy mục đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
-        m.add(Ui.item("Gửi có chọn Role...", Icons::target, () -> ui.pushDialog(true, null, null)));
+        m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.add(Ui.item("Copy STT + Path (Ctrl+Shift+C)", t -> Icons.copy(t.muted), () -> ui.copy(ui.scope().groups())));
         m.add(Ui.item("Copy path nhánh", t -> Icons.copy(t.muted), ui::copyBranchPath));
         m.add(Ui.item("Bật / Tắt Role cho mục đang chọn...", Icons::sliders, () -> {
@@ -151,6 +144,11 @@ final class TreeTab {
             }
         }));
         m.add(Ui.item("Xóa nhánh...", t -> Icons.trash(t.danger.text()), () -> ui.deleteBranchDialog(ui.selectedBranch())));
+        m.addSeparator();
+        m.add(Ui.item("Mở tất cả các nhánh", Icons::plus, () -> tree.expandFolders(true)));
+        m.add(Ui.item("Thu gọn tất cả", Icons::minus, () -> tree.expandFolders(false)));
+        m.addSeparator();
+        m.add(Ui.item("Hướng dẫn Chọn nhiều...", Icons::info, () -> Ui.popover(more, "Chọn nhiều", Help.SELECT)));
         m.show(more, 0, more.getHeight());
     }
 

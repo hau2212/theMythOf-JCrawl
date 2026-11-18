@@ -58,7 +58,7 @@ final class AuditTab {
     private JButton cardHide;
     private JButton cardDelete;
 
-    private final SearchField placeFilter = new SearchField("Lọc method, path, vị trí...", 20);
+    private final SearchField placeFilter = new SearchField("Lọc method, path, vị trí...", 15);
     private final JComboBox<String> placeView = new JComboBox<>(new String[] {"Tất cả", "Đang có API", "Đã xóa (giữ chỗ)",
         "Chờ xác nhận"});
     private final JLabel placesLabel = new JLabel(" ");
@@ -69,7 +69,7 @@ final class AuditTab {
     private final RowsModel<ApiGroup> dupModel = new RowsModel<>(Decisions.DUP_COLS);
     private final JTable dupTable;
 
-    private final SearchField logFilter = new SearchField("Lọc nhật ký (endpoint, hành động)...", 20);
+    private final SearchField logFilter = new SearchField("Lọc nhật ký (endpoint, hành động)...", 15);
     private final JButton logScope = new JButton("Tất cả endpoint");
     private final RowsModel<PlacementBook.Event> logModel = new RowsModel<>(Decisions.LOG_COLS);
     private final JTable logTable;
@@ -227,14 +227,25 @@ final class AuditTab {
         decideCard.setBody(cardInner);
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(decideTable), decideCard);
-        split.setResizeWeight(0.58);
+        split.setResizeWeight(0.62);
+        JButton[] moreDecideRef = new JButton[1];
+        JButton moreDecide = Ui.dropdown("Thao tác khác", null, "Chọn cách xử lý hoặc xem hướng dẫn", () -> {
+            JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Về nơi vừa gặp", Icons::move, () -> decide("found")));
+            m.add(Ui.item("Chuyển sang Path khác...", Icons::folder, () -> decide("other")));
+            m.add(Ui.item("Không giữ (ẩn)", Icons::hide, () -> decide("hide")));
+            m.add(Ui.item("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete")));
+            m.addSeparator();
+            m.add(Ui.item("Hướng dẫn Cần xử lý...", Icons::info,
+                    () -> Ui.popover(moreDecideRef[0], "Cần xử lý", Help.DECIDE)));
+            m.show(moreDecideRef[0], 0, moreDecideRef[0].getHeight());
+        });
+        moreDecideRef[0] = moreDecide;
         JPanel p = new JPanel(new BorderLayout());
-        p.add(bar(Help.DECIDE, "Cần xử lý", keep,
+        p.add(Ui.flow(FlowLayout.LEFT, keep,
                 Ui.button("Về nơi vừa gặp", Icons::move, () -> decide("found")),
-                Ui.button("Path khác...", Icons::folder, () -> decide("other")),
-                Ui.button("Không giữ", Icons::hide, () -> decide("hide")),
-                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete")),
-                Ui.button("Chọn hết", decideTable::selectAll)), BorderLayout.NORTH);
+                Ui.button("Chọn hết", decideTable::selectAll),
+                moreDecide), BorderLayout.NORTH);
         p.add(split, BorderLayout.CENTER);
         explain();
         return p;
@@ -322,12 +333,18 @@ final class AuditTab {
         onText(placeFilter, this::reload);
         placeView.addActionListener(e -> reload());
         JButton[] moreRef = new JButton[1];
-        JButton more = Ui.dropdown("Thêm", null, "Thao tác giữ chỗ khác", () -> {
+        JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ", () -> {
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Thêm vị trí giữ chỗ thủ công...", Icons::plus, this::addPlace));
+            m.add(Ui.item("Sửa vị trí giữ chỗ đang chọn...", Icons::edit, () -> editPlace(selectedPlace())));
+            m.addSeparator();
             m.add(Ui.item("Quên giữ chỗ (lần sau vào đích hiện tại)", Icons::error, this::forgetPlace));
             m.add(Ui.item("Cho phép bắt lại ngay (xóa bộ nhớ chống trùng)", Icons::refresh, this::recapture));
             m.add(Ui.item("Mở API đang có", Icons::search, this::openPlaceApi));
             m.add(Ui.item("Xem nhật ký của endpoint này", Icons::clock, this::logOfSelected));
+            m.addSeparator();
+            m.add(Ui.item("Hướng dẫn Giữ chỗ...", Icons::info,
+                    () -> Ui.popover(moreRef[0], "Giữ chỗ", Help.PLACES)));
             m.show(moreRef[0], 0, moreRef[0].getHeight());
         });
         moreRef[0] = more;
@@ -344,13 +361,10 @@ final class AuditTab {
                     () -> Ui.copyToClipboard(r.method + " " + r.host + " " + r.path)));
             m.show(e.getComponent(), e.getX(), e.getY());
         });
-        placesLabel.setBorder(BorderFactory.createEmptyBorder(0, 8, 2, 8));
-        JPanel top = new JPanel(new BorderLayout());
-        top.add(bar(Help.PLACES, "Giữ chỗ", placeFilter, placeView,
+        placesLabel.setForeground(Theme.current().muted);
+        JPanel top = Ui.flow(FlowLayout.LEFT, placeFilter, placeView,
                 Ui.button("Sửa chỗ...", Icons::edit, () -> editPlace(selectedPlace())),
-                Ui.button("Thêm...", Icons::plus, this::addPlace), more),
-                BorderLayout.NORTH);
-        top.add(placesLabel, BorderLayout.SOUTH);
+                more, placesLabel);
         JPanel p = new JPanel(new BorderLayout());
         p.add(top, BorderLayout.NORTH);
         p.add(MainPanel.scroll(placeTable), BorderLayout.CENTER);
