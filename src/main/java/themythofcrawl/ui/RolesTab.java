@@ -55,7 +55,6 @@ import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
 import themythofcrawl.ui.kit.Card;
 import themythofcrawl.ui.kit.Pill;
-import themythofcrawl.ui.kit.SectionHeader;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.ThemedTree;
 import themythofcrawl.ui.theme.Theme;
@@ -158,7 +157,7 @@ final class RolesTab {
                 title,
                 name,
                 enabled,
-                Ui.accent("Lưu Profile", t -> Icons.save(t.success.onSolid()), t -> t.success, this::save),
+                Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save),
                 dirty);
 
         JButton[] ruleMoreRef = new JButton[1];

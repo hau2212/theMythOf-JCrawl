@@ -24,7 +24,7 @@ import themythofcrawl.place.Decisions;
 
 /** The API list: one row per captured API, filtered by branch / audit chips. Rows are added incrementally. */
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
-    public static final String[] COLS = {"API #", "Group", "Group Path (Click đúp để chọn/đổi)", "Đánh giá / Màu (Info)",
+    public static final String[] COLS = {"API #", "Group", "Group Path", "Đánh giá (Info)",
         "Method", "Host", "Path", "Orig", "Orig Len", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
         "Excel", "Trùng"};
     public static final int PATH_COL = 2;

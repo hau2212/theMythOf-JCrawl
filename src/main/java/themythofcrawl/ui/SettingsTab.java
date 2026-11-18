@@ -574,11 +574,11 @@ final class SettingsTab {
     }
 
     private SectionEntry section(String title, Function<Theme, Theme.Token> accentFn, String desc, Object[]... rows) {
-        Card card = new Card(accentFn, true);
+        Card card = new Card(null, false);
         card.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_3, Theme.SPACE_3);
         card.setLayout(new BorderLayout(0, Theme.SPACE_2));
 
-        SectionHeader hdr = new SectionHeader(title, desc, null, accentFn);
+        SectionHeader hdr = new SectionHeader(title, desc, null, null);
         card.add(hdr, BorderLayout.NORTH);
 
         StringBuilder corpus = new StringBuilder();

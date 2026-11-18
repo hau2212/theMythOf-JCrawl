@@ -242,7 +242,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setMaxLabelChars(12);
+        dest.setMaxLabelChars(10);
         dest.onSegmentClick(seg -> {
             if (Hierarchy.normalize(seg).equals(Hierarchy.normalize(engine.activeBranch().name()))) {
                 destinationMenu();

@@ -479,7 +479,7 @@ public final class HistoryReportView extends JPanel {
                 case 2 -> c.setPreferredWidth(74);
                 case 3 -> c.setPreferredWidth(240);
                 case 4 -> c.setPreferredWidth(54);
-                default -> c.setPreferredWidth(68);
+                default -> c.setPreferredWidth(88);
             }
         }
     }

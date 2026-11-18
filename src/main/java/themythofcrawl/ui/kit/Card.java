@@ -146,7 +146,7 @@ public class Card extends JPanel {
             g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
             g2.setColor(t.border);
             g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
-            if (tok != null) {
+            if (subtleTint && tok != null) {
                 g2.setColor(tok.base());
                 g2.fillRect(0, Math.min(2, h), Math.max(2, t.scaled(3)), Math.max(0, h - 4));
             }

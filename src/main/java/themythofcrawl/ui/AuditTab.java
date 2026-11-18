@@ -58,11 +58,14 @@ final class AuditTab {
     private JButton cardHide;
     private JButton cardDelete;
 
+    private static final List<String> UI_PLACE_COLS = List.of("Method", "Path", "Host", "Vị trí giữ chỗ", "API",
+            "Trạng thái", "Đã xóa", "Lần gặp", "Bỏ qua", "Lần cuối", "Đích gặp cuối", "Đổi chỗ");
+
     private final SearchField placeFilter = new SearchField("Lọc method, path, vị trí...", 15);
     private final JComboBox<String> placeView = new JComboBox<>(new String[] {"Tất cả", "Đang có API", "Đã xóa (giữ chỗ)",
         "Chờ xác nhận"});
     private final JLabel placesLabel = new JLabel(" ");
-    private final RowsModel<PlacementBook.Record> placeModel = new RowsModel<>(Decisions.PLACE_COLS);
+    private final RowsModel<PlacementBook.Record> placeModel = new RowsModel<>(UI_PLACE_COLS);
     private final JTable placeTable;
 
     private final JComboBox<String> dupView = new JComboBox<>(new String[] {"Tất cả API trùng & ẩn", "Chỉ đang ẩn"});
@@ -81,11 +84,11 @@ final class AuditTab {
         tabs.putClientProperty("JTabbedPane.tabType", "card");
         decideTable = table(decideModel, new int[] {170, 80, 300, 300, 300}, 0, null,
                 r -> r.pathCols(2), 1);
-        placeTable = table(placeModel, new int[] {88, 280, 150, 280, 80, 140, 70, 60, 90, 110, 240, 80}, 5, 0,
+        placeTable = table(placeModel, new int[] {78, 205, 130, 205, 68, 145, 74, 80, 74, 115, 190, 76}, 5, 0,
                 r -> r.pathCols(1).numberCols(6, 7, 8, 11).timeCols(9), 3);
         dupTable = table(dupModel, new int[] {320, 70, 80, 320, 140, 70, 90}, 4, null,
                 r -> r.pathCols(0).timeCols(6), 1);
-        logTable = table(logModel, new int[] {54, 110, 230, 70, 65, 260, 240, 240, 300}, 2, 4,
+        logTable = table(logModel, new int[] {54, 110, 230, 70, 84, 260, 240, 240, 300}, 2, 4,
                 r -> r.pathCols(5).numberCols(0).timeCols(1), 0);
         ColumnMemory.install(decideTable, "audit_decide", ui.uiPrefs);
         ColumnMemory.install(placeTable, "audit_places", ui.uiPrefs);
@@ -124,15 +127,6 @@ final class AuditTab {
             t.getColumnModel().getColumn(c).setCellRenderer(r);
         }
         return t;
-    }
-
-    private static JPanel bar(String help, String title, Component... controls) {
-        JPanel b = new JPanel(new WrapLayout(FlowLayout.LEFT, 4, 2));
-        b.add(Ui.info(help, title));
-        for (Component c : controls) {
-            b.add(c);
-        }
-        return b;
     }
 
     private static <T> List<T> selected(JTable t, RowsModel<T> m) {
@@ -179,7 +173,7 @@ final class AuditTab {
 
     // ================================================================== Cần xử lý
     private JPanel decidePanel() {
-        JButton keep = Ui.accent("Giữ chỗ hiện tại", t -> Icons.check(t.success.onSolid()), t -> t.success, () -> decide("keep"));
+        JButton keep = Ui.accent("Giữ chỗ hiện tại", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
         decideTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && !reloading) {
                 explain();
@@ -212,7 +206,7 @@ final class AuditTab {
         decideText.setWrapStyleWord(true);
         decideText.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        cardKeep = Ui.accent("Giữ chỗ hiện tại", t -> Icons.check(t.success.onSolid()), t -> t.success, () -> decide("keep"));
+        cardKeep = Ui.accent("Giữ chỗ hiện tại", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
         cardFound = Ui.button("Về nơi vừa gặp", Icons::move, () -> decide("found"));
         cardOther = Ui.button("Path khác...", Icons::folder, () -> decide("other"));
         cardHide = Ui.button("Không giữ", Icons::hide, () -> decide("hide"));
@@ -492,13 +486,28 @@ final class AuditTab {
             m.add(Ui.item("Lịch sử vị trí", Icons::compass, gs.size() == 1, () -> show(1, gs.get(0).bookKey())));
             m.show(e.getComponent(), e.getX(), e.getY());
         });
+        JButton[] moreDupsRef = new JButton[1];
+        JButton moreDups = Ui.dropdown("Thao tác", null, "Mở, xóa bản trùng hoặc xem hướng dẫn", () -> {
+            List<ApiGroup> gs = selected(dupTable, dupModel);
+            JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
+            m.add(Ui.item("Hiện bản đang chọn", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
+            m.add(Ui.item("Ẩn bản đang chọn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
+            m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
+            m.add(Ui.item("Lịch sử vị trí", Icons::compass, gs.size() == 1, () -> show(1, gs.get(0).bookKey())));
+            m.add(Ui.item("Xóa bản đang chọn", t -> Icons.trash(t.danger.text()), !gs.isEmpty(), () -> dupAction("delete")));
+            m.addSeparator();
+            m.add(Ui.item("Hướng dẫn API trùng & ẩn...", Icons::info,
+                    () -> Ui.popover(moreDupsRef[0], "API trùng & ẩn", Help.DUPS)));
+            m.show(moreDupsRef[0], 0, moreDupsRef[0].getHeight());
+        });
+        moreDupsRef[0] = moreDups;
         JPanel p = new JPanel(new BorderLayout());
-        p.add(bar(Help.DUPS, "API trùng & ẩn", dupView,
+        p.add(Ui.flow(FlowLayout.LEFT, dupView,
+                Ui.button("Giữ (bản chờ)", t -> Icons.check(t.success.text()), () -> dupAction("keep")),
                 Ui.button("Hiện", Icons::show, () -> dupAction("show")),
                 Ui.button("Ẩn", Icons::hide, () -> dupAction("hide")),
-                Ui.button("Giữ (bản chờ)", t -> Icons.check(t.success.text()), () -> dupAction("keep")),
-                Ui.button("Mở", Icons::search, () -> dupAction("open")),
-                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> dupAction("delete"))), BorderLayout.NORTH);
+                moreDups), BorderLayout.NORTH);
         p.add(MainPanel.scroll(dupTable), BorderLayout.CENTER);
         return p;
     }
@@ -555,17 +564,28 @@ final class AuditTab {
             }));
             m.show(e.getComponent(), e.getX(), e.getY());
         });
+        JButton[] moreLogRef = new JButton[1];
+        JButton moreLog = Ui.dropdown("Thao tác", null, "Hoàn tác, xóa nhật ký hoặc xem hướng dẫn", () -> {
+            JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Hoàn tác dòng đang chọn", Icons::undo, this::revertLog));
+            m.add(Ui.item("Xóa toàn bộ nhật ký vị trí...", t -> Icons.trash(t.danger.text()), () -> {
+                if (ui.confirmDialog("Xóa toàn bộ nhật ký vị trí? (vị trí giữ chỗ vẫn giữ nguyên)")) {
+                    engine.book().clearLog();
+                    engine.changes().structure();
+                    stale = true;
+                    ui.tick(true);
+                }
+            }));
+            m.addSeparator();
+            m.add(Ui.item("Hướng dẫn Nhật ký vị trí...", Icons::info,
+                    () -> Ui.popover(moreLogRef[0], "Nhật ký vị trí", Help.LOG)));
+            m.show(moreLogRef[0], 0, moreLogRef[0].getHeight());
+        });
+        moreLogRef[0] = moreLog;
         JPanel p = new JPanel(new BorderLayout());
-        p.add(bar(Help.LOG, "Nhật ký vị trí", logFilter, logScope,
+        p.add(Ui.flow(FlowLayout.LEFT, logFilter, logScope,
                 Ui.button("Hoàn tác dòng chọn", Icons::undo, this::revertLog),
-                Ui.button("Xóa nhật ký...", t -> Icons.trash(t.danger.text()), () -> {
-                    if (ui.confirmDialog("Xóa toàn bộ nhật ký vị trí? (vị trí giữ chỗ vẫn giữ nguyên)")) {
-                        engine.book().clearLog();
-                        engine.changes().structure();
-                        stale = true;
-                        ui.tick(true);
-                    }
-                })), BorderLayout.NORTH);
+                moreLog), BorderLayout.NORTH);
         p.add(MainPanel.scroll(logTable), BorderLayout.CENTER);
         return p;
     }

@@ -98,11 +98,13 @@ final class HistoryTab {
                 }));
         panel.add(bar, BorderLayout.NORTH);
         JPanel treePanel = new JPanel(new BorderLayout());
+        treePanel.setPreferredSize(new java.awt.Dimension(330, 200));
         treePanel.add(MainPanel.scroll(tree.tree), BorderLayout.CENTER);
         JPanel sum = new JPanel(new BorderLayout());
         sum.add(report, BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treePanel, sum);
-        split.setResizeWeight(0.36);
+        split.setDividerLocation(330);
+        split.setResizeWeight(0.28);
         panel.add(split, BorderLayout.CENTER);
     }
 

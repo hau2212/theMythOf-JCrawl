@@ -333,7 +333,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             if (meta.verdictChip() != null && !meta.verdictChip().isEmpty() && !"-".equals(meta.verdictChip())) {
                 Theme.Token at = th.audit(n.level);
                 Icon ic = Icons.forAudit(n.level, at.text());
-                x = addChip(th, nl, Icons.stripLeadingSymbol(meta.verdictChip()), th.smallBoldFont,
+                x = addChip(th, nl, compactVerdict(meta.verdictChip()), th.smallBoldFont,
                         at.fill(), at.border(), at.text(), ic, true, x, th.scaled(4));
             }
             if (meta.pendingChip() != null && !meta.pendingChip().isEmpty()) {
@@ -348,6 +348,32 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
         }
         return x;
+    }
+
+    /**
+     * Short verdict for tree rows: drops the "INFO:" / "OK:" / "WARN:" / "ERROR:" prefix (the chip icon
+     * and colour already encode the level) and condenses verbose phrases so tree rows fit without clipping.
+     */
+    static String compactVerdict(String raw) {
+        String s = Icons.stripLeadingSymbol(raw == null ? "" : raw).trim();
+        s = s.replaceFirst("^[A-Za-zÀ-ỹ]+:\\s*", "");
+        s = s.replace(" API có Role lỗi/lệch", " lệch")
+                .replace(" API 2xx", " OK")
+                .replace("Role 2xx (Lệch Body)", "2xx lệch");
+        if (s.startsWith("Chưa Gửi")) {
+            return "Chưa gửi";
+        }
+        if (s.startsWith("Cả ") && s.endsWith(" Role 2xx")) {
+            return s.substring(3);
+        }
+        return s;
+    }
+
+    static String compactPending(ApiGroup g) {
+        if (g.dupPending()) {
+            return "Trùng #" + g.dupNo();
+        }
+        return g.placeHint() != null ? "Về chỗ cũ?" : "Chờ XN";
     }
 
     /** Muted plain-text counter after a name (e.g. "5 API"), Burp-style instead of a boxed chip. */
@@ -386,7 +412,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         }
         if (m.verdictChip() != null && !m.verdictChip().isEmpty() && !"-".equals(m.verdictChip())) {
             Theme.Token at = th.audit(n.level);
-            x = addChip(th, nl, Icons.stripLeadingSymbol(m.verdictChip()), th.smallBoldFont, at.fill(), at.border(),
+            x = addChip(th, nl, compactVerdict(m.verdictChip()), th.smallBoldFont, at.fill(), at.border(),
                     at.text(), Icons.forAudit(n.level, at.text()), false, x, th.scaled(4));
         }
         if (m.pendingChip() != null && !m.pendingChip().isEmpty()) {
@@ -439,7 +465,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         // Clickable Excel badge
         if (g.target() != null && !g.target().sttText().isBlank()) {
             nl.excelX0 = x;
-            x = addChip(th, nl, "Excel #" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
+            x = addChip(th, nl, "#" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
                     th.info.text(), Icons.excel(th.info.text(), 11), false, x, th.scaled(4));
             nl.excelX1 = x - th.scaled(4);
         }
@@ -454,7 +480,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
         // Pending chip
         if (g.pending()) {
-            x = addChip(th, nl, Icons.stripLeadingSymbol(Decisions.pendingLabel(g)), th.smallBoldFont,
+            x = addChip(th, nl, compactPending(g), th.smallBoldFont,
                     th.pending.fillStrong(), th.pending.border(), th.pending.text(),
                     Icons.hourglass(th.pending.text(), 11), false, x, th.scaled(4));
         }
@@ -465,12 +491,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (summary != null && !summary.isEmpty()) {
             Theme.Token at = g.results().isEmpty() ? th.orig : th.audit(auditLvl);
             Icon ic = g.results().isEmpty() ? Icons.pin(at.text(), 11) : Icons.forAudit(auditLvl, at.text());
-            x = addChip(th, nl, Icons.stripLeadingSymbol(summary), th.smallBoldFont,
+            x = addChip(th, nl, compactVerdict(summary), th.smallBoldFont,
                     at.fill(), at.border(), at.text(), ic, false, x, th.scaled(4));
         }
-
-        // Roles count chip
-        x = addTail(nl, th, BranchTree.rolesLabel(g), x, th.scaled(2));
         return x;
     }
 
@@ -504,7 +527,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (summary != null && !summary.isEmpty()) {
             AuditLevel al = Audit.level(g);
             Theme.Token at = th.audit(al);
-            x = addChip(th, nl, Icons.stripLeadingSymbol(summary), th.smallBoldFont, at.fill(), at.border(), at.text(),
+            x = addChip(th, nl, compactVerdict(summary), th.smallBoldFont, at.fill(), at.border(), at.text(),
                     Icons.forAudit(al, at.text()), false, x, th.scaled(4));
         }
         return x;

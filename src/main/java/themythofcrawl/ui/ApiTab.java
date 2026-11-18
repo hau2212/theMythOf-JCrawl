@@ -81,8 +81,8 @@ final class ApiTab {
         public void updateUI() {
             super.updateUI();
             Theme t = Theme.current();
-            setBackground(t.dup.fill());
-            setForeground(t.dup.text());
+            setBackground(t.surfaceAlt);
+            setForeground(t.fg);
             setFont(t.boldFont);
         }
     };
@@ -95,7 +95,7 @@ final class ApiTab {
             }
         }
     };
-    private final JLabel reqHeader = Ui.bold(" Request (Sửa trực tiếp & bấm 'Send Tab này')");
+    private final JLabel reqHeader = Ui.bold(" Request");
     private final JLabel respHeader = Ui.bold(" Response");
     private final UiHost.Viewer reqViewer;
     private final UiHost.Viewer respViewer;
@@ -181,15 +181,15 @@ final class ApiTab {
                 })
                 .numberCols(0, 8)
                 .timeCols(12);
-        int[] widths = {72, 46, 200, 195, 72, 130, 235, 50, 68, 95, 58, 52, 66, 230, 44, 115, 70};
+        int[] widths = {68, 62, 195, 195, 74, 130, 235, 58, 72, 95, 62, 62, 68, 220, 56, 115, 70};
         TableColumnModel cm = table.getColumnModel();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);   // keep readable widths, scroll sideways
         for (int i = 0; i < GroupTableModel.COLS.length; i++) {
             cm.getColumn(i).setPreferredWidth(widths[i]);
             cm.getColumn(i).setCellRenderer(gr);
         }
-        cm.getColumn(GroupTableModel.COPY_COL).setMinWidth(40);
-        cm.getColumn(GroupTableModel.COPY_COL).setMaxWidth(48);
+        cm.getColumn(GroupTableModel.COPY_COL).setMinWidth(52);
+        cm.getColumn(GroupTableModel.COPY_COL).setMaxWidth(60);
         cm.getColumn(GroupTableModel.COPY_COL).setCellRenderer(new AuditRenderer(groupModel, null, null, null, AuditRenderer.Mode.COPY)
                 .tooltip(r -> "Bấm để copy: " + engine.copyLabel(groupModel.at(r), false)));
         cm.getColumn(GroupTableModel.EXCEL_COL).setMinWidth(84);
@@ -258,14 +258,14 @@ final class ApiTab {
         for (int i = 0; i < results.getColumnCount(); i++) {
             results.getColumnModel().getColumn(i).setCellRenderer(rr);
         }
-        Ui.widths(results, 72, 185, 220, 82, 58, 78, 92, 74, 54, 340);
+        Ui.widths(results, 56, 150, 185, 68, 68, 92, 74, 94, 68, 250);
         ColumnMemory.install(results, "results", ui.uiPrefs);
         JPanel resPanel = new JPanel(new BorderLayout());
         resPanel.add(buildResultSummaryBar(), BorderLayout.NORTH);
         resPanel.add(MainPanel.scroll(results), BorderLayout.CENTER);
 
-        pill.setIcon(Icons.themed(t -> Icons.pair(Icons.folder(t.dup.text()),
-                expandedTabs ? Icons.chevronDown(t.dup.text(), 10) : Icons.chevronRight(t.dup.text(), 10), 4)));
+        pill.setIcon(Icons.themed(t -> Icons.pair(Icons.folder(t.fg),
+                expandedTabs ? Icons.chevronDown(t.fg, 10) : Icons.chevronRight(t.fg, 10), 4)));
         pill.addActionListener(e -> pillMenu());
         JScrollPane tabsScroll = new JScrollPane(roleTabs, JScrollPane.VERTICAL_SCROLLBAR_NEVER, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         tabsScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -284,11 +284,15 @@ final class ApiTab {
         });
         JButton sendOne = Ui.accent("Send Tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
         JButton[] barMoreRef = new JButton[1];
-        JButton barMore = Ui.dropdown("Thêm", null, "Thao tác với API Group / Tab", () -> {
+        JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả Group, đẩy Repeater hoặc khôi phục Request", () -> {
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
+            m.add(Ui.item("Gửi toàn bộ Roles của API Group này (Send Group)", Icons::sendAll,
+                    () -> ui.send(listOf(currentGroup()))));
+            m.addSeparator();
             m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
             m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(currentGroup())));
+            m.addSeparator();
+            m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
             m.show(barMoreRef[0], 0, barMoreRef[0].getHeight());
         });
         barMoreRef[0] = barMore;
@@ -296,9 +300,7 @@ final class ApiTab {
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(Ui.flow(FlowLayout.LEFT, pill), BorderLayout.WEST);
         bar.add(tabsScroll, BorderLayout.CENTER);
-        bar.add(Ui.flow(FlowLayout.RIGHT, sendOne,
-                Ui.button("Send Group", t -> Icons.sendAll(t.fg), () -> ui.send(listOf(currentGroup()))), barMore),
-                BorderLayout.EAST);
+        bar.add(Ui.flow(FlowLayout.RIGHT, sendOne, barMore), BorderLayout.EAST);
         JPanel reqPanel = new JPanel(new BorderLayout());
         reqPanel.add(reqHeader, BorderLayout.NORTH);
         reqPanel.add(reqViewer.component(), BorderLayout.CENTER);
@@ -896,13 +898,13 @@ final class ApiTab {
     private void showResult(RoleResult r) {
         ApiGroup g = currentGroup();
         if (g == null || r == null) {
-            reqHeader.setText(" Request (Chưa chọn Tab)");
+            reqHeader.setText(" Request");
             respHeader.setText(" Response");
             reqViewer.show(null, new byte[0]);
             respViewer.show(null, new byte[0]);
             return;
         }
-        reqHeader.setText(" Request [" + Text.groupId(g.gid()) + " | " + r.roleName() + "] (Có thể sửa trực tiếp & bấm 'Send Tab này')");
+        reqHeader.setText(" Request · " + Text.groupId(g.gid()) + " · " + r.roleName());
         reqViewer.show(g.service(), engine.requestOf(g, r));
         showResponse(r);
     }
@@ -913,7 +915,7 @@ final class ApiTab {
             return;
         }
         Object st = r.status() != null ? r.status() : r.state();
-        respHeader.setText(" Response [" + r.roleName() + " | Status: " + st + " | Length: " + (r.length() != null ? r.length() : "-") + "]");
+        respHeader.setText(" Response · " + r.roleName() + " · Status: " + st + " · Length: " + (r.length() != null ? r.length() : "-"));
         respViewer.show(g.service(), engine.responseOf(g, r));
     }
 

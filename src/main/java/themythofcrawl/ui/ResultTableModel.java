@@ -12,7 +12,7 @@ import themythofcrawl.model.RoleResult;
 
 /** Row 0 = the API gốc, rows 1..N = the roles of the selected API. */
 public final class ResultTableModel extends AbstractTableModel implements AuditRows {
-    static final String[] COLS = {"#", "Loại / Role", "Đánh giá Role (Màu)", "State", "Status", "Body Len", "Delta vs Orig",
+    static final String[] COLS = {"#", "Loại / Role", "Đánh giá Role", "State", "Status", "Body Len", "Delta",
         "Time (ms)", "Sends", "Repeater Tab / Error"};
     private ApiGroup group;
     private List<RoleResult> entries = List.of();

@@ -41,7 +41,6 @@ import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.ui.kit.EmptyState;
 import themythofcrawl.ui.kit.Pill;
-import themythofcrawl.ui.kit.SectionHeader;
 import themythofcrawl.ui.kit.StatCard;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
@@ -91,10 +90,10 @@ final class ExcelTab {
         targetOnly.addActionListener(e -> setTargetOnly(targetOnly.isSelected()));
 
         JPanel filterStrip = Ui.flow(FlowLayout.LEFT,
-                Ui.accent("Nạp Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load));
+                Ui.accent("Nạp Excel (.xlsx)...", t -> Icons.excel(t.accent.onSolid()), t -> t.accent, this::load));
         for (int i = 0; i < FILTERS.length; i++) {
             int idx = i;
-            Pill pill = new Pill(FILTERS[i], i == 0 ? t -> t.pink : t -> t.neutral);
+            Pill pill = new Pill(FILTERS[i], i == 0 ? t -> t.accent : t -> t.neutral);
             pill.setSolidWhenActive(true);
             pill.setActive(i == 0);
             pill.onClick(() -> selectFilter(idx));
@@ -187,7 +186,7 @@ final class ExcelTab {
                 .numberCols(0)
                 .timeCols(1)
                 .pathCols(5);
-        int[] hw = {62, 118, 138, 70, 72, 300, 150, 260, 260, 70, 200};
+        int[] hw = {62, 118, 138, 70, 84, 300, 150, 260, 260, 74, 200};
         for (int c = 0; c < hw.length; c++) {
             hitTable.getColumnModel().getColumn(c).setPreferredWidth(hw[c]);
             hitTable.getColumnModel().getColumn(c).setCellRenderer(hr);
@@ -217,10 +216,10 @@ final class ExcelTab {
         loadedView.add(split, BorderLayout.CENTER);
 
         emptyState = new EmptyState(
-                t -> Icons.excel(t.pink.text(), 36),
+                t -> Icons.excel(t.muted, 36),
                 "Chưa nạp file Excel đối chiếu (.xlsx)",
                 "Cần các cột: STT | PROTOCOL (method) | PATH | POSITION (tùy chọn). Tham số {id} [id] (id) <id> :id * là giá trị bất kỳ.",
-                Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.onSolid()), t -> t.pink, this::load));
+                Ui.accent("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.accent.onSolid()), t -> t.accent, this::load));
 
         deck.setOpaque(false);
         deck.add(emptyState, CARD_EMPTY);
@@ -233,7 +232,7 @@ final class ExcelTab {
     private javax.swing.JPopupMenu excelMenu() {
         javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
         boolean hasTargets = engine.targets() != null;
-        m.add(Ui.item("Nạp file Excel (.xlsx)...", t -> Icons.excel(t.pink.text()), this::load));
+        m.add(Ui.item("Nạp file Excel (.xlsx)...", Icons::excel, this::load));
         m.add(Ui.item("Xuất Excel độ phủ (.xlsx)...", Icons::export, ui::exportExcel));
         m.add(Ui.item("Gửi các API đã bắt trong danh sách", Icons::sendAll, hasTargets, this::sendListed));
         m.addSeparator();
@@ -258,7 +257,7 @@ final class ExcelTab {
         for (int i = 0; i < filterPills.size(); i++) {
             Pill p = filterPills.get(i);
             boolean on = i == filterIndex;
-            p.setToken(on ? t -> t.pink : t -> t.neutral);
+            p.setToken(on ? t -> t.accent : t -> t.neutral);
             p.setActive(on);
         }
         stale = true;

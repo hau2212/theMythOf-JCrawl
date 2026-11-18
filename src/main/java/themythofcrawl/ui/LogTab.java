@@ -16,7 +16,6 @@ import java.util.function.Function;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTree;
@@ -74,7 +73,6 @@ final class LogTab {
     private final SearchField search = new SearchField("Tìm log (API, path, nội dung)...", 16);
     private final Map<LogKind, Pill> filterPills = new EnumMap<>(LogKind.class);
     private LogKind activeKind = LogKind.ALL;
-    private final JLabel hint;
     private boolean restoring;
     private long nextOk;
     boolean stale = true;
@@ -120,7 +118,6 @@ final class LogTab {
         });
         Ui.onDoubleClick(tree, this::jump);
         tree.addMouseListener(ApiTab.treePopup(tree, e -> logMenu().show(e.getComponent(), e.getX(), e.getY())));
-        hint = Ui.muted("  Mỗi nhánh > API > chi tiết tải lười khi mở. Click đúp API để nhảy tới.");
 
         JPanel filterBar = Ui.flow(FlowLayout.LEFT, search);
         for (LogKind k : LogKind.values()) {
@@ -144,7 +141,7 @@ final class LogTab {
         moreRef[0] = more;
 
         JPanel actions = Ui.flow(FlowLayout.RIGHT,
-                Ui.accent("Xuất Excel", t -> Icons.excel(t.success.onSolid()), t -> t.success, ui::exportExcel),
+                Ui.button("Xuất Excel", t -> Icons.excel(t.fg), ui::exportExcel),
                 more);
 
         JPanel north = new JPanel(new BorderLayout(Theme.SPACE_1, 0));

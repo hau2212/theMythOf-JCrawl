@@ -233,6 +233,11 @@ public class Pill extends JComponent {
     }
 
     @Override
+    public Dimension getMaximumSize() {
+        return getPreferredSize();
+    }
+
+    @Override
     protected void paintComponent(Graphics g) {
         ensureTheme();
         Theme.Token tok = resolved;
