@@ -321,4 +321,81 @@ class EngineTest {
         assertNull(capture("POST", "/api/v1/transfer"));               // dedup memory restored
         assertEquals(2, capture("GET", "/api/v1/next").gid());
     }
+
+    @Test
+    void allFourActionProtectionMethodsAndManualIdReplacement() throws Exception {
+        // 1. Method 1: HOLD_AT_PROXY
+        config(c -> c.holdActionAtProxy = true);
+        byte[] heldReq = "DELETE /api/v1/cart/77 HTTP/1.1\r\nHost: api.example.test\r\n\r\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        byte[] getReq = "GET /api/v1/orders HTTP/1.1\r\nHost: api.example.test\r\n\r\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertTrue(e.shouldHoldAtProxy(SVC, heldReq, "https://api.example.test/api/v1/cart/77"));
+        assertFalse(e.shouldHoldAtProxy(SVC, getReq, "https://api.example.test/api/v1/orders"));
+        byte[] spoofResp = "HTTP/1.1 200 OK\r\nX-JCrawl-Held: true\r\n\r\n{\"held\":true}"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        ApiGroup heldGroup = e.process(new Engine.Message(SVC, heldReq, spoofResp, "https://api.example.test/api/v1/cart/77"),
+                "Proxy (Chặn thực thi - Giữ ID)", true, e.activeBranch().id());
+        assertNotNull(heldGroup);
+        assertTrue(heldGroup.heldAtProxy());
+        config(c -> c.holdActionAtProxy = false);
+
+        // 2. Harvest live IDs from GET /api/v1/orders (Method 3: LIVE_ID_POOL) & register POST /api/v1/orders (Method 4: PRODUCER)
+        byte[] getOrdersReq = "GET /api/v1/orders HTTP/1.1\r\nHost: api.example.test\r\n\r\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        byte[] getOrdersResp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"data\":[{\"id\":79},{\"id\":80}]}"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        e.process(new Engine.Message(SVC, getOrdersReq, getOrdersResp, "https://api.example.test/api/v1/orders"),
+                "Proxy", true, e.activeBranch().id());
+        List<String> liveIds = e.actionEngine().getAvailableLiveIds("/api/v1/orders/78", "78");
+        assertTrue(liveIds.contains("79"));
+        assertTrue(liveIds.contains("80"));
+
+        byte[] postOrderReq = "POST /api/v1/orders HTTP/1.1\r\nHost: api.example.test\r\nContent-Type: application/json\r\nContent-Length: 14\r\n\r\n{\"item\":\"book\"}"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        byte[] postOrderResp = "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\n\r\n{\"id\":91}"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        ApiGroup producerGroup = e.process(new Engine.Message(SVC, postOrderReq, postOrderResp, "https://api.example.test/api/v1/orders"),
+                "Proxy", true, e.activeBranch().id());
+        assertNotNull(producerGroup);
+        assertEquals(Integer.valueOf(producerGroup.gid()), e.actionEngine().findProducerGid("/api/v1/orders/78"));
+
+        // Capture a DELETE /api/v1/orders/78 that already executed during crawl (so 78 is marked consumed)
+        ApiGroup delGroup = capture("DELETE", "/api/v1/orders/78");
+        assertNotNull(delGroup);
+        assertTrue(delGroup.hasFirstOkSnapshot());
+        assertTrue(e.actionEngine().isConsumed("78"));
+
+        // Method 2 - Option 2A: Inherit 200 OK snapshot without re-sending dead ID
+        RoleResult adminRole = delGroup.results().get(0);
+        e.inheritInitial2xx(delGroup, List.of(adminRole));
+        assertEquals(200, adminRole.status());
+        assertEquals(ResultState.DONE, adminRole.state());
+
+        // Method 2 - Option 2C: Force raw send (simulate 400 error on dead ID) + Restore initial 200 OK
+        bridge.status = 400;
+        e.forceRawReplay(delGroup, List.of(delGroup.origResult()));
+        waitSends();
+        assertEquals(400, delGroup.origStatus());
+        e.restoreInitial2xx(delGroup);
+        assertEquals(200, delGroup.origStatus());
+        bridge.status = 200;
+
+        // Method 3: Switch to next live ID from pool ("79") & send
+        assertTrue(e.sendWithNextLiveId(delGroup, List.of(delGroup.origResult())));
+        waitSends();
+        assertEquals("/api/v1/orders/79", delGroup.path());
+        assertEquals(200, delGroup.origStatus());
+
+        // Method 3: Right-click manual ID replacement ("79" -> "88") at any time
+        e.replaceIdAndSend(delGroup, "79", "88", true, List.of(delGroup.origResult()));
+        waitSends();
+        assertEquals("/api/v1/orders/88", delGroup.path());
+        assertEquals(200, delGroup.origStatus());
+
+        // Method 4: Call Producer POST /api/v1/orders -> extract new ID -> replace & send
+        e.sendWithProducer(delGroup, producerGroup.gid(), List.of(delGroup.origResult()));
+        waitSends();
+        assertEquals(200, delGroup.origStatus());
+    }
 }

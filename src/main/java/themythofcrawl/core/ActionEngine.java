@@ -1,0 +1,513 @@
+package themythofcrawl.core;
+
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Engine xử lý 4 cơ chế bảo vệ & tái tạo trạng thái cho các Action API (POST / PUT / PATCH / DELETE)
+ * trong quá trình Crawl và Gửi lại:
+ * <ol>
+ *   <li><b>HOLD_AT_PROXY</b>: Chặn trình duyệt thực thi tại Proxy (Spoof 200 OK về trình duyệt,
+ *       giữ nguyên trạng thái trên Server để khi bấm Gửi trong Extension mới thực thi thật).</li>
+ *   <li><b>LOCK_2XX</b>: Khóa bảo vệ kết quả 2xx ban đầu (Snapshot 200 OK) kèm 3 chế độ gửi lại:
+ *       (2A) Kế thừa Response 200 OK ban đầu, (2B) Đẩy thật lên Server kèm đổi ID sống / gọi Producer,
+ *       (2C) Cưỡng bức gửi lại nguyên bản + nút Khôi phục 200 OK bất kỳ lúc nào.</li>
+ *   <li><b>LIVE_ID_POOL</b>: Tự động thu thập Giỏ ID sống từ các API GET/POST và cho phép chọn/đổi
+ *       ID sống khác bất kỳ lúc nào (tự động hoặc qua menu Chuột phải).</li>
+ *   <li><b>PRODUCER_RECREATE</b>: Tự động gọi lại API Tạo mới (Producer POST) để sinh ID mới trên
+ *       Server rồi thay vào API hiện tại trước khi đẩy lên Server, kèm làm mới các trường Unique.</li>
+ * </ol>
+ */
+public final class ActionEngine {
+
+    public enum ActionMode {
+        AUTO_SMART("Tự động thông minh (Kết hợp cả 4)", "Ưu tiên giữ 2xx, tự thay ID sống hoặc gọi Producer khi gặp 4xx"),
+        HOLD_AT_PROXY("1. Chặn ở Proxy (Giữ trạng thái Server)", "Trình duyệt nhận 200 ảo; Server giữ nguyên ID cho tới khi bấm Gửi"),
+        LOCK_2XX("2. Khóa bảo vệ 200 OK (Snapshot & 3 tùy chọn)", "Lưu bản sao 200 OK gốc; cho phép Kế thừa 200 OK, Đổi ID đẩy thật, hoặc Gửi cưỡng bức"),
+        LIVE_ID_POOL("3. Giỏ ID sống (Tự động nạp & Đổi ID)", "Thu thập ID từ API danh sách/chi tiết để thay thế ID đã bị xóa"),
+        PRODUCER_RECREATE("4. Gọi API Tạo mới (Producer -> ID mới)", "Gọi POST tạo bản ghi mới lấy ID tươi trước khi gửi DELETE/PUT/POST");
+
+        public final String label;
+        public final String description;
+
+        ActionMode(String label, String description) {
+            this.label = label;
+            this.description = description;
+        }
+    }
+
+    public enum Lock2xxStrategy {
+        INHERIT_200("Cách 1A: Kế thừa kết quả 200 OK ban đầu (Không gửi lại ID đã xóa lên Server)"),
+        REAL_SEND_FRESH_ID("Cách 1B: Đẩy thật lên Server kèm Tự đổi ID sống / Gọi API Tạo mới (Đạt 200 OK mới)"),
+        FORCE_RAW_SEND("Cách 2: Cưỡng bức gửi lại nguyên bản lên Server (Chấp nhận rủi ro 4xx, có thể Khôi phục 200 OK)");
+
+        public final String label;
+
+        Lock2xxStrategy(String label) {
+            this.label = label;
+        }
+    }
+
+    private static final Set<String> ACTION_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
+
+    private static final Pattern ACTION_PATH_HINT = Pattern.compile(
+            "(?i)/(delete|remove|destroy|cancel|revoke|archive|close|approve|reject|update|edit|create|add|submit|confirm|pay|checkout)(/|$|\\?)");
+
+    // Pattern nhận diện ID trên URL path: số nguyên >= 1 chữ số, UUID, hoặc chuỗi hex/mongo ObjectId 16-36 ký tự
+    private static final Pattern PATH_SEGMENT_ID = Pattern.compile(
+            "^(\\d+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{16,32})$");
+
+    // Pattern nhận diện ID trong JSON response/request: "id": 123, "order_id": "78", "userId": 15, "uuid": "..."
+    private static final Pattern JSON_ID_FIELD = Pattern.compile(
+            "\"([a-zA-Z0-9_]*(?:id|Id|ID|uuid|Uuid|code|Code))\"\\s*:\\s*(?:\"([0-9a-zA-Z_-]{1,36})\"|(\\d+))");
+
+    // Pattern nhận diện query/form parameter ID: id=123, order_id=78, itemId=99
+    private static final Pattern QUERY_ID_PARAM = Pattern.compile(
+            "(?:^|[?&])([a-zA-Z0-9_]*(?:id|Id|ID|uuid|code))=([0-9a-zA-Z_-]{1,36})");
+
+    // Pattern nhận diện các trường unique trong JSON cần làm mới khi gửi lại POST tạo mới
+    private static final Pattern JSON_UNIQUE_FIELD = Pattern.compile(
+            "\"(email|username|user_name|code|slug|phone|nonce|idempotency_key|client_req_id|reference|sku|serial)\"\\s*:\\s*\"([^\"]+)\"");
+
+    // Giỏ ID sống theo tên tài nguyên (ví dụ: "orders" -> ["77", "78", "79"])
+    private final ConcurrentHashMap<String, CopyOnWriteArrayList<String>> resourceLiveIds = new ConcurrentHashMap<>();
+    // Tập hợp các ID đã bị tiêu thụ (đã gửi DELETE/Action thành công)
+    private final Set<String> consumedIds = ConcurrentHashMap.newKeySet();
+    // Giỏ ID sống toàn cục theo thứ tự mới nhất
+    private final CopyOnWriteArrayList<String> globalLiveIds = new CopyOnWriteArrayList<>();
+    // Bản đồ tài nguyên -> GID của API Producer (POST tạo mới tài nguyên đó)
+    private final ConcurrentHashMap<String, Integer> resourceProducers = new ConcurrentHashMap<>();
+    // Danh sách các mẫu path/endpoint được bật chế độ Chặn tại Proxy (HOLD_AT_PROXY) riêng lẻ
+    private final Set<String> proxyHoldEndpoints = ConcurrentHashMap.newKeySet();
+    private volatile boolean holdAllActionAtProxy = false;
+    private volatile Lock2xxStrategy defaultLock2xxStrategy = Lock2xxStrategy.REAL_SEND_FRESH_ID;
+    private final AtomicInteger uniqueSeq = new AtomicInteger(100);
+
+    public static boolean isActionMethod(String method) {
+        if (method == null) return false;
+        return ACTION_METHODS.contains(method.toUpperCase(Locale.ROOT));
+    }
+
+    public static boolean isDestructiveOrMutating(String method, String path) {
+        if (method == null) return false;
+        String m = method.toUpperCase(Locale.ROOT);
+        if ("DELETE".equals(m) || "PUT".equals(m) || "PATCH".equals(m)) return true;
+        if ("POST".equals(m)) return true;
+        return path != null && ACTION_PATH_HINT.matcher(path).find();
+    }
+
+    public boolean isHoldAllActionAtProxy() {
+        return holdAllActionAtProxy;
+    }
+
+    public void setHoldAllActionAtProxy(boolean holdAll) {
+        this.holdAllActionAtProxy = holdAll;
+    }
+
+    public Lock2xxStrategy getDefaultLock2xxStrategy() {
+        return defaultLock2xxStrategy;
+    }
+
+    public void setDefaultLock2xxStrategy(Lock2xxStrategy strategy) {
+        if (strategy != null) this.defaultLock2xxStrategy = strategy;
+    }
+
+    public void setEndpointProxyHold(String method, String path, boolean hold) {
+        String key = endpointHoldKey(method, path);
+        if (hold) proxyHoldEndpoints.add(key);
+        else proxyHoldEndpoints.remove(key);
+    }
+
+    public boolean isEndpointProxyHold(String method, String path) {
+        return proxyHoldEndpoints.contains(endpointHoldKey(method, path));
+    }
+
+    public Set<String> getProxyHoldEndpoints() {
+        return new LinkedHashSet<>(proxyHoldEndpoints);
+    }
+
+    private static String endpointHoldKey(String method, String path) {
+        String m = method == null ? "*" : method.toUpperCase(Locale.ROOT);
+        String normPath = normalizePathTemplate(path);
+        return m + " " + normPath;
+    }
+
+    /**
+     * Chuẩn hóa path thành dạng template tài nguyên, ví dụ "/api/v1/orders/78/cancel" -> "/api/v1/orders/{id}/cancel".
+     */
+    public static String normalizePathTemplate(String path) {
+        if (path == null || path.isEmpty()) return "/";
+        String clean = Text.stripQuery(path);
+        String[] parts = clean.split("/");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            sb.append('/');
+            if (PATH_SEGMENT_ID.matcher(p).matches()) {
+                sb.append("{id}");
+            } else {
+                sb.append(p);
+            }
+        }
+        return sb.length() == 0 ? "/" : sb.toString();
+    }
+
+    /**
+     * Trích xuất khóa tài nguyên chính từ URL path (ví dụ "/api/v1/orders/78/invoice" -> "orders").
+     */
+    public static String extractResourceKey(String path) {
+        if (path == null || path.isEmpty()) return "default";
+        String clean = Text.stripQuery(path);
+        String[] parts = clean.split("/");
+        String lastNoun = "default";
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].trim();
+            if (p.isEmpty()) continue;
+            String lower = p.toLowerCase(Locale.ROOT);
+            if (lower.equals("api") || lower.matches("v\\d+") || lower.equals("rest") || lower.equals("public") || lower.equals("private")) {
+                continue;
+            }
+            if (PATH_SEGMENT_ID.matcher(p).matches()) {
+                return lastNoun;
+            }
+            if (!ACTION_PATH_HINT.matcher("/" + lower).find()) {
+                lastNoun = lower;
+            }
+        }
+        return lastNoun;
+    }
+
+    private static byte[] bodyBytes(byte[] msg) {
+        if (msg == null || msg.length == 0) return new byte[0];
+        int off = HttpBytes.bodyOffset(msg);
+        if (off >= msg.length) return new byte[0];
+        return Arrays.copyOfRange(msg, off, msg.length);
+    }
+
+    private static String headerText(byte[] msg) {
+        if (msg == null || msg.length == 0) return "";
+        int off = HttpBytes.bodyOffset(msg);
+        int end = off;
+        while (end > 0 && (msg[end - 1] == '\n' || msg[end - 1] == '\r')) {
+            end--;
+        }
+        return new String(msg, 0, end, StandardCharsets.ISO_8859_1);
+    }
+
+    /**
+     * Thu thập ID sống và tự động nhận diện Producer API từ mỗi cặp Request/Response đi qua Engine.
+     */
+    public void harvest(String method, String path, byte[] request, byte[] response, int status, int gid) {
+        if (path == null) return;
+        String resource = extractResourceKey(path);
+        String m = method == null ? "GET" : method.toUpperCase(Locale.ROOT);
+
+        // 1. Thu thập ID xuất hiện trên path của các request thành công
+        List<String> pathIds = extractPathIds(path);
+        if ("DELETE".equals(m) && status >= 200 && status < 300) {
+            // Nếu DELETE thành công, đánh dấu các ID trong request này là đã bị tiêu thụ (đã xóa)
+            for (String id : detectIds(path, request)) {
+                markConsumed(id);
+            }
+        } else if (status >= 200 && status < 300) {
+            for (String id : pathIds) {
+                if (!consumedIds.contains(id)) {
+                    addLiveId(resource, id);
+                }
+            }
+        }
+
+        // 2. Nếu là POST tạo mới thành công (không chứa từ khóa delete/cancel và không có ID sẵn trên path),
+        // ghi nhận đây là Producer cho tài nguyên này
+        if ("POST".equals(m) && status >= 200 && status < 300) {
+            String lowerPath = Text.stripQuery(path).toLowerCase(Locale.ROOT);
+            boolean isDeleteLike = lowerPath.contains("delete") || lowerPath.contains("remove") || lowerPath.contains("cancel");
+            if (!isDeleteLike && pathIds.isEmpty()) {
+                resourceProducers.putIfAbsent(resource, gid);
+            } else if (isDeleteLike) {
+                for (String id : detectIds(path, request)) {
+                    markConsumed(id);
+                }
+            }
+        }
+
+        // 3. Quét JSON body của Response 2xx để nạp các ID sống vào Giỏ ID
+        if (response != null && response.length > 0 && status >= 200 && status < 300) {
+            List<String> respIds = extractIdsFromBody(bodyBytes(response));
+            for (String id : respIds) {
+                if (!consumedIds.contains(id)) {
+                    addLiveId(resource, id);
+                }
+            }
+        }
+    }
+
+    public void addLiveId(String resource, String id) {
+        if (id == null || id.isBlank()) return;
+        String res = (resource == null || resource.isBlank()) ? "default" : resource.toLowerCase(Locale.ROOT);
+        consumedIds.remove(id);
+        CopyOnWriteArrayList<String> list = resourceLiveIds.computeIfAbsent(res, k -> new CopyOnWriteArrayList<>());
+        if (!list.contains(id)) {
+            list.add(id);
+        }
+        if (!globalLiveIds.contains(id)) {
+            globalLiveIds.add(id);
+        }
+    }
+
+    public void markConsumed(String id) {
+        if (id == null || id.isBlank()) return;
+        consumedIds.add(id);
+    }
+
+    public boolean isConsumed(String id) {
+        return id != null && consumedIds.contains(id);
+    }
+
+    public Set<String> getConsumedIds() {
+        return new LinkedHashSet<>(consumedIds);
+    }
+
+    /**
+     * Lấy danh sách các ID sống khả dụng cho một API (ưu tiên cùng tài nguyên, loại trừ ID đang dùng và ID đã xóa).
+     */
+    public List<String> getAvailableLiveIds(String path, String excludeId) {
+        String resource = extractResourceKey(path);
+        List<String> result = new ArrayList<>();
+        CopyOnWriteArrayList<String> byRes = resourceLiveIds.get(resource);
+        if (byRes != null) {
+            for (String id : byRes) {
+                if (!consumedIds.contains(id) && !id.equals(excludeId) && !result.contains(id)) {
+                    result.add(id);
+                }
+            }
+        }
+        for (String id : globalLiveIds) {
+            if (!consumedIds.contains(id) && !id.equals(excludeId) && !result.contains(id)) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    public Map<String, List<String>> getAllResourceLiveIds() {
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        for (Map.Entry<String, CopyOnWriteArrayList<String>> e : resourceLiveIds.entrySet()) {
+            map.put(e.getKey(), new ArrayList<>(e.getValue()));
+        }
+        return map;
+    }
+
+    /**
+     * Tìm ID sống tiếp theo phù hợp nhất để thay cho ID cũ của API.
+     */
+    public String nextLiveId(String path, String currentId) {
+        List<String> avail = getAvailableLiveIds(path, currentId);
+        if (!avail.isEmpty()) {
+            return avail.get(0);
+        }
+        return null;
+    }
+
+    public Integer findProducerGid(String path) {
+        String resource = extractResourceKey(path);
+        return resourceProducers.get(resource);
+    }
+
+    public void registerProducer(String resource, int gid) {
+        if (resource != null && !resource.isBlank()) {
+            resourceProducers.put(resource.toLowerCase(Locale.ROOT), gid);
+        }
+    }
+
+    /**
+     * Phát hiện tất cả các ID đang được truyền trong API (theo thứ tự ưu tiên: Path -> Query -> Body JSON/Form).
+     */
+    public List<String> detectIds(String path, byte[] request) {
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        if (path != null) {
+            ids.addAll(extractPathIds(path));
+            int qIdx = path.indexOf('?');
+            if (qIdx >= 0 && qIdx + 1 < path.length()) {
+                Matcher qm = QUERY_ID_PARAM.matcher(path.substring(qIdx));
+                while (qm.find()) {
+                    ids.add(qm.group(2));
+                }
+            }
+        }
+        if (request != null && request.length > 0) {
+            byte[] body = bodyBytes(request);
+            if (body.length > 0) {
+                ids.addAll(extractIdsFromBody(body));
+                String bodyStr = new String(body, StandardCharsets.UTF_8);
+                Matcher fm = QUERY_ID_PARAM.matcher("&" + bodyStr);
+                while (fm.find()) {
+                    ids.add(fm.group(2));
+                }
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    public static List<String> extractPathIds(String path) {
+        List<String> list = new ArrayList<>();
+        if (path == null) return list;
+        String clean = Text.stripQuery(path);
+        for (String seg : clean.split("/")) {
+            if (seg.isEmpty()) continue;
+            if (PATH_SEGMENT_ID.matcher(seg).matches()) {
+                list.add(seg);
+            }
+        }
+        return list;
+    }
+
+    public static List<String> extractIdsFromBody(byte[] bodyBytes) {
+        List<String> list = new ArrayList<>();
+        if (bodyBytes == null || bodyBytes.length == 0) return list;
+        String text = new String(bodyBytes, StandardCharsets.UTF_8);
+        Matcher m = JSON_ID_FIELD.matcher(text);
+        while (m.find()) {
+            String val = m.group(2) != null ? m.group(2) : m.group(3);
+            if (val != null && !val.isBlank() && !list.contains(val)) {
+                list.add(val);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Trích xuất ID vừa được tạo từ Response của một Producer API (POST tạo mới).
+     */
+    public String extractCreatedId(byte[] response) {
+        if (response == null || response.length == 0) return null;
+        String loc = HttpBytes.header(response, "Location");
+        if (loc != null && !loc.isBlank()) {
+            List<String> locIds = extractPathIds(loc.trim());
+            if (!locIds.isEmpty()) return locIds.get(locIds.size() - 1);
+        }
+        List<String> bodyIds = extractIdsFromBody(bodyBytes(response));
+        if (!bodyIds.isEmpty()) {
+            return bodyIds.get(0);
+        }
+        return null;
+    }
+
+    /**
+     * Thay thế một ID cũ bằng ID mới trên đường dẫn path.
+     */
+    public static String replaceIdInPath(String path, String oldId, String newId) {
+        if (path == null || oldId == null || newId == null || oldId.isEmpty()) return path;
+        String escaped = Pattern.quote(oldId);
+        // Thay trong path segment (/oldId/ hoặc /oldId$ hoặc /oldId?)
+        String updated = path.replaceAll("(?<=/)" + escaped + "(?=/|\\?|$)", Matcher.quoteReplacement(newId));
+        // Thay trong query param (=oldId& hoặc =oldId$)
+        updated = updated.replaceAll("(?<==)" + escaped + "(?=&|$)", Matcher.quoteReplacement(newId));
+        return updated;
+    }
+
+    /**
+     * Thay thế một ID cũ bằng ID mới trong toàn bộ raw HTTP request (Request-Line, Query và Body)
+     * và tự động cập nhật lại header Content-Length.
+     */
+    public static byte[] replaceIdInRequest(byte[] rawRequest, String oldId, String newId) {
+        if (rawRequest == null || rawRequest.length == 0 || oldId == null || newId == null || oldId.isEmpty()) {
+            return rawRequest;
+        }
+        String head = headerText(rawRequest);
+        byte[] body = bodyBytes(rawRequest);
+
+        String[] lines = head.split("\r?\n");
+        if (lines.length > 0) {
+            String[] rl = lines[0].split(" ", 3);
+            if (rl.length >= 2) {
+                rl[1] = replaceIdInPath(rl[1], oldId, newId);
+                lines[0] = String.join(" ", rl);
+            }
+        }
+
+        String escaped = Pattern.quote(oldId);
+        if (body.length > 0) {
+            String bodyStr = new String(body, StandardCharsets.UTF_8);
+            // Thay trong JSON ("id": 78 hoặc "id": "78")
+            String updatedBody = bodyStr.replaceAll(
+                    "(\"[a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)\"\\s*:\\s*\")" + escaped + "(\")",
+                    "$1" + Matcher.quoteReplacement(newId) + "$2");
+            updatedBody = updatedBody.replaceAll(
+                    "(\"[a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)\"\\s*:\\s*)" + escaped + "(?=\\s*[,}\\]])",
+                    "$1" + Matcher.quoteReplacement(newId));
+            // Thay trong form-urlencoded (id=78)
+            updatedBody = updatedBody.replaceAll(
+                    "(?<=^|[?&])([a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)=)" + escaped + "(?=&|$)",
+                    "$1" + Matcher.quoteReplacement(newId));
+            body = updatedBody.getBytes(StandardCharsets.UTF_8);
+        }
+
+        return rebuildRequestWithContentLength(lines, body);
+    }
+
+    /**
+     * Làm mới các trường Unique (email, username, code, phone, nonce...) trong body JSON/Form
+     * để tránh lỗi 409 Conflict / Duplicate khi gửi lại API POST tạo mới.
+     */
+    public byte[] refreshUniqueFields(byte[] rawRequest) {
+        if (rawRequest == null || rawRequest.length == 0) return rawRequest;
+        String head = headerText(rawRequest);
+        byte[] body = bodyBytes(rawRequest);
+        if (body.length == 0) return rawRequest;
+
+        int seq = uniqueSeq.incrementAndGet();
+        String bodyStr = new String(body, StandardCharsets.UTF_8);
+        Matcher m = JSON_UNIQUE_FIELD.matcher(bodyStr);
+        StringBuilder sb = new StringBuilder();
+        boolean changed = false;
+        while (m.find()) {
+            changed = true;
+            String field = m.group(1);
+            String val = m.group(2);
+            String newVal;
+            if (val.contains("@")) {
+                int at = val.indexOf('@');
+                String local = val.substring(0, at).replaceAll("\\+\\d+$", "");
+                newVal = local + "+" + seq + val.substring(at);
+            } else {
+                String base = val.replaceAll("_\\d+$", "");
+                newVal = base + "_" + seq;
+            }
+            m.appendReplacement(sb, "\"" + field + "\":\"" + Matcher.quoteReplacement(newVal) + "\"");
+        }
+        m.appendTail(sb);
+        if (!changed) return rawRequest;
+
+        byte[] newBody = sb.toString().getBytes(StandardCharsets.UTF_8);
+        return rebuildRequestWithContentLength(head.split("\r?\n"), newBody);
+    }
+
+    private static byte[] rebuildRequestWithContentLength(String[] headerLines, byte[] body) {
+        StringBuilder h = new StringBuilder();
+        boolean hasCl = false;
+        for (int i = 0; i < headerLines.length; i++) {
+            String line = headerLines[i];
+            if (i > 0 && line.toLowerCase(Locale.ROOT).startsWith("content-length:")) {
+                h.append("Content-Length: ").append(body.length).append("\r\n");
+                hasCl = true;
+            } else {
+                h.append(line).append("\r\n");
+            }
+        }
+        if (!hasCl && body.length > 0) {
+            h.append("Content-Length: ").append(body.length).append("\r\n");
+        }
+        h.append("\r\n");
+        byte[] headBytes = h.toString().getBytes(StandardCharsets.ISO_8859_1);
+        byte[] out = new byte[headBytes.length + body.length];
+        System.arraycopy(headBytes, 0, out, 0, headBytes.length);
+        System.arraycopy(body, 0, out, headBytes.length, body.length);
+        return out;
+    }
+}

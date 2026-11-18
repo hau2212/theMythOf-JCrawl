@@ -268,9 +268,8 @@ public class Pill extends JComponent {
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             int w = getWidth();
             int h = getHeight();
-            int arc = radius >= Theme.RADIUS_PILL ? h : Math.min(h, Math.round(radius * 2 * resolvedTheme.scale));
             g2.setColor(fill);
-            g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
+            g2.fillRect(0, 0, w - 1, h - 1);
 
             if (progress >= 0) {
                 int margin = Math.max(4, Math.min(8, h / 3));
@@ -278,16 +277,16 @@ public class Pill extends JComponent {
                 int barH = Math.max(2, resolvedTheme.scaled(2));
                 int by = h - barH - 2;
                 g2.setColor(resolvedTheme.border);
-                g2.fillRoundRect(margin, by, barW, barH, barH, barH);
+                g2.fillRect(margin, by, barW, barH);
                 int fillW = (int) Math.round(barW * progress);
                 if (fillW > 0) {
                     g2.setColor(active && solidWhenActive ? tok.onSolid() : tok.solidFill());
-                    g2.fillRoundRect(margin, by, Math.max(barH, fillW), barH, barH, barH);
+                    g2.fillRect(margin, by, Math.max(barH, fillW), barH);
                 }
             }
 
             g2.setColor(border);
-            g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+            g2.drawRect(0, 0, w - 1, h - 1);
 
             int cx = Math.round(padding.left * resolvedTheme.scale);
             if (cachedIcon != null) {
@@ -305,11 +304,11 @@ public class Pill extends JComponent {
                 cx += fm.stringWidth(text);
             }
             if (cachedTrailingDot != null) {
-                int d = resolvedTheme.scaled(7);
+                int d = resolvedTheme.scaled(6);
                 int dx = cx + Theme.SPACE_1;
                 int dy = (h - d) / 2;
                 g2.setColor(cachedTrailingDot);
-                g2.fillOval(dx, dy, d, d);
+                g2.fillRect(dx, dy, d, d);
             }
         } finally {
             g2.dispose();

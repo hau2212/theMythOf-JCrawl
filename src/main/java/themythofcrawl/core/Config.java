@@ -93,6 +93,10 @@ public final class Config {
     public CopyFallback copySttFallback = CopyFallback.NONE;
     public int copyCounter = 1;
     public boolean excelPositionCopyFormat = true;
+    // Action API (POST/PUT/PATCH/DELETE) crawl protection
+    public ActionEngine.ActionMode actionMode = ActionEngine.ActionMode.AUTO_SMART;
+    public ActionEngine.Lock2xxStrategy lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
+    public boolean holdActionAtProxy = false;
 
     public Config copy() {
         return fromMap(toMap());
@@ -117,6 +121,8 @@ public final class Config {
         shortPathLen = clamp(shortPathLen, 8, 200);
         staticExt = Text.nz(staticExt);
         apiRegex = Text.nz(apiRegex);
+        if (actionMode == null) actionMode = ActionEngine.ActionMode.AUTO_SMART;
+        if (lock2xxStrategy == null) lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
         return this;
     }
 
@@ -161,6 +167,9 @@ public final class Config {
         m.put("copy_stt_fallback", copySttFallback.name().toLowerCase(java.util.Locale.ROOT));
         m.put("copy_counter", copyCounter);
         m.put("excel_position_copy_format", excelPositionCopyFormat);
+        m.put("action_mode", actionMode.name());
+        m.put("lock_2xx_strategy", lock2xxStrategy.name());
+        m.put("hold_action_at_proxy", holdActionAtProxy);
         return m;
     }
 
@@ -204,6 +213,9 @@ public final class Config {
         c.copySttFallback = e(CopyFallback.class, m.get("copy_stt_fallback"), c.copySttFallback);
         c.copyCounter = i(m, "copy_counter", c.copyCounter);
         c.excelPositionCopyFormat = b(m, "excel_position_copy_format", c.excelPositionCopyFormat);
+        c.actionMode = e(ActionEngine.ActionMode.class, m.get("action_mode"), c.actionMode);
+        c.lock2xxStrategy = e(ActionEngine.Lock2xxStrategy.class, m.get("lock_2xx_strategy"), c.lock2xxStrategy);
+        c.holdActionAtProxy = b(m, "hold_action_at_proxy", c.holdActionAtProxy);
         return c.normalized();
     }
 

@@ -72,6 +72,7 @@ final class LogTab {
     private final Set<Object> expanded = new HashSet<>();
     private final SearchField search = new SearchField("Tìm log (API, path, nội dung)...", 16);
     private final Map<LogKind, Pill> filterPills = new EnumMap<>(LogKind.class);
+    private JButton filterDropdownBtn;
     private LogKind activeKind = LogKind.ALL;
     private boolean restoring;
     private long nextOk;
@@ -119,15 +120,30 @@ final class LogTab {
         Ui.onDoubleClick(tree, this::jump);
         tree.addMouseListener(ApiTab.treePopup(tree, e -> logMenu().show(e.getComponent(), e.getX(), e.getY())));
 
-        JPanel filterBar = Ui.flow(FlowLayout.LEFT, search);
         for (LogKind k : LogKind.values()) {
             Pill p = new Pill(k.label, k.token, k.icon);
             p.setSolidWhenActive(true);
             p.setActive(k == activeKind);
             p.onClick(() -> setFilter(k));
             filterPills.put(k, p);
-            filterBar.add(p);
         }
+        JButton[] filterRef = new JButton[1];
+        filterDropdownBtn = Ui.dropdown("Lọc: Tất cả", t -> Icons.withChevron(Icons.sliders(t.fg), t.fg),
+                "Lọc dòng nhật ký theo loại (Tất cả, Bắt, Gửi, Lỗi, Di chuyển, Hệ thống)", () -> {
+                    JPopupMenu fm = new JPopupMenu();
+                    javax.swing.ButtonGroup bg = new javax.swing.ButtonGroup();
+                    for (LogKind k : LogKind.values()) {
+                        javax.swing.JRadioButtonMenuItem item = new javax.swing.JRadioButtonMenuItem(
+                                "Lọc: " + k.label, k == activeKind);
+                        item.addActionListener(e -> setFilter(k));
+                        bg.add(item);
+                        fm.add(item);
+                    }
+                    fm.show(filterRef[0], 0, filterRef[0].getHeight());
+                });
+        filterRef[0] = filterDropdownBtn;
+
+        JPanel filterBar = Ui.flow(FlowLayout.LEFT, search, filterDropdownBtn);
         search.onChange(q -> {
             stale = true;
             nextOk = 0;
@@ -136,13 +152,11 @@ final class LogTab {
 
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
-                "Mở/Thu gọn nhánh, Copy dòng chọn, Xóa nhật ký hệ thống",
+                "Mở/Thu gọn nhánh, Copy dòng chọn, Xuất Excel, Xóa nhật ký hệ thống",
                 () -> logMenu().show(moreRef[0], 0, moreRef[0].getHeight()));
         moreRef[0] = more;
 
-        JPanel actions = Ui.flow(FlowLayout.RIGHT,
-                Ui.button("Xuất Excel", t -> Icons.excel(t.fg), ui::exportExcel),
-                more);
+        JPanel actions = Ui.flow(FlowLayout.RIGHT, more);
 
         JPanel north = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         north.setOpaque(false);
@@ -158,6 +172,9 @@ final class LogTab {
         JPopupMenu m = new JPopupMenu();
         Node sel = selected();
         m.add(Ui.item("Mở API ở tab API (Click đúp)", Icons::search, sel != null && sel.payload instanceof ApiGroup, this::jump));
+        if (sel != null && sel.payload instanceof ApiGroup g) {
+            m.add(ActionMenus.buildForApi(panel, engine, g, null, this::rebuild));
+        }
         m.add(Ui.item("Copy dòng đang chọn", Icons::copy, sel != null, () -> {
             Node n = selected();
             if (n != null) {
@@ -205,6 +222,9 @@ final class LogTab {
 
     void setFilter(LogKind kind) {
         this.activeKind = kind == null ? LogKind.ALL : kind;
+        if (filterDropdownBtn != null) {
+            filterDropdownBtn.setText("Lọc: " + this.activeKind.label);
+        }
         filterPills.forEach((k, pill) -> {
             pill.setActive(k == this.activeKind);
             if (k.icon != null) {

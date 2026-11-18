@@ -10,7 +10,14 @@ import javax.swing.SwingUtilities;
 
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ToolType;
+import burp.api.montoya.http.handler.HttpHandler;
+import burp.api.montoya.http.handler.HttpRequestToBeSent;
+import burp.api.montoya.http.handler.HttpResponseReceived;
+import burp.api.montoya.http.handler.RequestToBeSentAction;
+import burp.api.montoya.http.handler.ResponseReceivedAction;
 import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.proxy.http.InterceptedResponse;
 import burp.api.montoya.proxy.http.ProxyResponseHandler;
 import burp.api.montoya.proxy.http.ProxyResponseReceivedAction;
@@ -65,6 +72,36 @@ public final class Extension implements BurpExtension {
         } catch (Exception e) {
             api.logging().logToError(Text.EXT_NAME + ": lỗi dựng giao diện: " + e);
         }
+
+        api.http().registerHttpHandler(new HttpHandler() {
+            @Override
+            public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent req) {
+                try {
+                    if (req.toolSource() != null && req.toolSource().isFromTool(ToolType.PROXY)) {
+                        var svc = req.httpService();
+                        Service service = new Service(svc.host(), svc.port(), svc.secure());
+                        byte[] raw = req.toByteArray().getBytes();
+                        if (engine.shouldHoldAtProxy(service, raw, req.url())) {
+                            engine.onProxyHeldRequest(service, raw, req.url());
+                            String spoof = "HTTP/1.1 200 OK\r\n"
+                                    + "Content-Type: application/json\r\n"
+                                    + "X-JCrawl-Held: true\r\n"
+                                    + "Content-Length: 45\r\n\r\n"
+                                    + "{\"status\":\"held_by_jcrawl\",\"server_id\":\"kept\"}";
+                            return RequestToBeSentAction.spoof(HttpResponse.httpResponse(spoof));
+                        }
+                    }
+                } catch (RuntimeException e) {
+                    api.logging().logToError(Text.EXT_NAME + " proxy-hold: " + e);
+                }
+                return RequestToBeSentAction.continueWith(req);
+            }
+
+            @Override
+            public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived resp) {
+                return ResponseReceivedAction.continueWith(resp);
+            }
+        });
 
         api.proxy().registerResponseHandler(new ProxyResponseHandler() {
             @Override

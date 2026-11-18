@@ -99,6 +99,9 @@ final class SettingsTab {
     private final JTextField threads = new JTextField(6);
     private final JLabel pacing = Ui.muted(" ");
     private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả API gốc (áp profile API gốc) cùng các role");
+    private final JComboBox<String> actionModeBox = new JComboBox<>();
+    private final JComboBox<String> lock2xxStrategyBox = new JComboBox<>();
+    private final JCheckBox holdActionProxyChk = new JCheckBox("PP1: Bật Chặn tại Proxy cho mọi Action API khi Crawl (Giữ nguyên ID trên Server)");
     private final JCheckBox number = new JCheckBox("Thêm số thứ tự role vào tên tab (01_, 02_ ...) nếu tên chưa có");
     private final JCheckBox branchInTab = new JCheckBox("Gắn mã Nhánh vào tên tab: [F01-G01:POST /v1/...] thay vì [G01:POST /v1/...]");
     private final JTextField pathLen = new JTextField(6);
@@ -128,6 +131,12 @@ final class SettingsTab {
         for (Config.SendProfile p : Config.SendProfile.values()) {
             profile.addItem(p.label);
         }
+        for (themythofcrawl.core.ActionEngine.ActionMode am : themythofcrawl.core.ActionEngine.ActionMode.values()) {
+            actionModeBox.addItem(am.label);
+        }
+        for (themythofcrawl.core.ActionEngine.Lock2xxStrategy ls : themythofcrawl.core.ActionEngine.Lock2xxStrategy.values()) {
+            lock2xxStrategyBox.addItem(ls.label);
+        }
         for (Config.QueryModeOption q : Config.QueryModeOption.values()) {
             queryMode.addItem(q.label);
         }
@@ -152,13 +161,16 @@ final class SettingsTab {
         sections.add(section("2.  Chống trùng lặp & vị trí", t -> t.dup,
                 "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại được đặt.",
                 row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts)));
-        sections.add(section("3.  Gửi request & chống lỗi 429", t -> t.success,
-                "Mọi request đi qua hàng đợi theo host, giãn cách như người thật; gặp 429/503 tự tạm dừng, giảm tốc và gửi lại.",
+        sections.add(section("3.  Gửi request, Bảo vệ Action API & chống lỗi 429", t -> t.success,
+                "Hàng đợi theo host chống 429/503; tích hợp 4 Phương pháp bảo vệ & tự phục hồi ID cho Action API (POST/PUT/PATCH/DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
                 field("Dao động (%):", jitter, Ui.muted("nghỉ = khoảng nghỉ +/- %")),
                 field("Song song mỗi host:", concurrency, Ui.muted("1 = tuần tự")),
                 field("Tự gửi lại 429/503:", retries, null), field("Tổng luồng gửi:", threads, null),
-                row(sendOriginal)));
+                row(sendOriginal),
+                field("Chế độ Action API:", actionModeBox, null),
+                field("Khi gửi lại ở PP2 (Khóa 2xx):", lock2xxStrategyBox, null),
+                row(holdActionProxyChk)));
         sections.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
                 "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} [id] (id) <id> :id * là giá trị bất kỳ.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
@@ -241,7 +253,7 @@ final class SettingsTab {
         });
 
         for (JCheckBox b : new JCheckBox[] {scope, ignoreStatic, regexOn, options, dedup, dedupIds, dedupBranch, confirmNew, restore, dupNew,
-            ghosts, sendOriginal, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
+            ghosts, sendOriginal, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
             b.addActionListener(e -> apply());
             b.setOpaque(false);
         }
@@ -269,7 +281,7 @@ final class SettingsTab {
                 saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             }
         });
-        for (JComboBox<?> c : new JComboBox<?>[] {profile, queryMode, copyFallback}) {
+        for (JComboBox<?> c : new JComboBox<?>[] {profile, actionModeBox, lock2xxStrategyBox, queryMode, copyFallback}) {
             c.addActionListener(e -> apply());
         }
         regex.getDocument().addDocumentListener(new DocumentListener() {
@@ -407,6 +419,9 @@ final class SettingsTab {
             retries.setText(String.valueOf(c.maxRetries));
             threads.setText(String.valueOf(c.threads));
             sendOriginal.setSelected(c.autoSendOriginal);
+            actionModeBox.setSelectedIndex(c.actionMode.ordinal());
+            lock2xxStrategyBox.setSelectedIndex(c.lock2xxStrategy.ordinal());
+            holdActionProxyChk.setSelected(c.holdActionAtProxy);
             number.setSelected(c.numberRolesInTab);
             branchInTab.setSelected(c.includeBranchInTab);
             pathLen.setText(String.valueOf(c.shortPathLen));
@@ -499,6 +514,9 @@ final class SettingsTab {
         c.maxRetries = num(retries, c.maxRetries);
         c.threads = num(threads, c.threads);
         c.autoSendOriginal = sendOriginal.isSelected();
+        c.actionMode = themythofcrawl.core.ActionEngine.ActionMode.values()[Math.max(0, actionModeBox.getSelectedIndex())];
+        c.lock2xxStrategy = themythofcrawl.core.ActionEngine.Lock2xxStrategy.values()[Math.max(0, lock2xxStrategyBox.getSelectedIndex())];
+        c.holdActionAtProxy = holdActionProxyChk.isSelected();
         c.numberRolesInTab = number.isSelected();
         c.includeBranchInTab = branchInTab.isSelected();
         c.shortPathLen = num(pathLen, c.shortPathLen);

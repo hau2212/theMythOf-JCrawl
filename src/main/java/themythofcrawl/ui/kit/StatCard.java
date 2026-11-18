@@ -116,12 +116,11 @@ public class StatCard extends Card {
             int fillW = (int) Math.round(w * clamped);
             Graphics2D g2 = (Graphics2D) g.create();
             try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(t.border);
-                g2.fillRoundRect(0, 0, w, h, h, h);
+                g2.fillRect(0, 0, w, h);
                 if (fillW > 0) {
                     g2.setColor(tok.solidFill());
-                    g2.fillRoundRect(0, 0, Math.max(h, fillW), h, h, h);
+                    g2.fillRect(0, 0, Math.max(2, fillW), h);
                 }
             } finally {
                 g2.dispose();

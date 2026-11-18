@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import themythofcrawl.core.ActionEngine;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Text;
 import themythofcrawl.excel.TargetEntry;
@@ -17,8 +18,8 @@ public final class ApiGroup {
     private final int gid;
     private final Service service;
     private final String method;
-    private final String path;
-    private final String url;
+    private volatile String path;
+    private volatile String url;
     private final String source;
     private final String created;
     private final long createdMillis;
@@ -28,6 +29,17 @@ public final class ApiGroup {
     private volatile Blob origResponse;
     private volatile Integer origStatus;
     private volatile Integer origLength;
+    // Snapshot bảo vệ 2xx ban đầu (Method 2: LOCK_2XX)
+    private volatile Blob firstOkRequest;
+    private volatile Blob firstOkResponse;
+    private volatile Integer firstOkStatus;
+    private volatile Integer firstOkLength;
+    private volatile String firstOkPath;
+    // Cấu hình xử lý Action riêng cho từng API (có thể đổi bất kỳ lúc nào sau khi bắt)
+    private volatile ActionEngine.ActionMode actionModeOverride;
+    private volatile Integer producerGid;
+    private volatile boolean heldAtProxy;
+    private volatile String activeIdNote;
     private final RoleResult origResult;
     private volatile List<RoleResult> results = List.of();
     private volatile TargetEntry target;
@@ -73,6 +85,12 @@ public final class ApiGroup {
     public String method() { return method; }
     public String path() { return path; }
     public String url() { return url; }
+
+    public void setPathAndUrl(String newPath, String newUrl) {
+        if (newPath != null && !newPath.isBlank()) this.path = newPath;
+        if (newUrl != null && !newUrl.isBlank()) this.url = newUrl;
+    }
+
     public String source() { return source; }
     public String created() { return created; }
     public long createdMillis() { return createdMillis; }
@@ -98,7 +116,41 @@ public final class ApiGroup {
     public void setOrigMeta(Integer status, Integer length) {
         origStatus = status;
         origLength = length;
+        if (status != null && status >= 200 && status < 300 && firstOkResponse == null && origResponse != null) {
+            saveFirstOkSnapshot(origRequest, origResponse, status, length, path);
+        }
     }
+
+    public void saveFirstOkSnapshot(Blob req, Blob resp, Integer status, Integer length, String snapPath) {
+        if (resp == null || status == null || status < 200 || status >= 300) return;
+        this.firstOkRequest = req;
+        this.firstOkResponse = resp;
+        this.firstOkStatus = status;
+        this.firstOkLength = length;
+        this.firstOkPath = snapPath != null ? snapPath : this.path;
+    }
+
+    public boolean hasFirstOkSnapshot() {
+        return firstOkResponse != null && firstOkStatus != null && firstOkStatus >= 200 && firstOkStatus < 300;
+    }
+
+    public Blob firstOkRequest() { return firstOkRequest; }
+    public Blob firstOkResponse() { return firstOkResponse; }
+    public Integer firstOkStatus() { return firstOkStatus; }
+    public Integer firstOkLength() { return firstOkLength; }
+    public String firstOkPath() { return firstOkPath; }
+
+    public ActionEngine.ActionMode actionModeOverride() { return actionModeOverride; }
+    public void setActionModeOverride(ActionEngine.ActionMode mode) { this.actionModeOverride = mode; }
+
+    public Integer producerGid() { return producerGid; }
+    public void setProducerGid(Integer gid) { this.producerGid = gid; }
+
+    public boolean heldAtProxy() { return heldAtProxy; }
+    public void setHeldAtProxy(boolean held) { this.heldAtProxy = held; }
+
+    public String activeIdNote() { return activeIdNote; }
+    public void setActiveIdNote(String note) { this.activeIdNote = note; }
 
     public RoleResult origResult() { return origResult; }
     public List<RoleResult> results() { return results; }

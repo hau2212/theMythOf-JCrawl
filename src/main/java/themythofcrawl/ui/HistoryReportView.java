@@ -108,8 +108,9 @@ public final class HistoryReportView extends JPanel {
     private final JButton expandAllBtn;
     private final JButton collapseAllBtn;
     private final JButton copyTextBtn;
+    private final JButton toggleKpiBtn;
 
-    private final JPanel kpiPanel = new JPanel(new GridLayout(2, 4, Theme.SPACE_2, Theme.SPACE_2));
+    private final JPanel kpiPanel = new JPanel(new GridLayout(1, 8, Theme.SPACE_1, Theme.SPACE_1));
     private final StatCard kpiBranches = new StatCard("Tổng nhánh", "0");
     private final StatCard kpiApis = new StatCard("Tổng API", "0");
     private final StatCard kpiOk = new StatCard("OK", "0", null, t -> t.success, -1);
@@ -145,15 +146,15 @@ public final class HistoryReportView extends JPanel {
     private List<ApiGroup> sortedGroups = List.of();
     private boolean matrixDirty;
     private boolean textDirty;
-    private boolean wideKpiGrid;
+    private boolean wideKpiGrid = true;
     private final Map<Integer, Boolean> collapsedBranches = new HashMap<>();
 
     public HistoryReportView(BiConsumer<ApiGroup, RoleResult> onJump, Consumer<String> onFlash) {
-        super(new BorderLayout(0, Theme.SPACE_2));
+        super(new BorderLayout(0, Theme.SPACE_1));
         this.onJump = onJump != null ? onJump : (g, r) -> { };
         this.onFlash = onFlash != null ? onFlash : s -> { };
         setOpaque(false);
-        setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
+        setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
 
         expandAllBtn = Ui.compact(Ui.button("Mở hết", t -> Icons.plus(t.fg, 12), "Mở rộng tất cả thẻ nhánh",
                 () -> expandAll(true)));
@@ -161,11 +162,17 @@ public final class HistoryReportView extends JPanel {
                 () -> expandAll(false)));
         copyTextBtn = Ui.compact(Ui.button("Copy văn bản", t -> Icons.copy(t.fg), "Copy toàn bộ báo cáo Lịch sử dạng văn bản",
                 this::copyTextReport));
+        toggleKpiBtn = Ui.compact(Ui.button("Ẩn/Hiện KPI", t -> Icons.chevronDown(t.fg, 11), "Thu gọn hoặc mở rộng dải 8 thẻ KPI tổng quan", () -> {
+            kpiPanel.setVisible(!kpiPanel.isVisible());
+            revalidate();
+            repaint();
+        }));
 
         JPanel topBar = new JPanel(new BorderLayout(Theme.SPACE_2, Theme.SPACE_1));
         topBar.setOpaque(false);
         JPanel rightControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         rightControls.setOpaque(false);
+        rightControls.add(toggleKpiBtn);
         rightControls.add(expandAllBtn);
         rightControls.add(collapseAllBtn);
         rightControls.add(copyTextBtn);
@@ -174,10 +181,11 @@ public final class HistoryReportView extends JPanel {
 
         kpiPanel.setOpaque(false);
         for (StatCard card : kpis) {
+            card.setPadding(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2);
             kpiPanel.add(card);
         }
 
-        JPanel northStack = new JPanel(new BorderLayout(0, Theme.SPACE_2));
+        JPanel northStack = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         northStack.setOpaque(false);
         northStack.add(topBar, BorderLayout.NORTH);
         northStack.add(kpiPanel, BorderLayout.CENTER);
@@ -1266,7 +1274,7 @@ public final class HistoryReportView extends JPanel {
                     int ry = r * rh;
                     if (r == hoverRow) {
                         g2.setColor(th.hover);
-                        g2.fillRoundRect(0, ry + 1, w, rh - 2, th.scaled(4), th.scaled(4));
+                        g2.fillRect(0, ry + 1, w, rh - 2);
                     } else if ((r & 1) == 1) {
                         g2.setColor(th.zebra[1]);
                         g2.fillRect(0, ry, w, rh);
@@ -1286,18 +1294,17 @@ public final class HistoryReportView extends JPanel {
                     int monoTy = ry + (rh - monoFm.getHeight()) / 2 + monoFm.getAscent();
                     g2.drawChars(tmpBuf, 0, gidLen, gPad, monoTy);
 
-                    // 2. Method pill
+                    // 2. Method pill (sharp rectangle)
                     String meth = Text.nz(grp.method());
                     Theme.Token mTok = th.method(meth);
                     int mLen = loadTmp(meth);
                     int mw = Math.min(gMethodW, smallFm.charsWidth(tmpBuf, 0, mLen) + th.scaled(12));
                     int mh = th.scaled(19);
                     int my = ry + (rh - mh) / 2;
-                    int arc = th.scaled(Theme.RADIUS_SM);
                     g2.setColor(mTok.fill());
-                    g2.fillRoundRect(gMethodX, my, mw - 1, mh - 1, arc, arc);
+                    g2.fillRect(gMethodX, my, mw - 1, mh - 1);
                     g2.setColor(mTok.border());
-                    g2.drawRoundRect(gMethodX, my, mw - 1, mh - 1, arc, arc);
+                    g2.drawRect(gMethodX, my, mw - 1, mh - 1);
                     g2.setFont(th.smallBoldFont);
                     g2.setColor(mTok.text());
                     int stTy = my + (mh - smallFm.getHeight()) / 2 + smallFm.getAscent();
@@ -1323,10 +1330,9 @@ public final class HistoryReportView extends JPanel {
                     int bTy = ry + (rh - boldFm.getHeight()) / 2 + boldFm.getAscent();
                     g2.drawChars(tmpBuf, 0, oLen, gOrigX + Math.max(0, (gOrigW - oW) / 2), bTy);
 
-                    // 5. Heatmap 14px squares for each RoleResult
+                    // 5. Heatmap 14px sharp squares for each RoleResult
                     int sq = gSq;
                     int sqY = ry + (rh - sq) / 2;
-                    int sqArc = th.scaled(4);
                     int maxDrawX = w - gPad - sq;
                     for (int i = 0; i < results.size(); i++) {
                         int sx = gHeatStart + i * (sq + gSqGap);
@@ -1337,15 +1343,15 @@ public final class HistoryReportView extends JPanel {
                         AuditLevel lvl = effectiveRoleLevel(grp, rr);
                         if (lvl == AuditLevel.NONE) {
                             g2.setColor(th.surface);
-                            g2.fillRoundRect(sx, sqY, sq - 1, sq - 1, sqArc, sqArc);
+                            g2.fillRect(sx, sqY, sq - 1, sq - 1);
                             g2.setColor(th.border);
-                            g2.drawRoundRect(sx, sqY, sq - 1, sq - 1, sqArc, sqArc);
+                            g2.drawRect(sx, sqY, sq - 1, sq - 1);
                         } else {
                             Theme.Token tok = tokenForAudit(lvl).apply(th);
                             g2.setColor(tok.solidFill());
-                            g2.fillRoundRect(sx, sqY, sq - 1, sq - 1, sqArc, sqArc);
+                            g2.fillRect(sx, sqY, sq - 1, sq - 1);
                             g2.setColor(tok.border());
-                            g2.drawRoundRect(sx, sqY, sq - 1, sq - 1, sqArc, sqArc);
+                            g2.drawRect(sx, sqY, sq - 1, sq - 1);
                             if (lvl == AuditLevel.WARN || lvl == AuditLevel.ERROR) {
                                 g2.setColor(tok.onSolid());
                                 int cx = sx + sq / 2;
@@ -1360,7 +1366,7 @@ public final class HistoryReportView extends JPanel {
                         }
                         if (r == hoverRow && i == hoverRole) {
                             g2.setColor(th.fg);
-                            g2.drawRoundRect(sx - 1, sqY - 1, sq + 1, sq + 1, sqArc + 2, sqArc + 2);
+                            g2.drawRect(sx - 1, sqY - 1, sq + 1, sq + 1);
                         }
                     }
                 }
@@ -1705,11 +1711,10 @@ public final class HistoryReportView extends JPanel {
                     int ph = Math.min(h - th.scaled(6), th.scaled(19));
                     int px = pad;
                     int py = (h - ph) / 2;
-                    int arc = th.scaled(Theme.RADIUS_SM);
                     g2.setColor(mTok.fill());
-                    g2.fillRoundRect(px, py, pw - 1, ph - 1, arc, arc);
+                    g2.fillRect(px, py, pw - 1, ph - 1);
                     g2.setColor(mTok.border());
-                    g2.drawRoundRect(px, py, pw - 1, ph - 1, arc, arc);
+                    g2.drawRect(px, py, pw - 1, ph - 1);
                     g2.setColor(mTok.text());
                     int ty = py + (ph - fm.getHeight()) / 2 + fm.getAscent();
                     g2.drawChars(buf, 0, textLen, px + Math.max(2, (pw - fm.charsWidth(buf, 0, textLen)) / 2), ty);

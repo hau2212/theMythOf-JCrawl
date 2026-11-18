@@ -80,6 +80,21 @@ final class HistoryTab {
                 });
         actionRef[0] = actionBtn;
 
+        javax.swing.JButton[] actIdRef = new javax.swing.JButton[1];
+        javax.swing.JButton actIdBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.gear(t.accent.text()), t.fg),
+                "4 Phương pháp Bảo vệ Action API (POST/PUT/DELETE) & Chọn đổi ID sống", () -> {
+                    ui.useSource(tree);
+                    javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
+                    ActionMenus.populateToolbarDropdown(m, panel, engine,
+                            () -> BranchTree.groupOf(tree.selectedNode()), () -> {
+                                stale = true;
+                                nextOk = 0;
+                                refreshIfVisible();
+                            });
+                    m.show(actIdRef[0], 0, actIdRef[0].getHeight());
+                });
+        actIdRef[0] = actIdBtn;
+
         JPanel bar = Ui.flow(FlowLayout.LEFT,
                 Ui.accent("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     ui.useSource(tree);
@@ -89,6 +104,7 @@ final class HistoryTab {
                     ui.useSource(tree);
                     ui.push(ui.scope().groups());
                 }),
+                actIdBtn,
                 actionBtn,
                 exportMenu(ui),
                 Ui.button("Refresh", t -> Icons.refresh(t.fg), () -> {

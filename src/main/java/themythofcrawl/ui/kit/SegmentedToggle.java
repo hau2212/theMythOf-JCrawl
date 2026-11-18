@@ -152,16 +152,14 @@ public class SegmentedToggle extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         Theme t = Theme.current();
-        int arc = Math.round((Theme.RADIUS_SM + 2) * 2 * t.scale);
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             int w = getWidth();
             int h = getHeight();
             g2.setColor(t.surfaceAlt);
-            g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
+            g2.fillRect(0, 0, w - 1, h - 1);
             g2.setColor(t.border);
-            g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+            g2.drawRect(0, 0, w - 1, h - 1);
         } finally {
             g2.dispose();
         }
@@ -262,7 +260,6 @@ public class SegmentedToggle extends JPanel {
             Theme.Token tok = opt.activeToken.apply(t);
             Color fill = selected ? (opt.softFill ? tok.fillStrong() : tok.solidFill()) : (hovered ? t.hover : null);
             Color fg = selected ? (opt.softFill ? tok.text() : tok.onSolid()) : (hovered ? t.fg : t.muted);
-            int arc = Math.round(Theme.RADIUS_SM * 2 * t.scale);
             Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -271,10 +268,10 @@ public class SegmentedToggle extends JPanel {
                 int h = getHeight();
                 if (fill != null) {
                     g2.setColor(fill);
-                    g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                    g2.fillRect(0, 0, w - 1, h - 1);
                     if (selected && opt.softFill) {
                         g2.setColor(tok.border());
-                        g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                        g2.drawRect(0, 0, w - 1, h - 1);
                     }
                 }
                 int x = Math.round(6 * t.scale);

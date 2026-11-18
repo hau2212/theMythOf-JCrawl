@@ -185,11 +185,10 @@ public class Breadcrumb extends JPanel {
             Theme t = Theme.current();
             Graphics2D g2 = (Graphics2D) g.create();
             try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(t.surfaceAlt);
-                g2.fillRoundRect(1, 1, getWidth() - 2, getHeight() - 2, 6, 6);
+                g2.fillRect(1, 1, getWidth() - 2, getHeight() - 2);
                 g2.setColor(t.border);
-                g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 6, 6);
+                g2.drawRect(1, 1, getWidth() - 3, getHeight() - 3);
             } finally {
                 g2.dispose();
             }

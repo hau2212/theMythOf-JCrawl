@@ -33,7 +33,7 @@ import themythofcrawl.ui.theme.Theme;
  * caching so scrolling thousands of rows allocates nothing.
  */
 public final class TreeRenderer extends JComponent implements TreeCellRenderer, ThemedTree.ExtensionRenderer {
-    private static final int ARC = 4;
+    private static final int ARC = 0;
 
     private static final class Chip {
         String text;
@@ -57,6 +57,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         boolean pendingFlag;
         int dupTotal;
         String targetStt;
+        boolean heldFlag;
+        String actionNoteRef;
 
         int totalW;
         int totalH;
@@ -106,7 +108,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
         void resetChips() {
             if (chips == null) {
-                chips = new Chip[6];
+                chips = new Chip[8];
                 for (int i = 0; i < chips.length; i++) {
                     chips[i] = new Chip();
                 }
@@ -221,6 +223,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             String stt = g.target() != null ? g.target().sttText() : null;
             return g.auditSummary() != nl.summaryRef || g.results().size() != nl.resCount
                     || g.pending() != nl.pendingFlag || g.dupTotal() != nl.dupTotal
+                    || g.heldAtProxy() != nl.heldFlag
+                    || !java.util.Objects.equals(g.activeIdNote(), nl.actionNoteRef)
                     || !java.util.Objects.equals(stt, nl.targetStt);
         }
         return false;
@@ -236,6 +240,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             nl.resCount = g.results().size();
             nl.pendingFlag = g.pending();
             nl.dupTotal = g.dupTotal();
+            nl.heldFlag = g.heldAtProxy();
+            nl.actionNoteRef = g.activeIdNote();
             nl.targetStt = g.target() != null ? g.target().sttText() : null;
         }
 
@@ -494,6 +500,15 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, compactVerdict(summary), th.smallBoldFont,
                     at.fill(), at.border(), at.text(), ic, false, x, th.scaled(4));
         }
+
+        // Action / ID Protection status chip (when proxy-held or ID substituted/restored)
+        if (g.activeIdNote() != null && !g.activeIdNote().isBlank()) {
+            x = addChip(th, nl, Text.shortPath(g.activeIdNote(), 22), th.smallBoldFont,
+                    th.accent.fill(), th.accent.border(), th.accent.text(), null, true, x, th.scaled(4));
+        } else if (g.heldAtProxy()) {
+            x = addChip(th, nl, "Chặn Proxy", th.smallBoldFont,
+                    th.info.fill(), th.info.border(), th.info.text(), null, true, x, th.scaled(4));
+        }
         return x;
     }
 
@@ -646,8 +661,10 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             if (nl == null) {
                 if (activeSelected) {
                     g2.setColor(th.selectionBg);
-                    g2.fillRoundRect(0, 1, w - 1, h - 2, ARC, ARC);
+                    g2.fillRect(0, 0, w - 1, h - 1);
                 }
+                g2.setColor(th.grid);
+                g2.drawLine(0, h - 1, w - 1, h - 1);
                 g2.setFont(th.baseFont);
                 g2.setColor(activeSelected ? th.selectionFg : th.fg);
                 FontMetrics fm = g2.getFontMetrics(th.baseFont);
@@ -660,11 +677,28 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             Color edge = activeSelected ? Theme.mix(th.selectionBg, th.fg, 0.3) : nl.edge;
             if (fill != null) {
                 g2.setColor(fill);
-                g2.fillRoundRect(0, 1, w - 1, h - 2, ARC, ARC);
+                g2.fillRect(0, 0, w - 1, h - 1);
             }
             if (edge != null) {
                 g2.setColor(edge);
-                g2.drawRoundRect(0, 1, w - 1, h - 3, ARC, ARC);
+                g2.drawRect(0, 0, w - 1, h - 2);
+            }
+
+            // Tree-Table horizontal row border and vertical column cell separators
+            g2.setColor(th.grid);
+            g2.drawLine(0, h - 1, w - 1, h - 1);
+            int divPad = th.scaled(3);
+            if (nl.monoPathLen > 0 && nl.monoPathX > divPad) {
+                g2.drawLine(nl.monoPathX - divPad, 2, nl.monoPathX - divPad, h - 3);
+            }
+            if (nl.statusText != null && !nl.statusText.isEmpty() && nl.statusX > divPad) {
+                g2.drawLine(nl.statusX - divPad, 2, nl.statusX - divPad, h - 3);
+            }
+            if (nl.tailText != null && !nl.tailText.isEmpty() && nl.tailX > divPad) {
+                g2.drawLine(nl.tailX - divPad, 2, nl.tailX - divPad, h - 3);
+            }
+            if (nl.chipCount > 0 && nl.chips[0].x > divPad) {
+                g2.drawLine(nl.chips[0].x - divPad, 2, nl.chips[0].x - divPad, h - 3);
             }
 
             if (nl.leadIcon != null) {
@@ -720,11 +754,10 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             int ip = th.scaled(6);
             for (int i = 0; i < nl.chipCount; i++) {
                 Chip ch = nl.chips[i];
-                int arc = Math.min(pillH, th.scaled(ch.squareRadius ? 4 : 6));
                 g2.setColor(ch.fill);
-                g2.fillRoundRect(ch.x, pillY, ch.w - 1, pillH - 1, arc, arc);
+                g2.fillRect(ch.x, pillY, ch.w - 1, pillH - 1);
                 g2.setColor(ch.border);
-                g2.drawRoundRect(ch.x, pillY, ch.w - 1, pillH - 1, arc, arc);
+                g2.drawRect(ch.x, pillY, ch.w - 1, pillH - 1);
                 int cx = ch.x + ip;
                 if (ch.icon != null) {
                     ch.icon.paintIcon(this, g2, cx, pillY + (pillH - ch.icon.getIconHeight()) / 2);

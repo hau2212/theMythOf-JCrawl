@@ -100,7 +100,8 @@ final class ApiTab {
     private final UiHost.Viewer reqViewer;
     private final UiHost.Viewer respViewer;
     private final JComboBox<String> pathEditor = new JComboBox<>();
-    private boolean expandedTabs = true;
+    private JButton filterDropdownBtn;
+    private boolean expandedTabs = false;
     private boolean treeStale = true;
     private boolean branchStale = true;
     private boolean selecting;
@@ -117,9 +118,10 @@ final class ApiTab {
         results = new ThemedTable(resultModel);
         reqViewer = ui.host.requestViewer(true);
         respViewer = ui.host.responseViewer();
+        initFilterPills();
         panel.add(actionBar(), BorderLayout.NORTH);
 
-        // left: branch tree + branch table
+        // left: branch tree + branch table (compact, no redundant bottom bar)
         tree.onChip((c, g, t, x, y) -> ui.chip(c, g, t, x, y));
         tree.tree.addTreeSelectionListener(e -> onTreeSelected());
         tree.tree.addMouseListener(popup(tree.tree, this::treePopup));
@@ -144,20 +146,10 @@ final class ApiTab {
         leftTabs.addTab("Cây Sub-folder", MainPanel.scroll(tree.tree));
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
-        JPanel left = new JPanel(new BorderLayout(2, 2));
+        JPanel left = new JPanel(new BorderLayout(0, 0));
         left.add(leftTabs, BorderLayout.CENTER);
-        JButton[] moreRef = new JButton[1];
-        JButton more = Ui.compact(Ui.dropdown("Nhánh", null, "Thao tác với Nhánh / Sub-folder",
-                () -> branchMenu().show(moreRef[0], 0, moreRef[0].getHeight())));
-        moreRef[0] = more;
-        JPanel leftBottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 2));
-        leftBottom.setOpaque(false);
-        leftBottom.add(Ui.compact(Ui.button("+ Sub-folder", () -> ui.addSubfolder(ui.selectedBranch()))));
-        leftBottom.add(Ui.compact(Ui.button("Xem tất cả", this::showAll)));
-        leftBottom.add(more);
-        left.add(leftBottom, BorderLayout.SOUTH);
 
-        // right: the API table
+        // right: the API table (filter & search merged into top actionBar)
         Ui.style(table);
         table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
         table.setAutoCreateRowSorter(true);
@@ -237,12 +229,11 @@ final class ApiTab {
         table.addMouseListener(cells);
         table.addMouseMotionListener(cells);
         JPanel groupPanel = new JPanel(new BorderLayout(0, 0));
-        groupPanel.add(buildFilterStrip(), BorderLayout.NORTH);
         groupPanel.add(MainPanel.scroll(table), BorderLayout.CENTER);
         JSplitPane top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, groupPanel);
         top.setResizeWeight(0.30);
 
-        // bottom: API gốc + roles, grouped Repeater bar, viewers
+        // bottom: API gốc + roles, single compact Repeater/summary bar, viewers
         Ui.style(results);
         results.setRowSorter(new PinnedOrigRowSorter(resultModel));
         results.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
@@ -261,46 +252,74 @@ final class ApiTab {
         Ui.widths(results, 56, 150, 185, 68, 68, 92, 74, 94, 68, 250);
         ColumnMemory.install(results, "results", ui.uiPrefs);
         JPanel resPanel = new JPanel(new BorderLayout());
-        resPanel.add(buildResultSummaryBar(), BorderLayout.NORTH);
         resPanel.add(MainPanel.scroll(results), BorderLayout.CENTER);
 
+        for (Pill p : new Pill[] {resOkPill, resInfoPill, resWarnPill, resErrPill}) {
+            p.setPadding(1, 6, 1, 6);
+        }
         pill.setIcon(Icons.themed(t -> Icons.pair(Icons.folder(t.fg),
-                expandedTabs ? Icons.chevronDown(t.fg, 10) : Icons.chevronRight(t.fg, 10), 4)));
+                Icons.chevronDown(t.fg, 10), 4)));
         pill.addActionListener(e -> pillMenu());
         JScrollPane tabsScroll = new JScrollPane(roleTabs, JScrollPane.VERTICAL_SCROLLBAR_NEVER, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         tabsScroll.setBorder(BorderFactory.createEmptyBorder());
-        tabsScroll.setPreferredSize(new Dimension(420, 32));
-        tabsScroll.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 8));   // thin, under the chips
+        tabsScroll.setPreferredSize(new Dimension(240, 26));
+        tabsScroll.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 6));
         tabsScroll.getHorizontalScrollBar().setUnitIncrement(40);
-        roleTabs.addContainerListener(new java.awt.event.ContainerAdapter() {
-            @Override
-            public void componentAdded(java.awt.event.ContainerEvent e) {
-                int h = roleTabs.getPreferredSize().height + 10;
-                if (tabsScroll.getPreferredSize().height != h) {
-                    tabsScroll.setPreferredSize(new Dimension(420, h));
-                    tabsScroll.revalidate();
-                }
-            }
-        });
         JButton sendOne = Ui.accent("Send Tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
+        JButton[] repActionRef = new JButton[1];
+        JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.send(t.accent.text()), t.fg),
+                "4 Phương pháp xử lý Action (POST/PUT/DELETE): Đổi ID sống, Gọi Producer, Khóa 200 OK, Chặn Proxy", () -> {
+                    JPopupMenu m = new JPopupMenu();
+                    ApiGroup cur = currentGroup();
+                    if (cur != null) {
+                        ActionMenus.populateApiActionItems(m, panel, engine, cur, selectedResults(), () -> {
+                            resultModel.refresh();
+                            refreshBar();
+                        });
+                    } else {
+                        ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, this::refreshBar);
+                    }
+                    m.show(repActionRef[0], 0, repActionRef[0].getHeight());
+                });
+        repActionRef[0] = repActionBtn;
         JButton[] barMoreRef = new JButton[1];
         JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả Group, đẩy Repeater hoặc khôi phục Request", () -> {
             JPopupMenu m = new JPopupMenu();
             m.add(Ui.item("Gửi toàn bộ Roles của API Group này (Send Group)", Icons::sendAll,
                     () -> ui.send(listOf(currentGroup()))));
+            ApiGroup cur = currentGroup();
+            if (cur != null) {
+                m.add(ActionMenus.buildForApi(panel, engine, cur, selectedResults(), () -> {
+                    resultModel.refresh();
+                    refreshBar();
+                }));
+            }
             m.addSeparator();
             m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
             m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(currentGroup())));
             m.addSeparator();
+            m.add(Ui.item(expandedTabs ? "Ẩn dải nút Tab Role ngang (Gọn giao diện)" : "Hiện dải nút Tab Role ngang",
+                    Icons::sliders, () -> {
+                        expandedTabs = !expandedTabs;
+                        refreshBar();
+                    }));
             m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
             m.show(barMoreRef[0], 0, barMoreRef[0].getHeight());
         });
         barMoreRef[0] = barMore;
+        JPanel barLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
+        barLeft.setOpaque(false);
+        barLeft.add(pill);
+        barLeft.add(resOkPill);
+        barLeft.add(resInfoPill);
+        barLeft.add(resWarnPill);
+        barLeft.add(resErrPill);
+        barLeft.add(resMetaLabel);
         JPanel bar = new JPanel(new BorderLayout(4, 1));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        bar.add(Ui.flow(FlowLayout.LEFT, pill), BorderLayout.WEST);
+        bar.add(barLeft, BorderLayout.WEST);
         bar.add(tabsScroll, BorderLayout.CENTER);
-        bar.add(Ui.flow(FlowLayout.RIGHT, sendOne, barMore), BorderLayout.EAST);
+        bar.add(Ui.flow(FlowLayout.RIGHT, sendOne, repActionBtn, barMore), BorderLayout.EAST);
         JPanel reqPanel = new JPanel(new BorderLayout());
         reqPanel.add(reqHeader, BorderLayout.NORTH);
         reqPanel.add(reqViewer.component(), BorderLayout.CENTER);
@@ -315,7 +334,7 @@ final class ApiTab {
         JSplitPane detail = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resPanel, repeater);
         detail.setResizeWeight(0.30);
         JSplitPane master = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, detail);
-        master.setResizeWeight(0.36);
+        master.setResizeWeight(0.38);
         panel.add(master, BorderLayout.CENTER);
     }
 
@@ -331,25 +350,58 @@ final class ApiTab {
                 "Tùy chọn gửi request, chọn Role, gửi chưa gửi, hủy hàng đợi (Ctrl+Enter)",
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
+        JButton[] actionRef = new JButton[1];
+        JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.send(t.accent.text()), t.fg),
+                "Xử lý Action API (POST/PUT/DELETE): 4 Phương pháp chống lỗi 400 do ID đã xóa", () -> {
+                    JPopupMenu m = new JPopupMenu();
+                    ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {
+                        resultModel.refresh();
+                        refreshBar();
+                    });
+                    m.show(actionRef[0], 0, actionRef[0].getHeight());
+                });
+        actionRef[0] = actionMenuBtn;
         JButton[] repRef = new JButton[1];
         JButton repMenu = Ui.dropdown("Repeater", t -> Icons.withChevron(Icons.repeater(t.fg), t.fg), "Đẩy sang Burp Repeater (Ctrl+R)",
                 () -> repeaterMenu().show(repRef[0], 0, repRef[0].getHeight()));
         repRef[0] = repMenu;
+        JButton[] branchRef = new JButton[1];
+        JButton branchBtn = Ui.dropdown("Nhánh", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
+                "Thêm Sub-folder, đặt Đích, đổi tên/xóa Nhánh, xem tất cả",
+                () -> branchMenu().show(branchRef[0], 0, branchRef[0].getHeight()));
+        branchRef[0] = branchBtn;
         JButton[] toolsRef = new JButton[1];
         JButton tools = Ui.dropdown("Công cụ", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
                 "Copy STT+Path, đổi nhánh, xuất Excel/Matrix, xóa & trợ giúp",
                 () -> toolsMenu().show(toolsRef[0], 0, toolsRef[0].getHeight()));
         toolsRef[0] = tools;
+
+        search.setColumns(13);
+        search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh hoặc Excel STT (Ctrl+F)");
+        search.onChange(q -> {
+            groupModel.setTextFilter(q);
+            updateFilterStrip();
+        });
+
+        JButton[] filterRef = new JButton[1];
+        filterDropdownBtn = Ui.dropdown("Lọc: Tất cả", t -> Icons.withChevron(Icons.sliders(t.fg), t.fg),
+                "Lọc bảng API theo trạng thái (OK, Lệch, Bypass, Lỗi, Chưa gửi, Chờ XN) & Chế độ Nhánh",
+                () -> filterPopupMenu().show(filterRef[0], 0, filterRef[0].getHeight()));
+        filterRef[0] = filterDropdownBtn;
+
         viewMode.setToolTipText("Chế độ hiển thị bảng API: Tất cả API hoặc chỉ Nhánh đang chọn");
         viewMode.addActionListener(e -> applyViewMode());
+
         JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 1));
         leftActions.setOpaque(false);
-        for (java.awt.Component comp : new java.awt.Component[] {sendApi, sendMenu, repMenu, tools}) {
+        for (java.awt.Component comp : new java.awt.Component[] {sendApi, sendMenu, actionMenuBtn, repMenu, branchBtn, tools}) {
             leftActions.add(comp);
         }
         JPanel rightMode = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 1));
         rightMode.setOpaque(false);
-        rightMode.add(viewMode);
+        rightMode.add(search);
+        rightMode.add(filterDropdownBtn);
+        rightMode.add(filterCount);
         JPanel bar = new JPanel(new BorderLayout(4, 1));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(leftActions, BorderLayout.WEST);
@@ -357,14 +409,7 @@ final class ApiTab {
         return bar;
     }
 
-    private JPanel buildFilterStrip() {
-        search.setColumns(14);
-        search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh hoặc Excel STT (Ctrl+F)");
-        search.onChange(q -> {
-            groupModel.setTextFilter(q);
-            updateFilterStrip();
-        });
-
+    private void initFilterPills() {
         filterAll.setPadding(1, 6, 1, 6);
         filterAll.setToolTipText("Hiển thị tất cả API (bỏ lọc trạng thái)");
         filterAll.onClick(this::clearAuditFilters);
@@ -375,22 +420,39 @@ final class ApiTab {
         registerFilterPill(AuditLevel.ERROR, "Lỗi", "Lọc API: Có lỗi 5xx / Mất kết nối", t -> t.danger, t -> Icons.error(t.danger.text(), 11));
         registerFilterPill(AuditLevel.NONE, "Chưa gửi", "Lọc API: Chưa gửi / chưa replay", t -> t.neutral, t -> Icons.statusDot(t.dotNone, 9));
         registerFilterPill(AuditLevel.PENDING, "Chờ XN", "Lọc API: Chờ xác nhận vị trí / trùng", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 10));
+    }
 
-        JPanel chips = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 1));
-        chips.setOpaque(false);
-        chips.add(search);
-        chips.add(filterAll);
-        for (Pill p : filterPills.values()) {
-            p.setPadding(1, 5, 1, 5);
-            chips.add(p);
+    private JPopupMenu filterPopupMenu() {
+        JPopupMenu m = new JPopupMenu();
+        javax.swing.JCheckBoxMenuItem allItem = new javax.swing.JCheckBoxMenuItem("Hiển thị Tất cả trạng thái (Bỏ lọc)", activeFilters.isEmpty());
+        allItem.addActionListener(e -> clearAuditFilters());
+        m.add(allItem);
+        m.addSeparator();
+        Object[][] defs = {
+                {AuditLevel.NONE, "Chưa gửi (Chưa replay)"},
+                {AuditLevel.OK, "OK (Tất cả Role 2xx)"},
+                {AuditLevel.INFO, "Lệch (Có Role lỗi / lệch body)"},
+                {AuditLevel.WARN, "Bypass (Nghi vấn Guest/Role thấp 2xx)"},
+                {AuditLevel.ERROR, "Lỗi (5xx / Mất kết nối)"},
+                {AuditLevel.PENDING, "Chờ XN (Chờ xác nhận vị trí / trùng)"}
+        };
+        for (Object[] d : defs) {
+            AuditLevel lvl = (AuditLevel) d[0];
+            String label = (String) d[1];
+            javax.swing.JCheckBoxMenuItem item = new javax.swing.JCheckBoxMenuItem(label, activeFilters.contains(lvl));
+            item.addActionListener(e -> toggleAuditFilter(lvl));
+            m.add(item);
         }
-
-        JPanel strip = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
-        strip.setOpaque(false);
-        strip.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 6));
-        strip.add(chips, BorderLayout.CENTER);
-        strip.add(filterCount, BorderLayout.EAST);
-        return strip;
+        m.addSeparator();
+        javax.swing.JRadioButtonMenuItem allBranches = new javax.swing.JRadioButtonMenuItem(
+                "Phạm vi: Tất cả API (Mặc định)", viewMode.getSelectedIndex() == 0);
+        allBranches.addActionListener(e -> viewMode.setSelectedIndex(0));
+        javax.swing.JRadioButtonMenuItem selectedBranchOnly = new javax.swing.JRadioButtonMenuItem(
+                "Phạm vi: Chỉ theo Nhánh đang chọn", viewMode.getSelectedIndex() == 1);
+        selectedBranchOnly.addActionListener(e -> viewMode.setSelectedIndex(1));
+        m.add(allBranches);
+        m.add(selectedBranchOnly);
+        return m;
     }
 
     SearchField searchField() {
@@ -405,34 +467,6 @@ final class ApiTab {
         p.setToolTipText(tip);
         p.onClick(() -> toggleAuditFilter(lvl));
         filterPills.put(lvl, p);
-    }
-
-    private JPanel buildResultSummaryBar() {
-        for (Pill p : new Pill[] {resOkPill, resInfoPill, resWarnPill, resErrPill}) {
-            p.setPadding(1, 7, 1, 7);
-        }
-        JPanel bar = new JPanel(new BorderLayout(Theme.SPACE_2, 0)) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().grid),
-                        BorderFactory.createEmptyBorder(2, 6, 3, 6)));
-            }
-        };
-        bar.setOpaque(false);
-        bar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().grid),
-                BorderFactory.createEmptyBorder(2, 6, 3, 6)));
-        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        left.setOpaque(false);
-        left.add(resOkPill);
-        left.add(resInfoPill);
-        left.add(resWarnPill);
-        left.add(resErrPill);
-        bar.add(left, BorderLayout.WEST);
-        bar.add(resMetaLabel, BorderLayout.EAST);
-        return bar;
     }
 
     // =================================================================== refresh
@@ -679,6 +713,13 @@ final class ApiTab {
         filterAll.setActive(activeFilters.isEmpty());
         for (Map.Entry<AuditLevel, Pill> en : filterPills.entrySet()) {
             en.getValue().setActive(activeFilters.contains(en.getKey()));
+        }
+        if (filterDropdownBtn != null) {
+            if (activeFilters.isEmpty()) {
+                filterDropdownBtn.setText(viewMode.getSelectedIndex() == 1 ? "Lọc: Theo Nhánh" : "Lọc: Tất cả");
+            } else {
+                filterDropdownBtn.setText("Lọc (" + activeFilters.size() + ")");
+            }
         }
         int shown = groupModel.getRowCount();
         int total = groupModel.total();
@@ -994,25 +1035,40 @@ final class ApiTab {
 
     private void pillMenu() {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item(expandedTabs ? "Thu gọn các Tab Role trong Group này" : "Mở rộng các Tab Role trong Group này",
-                t -> expandedTabs ? Icons.chevronDown(t.fg, 12) : Icons.chevronRight(t.fg, 12), () -> {
-                    expandedTabs = !expandedTabs;
-                    refreshBar();
-                }));
         ApiGroup g = currentGroup();
         if (g != null) {
+            RoleResult cur = selectedResult();
+            for (RoleResult r : g.entries()) {
+                String lbl = (r.original() ? "[GỐC] " : "") + r.roleName()
+                        + (r.status() != null ? "  —  HTTP " + r.status() : "  —  " + r.state());
+                m.add(Ui.item(lbl, t -> Icons.circle(r == cur ? t.accent.text() : t.muted, r == cur),
+                        () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
+            }
+            m.addSeparator();
+            m.add(ActionMenus.buildForApi(panel, engine, g, selectedResults(), () -> {
+                resultModel.refresh();
+                refreshBar();
+            }));
             m.add(Ui.item("Gửi (Send) toàn bộ " + g.results().size() + " Roles của " + Text.groupId(g.gid()),
                     Icons::sendAll, () -> engine.replay(g, engine.defaultTargets(g, false))));
             m.add(Ui.item("Đẩy Group " + Text.groupId(g.gid()) + " sang Burp Repeater (Tên gọn + Copy tên Group)",
                     Icons::repeater, () -> ui.push(g)));
+            m.addSeparator();
         }
+        m.add(Ui.item(expandedTabs ? "Thu gọn dải nút Tab Role ngang (Gọn giao diện)" : "Mở rộng dải nút Tab Role ngang",
+                t -> expandedTabs ? Icons.chevronDown(t.fg, 12) : Icons.chevronRight(t.fg, 12), () -> {
+                    expandedTabs = !expandedTabs;
+                    refreshBar();
+                }));
         List<ApiGroup> all = engine.groups();
         if (!all.isEmpty()) {
             m.addSeparator();
+            javax.swing.JMenu switchGroupMenu = new javax.swing.JMenu("Chuyển nhanh sang API Group khác (" + all.size() + ")");
             for (ApiGroup x : all.subList(Math.max(0, all.size() - 25), all.size())) {
-                m.add(Ui.item(Text.groupId(x.gid()) + " [" + x.branch() + "]: " + x.method() + " " + Text.shortPath(x.path(), 30)
+                switchGroupMenu.add(Ui.item(Text.groupId(x.gid()) + " [" + x.branch() + "]: " + x.method() + " " + Text.shortPath(x.path(), 30)
                         + " (" + x.results().size() + " Roles)", Icons::folder, () -> select(x, null)));
             }
+            m.add(switchGroupMenu);
         }
         m.show(pill, 0, pill.getHeight());
     }
@@ -1057,8 +1113,15 @@ final class ApiTab {
         ui.useSource(table);
         List<ApiGroup> gs = selectedGroups();
         int n = Math.max(1, gs.size());
+        ApiGroup primary = gs.isEmpty() ? currentGroup() : gs.get(0);
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Gửi " + n + " API đang chọn (N Roles)", Icons::send, () -> ui.send(gs)));
+        if (primary != null) {
+            m.add(ActionMenus.buildForApi(panel, engine, primary, null, () -> {
+                resultModel.refresh();
+                refreshBar();
+            }));
+        }
         m.add(Ui.item("Đẩy " + n + " API đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(gs)));
         m.add(Ui.item("Copy STT + Path (" + n + " API)     Ctrl+Shift+C", Icons::copy, () -> ui.copy(gs)));
         m.add(Ui.item("Đẩy / Gửi " + n + " API có chọn Role (API gốc / role nào)...",
@@ -1085,6 +1148,12 @@ final class ApiTab {
             }
         }));
         m.add(Ui.item("Gửi toàn bộ Roles của API này", Icons::sendAll, () -> ui.send(listOf(g))));
+        if (g != null) {
+            m.add(ActionMenus.buildForApi(panel, engine, g, selectedResults(), () -> {
+                resultModel.refresh();
+                refreshBar();
+            }));
+        }
         m.addSeparator();
         m.add(Ui.item("Đẩy Role đang chọn -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
         m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(g)));

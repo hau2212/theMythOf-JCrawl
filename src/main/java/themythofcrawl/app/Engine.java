@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import themythofcrawl.core.ActionEngine;
 import themythofcrawl.core.Audit;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Config;
@@ -69,6 +70,8 @@ public final class Engine {
     private final Changes changes = new Changes();
     private final Logbook logbook = new Logbook();
     private final Roles roles = new Roles();
+    private final ActionEngine actionEngine = new ActionEngine();
+    private final Set<Integer> forceRawGids = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final ExecutorService captureExec;
     private final ThreadPoolExecutor sendExec;
     private final ScheduledExecutorService scheduler;
@@ -110,6 +113,7 @@ public final class Engine {
         this.builder = builder == null ? RoleRules.INSTANCE : builder;
         this.config = loadConfig();
         compileFilters(config);
+        syncActionEngine(config);
         loadRoles();
         captureExec = Executors.newSingleThreadExecutor(daemon("JCrawl-capture"));
         sendExec = new ThreadPoolExecutor(config.threads, config.threads, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
@@ -123,6 +127,15 @@ public final class Engine {
                 }, line -> log(line, null), System::currentTimeMillis, Math::random);
         branches.add(new Branch(1, Hierarchy.DEFAULT_PATH, null));
         scheduler.scheduleWithFixedDelay(this::flushQuietly, 2, 2, TimeUnit.SECONDS);
+    }
+
+    private void syncActionEngine(Config c) {
+        actionEngine.setHoldAllActionAtProxy(c.holdActionAtProxy || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY);
+        actionEngine.setDefaultLock2xxStrategy(c.lock2xxStrategy);
+    }
+
+    public ActionEngine actionEngine() {
+        return actionEngine;
     }
 
     private static java.util.concurrent.ThreadFactory daemon(String name) {
@@ -209,6 +222,7 @@ public final class Engine {
         Config old = config;
         String err = compileFilters(c);
         config = c;
+        syncActionEngine(c);
         prefs.set(PREF_CONFIG, Json.write(c.toMap()));
         if (targets != null && (old.targetAllowPrefix != c.targetAllowPrefix || old.targetIdsAsParams != c.targetIdsAsParams
                 || old.targetQueryMode != c.targetQueryMode)) {
@@ -582,6 +596,10 @@ public final class Engine {
         if (!c.captureEnabled || closed) {
             return;
         }
+        if (m.response() != null && "true".equalsIgnoreCase(HttpBytes.header(m.response(), "X-JCrawl-Held"))) {
+            // Đã được bắt bởi onProxyHeldRequest (Phương pháp 1: HOLD_AT_PROXY)
+            return;
+        }
         String[] rl = Text.requestLine(m.request());
         if (rl == null) {
             return;
@@ -593,6 +611,51 @@ public final class Engine {
         }
         int dest = activeBranch().id();
         captureExec.execute(() -> safely(() -> process(m, "Proxy", true, dest)));
+    }
+
+    /**
+     * Phương pháp 1 (HOLD_AT_PROXY): Kiểm tra xem request từ trình duyệt đi qua Proxy có cần được
+     * chặn lại trước khi tới Server (để giữ nguyên trạng thái ID trên Server) hay không.
+     */
+    public boolean shouldHoldAtProxy(Service svc, byte[] request, String url) {
+        Config c = config;
+        if (!c.captureEnabled || closed || svc == null || request == null) {
+            return false;
+        }
+        String[] rl = Text.requestLine(request);
+        if (rl == null) {
+            return false;
+        }
+        String method = rl[0];
+        String path = rl[1];
+        if (!ActionEngine.isActionMethod(method)) {
+            return false;
+        }
+        boolean holdMode = c.holdActionAtProxy
+                || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
+                || actionEngine.isHoldAllActionAtProxy()
+                || actionEngine.isEndpointProxyHold(method, path);
+        if (!holdMode) {
+            return false;
+        }
+        if (quickReject(method, path, svc.host()) != null) {
+            return false;
+        }
+        String fullUrl = url != null ? url : svc.protocol() + "://" + svc.hostLabel() + path;
+        TargetEntry target = targetMatch(method, path, svc.host());
+        return filterReason(c, fullUrl, method, path, target) == null;
+    }
+
+    /**
+     * Phương pháp 1 (HOLD_AT_PROXY): Thu nhận Action request đã được giữ tại Proxy (chưa thực thi trên Server).
+     */
+    public void onProxyHeldRequest(Service svc, byte[] request, String url) {
+        if (closed) {
+            return;
+        }
+        int dest = activeBranch().id();
+        Message m = new Message(svc, request, null, url);
+        captureExec.execute(() -> safely(() -> process(m, "Proxy-Held", true, dest)));
     }
 
     /** Manual capture from the context menu. */
@@ -761,8 +824,20 @@ public final class Engine {
         g.setBookKey(pkey);
         g.setPending(pending);
         g.setPlaceHint(hint);
-        if (m.response() != null) {
+        boolean isHeld = "Proxy-Held".equals(source)
+                || (source != null && source.contains("Chặn"))
+                || (m.response() != null && "true".equalsIgnoreCase(HttpBytes.header(m.response(), "X-JCrawl-Held")));
+        if (isHeld) {
+            g.setHeldAtProxy(true);
+            g.setActiveIdNote("Đã chặn ở Proxy (Server giữ nguyên ID)");
+        } else if (m.response() != null) {
             g.setOrigMeta(HttpBytes.statusCode(m.response()), HttpBytes.bodyLength(m.response()));
+            actionEngine.harvest(method, path, m.request(), m.response(),
+                    g.origStatus() != null ? g.origStatus() : 0, gid);
+        }
+        Integer autoProd = actionEngine.findProducerGid(path);
+        if (autoProd != null && autoProd != gid) {
+            g.setProducerGid(autoProd);
         }
         book.ensure(pkey, method, svc.host(), path);
         g.setDupNo(book.nextCopyNo(pkey));
@@ -815,6 +890,9 @@ public final class Engine {
         }
         if (target != null) {
             note += " (khớp dòng STT " + target.sttText() + " trong file Excel)";
+        }
+        if (g.heldAtProxy()) {
+            note += " [Đã chặn ở Proxy - Server giữ nguyên trạng thái cho tới khi bấm Gửi]";
         }
         log("Bắt từ " + source + ": " + method + " " + url + " -> 1 API gốc + " + g.results().size() + " role" + note, gid);
         if (c.autoRepeater) {
@@ -938,8 +1016,267 @@ public final class Engine {
 
     private static final Set<String> BUSY = Set.of(ResultState.QUEUED, ResultState.SENDING, ResultState.RETRY);
 
+    public ActionEngine.ActionMode effectiveActionMode(ApiGroup g) {
+        if (g != null && g.actionModeOverride() != null) {
+            return g.actionModeOverride();
+        }
+        return config.actionMode != null ? config.actionMode : ActionEngine.ActionMode.AUTO_SMART;
+    }
+
+    public void setApiActionMode(ApiGroup g, ActionEngine.ActionMode mode) {
+        if (g == null) return;
+        g.setActionModeOverride(mode);
+        g.setActiveIdNote(mode == null ? "Theo mặc định (" + config.actionMode.label + ")" : mode.label);
+        touch(g);
+        log("Đặt chế độ xử lý Action cho API #" + g.gid() + " -> " + (mode == null ? "Mặc định" : mode.label), g.gid());
+    }
+
+    public void toggleEndpointProxyHold(ApiGroup g, boolean hold) {
+        if (g == null) return;
+        actionEngine.setEndpointProxyHold(g.method(), g.path(), hold);
+        g.setActiveIdNote(hold ? "Chặn ở Proxy (Giữ ID Server)" : null);
+        touch(g);
+        log((hold ? "Bật" : "Tắt") + " Chặn tại Proxy (Phương pháp 1) cho endpoint " + g.method() + " "
+                + ActionEngine.normalizePathTemplate(g.path()), g.gid());
+    }
+
+    /**
+     * Phương pháp 2 - Cách 1A (INHERIT_200): Kế thừa kết quả 200 OK ban đầu mà không gửi lại ID đã xóa lên Server.
+     */
+    public boolean inheritInitial2xx(ApiGroup g, Collection<RoleResult> targets) {
+        if (g == null || !g.hasFirstOkSnapshot()) {
+            return false;
+        }
+        Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
+        synchronized (g) {
+            for (RoleResult r : rows) {
+                r.setResponse(g.firstOkResponse());
+                r.setStatus(g.firstOkStatus());
+                r.setLength(g.firstOkLength());
+                r.setState(ResultState.DONE);
+                r.setError("");
+                if (r.original()) {
+                    g.setOriginal(g.firstOkRequest() != null ? g.firstOkRequest() : g.origRequest(), g.firstOkResponse());
+                    g.setOrigMeta(g.firstOkStatus(), g.firstOkLength());
+                }
+            }
+            g.setActiveIdNote("Đã kế thừa Snapshot " + g.firstOkStatus() + " OK");
+        }
+        Audit.recalc(g);
+        touch(g);
+        log("Khóa 2xx (Cách 1A - Kế thừa 200 OK): Đã áp kết quả " + g.firstOkStatus() + " OK ban đầu cho " + rows.size()
+                + " dòng (không gửi lại ID đã xóa lên Server).", g.gid());
+        return true;
+    }
+
+    /**
+     * Phương pháp 2 - Khôi phục lại Snapshot Response 200 OK gốc sau khi người dùng cưỡng bức gửi lại bị lỗi 4xx.
+     */
+    public boolean restoreInitial2xx(ApiGroup g) {
+        if (g == null || !g.hasFirstOkSnapshot()) {
+            return false;
+        }
+        synchronized (g) {
+            if (g.firstOkRequest() != null) {
+                g.setOriginal(g.firstOkRequest(), g.firstOkResponse());
+            } else {
+                g.setOriginal(g.origRequest(), g.firstOkResponse());
+            }
+            g.setOrigMeta(g.firstOkStatus(), g.firstOkLength());
+            if (g.firstOkPath() != null && !g.firstOkPath().equals(g.path())) {
+                String newUrl = g.service().protocol() + "://" + g.service().hostLabel() + g.firstOkPath();
+                g.setPathAndUrl(g.firstOkPath(), newUrl);
+            }
+            RoleResult orig = g.origResult();
+            orig.setResponse(g.firstOkResponse());
+            orig.setStatus(g.firstOkStatus());
+            orig.setLength(g.firstOkLength());
+            orig.setState(ResultState.DONE);
+            orig.setError("");
+            g.setActiveIdNote("Đã khôi phục " + g.firstOkStatus() + " OK gốc");
+        }
+        Audit.recalc(g);
+        touch(g);
+        log("Đã khôi phục Response " + g.firstOkStatus() + " OK ban đầu cho API #" + g.gid(), g.gid());
+        return true;
+    }
+
+    /**
+     * Phương pháp 2 - Cách 2 (FORCE_RAW_SEND): Cưỡng bức gửi lại request nguyên bản lên Server (chấp nhận rủi ro 4xx).
+     */
+    public void forceRawReplay(ApiGroup g, Collection<RoleResult> targets) {
+        if (g == null) return;
+        forceRawGids.add(g.gid());
+        g.setActiveIdNote("Gửi cưỡng bức nguyên bản");
+        Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
+        log("Khóa 2xx (Cách 2 - Cưỡng bức gửi lại): Đẩy nguyên bản API #" + g.gid()
+                + " lên Server (bản Snapshot 200 OK vẫn được lưu để khôi phục khi cần).", g.gid());
+        replayInternal(g, rows);
+    }
+
+    /**
+     * Phương pháp 3 (LIVE_ID_POOL): Đổi sang một ID cụ thể (từ Giỏ ID sống hoặc do người dùng nhập) rồi Gửi lên Server.
+     */
+    public boolean replaceIdAndSend(ApiGroup g, String oldId, String newId, boolean updateApiGroup, Collection<RoleResult> targets) {
+        if (g == null || newId == null || newId.isBlank()) {
+            return false;
+        }
+        byte[] origBytes = Blob.bytesOf(g.origRequest());
+        if (origBytes == null) {
+            return false;
+        }
+        String targetOldId = oldId;
+        if (targetOldId == null || targetOldId.isBlank()) {
+            List<String> detected = actionEngine.detectIds(g.path(), origBytes);
+            if (!detected.isEmpty()) {
+                targetOldId = detected.get(0);
+            }
+        }
+        if (targetOldId == null || targetOldId.isBlank()) {
+            return false;
+        }
+        byte[] replacedReq = ActionEngine.replaceIdInRequest(origBytes, targetOldId, newId.trim());
+        String replacedPath = ActionEngine.replaceIdInPath(g.path(), targetOldId, newId.trim());
+        if (updateApiGroup) {
+            Blob reqBlob = storage.put(g.gid(), GroupCodec.ORIG_REQ, replacedReq);
+            g.setOriginal(reqBlob, g.origResponse());
+            String newUrl = g.service().protocol() + "://" + g.service().hostLabel() + replacedPath;
+            g.setPathAndUrl(replacedPath, newUrl);
+            for (RoleResult r : g.entries()) {
+                if (r.customRequest() != null) {
+                    byte[] cBytes = r.customRequest().bytes();
+                    if (cBytes != null) {
+                        byte[] newCustom = ActionEngine.replaceIdInRequest(cBytes, targetOldId, newId.trim());
+                        r.setCustomRequest(storage.put(g.gid(), GroupCodec.reqName(r), newCustom));
+                    }
+                }
+            }
+        }
+        g.setActiveIdNote("Đổi ID: " + targetOldId + " -> " + newId.trim());
+        touch(g);
+        log("Phương pháp 3 (Đổi ID sống): Đã thay ID [" + targetOldId + "] -> [" + newId.trim() + "] cho API #" + g.gid() + " và gửi lên Server.", g.gid());
+        Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
+        forceRawGids.add(g.gid());
+        replayInternal(g, rows);
+        return true;
+    }
+
+    /**
+     * Phương pháp 3 (LIVE_ID_POOL - Tự động): Tự lấy ID sống tiếp theo trong Giỏ ID và Gửi.
+     */
+    public boolean sendWithNextLiveId(ApiGroup g, Collection<RoleResult> targets) {
+        if (g == null) return false;
+        byte[] origBytes = Blob.bytesOf(g.origRequest());
+        List<String> ids = actionEngine.detectIds(g.path(), origBytes);
+        String oldId = ids.isEmpty() ? null : ids.get(0);
+        String nextId = actionEngine.nextLiveId(g.path(), oldId);
+        if (nextId == null || oldId == null) {
+            log("Giỏ ID sống chưa có ID dự phòng khả dụng cho tài nguyên '" + ActionEngine.extractResourceKey(g.path()) + "'.", g.gid());
+            return false;
+        }
+        return replaceIdAndSend(g, oldId, nextId, true, targets);
+    }
+
+    /**
+     * Phương pháp 4 (PRODUCER_RECREATE): Gọi API Tạo mới (Producer POST) lên Server để sinh ID mới,
+     * trích xuất ID vừa tạo, thay vào API hiện tại rồi Gửi lên Server.
+     */
+    public void sendWithProducer(ApiGroup g, Integer explicitProducerGid, Collection<RoleResult> targets) {
+        if (g == null) return;
+        Integer prodGid = explicitProducerGid != null ? explicitProducerGid
+                : (g.producerGid() != null ? g.producerGid() : actionEngine.findProducerGid(g.path()));
+        ApiGroup producer = prodGid != null ? group(prodGid) : null;
+        if (producer == null) {
+            // Tìm API POST cùng tài nguyên trong danh sách groups
+            String res = ActionEngine.extractResourceKey(g.path());
+            for (ApiGroup cand : groups()) {
+                if (cand.gid() != g.gid() && "POST".equalsIgnoreCase(cand.method())
+                        && res.equalsIgnoreCase(ActionEngine.extractResourceKey(cand.path()))) {
+                    producer = cand;
+                    break;
+                }
+            }
+        }
+        if (producer == null) {
+            log("Phương pháp 4: Không tìm thấy API POST Tạo mới (Producer) cho tài nguyên '"
+                    + ActionEngine.extractResourceKey(g.path()) + "'. Tiến hành làm mới các trường Unique và gửi.", g.gid());
+            sendWithUniqueRefresh(g, targets);
+            return;
+        }
+        final ApiGroup prodGroup = producer;
+        g.setProducerGid(prodGroup.gid());
+        Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
+        sendExec.execute(() -> {
+            String newId = executeProducerForNewId(prodGroup, g.gid());
+            if (newId != null && !newId.isBlank()) {
+                List<String> oldIds = actionEngine.detectIds(g.path(), Blob.bytesOf(g.origRequest()));
+                String oldId = oldIds.isEmpty() ? null : oldIds.get(0);
+                if (oldId != null) {
+                    replaceIdAndSend(g, oldId, newId, true, rows);
+                    return;
+                }
+            }
+            replayInternal(g, rows);
+        });
+    }
+
+    /**
+     * Phương pháp 4B: Làm mới các trường Unique (email, username, code, phone, nonce...) trong body rồi Gửi.
+     */
+    public boolean sendWithUniqueRefresh(ApiGroup g, Collection<RoleResult> targets) {
+        if (g == null) return false;
+        byte[] orig = Blob.bytesOf(g.origRequest());
+        if (orig == null) return false;
+        byte[] refreshed = actionEngine.refreshUniqueFields(orig);
+        Blob reqBlob = storage.put(g.gid(), GroupCodec.ORIG_REQ, refreshed);
+        g.setOriginal(reqBlob, g.origResponse());
+        g.setActiveIdNote("Đã làm mới Unique fields");
+        touch(g);
+        log("Phương pháp 4 (Làm mới Unique): Đã sinh giá trị mới cho các trường Unique (email/code/nonce...) của API #" + g.gid() + " và gửi.", g.gid());
+        Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
+        forceRawGids.add(g.gid());
+        replayInternal(g, rows);
+        return true;
+    }
+
+    private String executeProducerForNewId(ApiGroup producer, int consumerGid) {
+        byte[] prodReq = Blob.bytesOf(producer.origRequest());
+        if (prodReq == null) return null;
+        byte[] freshProdReq = actionEngine.refreshUniqueFields(prodReq);
+        try {
+            Bridge.Sent sent = bridge.send(producer.service(), freshProdReq);
+            byte[] resp = sent.response();
+            Integer st = HttpBytes.statusCode(resp);
+            if (resp != null && st != null && st >= 200 && st < 300) {
+                String createdId = actionEngine.extractCreatedId(resp);
+                actionEngine.harvest(producer.method(), producer.path(), freshProdReq, resp, st, producer.gid());
+                if (createdId != null) {
+                    log("Phương pháp 4 (Producer #" + producer.gid() + " " + producer.method() + " " + producer.path()
+                            + "): Đã tạo bản ghi mới trên Server -> thu được ID tươi [" + createdId + "] cho API #" + consumerGid, consumerGid);
+                    return createdId;
+                }
+            }
+        } catch (RuntimeException e) {
+            log("Gọi Producer #" + producer.gid() + " thất bại: " + e, consumerGid);
+        }
+        return null;
+    }
+
     /** Queue requests on the paced dispatcher; never blocks. */
     public void replay(ApiGroup g, Collection<RoleResult> results) {
+        if (g != null && ActionEngine.isActionMethod(g.method()) && !forceRawGids.contains(g.gid())) {
+            ActionEngine.ActionMode mode = effectiveActionMode(g);
+            if (mode == ActionEngine.ActionMode.LOCK_2XX
+                    && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.INHERIT_200
+                    && g.hasFirstOkSnapshot()) {
+                inheritInitial2xx(g, results);
+                return;
+            }
+        }
+        replayInternal(g, results);
+    }
+
+    private void replayInternal(ApiGroup g, Collection<RoleResult> results) {
         List<RoleResult> todo = results.stream().filter(r -> !BUSY.contains(r.state())).toList();
         if (todo.isEmpty()) {
             return;
@@ -1007,6 +1344,92 @@ public final class Engine {
         return n;
     }
 
+    private byte[] prepareActionRequestBeforeSend(ApiGroup g, byte[] request, ActionEngine.ActionMode mode) {
+        if (!ActionEngine.isActionMethod(g.method()) || request == null) {
+            return request;
+        }
+        if (mode == ActionEngine.ActionMode.LOCK_2XX && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.FORCE_RAW_SEND) {
+            return request;
+        }
+        List<String> ids = actionEngine.detectIds(g.path(), request);
+        String currentId = ids.isEmpty() ? null : ids.get(0);
+        if (mode == ActionEngine.ActionMode.PRODUCER_RECREATE) {
+            Integer pGid = g.producerGid() != null ? g.producerGid() : actionEngine.findProducerGid(g.path());
+            ApiGroup prod = pGid != null ? group(pGid) : null;
+            if (prod != null && currentId != null) {
+                String newId = executeProducerForNewId(prod, g.gid());
+                if (newId != null) {
+                    g.setActiveIdNote("Producer ID: " + currentId + " -> " + newId);
+                    return ActionEngine.replaceIdInRequest(request, currentId, newId);
+                }
+            }
+            return actionEngine.refreshUniqueFields(request);
+        }
+        if ((mode == ActionEngine.ActionMode.LIVE_ID_POOL || mode == ActionEngine.ActionMode.AUTO_SMART
+                || (mode == ActionEngine.ActionMode.LOCK_2XX && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID))
+                && currentId != null && actionEngine.isConsumed(currentId)) {
+            String liveId = actionEngine.nextLiveId(g.path(), currentId);
+            if (liveId != null) {
+                g.setActiveIdNote("Tự đổi ID sống: " + currentId + " -> " + liveId);
+                return ActionEngine.replaceIdInRequest(request, currentId, liveId);
+            }
+        }
+        return request;
+    }
+
+    private byte[] autoHealActionRequestOn4xx(ApiGroup g, byte[] sentRequest, int statusCode, ActionEngine.ActionMode mode) {
+        if (!ActionEngine.isActionMethod(g.method()) || sentRequest == null) {
+            return null;
+        }
+        if (statusCode != 400 && statusCode != 404 && statusCode != 409 && statusCode != 410 && statusCode != 422) {
+            return null;
+        }
+        if (mode == ActionEngine.ActionMode.HOLD_AT_PROXY) {
+            return null;
+        }
+        if (mode == ActionEngine.ActionMode.LOCK_2XX && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.FORCE_RAW_SEND) {
+            return null;
+        }
+        List<String> ids = actionEngine.detectIds(g.path(), sentRequest);
+        String deadId = ids.isEmpty() ? null : ids.get(0);
+        if (deadId != null) {
+            actionEngine.markConsumed(deadId);
+        }
+        // Bước 1: Thử thay bằng ID sống trong Giỏ ID (Phương pháp 3)
+        if (deadId != null && mode != ActionEngine.ActionMode.PRODUCER_RECREATE) {
+            String nextId = actionEngine.nextLiveId(g.path(), deadId);
+            if (nextId != null) {
+                g.setActiveIdNote("Auto-ID (" + statusCode + "): " + deadId + " -> " + nextId);
+                log("Action Auto-Heal (Giỏ ID sống): Gặp HTTP " + statusCode + " do ID [" + deadId
+                        + "] đã bị xóa/tiêu thụ -> Tự động thay bằng ID sống [" + nextId + "] và gửi lại.", g.gid());
+                return ActionEngine.replaceIdInRequest(sentRequest, deadId, nextId);
+            }
+        }
+        // Bước 2: Thử gọi Producer POST để sinh ID mới (Phương pháp 4)
+        if (deadId != null && (mode == ActionEngine.ActionMode.AUTO_SMART || mode == ActionEngine.ActionMode.PRODUCER_RECREATE
+                || mode == ActionEngine.ActionMode.LOCK_2XX)) {
+            Integer pGid = g.producerGid() != null ? g.producerGid() : actionEngine.findProducerGid(g.path());
+            ApiGroup prod = pGid != null ? group(pGid) : null;
+            if (prod != null) {
+                String createdId = executeProducerForNewId(prod, g.gid());
+                if (createdId != null) {
+                    g.setActiveIdNote("Producer (" + statusCode + "): " + deadId + " -> " + createdId);
+                    return ActionEngine.replaceIdInRequest(sentRequest, deadId, createdId);
+                }
+            }
+        }
+        // Bước 3: Thử làm mới các trường Unique nếu là POST tạo mới bị trùng (400/409/422)
+        if ("POST".equalsIgnoreCase(g.method())) {
+            byte[] refreshed = actionEngine.refreshUniqueFields(sentRequest);
+            if (refreshed != sentRequest) {
+                g.setActiveIdNote("Auto-Unique (" + statusCode + ")");
+                log("Action Auto-Heal (Unique Refresh): Gặp HTTP " + statusCode + " -> Tự động làm mới trường Unique và gửi lại.", g.gid());
+                return refreshed;
+            }
+        }
+        return null;
+    }
+
     private void runJob(SendDispatcher.Job<Work> job) {
         ApiGroup g = job.payload.group();
         RoleResult r = job.payload.result();
@@ -1020,15 +1443,30 @@ public final class Engine {
         changes.dirty(g);
         Double retryAfter = null;
         long started = System.currentTimeMillis();
+        boolean forceRaw = forceRawGids.remove(g.gid());
+        ActionEngine.ActionMode mode = effectiveActionMode(g);
         try {
-            byte[] request = requestOf(g, r);
-            if (request == null) {
+            byte[] baseReq = requestOf(g, r);
+            if (baseReq == null) {
                 throw new IllegalStateException("request could not be built");
             }
+            byte[] request = forceRaw ? baseReq : prepareActionRequestBeforeSend(g, baseReq, mode);
             Bridge.Sent sent = bridge.send(g.service(), request);
+            byte[] resp = sent.response();
+            Integer firstSt = HttpBytes.statusCode(resp);
+            if (!forceRaw && firstSt != null) {
+                byte[] healedReq = autoHealActionRequestOn4xx(g, request, firstSt, mode);
+                if (healedReq != null) {
+                    Bridge.Sent retrySent = bridge.send(g.service(), healedReq);
+                    if (retrySent.response() != null && retrySent.response().length > 0) {
+                        request = healedReq;
+                        sent = retrySent;
+                        resp = retrySent.response();
+                    }
+                }
+            }
             r.setElapsedMs(sent.elapsedMs() > 0 ? sent.elapsedMs() : System.currentTimeMillis() - started);
             r.incSent();
-            byte[] resp = sent.response();
             Blob stored = resp == null || resp.length == 0 ? null : storage.put(g.gid(), GroupCodec.respName(r), resp);
             synchronized (g) {   // a result is written whole before anyone evaluates it (see Audit.recalc)
                 if (resp == null || resp.length == 0) {
@@ -1038,16 +1476,30 @@ public final class Engine {
                     r.setState(ResultState.ERROR);
                     r.setError(sent.error() != null ? sent.error() : "No response (timeout / connection failure)");
                 } else {
+                    Integer st = HttpBytes.statusCode(resp);
+                    int len = HttpBytes.bodyLength(resp);
                     r.setResponse(stored);
-                    r.setStatus(HttpBytes.statusCode(resp));
-                    r.setLength(HttpBytes.bodyLength(resp));
+                    r.setStatus(st);
+                    r.setLength(len);
                     r.setState(ResultState.DONE);
                     r.setError("");
-                    if (r.status() != null && SendDispatcher.retryable(r.status())) {
+                    if (st != null) {
+                        actionEngine.harvest(g.method(), g.path(), request, resp, st, g.gid());
+                    }
+                    if (st != null && st >= 200 && st < 300 && !g.hasFirstOkSnapshot()) {
+                        g.saveFirstOkSnapshot(r.customRequest() != null ? r.customRequest() : g.origRequest(),
+                                stored, st, len, g.path());
+                    }
+                    if (st != null && SendDispatcher.retryable(st)) {
                         retryAfter = SendDispatcher.parseRetryAfter(HttpBytes.header(resp, "Retry-After"), System.currentTimeMillis());
                     }
                     if (r.original()) {
-                        g.setOrigMeta(r.status(), r.length());
+                        g.setOriginal(g.origRequest(), stored);
+                        g.setOrigMeta(st, len);
+                    }
+                    if (g.heldAtProxy() && st != null && st >= 200 && st < 300) {
+                        g.setHeldAtProxy(false);
+                        g.setActiveIdNote("Đã thực thi thật (" + st + " OK)");
                     }
                 }
             }

@@ -35,10 +35,10 @@ public final class Theme {
     public static final int SPACE_4 = 16;
     public static final int SPACE_6 = 24;
 
-    /** Corner radii (Burp Suite 2026 style: almost square, flat surfaces). */
-    public static final int RADIUS_SM = 3;
-    public static final int RADIUS_CARD = 4;
-    public static final int RADIUS_PILL = 999;
+    /** Corner radii (Burp Suite 2026 style: sharp rectangular & square geometry, zero rounding). */
+    public static final int RADIUS_SM = 0;
+    public static final int RADIUS_CARD = 0;
+    public static final int RADIUS_PILL = 0;
 
     /** Default row heights (compact, like Burp's Proxy history / Site map). */
     public static final int ROW_TABLE = 24;
