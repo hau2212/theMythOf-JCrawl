@@ -33,7 +33,7 @@ import themythofcrawl.ui.theme.Theme;
  * caching so scrolling thousands of rows allocates nothing.
  */
 public final class TreeRenderer extends JComponent implements TreeCellRenderer, ThemedTree.ExtensionRenderer {
-    private static final int ARC = 8;
+    private static final int ARC = 4;
 
     private static final class Chip {
         String text;
@@ -248,6 +248,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         switch (n.kind) {
             case FOLDER, LOGBRANCH -> x = layoutFolder(n, th, nl, x, gap);
             case ROOT -> x = layoutRoot(n, th, nl, x, gap);
+            case APIS -> x = layoutApis(n, th, nl, x, gap);
             case LOGSYS -> x = layoutLogSys(n, th, nl, x, gap);
             case GROUP -> x = layoutGroup(n, th, nl, x, gap);
             case LOGAPI -> x = layoutLogApi(n, th, nl, x, gap);
@@ -311,10 +312,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
     }
 
     private int layoutFolder(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        // Flat Burp-style folder row: no filled box, folder glyph tinted by level, plain bold name.
         Theme.Token lv = th.level(n.depth);
-        nl.fill = lv.fill();
-        nl.edge = lv.border();
-        x = addLeadIcon(nl, Icons.dot(lv.base(), true), x, gap);
+        x = addLeadIcon(nl, Icons.folder(lv.base(), 14), x, gap);
 
         Node.FolderMeta meta = n.folderMeta;
         if (meta == null && n.kind == Node.Kind.LOGBRANCH && n.payload instanceof List<?> gs) {
@@ -326,48 +326,72 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         }
 
         if (meta != null) {
-            x = addPrimary(nl, meta.name(), th.boldFont, lv.text(), x, gap);
-            if (meta.levelChip() != null && !meta.levelChip().isEmpty()) {
-                x = addChip(th, nl, meta.levelChip(), th.smallBoldFont, lv.fillStrong(), lv.border(), lv.text(), null,
-                        true, x, th.scaled(4));
-            }
+            x = addPrimary(nl, meta.name(), th.boldFont, th.fg, x, gap);
             if (meta.countChip() != null && !meta.countChip().isEmpty()) {
-                x = addChip(th, nl, meta.countChip(), th.smallBoldFont, th.neutral.fill(), th.border, th.fg, null,
-                        false, x, th.scaled(4));
+                x = addTail(nl, th, meta.countChip(), x, gap);
             }
             if (meta.verdictChip() != null && !meta.verdictChip().isEmpty() && !"-".equals(meta.verdictChip())) {
                 Theme.Token at = th.audit(n.level);
                 Icon ic = Icons.forAudit(n.level, at.text());
                 x = addChip(th, nl, Icons.stripLeadingSymbol(meta.verdictChip()), th.smallBoldFont,
-                        at.fillStrong(), at.border(), at.text(), ic, false, x, th.scaled(4));
+                        at.fill(), at.border(), at.text(), ic, true, x, th.scaled(4));
             }
             if (meta.pendingChip() != null && !meta.pendingChip().isEmpty()) {
-                x = addChip(th, nl, meta.pendingChip(), th.smallBoldFont, th.pending.fillStrong(), th.pending.border(),
-                        th.pending.text(), Icons.hourglass(th.pending.text(), 11), false, x, th.scaled(4));
+                x = addChip(th, nl, meta.pendingChip(), th.smallBoldFont, th.pending.fill(), th.pending.border(),
+                        th.pending.text(), Icons.hourglass(th.pending.text(), 11), true, x, th.scaled(4));
             }
             if (meta.ghostChip() != null && !meta.ghostChip().isEmpty()) {
                 x = addChip(th, nl, meta.ghostChip(), th.smallBoldFont, th.neutral.fill(), th.border, th.muted,
-                        Icons.ghost(th.muted, 11), false, x, th.scaled(4));
+                        Icons.ghost(th.muted, 11), true, x, th.scaled(4));
             }
         } else {
-            x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, lv.text(), x, th.scaled(4));
+            x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
         }
         return x;
     }
 
+    /** Muted plain-text counter after a name (e.g. "5 API"), Burp-style instead of a boxed chip. */
+    private int addTail(NodeLayout nl, Theme th, String text, int x, int gap) {
+        nl.tailText = text;
+        nl.tailFont = th.smallFont;
+        nl.tailColor = th.muted;
+        nl.tailX = x;
+        return x + getFontMetrics(th.smallFont).stringWidth(text) + gap;
+    }
+
     private int layoutRoot(Node n, Theme th, NodeLayout nl, int x, int gap) {
-        nl.fill = th.surfaceAlt;
-        nl.edge = th.grid;
-        x = addLeadIcon(nl, Icons.dot(th.dotNone, true), x, gap);
+        x = addLeadIcon(nl, Icons.folder(th.muted, 14), x, gap);
         Node.FolderMeta m = n.folderMeta;
         if (m != null) {
             x = addPrimary(nl, m.name(), th.boldFont, th.fg, x, gap);
             if (m.countChip() != null && !m.countChip().isEmpty()) {
-                x = addChip(th, nl, m.countChip(), th.smallBoldFont, th.neutral.fill(), th.border, th.fg, null,
-                        false, x, th.scaled(4));
+                x = addTail(nl, th, m.countChip(), x, gap);
             }
         } else {
             x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
+        }
+        return x;
+    }
+
+    /** "API của nhánh" bucket: flat row (no fill), API glyph, count + verdict + pending chips. */
+    private int layoutApis(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        x = addLeadIcon(nl, Icons.api(th.muted, 12), x, gap);
+        Node.FolderMeta m = n.folderMeta;
+        if (m == null) {
+            return addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.muted, x, th.scaled(4));
+        }
+        x = addPrimary(nl, m.name(), th.italicFont, th.muted, x, gap);
+        if (m.countChip() != null && !m.countChip().isEmpty()) {
+            x = addTail(nl, th, m.countChip(), x, gap);
+        }
+        if (m.verdictChip() != null && !m.verdictChip().isEmpty() && !"-".equals(m.verdictChip())) {
+            Theme.Token at = th.audit(n.level);
+            x = addChip(th, nl, Icons.stripLeadingSymbol(m.verdictChip()), th.smallBoldFont, at.fill(), at.border(),
+                    at.text(), Icons.forAudit(n.level, at.text()), false, x, th.scaled(4));
+        }
+        if (m.pendingChip() != null && !m.pendingChip().isEmpty()) {
+            x = addChip(th, nl, m.pendingChip(), th.smallBoldFont, th.pending.fill(), th.pending.border(),
+                    th.pending.text(), Icons.hourglass(th.pending.text(), 11), false, x, th.scaled(4));
         }
         return x;
     }
@@ -381,13 +405,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
     }
 
     private int layoutGroup(Node n, Theme th, NodeLayout nl, int x, int gap) {
-        nl.fill = th.tinted(n.level) ? th.rowBackground(n.level, 0) : th.surfaceAlt;
         if (!(n.payload instanceof ApiGroup g)) {
             x = addLeadIcon(nl, Icons.dot(th.dotNone, false), x, gap);
             return addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
-        }
-        if (g.dupTotal() > 1) {
-            nl.edge = th.dup.base();
         }
         Color dotCol = n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base();
         x = addLeadIcon(nl, Icons.dot(dotCol, false), x, th.scaled(3));
@@ -450,8 +470,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         }
 
         // Roles count chip
-        x = addChip(th, nl, BranchTree.rolesLabel(g), th.smallFont, th.neutral.fill(), th.border, th.muted, null,
-                false, x, th.scaled(2));
+        x = addTail(nl, th, BranchTree.rolesLabel(g), x, th.scaled(2));
         return x;
     }
 
@@ -493,11 +512,6 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
     private int layoutRole(Node n, Theme th, NodeLayout nl, int x, int gap) {
         boolean isOrig = n.kind == Node.Kind.ORIG;
-        if (isOrig) {
-            nl.fill = th.orig.fill();
-        } else if (th.tinted(n.level)) {
-            nl.fill = th.rowBackground(n.level, 0);
-        }
         if (!(n.payload instanceof Object[] arr) || arr.length < 2 || !(arr[0] instanceof ApiGroup g)
                 || !(arr[1] instanceof RoleResult r)) {
             Color dotCol = isOrig ? th.orig.base() : (n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base());
@@ -683,7 +697,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             int ip = th.scaled(6);
             for (int i = 0; i < nl.chipCount; i++) {
                 Chip ch = nl.chips[i];
-                int arc = ch.squareRadius ? Math.min(pillH, th.scaled(5)) : pillH;
+                int arc = Math.min(pillH, th.scaled(ch.squareRadius ? 4 : 6));
                 g2.setColor(ch.fill);
                 g2.fillRoundRect(ch.x, pillY, ch.w - 1, pillH - 1, arc, arc);
                 g2.setColor(ch.border);

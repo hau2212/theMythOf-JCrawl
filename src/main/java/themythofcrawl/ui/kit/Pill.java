@@ -32,7 +32,7 @@ public class Pill extends JComponent {
     private Color cachedTrailingDot;
     private Theme.Token resolved;
     private Theme resolvedTheme;
-    private int radius = Theme.RADIUS_PILL;
+    private int radius = Theme.RADIUS_SM;
     private Insets padding = new Insets(2, 8, 2, 8);
     private double progress = -1;
     private boolean hovered;

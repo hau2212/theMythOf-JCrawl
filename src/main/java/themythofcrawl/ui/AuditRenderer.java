@@ -512,7 +512,7 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
         int pillW = Math.min(avail, ip * 2 + icW + drawnW);
         int pillH = Math.min(h - th.scaled(4), th.scaled(20));
         int pillY = (h - pillH) / 2;
-        int arc = activeKind == ColKind.METHOD_PILL ? Math.min(pillH, th.scaled(6)) : pillH;
+        int arc = Math.min(pillH, th.scaled(activeKind == ColKind.METHOD_PILL ? 4 : 6));
 
         g2.setColor(pillBg != null ? pillBg : th.neutral.fill());
         g2.fillRoundRect(x, pillY, pillW - 1, pillH - 1, arc, arc);

@@ -35,14 +35,14 @@ public final class Theme {
     public static final int SPACE_4 = 16;
     public static final int SPACE_6 = 24;
 
-    /** Corner radii. */
-    public static final int RADIUS_SM = 6;
-    public static final int RADIUS_CARD = 10;
+    /** Corner radii (Burp Suite 2026 style: almost square, flat surfaces). */
+    public static final int RADIUS_SM = 3;
+    public static final int RADIUS_CARD = 4;
     public static final int RADIUS_PILL = 999;
 
-    /** Default row heights. */
-    public static final int ROW_TABLE = 28;
-    public static final int ROW_TREE = 26;
+    /** Default row heights (compact, like Burp's Proxy history / Site map). */
+    public static final int ROW_TABLE = 24;
+    public static final int ROW_TREE = 22;
 
     /**
      * Semantic colour token:
@@ -356,9 +356,10 @@ public final class Theme {
     }
 
     private Token token(Color base) {
-        Color fill = mix(surface, base, dark ? 0.20 : 0.10);
-        Color fillStrong = mix(surface, base, dark ? 0.30 : 0.18);
-        Color edge = mix(surface, base, dark ? 0.56 : 0.45);
+        // Muted tints: Burp keeps colour for meaning only (status, severity), never for decoration.
+        Color fill = mix(surface, base, dark ? 0.16 : 0.07);
+        Color fillStrong = mix(surface, base, dark ? 0.26 : 0.14);
+        Color edge = mix(surface, base, dark ? 0.46 : 0.36);
         Color startText = dark ? mix(base, Color.WHITE, 0.46) : mix(base, Color.BLACK, 0.20);
         Color txt = ensureContrastAll(startText, !dark, 4.6, fill, fillStrong, surface, surfaceAlt, bg);
         Color solid = base;
@@ -427,8 +428,9 @@ public final class Theme {
         if (!tinted(lvl)) {
             return zebra[viewRow & 1];
         }
+        // Very light severity wash over the zebra stripe: readable at a glance, not decorative.
         Token t = audit(lvl);
-        return (viewRow & 1) == 0 ? t.fill() : mix(t.fill(), fg, dark ? 0.035 : 0.025);
+        return mix(zebra[viewRow & 1], t.base(), dark ? 0.10 : 0.045);
     }
 
     public Color branchAccent(Object key) {

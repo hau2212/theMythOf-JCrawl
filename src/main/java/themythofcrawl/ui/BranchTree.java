@@ -279,7 +279,7 @@ public final class BranchTree {
             if (path == null || !(path.getLastPathComponent() instanceof Node n)) {
                 return null;
             }
-            if (n.kind == Node.Kind.FOLDER && n.payload instanceof String s) {
+            if ((n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) && n.payload instanceof String s) {
                 return s;
             }
             ApiGroup g = groupOf(n);
@@ -379,18 +379,16 @@ public final class BranchTree {
             paths.add(Hierarchy.normalize(g.branch()));
         }
         paths.forEach(ensure);
+        // A folder's own APIs and its ghost row are collected first, then attached by layoutFolders():
+        // APIs on top (in a collapsible bucket when the folder also has sub-folders), sub-folders at the bottom.
+        Map<Node, List<Node>> ownApis = new LinkedHashMap<>();
+        Map<Node, Node> ghostRows = new HashMap<>();
         for (ApiGroup g : groups) {
             Node leaf = nodes.get("F" + Hierarchy.key(g.branch()));
             Node n = new Node(Node.Kind.GROUP, g, Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 48),
                     Audit.display(g), "G" + g.gid(), 0);
             nodes.put(n.key, n);
-            if (Boolean.TRUE.equals(reachable.get(leaf)) && expanded.contains(n.key)) {
-                fillGroup(n, nodes);
-                expand.add(n);
-            } else {
-                n.lazy();
-            }
-            leaf.add(n);
+            ownApis.computeIfAbsent(leaf, k -> new ArrayList<>()).add(n);
         }
         ghosts.forEach((fkey, recs) -> {
             Node folder = nodes.get("F" + fkey);
@@ -400,14 +398,9 @@ public final class BranchTree {
             Node gn = new Node(Node.Kind.GHOSTS, recs, recs.size()
                     + " API đã xóa từng nằm ở đây (giữ chỗ - bắt lại sẽ về đây)", AuditLevel.NONE, "GH" + fkey, 0);
             nodes.put(gn.key, gn);
-            if (Boolean.TRUE.equals(reachable.get(folder)) && expanded.contains(gn.key)) {
-                fillGhosts(gn, nodes);
-                expand.add(gn);
-            } else {
-                gn.lazy();
-            }
-            folder.add(gn);
+            ghostRows.put(folder, gn);
         });
+        layoutFolders(nodes, ownApis, ghostRows, reachable, expand);
         restoring = true;
         try {
             model.setRoot(root);
@@ -458,6 +451,101 @@ public final class BranchTree {
             parent = n;
         }
         return parent;
+    }
+
+    /** Key of the APIS bucket of a folder key ("F..." -> "A..."). */
+    static String bucketKey(Object folderKey) {
+        return "A" + String.valueOf(folderKey).substring(1);
+    }
+
+    /**
+     * Re-orders every folder's children: the folder's own APIs first (wrapped in a collapsible
+     * {@link Node.Kind#APIS} bucket when the folder also has sub-folders, so they fold away in one click),
+     * then the ghost row, then the sub-folders at the bottom.
+     */
+    private void layoutFolders(Map<Object, Node> nodes, Map<Node, List<Node>> ownApis, Map<Node, Node> ghostRows,
+                               Map<Node, Boolean> reachable, List<Node> expand) {
+        List<Node> folders = new ArrayList<>();
+        for (Node n : nodes.values()) {
+            if (n.kind == Node.Kind.FOLDER) {
+                folders.add(n);
+            }
+        }
+        for (Node folder : folders) {
+            List<Node> apis = ownApis.getOrDefault(folder, List.of());
+            Node ghostRow = ghostRows.get(folder);
+            List<Node> subfolders = new ArrayList<>();
+            for (int i = 0; i < folder.getChildCount(); i++) {
+                subfolders.add((Node) folder.getChildAt(i));
+            }
+            folder.removeAllChildren();
+            boolean folderOpen = Boolean.TRUE.equals(reachable.get(folder));
+            Node apiParent = folder;
+            boolean apisOpen = folderOpen;
+            if (!apis.isEmpty() && !subfolders.isEmpty()) {
+                Node bucket = apisBucket(folder, apis);
+                nodes.put(bucket.key, bucket);
+                folder.add(bucket);
+                apisOpen = folderOpen && !collapsed.contains(bucket.key);
+                reachable.put(bucket, apisOpen);
+                if (apisOpen) {
+                    expand.add(bucket);
+                }
+                apiParent = bucket;
+            }
+            for (Node n : apis) {
+                if (apisOpen && expanded.contains(n.key)) {
+                    fillGroup(n, nodes);
+                    expand.add(n);
+                } else {
+                    n.lazy();
+                }
+                apiParent.add(n);
+            }
+            if (ghostRow != null) {
+                if (folderOpen && expanded.contains(ghostRow.key)) {
+                    fillGhosts(ghostRow, nodes);
+                    expand.add(ghostRow);
+                } else {
+                    ghostRow.lazy();
+                }
+                folder.add(ghostRow);
+            }
+            for (Node sub : subfolders) {
+                folder.add(sub);
+            }
+        }
+    }
+
+    private static Node apisBucket(Node folder, List<Node> apis) {
+        List<ApiGroup> gs = new ArrayList<>(apis.size());
+        int pending = 0;
+        for (Node n : apis) {
+            ApiGroup g = (ApiGroup) n.payload;
+            gs.add(g);
+            if (g.pending()) {
+                pending++;
+            }
+        }
+        Audit.Verdict v = Audit.branch(gs);
+        String count = gs.size() + " API";
+        Node.FolderMeta meta = new Node.FolderMeta("API của nhánh", null, count, v.summary(),
+                pending > 0 ? String.valueOf(pending) : null, null);
+        return new Node(Node.Kind.APIS, folder.payload, "API của nhánh · " + count + " · " + v.summary(), v.level(),
+                bucketKey(folder.key), folder.depth, meta);
+    }
+
+    /** The APIs held by an {@link Node.Kind#APIS} bucket (the folder's own APIs, not its sub-folders'). */
+    public static List<ApiGroup> directGroups(Node bucket) {
+        List<ApiGroup> out = new ArrayList<>();
+        if (bucket != null) {
+            for (int i = 0; i < bucket.getChildCount(); i++) {
+                if (bucket.getChildAt(i) instanceof Node c && c.payload instanceof ApiGroup g) {
+                    out.add(g);
+                }
+            }
+        }
+        return out;
     }
 
     private void loadChildren(Node n) {
@@ -549,6 +637,8 @@ public final class BranchTree {
                     out.addAll(engine.groups());
                 } else if (n.kind == Node.Kind.FOLDER) {
                     out.addAll(engine.groupsUnder((String) n.payload));
+                } else if (n.kind == Node.Kind.APIS) {
+                    out.addAll(directGroups(n));
                 } else {
                     ApiGroup g = groupOf(n);
                     if (g != null) {
@@ -560,13 +650,13 @@ public final class BranchTree {
         return new ArrayList<>(out);
     }
 
-    /** Branch of the selected row (a folder, or the branch of the selected API). */
+    /** Branch of the selected row (a folder / its API bucket, or the branch of the selected API). */
     public String selectedBranch() {
         Node n = selectedNode();
         if (n == null) {
             return null;
         }
-        if (n.kind == Node.Kind.FOLDER) {
+        if (n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
             return (String) n.payload;
         }
         ApiGroup g = groupOf(n);
@@ -605,13 +695,13 @@ public final class BranchTree {
         return false;
     }
 
-    /** Open (true) or close every folder. */
+    /** Open (true) or close every folder (and every "API của nhánh" bucket). */
     public void expandFolders(boolean open) {
         if (open) {
             collapsed.clear();
             for (int i = 0; i < tree.getRowCount(); i++) {
                 Node n = (Node) tree.getPathForRow(i).getLastPathComponent();
-                if (n.kind == Node.Kind.ROOT || n.kind == Node.Kind.FOLDER) {
+                if (n.kind == Node.Kind.ROOT || n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
                     tree.expandRow(i);
                 }
             }

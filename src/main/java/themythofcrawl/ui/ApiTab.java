@@ -145,7 +145,7 @@ final class ApiTab {
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
         JPanel left = new JPanel(new BorderLayout(2, 2));
-        left.setBorder(BorderFactory.createTitledBorder("Cây phân cấp Sub-folder (Chuột phải để Gửi / Thêm / Sửa / Xóa)"));
+        left.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Cây phân cấp Sub-folder (Chuột phải để Gửi / Thêm / Sửa / Xóa)"));
         left.add(leftTabs, BorderLayout.CENTER);
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.compact(Ui.dropdown("Thao tác", null, "Thao tác nhánh",
@@ -235,7 +235,7 @@ final class ApiTab {
         table.addMouseListener(cells);
         table.addMouseMotionListener(cells);
         JPanel groupPanel = new JPanel(new BorderLayout(0, 2));
-        groupPanel.setBorder(BorderFactory.createTitledBorder(
+        groupPanel.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
                 "Danh sách API (Click đúp cột 'Group Path' để chọn Nhánh | Chuột phải để Gửi / Đẩy Repeater)"));
         groupPanel.add(buildFilterStrip(), BorderLayout.NORTH);
         groupPanel.add(MainPanel.scroll(table), BorderLayout.CENTER);
@@ -261,7 +261,7 @@ final class ApiTab {
         Ui.widths(results, 72, 185, 220, 82, 58, 78, 92, 74, 54, 340);
         ColumnMemory.install(results, "results", ui.uiPrefs);
         JPanel resPanel = new JPanel(new BorderLayout());
-        resPanel.setBorder(BorderFactory.createTitledBorder(
+        resPanel.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
                 "So sánh 1 API GỐC (Acc Crawl) & N Roles (Click đúp hoặc Chuột phải để Gửi / Đẩy Repeater)"));
         resPanel.add(buildResultSummaryBar(), BorderLayout.NORTH);
         resPanel.add(MainPanel.scroll(results), BorderLayout.CENTER);

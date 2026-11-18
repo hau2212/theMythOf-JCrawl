@@ -78,7 +78,7 @@ public final class PathPicker {
         head.add(row, BorderLayout.SOUTH);
         d.add(head, BorderLayout.NORTH);
         JScrollPane sp = new JScrollPane(list);
-        sp.setBorder(BorderFactory.createTitledBorder("Các đường dẫn đã có (click đúp để chọn)"));
+        sp.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Các đường dẫn đã có (click đúp để chọn)"));
         d.add(sp, BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(4, Theme.SPACE_2));
         bottom.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3));

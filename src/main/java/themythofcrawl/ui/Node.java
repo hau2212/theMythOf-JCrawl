@@ -6,7 +6,11 @@ import themythofcrawl.core.AuditLevel;
 
 /** A tree row: what it is, what it points to, its label, colour and a stable key (selection / expansion restore). */
 public final class Node extends DefaultMutableTreeNode {
-    public enum Kind { ROOT, FOLDER, GROUP, ORIG, ROLE, PLACE, GHOSTS, GHOST, LOADING, LOGBRANCH, LOGAPI, LOGSYS, LOGLINE }
+    /**
+     * {@code APIS}: collapsible bucket holding the APIs that sit directly in a folder which also has
+     * sub-folders (payload = the folder path). Keeps APIs on top and sub-folders below instead of mixing them.
+     */
+    public enum Kind { ROOT, FOLDER, APIS, GROUP, ORIG, ROLE, PLACE, GHOSTS, GHOST, LOADING, LOGBRANCH, LOGAPI, LOGSYS, LOGLINE }
 
     /** Precomputed chip labels for folder / root rows so TreeRenderer allocates nothing while painting. */
     public record FolderMeta(String name, String levelChip, String countChip, String verdictChip, String pendingChip,

@@ -404,7 +404,7 @@ final class RolesTab {
     private JPanel modeLegend() {
         JPanel p = new JPanel(new GridLayout(3, 2, 6, 4));
         p.setOpaque(false);
-        p.setBorder(BorderFactory.createTitledBorder("Các chế độ (cột Mode)"));
+        p.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Các chế độ (cột Mode)"));
         for (RuleMode m : RuleMode.values()) {
             Pill chip = Pill.badge(m.name(), t -> t.mode(m));
             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -953,20 +953,12 @@ final class RolesTab {
                 g2.fillRect(0, 0, w, h);
 
                 int pad = th.scaled(6);
-                int av = Math.min(h - th.scaled(8), th.scaled(24));
-                int ay = (h - av) / 2;
-                Theme.Token tok = roleEnabled ? th.accent(modelRow) : th.neutral;
-                g2.setColor(tok.solidFill());
-                g2.fillOval(pad, ay, av, av);
+                int dot = Math.max(6, th.scaled(7));
+                int dy = (h - dot) / 2;
+                g2.setColor(roleEnabled ? th.accent(modelRow).base() : th.dotNone);
+                g2.fillRect(pad, dy, dot, dot);
 
-                g2.setFont(th.smallBoldFont);
-                FontMetrics sfm = g2.getFontMetrics();
-                int itw = sfm.stringWidth(initials);
-                int ity = ay + (av - sfm.getHeight()) / 2 + sfm.getAscent();
-                g2.setColor(tok.onSolid());
-                g2.drawString(initials, pad + Math.max(1, (av - itw) / 2), ity);
-
-                int tx = pad + av + th.scaled(8);
+                int tx = pad + dot + th.scaled(6);
                 g2.setFont(roleEnabled ? th.boldFont : th.baseFont);
                 FontMetrics fm = g2.getFontMetrics();
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
@@ -1058,10 +1050,11 @@ final class RolesTab {
         }
 
         private void drawChip(Graphics2D g2, Theme.Token tok, int x, int y, int w, int h, FontMetrics fm, int len) {
+            int arc = Math.min(h, 4);
             g2.setColor(tok.fill());
-            g2.fillRoundRect(x, y, w - 1, h - 1, h, h);
+            g2.fillRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.border());
-            g2.drawRoundRect(x, y, w - 1, h - 1, h, h);
+            g2.drawRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.text());
             int ty = y + (h - fm.getHeight()) / 2 + fm.getAscent();
             g2.drawChars(buf, 0, len, x + (w - fm.charsWidth(buf, 0, len)) / 2, ty);

@@ -121,7 +121,7 @@ final class RoleScopeDialog {
             allNames.add(r.name());
         }
         roleList = new CheckList<>(roleItems, roleNames != null ? roleNames : allNames, this::update, "Lọc role theo tên");
-        roleList.setBorder(BorderFactory.createTitledBorder("1. Role áp dụng"));
+        roleList.setBorder(themythofcrawl.ui.kit.SectionBorder.of("1. Role áp dụng"));
         roleList.setPreferredSize(new Dimension(250, 300));
 
         List<CheckList.Item<String>> branchItems = new ArrayList<>();
@@ -147,7 +147,7 @@ final class RoleScopeDialog {
         targets.addTab("Nhánh", branchList);
         targets.addTab("API gốc", apiList);
         targets.addTab("Ngoại lệ đã đặt", rulesPanel());
-        targets.setBorder(BorderFactory.createTitledBorder("2. Nhánh / API (khi phạm vi không phải Toàn bộ)"));
+        targets.setBorder(themythofcrawl.ui.kit.SectionBorder.of("2. Nhánh / API (khi phạm vi không phải Toàn bộ)"));
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, roleList, targets);
         split.setResizeWeight(0.3);
         dialog.add(split, BorderLayout.CENTER);

@@ -136,7 +136,6 @@ public class Card extends JPanel {
         Theme t = Theme.current();
         Theme.Token tok = tokenSupplier != null ? tokenSupplier.apply(t) : null;
         Color fill = subtleTint && tok != null ? tok.fill() : t.surfaceAlt;
-        Color borderCol = tok != null ? tok.border() : t.border;
         int arc = Math.round(Theme.RADIUS_CARD * 2 * t.scale);
         Graphics2D g2 = (Graphics2D) g.create();
         try {
@@ -145,8 +144,12 @@ public class Card extends JPanel {
             int h = getHeight();
             g2.setColor(fill);
             g2.fillRoundRect(0, 0, w - 1, h - 1, arc, arc);
-            g2.setColor(borderCol);
+            g2.setColor(t.border);
             g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+            if (tok != null) {
+                g2.setColor(tok.base());
+                g2.fillRect(0, Math.min(2, h), Math.max(2, t.scaled(3)), Math.max(0, h - 4));
+            }
         } finally {
             g2.dispose();
         }

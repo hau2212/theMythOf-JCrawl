@@ -83,7 +83,7 @@ public final class PushDialog {
             listing.add(b);
         }
         JScrollPane scroll = new JScrollPane(listing);
-        scroll.setBorder(BorderFactory.createTitledBorder("Đối tượng (API gốc và / hoặc các Role)"));
+        scroll.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Đối tượng (API gốc và / hoặc các Role)"));
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         JCheckBox flagged = new JCheckBox("Chỉ lấy role đang Lỗi / Lệch / Nghi bypass (Vàng / Cam / Đỏ) ở từng API", mem.onlyFlagged());
         JRadioButton compact = new JRadioButton("Tên tab gọn: G01•01_Admin (+ copy tên Group vào clipboard)", mem.compact());

@@ -128,7 +128,9 @@ public class Breadcrumb extends JPanel {
             String name = parts.get(i);
             String segmentPath = Hierarchy.join(parts.subList(0, depth));
             String shortName = name.length() <= maxLabelChars ? name : name.substring(0, maxLabelChars - 2) + "...";
-            Pill chip = new Pill(shortName, th -> th.level(depth));
+            boolean current = i == total - 1;
+            // Burp-style: neutral segments, only the current (last) level carries the accent colour
+            Pill chip = new Pill(shortName, th -> current ? th.info : th.neutral);
             chip.setRadius(Theme.RADIUS_SM);
             chip.setPadding(1, 7, 1, 7);
             chip.setToolTipText("Cấp " + depth + ": " + segmentPath);

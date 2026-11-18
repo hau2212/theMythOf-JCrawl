@@ -805,6 +805,8 @@ public final class MainPanel {
                     return new Scope(engine.groups(), "Tất cả API");
                 case FOLDER:
                     return new Scope(engine.groupsUnder((String) n.payload), "Nhánh \"" + n.payload + "\"");
+                case APIS:
+                    return new Scope(BranchTree.directGroups(n), "API trực tiếp của nhánh \"" + n.payload + "\"");
                 default:
                     ApiGroup g = BranchTree.groupOf(n);
                     if (g != null) {

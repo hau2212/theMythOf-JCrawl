@@ -6,6 +6,7 @@ import java.util.List;
 import javax.swing.JPopupMenu;
 
 import themythofcrawl.app.Engine;
+import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.RoleScopes;
@@ -53,6 +54,22 @@ final class TreeMenus {
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),
                             () -> ui.deleteBranchDialog(prefix)));
                 }
+            }
+            case APIS -> {
+                String branch = (String) n.payload;
+                String title = Hierarchy.leaf(branch);
+                m.add(Ui.item("Gửi " + many.size() + " API trực tiếp của \"" + title + "\"", t -> Icons.send(t.critical.text()),
+                        () -> ui.send(many)));
+                m.add(Ui.item("Đẩy " + many.size() + " API sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
+                m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target,
+                        () -> ui.pushDialog(false, many, "API của nhánh \"" + title + "\"")));
+                m.add(Ui.item("Copy STT + Path của " + many.size() + " API", t -> Icons.copy(t.muted), () -> ui.copy(many)));
+                m.add(Ui.item("Bật / Tắt Role cho các API này...", Icons::sliders,
+                        () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, many, null)));
+                m.addSeparator();
+                ui.placeItems(m, many);
+                m.addSeparator();
+                m.add(Ui.item("Thêm Sub-folder con vào \"" + title + "\"...", Icons::plus, () -> ui.addSubfolder(branch)));
             }
             case GROUP, ORIG, ROLE -> {
                 ApiGroup g = BranchTree.groupOf(n);

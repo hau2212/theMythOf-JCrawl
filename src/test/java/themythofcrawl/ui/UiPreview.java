@@ -219,6 +219,7 @@ public final class UiPreview {
             {"Toppage > menu > Users", "GET /api/v1/users/15", "GET /api/v1/users/16", "GET /api/v1/search?q=a"},
             {"Toppage > contact > button \"send\"", "POST /api/v1/contact/send", "GET /api/v1/profile"},
             {"Toppage > Orders", "GET /api/v1/orders", "GET /api/v1/orders/77", "POST /api/v1/cart", "GET /api/v1/admin/stats"},
+            {"Toppage > Orders > Chi tiết", "GET /api/v1/orders/78/items", "GET /api/v1/orders/78/invoice"},
         };
         for (String[] f : flow) {
             e.setDestination(f[0]);

@@ -192,7 +192,7 @@ final class TreeTab {
     String currentBreadcrumbPath() {
         Node n = tree.selectedNode();
         if (n != null) {
-            if (n.kind == Node.Kind.FOLDER && n.payload instanceof String p) {
+            if ((n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) && n.payload instanceof String p) {
                 return p;
             }
             ApiGroup g = BranchTree.groupOf(n);

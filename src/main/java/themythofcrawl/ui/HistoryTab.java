@@ -89,11 +89,11 @@ final class HistoryTab {
                 Ui.info(Help.SELECT, "Chọn nhiều"));
         panel.add(bar, BorderLayout.NORTH);
         JPanel treePanel = new JPanel(new BorderLayout());
-        treePanel.setBorder(BorderFactory.createTitledBorder(
+        treePanel.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
                 "Cây phân cấp Sub-folder & API (Chuột phải vào mục bất kỳ để Gửi / Đổi tên / Xem chi tiết)"));
         treePanel.add(MainPanel.scroll(tree.tree), BorderLayout.CENTER);
         JPanel sum = new JPanel(new BorderLayout());
-        sum.setBorder(BorderFactory.createTitledBorder(
+        sum.setBorder(themythofcrawl.ui.kit.SectionBorder.of(
                 "Bản tổng hợp Audit (Thẻ theo nhánh · Ma trận Role x API · Văn bản)"));
         sum.add(report, BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treePanel, sum);
@@ -106,7 +106,7 @@ final class HistoryTab {
         if (n == null) {
             return;
         }
-        if (n.kind == Node.Kind.FOLDER) {
+        if (n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
             report.scrollToBranchPath((String) n.payload);
         } else {
             ApiGroup g = BranchTree.groupOf(n);
