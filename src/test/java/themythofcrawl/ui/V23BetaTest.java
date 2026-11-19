@@ -116,16 +116,18 @@ final class V23BetaTest {
     }
 
     @Test
-    void versionMetadataIsV23Beta() throws Exception {
+    void versionMetadataIsConsistentWithProperties() throws Exception {
         Properties props = new Properties();
         try (InputStream in = Files.newInputStream(Path.of("version.properties"))) {
             props.load(in);
         }
-        assertEquals("V_2.3_beta", props.getProperty("releaseTag"));
-        assertEquals("2.3-beta", props.getProperty("versionName"));
-        assertEquals("theMythOf-JCrawl_V_2.3_beta.jar", props.getProperty("jarName"));
-        assertEquals("2.3-beta", Extension.VERSION);
-        assertEquals("2.3-beta", Diagnostics.VERSION);
+        String ver = props.getProperty("versionName");
+        String tag = props.getProperty("releaseTag");
+        String jar = props.getProperty("jarName");
+        assertTrue(tag != null && tag.startsWith("V_"));
+        assertEquals("theMythOf-JCrawl_" + tag + ".jar", jar);
+        assertEquals(ver, Extension.VERSION);
+        assertEquals(ver, Diagnostics.VERSION);
     }
 
     @Test

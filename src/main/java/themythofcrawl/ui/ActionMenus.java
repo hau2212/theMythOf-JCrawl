@@ -151,13 +151,36 @@ public final class ActionMenus {
         addItem(menuContainer, lockItem);
 
         addSep(menuContainer);
-        JCheckBoxMenuItem holdEpItem = new JCheckBoxMenuItem("Chặn tại Proxy cho endpoint này (Giữ nguyên trên Server)", epHeld);
+        boolean epWait = engine.actionEngine().isEndpointInterceptWait(g.method(), g.path())
+                && engine.actionEngine().isInterceptWaitEnabled();
+        JMenu proxyMenu = new JMenu(epWait ? "Chặn Proxy cho API này [ĐANG CHẶN]" : "Chặn Proxy cho API này");
+        proxyMenu.setIcon(Icons.strategyShield(epWait ? th.danger.text() : th.warning.text(), 14));
+
+        JCheckBoxMenuItem waitEpItem = new JCheckBoxMenuItem("Chặn chờ duyệt (Đợi tôi bấm Gửi) cho API này", epWait);
+        waitEpItem.setIcon(Icons.strategyShield(th.danger.text(), 14));
+        waitEpItem.addActionListener(e -> {
+            boolean next = waitEpItem.isSelected();
+            engine.toggleEndpointInterceptWait(g, next);
+            if (next) {
+                MainPanel.openInterceptQueue(engine);
+            }
+            if (onAfterAction != null) onAfterAction.run();
+        });
+        proxyMenu.add(waitEpItem);
+
+        JMenuItem openQueueItem = new JMenuItem("Mở Hàng chờ Chặn Proxy trực tiếp...", Icons.strategyShield(th.accent.text(), 14));
+        openQueueItem.addActionListener(e -> MainPanel.openInterceptQueue(engine));
+        proxyMenu.add(openQueueItem);
+        proxyMenu.addSeparator();
+
+        JCheckBoxMenuItem holdEpItem = new JCheckBoxMenuItem("Giữ ở Proxy cho endpoint này (200 ảo / Không gửi Server)", epHeld);
         holdEpItem.setIcon(Icons.strategyShield(th.warning.text(), 14));
         holdEpItem.addActionListener(e -> {
             engine.toggleEndpointProxyHold(g, holdEpItem.isSelected());
             if (onAfterAction != null) onAfterAction.run();
         });
-        addItem(menuContainer, holdEpItem);
+        proxyMenu.add(holdEpItem);
+        addItem(menuContainer, proxyMenu);
     }
 
     /**

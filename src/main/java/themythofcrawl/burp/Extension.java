@@ -1,8 +1,12 @@
 package themythofcrawl.burp;
 
 import java.awt.Component;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -10,6 +14,7 @@ import javax.swing.SwingUtilities;
 
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.core.ToolType;
 import burp.api.montoya.http.handler.HttpHandler;
 import burp.api.montoya.http.handler.HttpRequestToBeSent;
@@ -17,8 +22,13 @@ import burp.api.montoya.http.handler.HttpResponseReceived;
 import burp.api.montoya.http.handler.RequestToBeSentAction;
 import burp.api.montoya.http.handler.ResponseReceivedAction;
 import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
+import burp.api.montoya.proxy.http.InterceptedRequest;
 import burp.api.montoya.proxy.http.InterceptedResponse;
+import burp.api.montoya.proxy.http.ProxyRequestHandler;
+import burp.api.montoya.proxy.http.ProxyRequestReceivedAction;
+import burp.api.montoya.proxy.http.ProxyRequestToBeSentAction;
 import burp.api.montoya.proxy.http.ProxyResponseHandler;
 import burp.api.montoya.proxy.http.ProxyResponseReceivedAction;
 import burp.api.montoya.proxy.http.ProxyResponseToBeSentAction;
@@ -26,7 +36,9 @@ import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
 import themythofcrawl.app.Engine;
 import themythofcrawl.app.Prefs;
+import themythofcrawl.core.ProxyInterceptQueue;
 import themythofcrawl.core.Text;
+import themythofcrawl.model.ActionInterceptRule;
 import themythofcrawl.model.Branch;
 import themythofcrawl.model.Service;
 import themythofcrawl.rolereq.RoleRules;
@@ -36,7 +48,81 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "2.3-beta";
+    public static final String VERSION = "2.4-beta";
+
+    private static final long BRIDGE_TTL_MS = 15_000L;
+    private static final Method SPOOF_METHOD = resolveStaticMethod(
+            RequestToBeSentAction.class, "spoof", HttpResponse.class);
+    private static final Method DROP_METHOD = resolveStaticMethod(
+            RequestToBeSentAction.class, "drop");
+
+    private record TimedSpoof(String rawResponse, long expiresAtMs) {
+        boolean alive(long now) {
+            return now <= expiresAtMs;
+        }
+    }
+
+    /** True when the host Burp Suite Montoya runtime supports {@code RequestToBeSentAction.spoof(HttpResponse)}. */
+    public static boolean supportsSpoof() {
+        return SPOOF_METHOD != null;
+    }
+
+    /** True when the host Burp Suite Montoya runtime supports {@code RequestToBeSentAction.drop()}. */
+    public static boolean supportsHttpDrop() {
+        return DROP_METHOD != null;
+    }
+
+    private static Method resolveStaticMethod(Class<?> owner, String name, Class<?>... params) {
+        try {
+            return owner.getMethod(name, params);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    static RequestToBeSentAction invokeSpoof(HttpResponse response) {
+        if (SPOOF_METHOD == null || response == null) {
+            return null;
+        }
+        try {
+            Object res = SPOOF_METHOD.invoke(null, response);
+            return res instanceof RequestToBeSentAction act ? act : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    static RequestToBeSentAction invokeDrop() {
+        if (DROP_METHOD == null) {
+            return null;
+        }
+        try {
+            Object res = DROP_METHOD.invoke(null);
+            return res instanceof RequestToBeSentAction act ? act : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    static String exactFingerprint(Service svc, byte[] raw) {
+        if (svc == null || raw == null) {
+            return "";
+        }
+        return svc.host().toLowerCase(Locale.ROOT) + ":" + svc.port() + ":" + svc.secure()
+                + "|" + Arrays.hashCode(raw) + "|" + raw.length;
+    }
+
+    static String routeFingerprint(Service svc, byte[] raw) {
+        if (svc == null || raw == null) {
+            return "";
+        }
+        String[] rl = Text.requestLine(raw);
+        if (rl == null) {
+            return "";
+        }
+        return svc.host().toLowerCase(Locale.ROOT) + ":" + svc.port() + ":" + svc.secure()
+                + "|" + rl[0].toUpperCase(Locale.ROOT) + "|" + rl[1];
+    }
 
     @Override
     public void initialize(MontoyaApi api) {
@@ -73,25 +159,118 @@ public final class Extension implements BurpExtension {
             api.logging().logToError(Text.EXT_NAME + ": lỗi dựng giao diện: " + e);
         }
 
+        // Bridges ProxyRequestHandler -> HttpHandler when returning a spoofed 200 OK (Montoya 2026.7+)
+        ConcurrentHashMap<String, TimedSpoof> pendingSpoofsExact = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, TimedSpoof> pendingSpoofsRoute = new ConcurrentHashMap<>();
+
+        // Primary Proxy Request Handler — works across ALL Burp Suite Montoya versions (2023 -> 2026.7+)
+        api.proxy().registerRequestHandler(new ProxyRequestHandler() {
+            @Override
+            public ProxyRequestReceivedAction handleRequestReceived(InterceptedRequest req) {
+                try {
+                    var svc = req.httpService();
+                    Service service = new Service(svc.host(), svc.port(), svc.secure());
+                    byte[] raw = req.toByteArray().getBytes();
+                    String url = req.url();
+                    Engine.ProxyInterceptOutcome outcome = engine.evaluateProxyIntercept(service, raw, url);
+                    if (outcome == null || outcome.effect() == ActionInterceptRule.Effect.ALLOW) {
+                        return ProxyRequestReceivedAction.continueWith(req);
+                    }
+
+                    // Mode #5: Live Interactive Intercept Wait — hold the Proxy worker thread until user decides
+                    if (outcome.shouldWait()) {
+                        String[] rl = Text.requestLine(raw);
+                        String method = rl != null ? rl[0] : req.method();
+                        String path = rl != null ? rl[1] : req.path();
+                        String branchName = engine.activeBranch().name();
+                        engine.log("CHẶN CHỜ DUYỆT [" + method + " " + path + "] (" + outcome.reason()
+                                + ") — mở Hàng chờ Chặn để bấm Gửi lên Server hoặc Hủy.", null);
+                        ProxyInterceptQueue.Resolution res = engine.proxyQueue().enqueueAndAwait(
+                                service, method, path, url, branchName, outcome.reason(),
+                                outcome.spoofResponse(), raw, ProxyInterceptQueue.DEFAULT_TIMEOUT_MS);
+                        byte[] finalBytes = (res.editedRequest() != null && res.editedRequest().length > 0)
+                                ? res.editedRequest() : raw;
+
+                        switch (res.kind()) {
+                            case FORWARD -> {
+                                HttpRequest finalReq = HttpRequest.httpRequest(
+                                        req.httpService(), ByteArray.byteArray(finalBytes));
+                                engine.log("ĐÃ GỬI LÊN SERVER [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
+                                return ProxyRequestReceivedAction.doNotIntercept(finalReq);
+                            }
+                            case HOLD_AND_SPOOF -> {
+                                engine.onProxyHeldRequest(service, finalBytes, url, outcome.matchedRule(),
+                                        "Proxy-Wait[" + outcome.reason() + "]");
+                                if (supportsSpoof() && res.spoofResponse() != null) {
+                                    recordPendingSpoof(pendingSpoofsExact, pendingSpoofsRoute,
+                                            service, raw, res.spoofResponse());
+                                    return ProxyRequestReceivedAction.doNotIntercept(req);
+                                }
+                                return ProxyRequestReceivedAction.drop();
+                            }
+                            case DROP_AND_SAVE -> {
+                                engine.onProxyHeldRequest(service, finalBytes, url, outcome.matchedRule(),
+                                        "Proxy-Wait[" + outcome.reason() + "]");
+                                return ProxyRequestReceivedAction.drop();
+                            }
+                            case DROP -> {
+                                engine.log("ĐÃ HỦY (DROP) [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
+                                return ProxyRequestReceivedAction.drop();
+                            }
+                        }
+                    }
+
+                    // Proactive BLOCK_DROP or Strategy #1 HOLD_AT_PROXY / BLOCK_SPOOF
+                    if (outcome.shouldBlock()) {
+                        engine.onProxyHeldRequest(service, raw, url, outcome.matchedRule());
+                        if (outcome.effect() == ActionInterceptRule.Effect.BLOCK_DROP) {
+                            return ProxyRequestReceivedAction.drop();
+                        }
+                        if (supportsSpoof() && outcome.spoofResponse() != null) {
+                            recordPendingSpoof(pendingSpoofsExact, pendingSpoofsRoute,
+                                    service, raw, outcome.spoofResponse());
+                            return ProxyRequestReceivedAction.doNotIntercept(req);
+                        }
+                        // Fallback for older Burp versions without RequestToBeSentAction.spoof():
+                        // dropping at Proxy guarantees Server NEVER executes the request while keeping it in Extension!
+                        return ProxyRequestReceivedAction.drop();
+                    }
+                } catch (Throwable e) {
+                    api.logging().logToError(Text.EXT_NAME + " proxy-request-handler: " + e);
+                }
+                return ProxyRequestReceivedAction.continueWith(req);
+            }
+
+            @Override
+            public ProxyRequestToBeSentAction handleRequestToBeSent(InterceptedRequest req) {
+                return ProxyRequestToBeSentAction.continueWith(req);
+            }
+        });
+
+        // Secondary HttpHandler: completes spoofed 200 OK responses scheduled by ProxyRequestHandler
         api.http().registerHttpHandler(new HttpHandler() {
             @Override
             public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent req) {
                 try {
-                    if (req.toolSource() != null && req.toolSource().isFromTool(ToolType.PROXY)) {
+                    if (req.toolSource() != null && req.toolSource().isFromTool(ToolType.PROXY)
+                            && (!pendingSpoofsExact.isEmpty() || !pendingSpoofsRoute.isEmpty())) {
                         var svc = req.httpService();
                         Service service = new Service(svc.host(), svc.port(), svc.secure());
                         byte[] raw = req.toByteArray().getBytes();
-                        Engine.ProxyInterceptOutcome outcome = engine.evaluateProxyIntercept(service, raw, req.url());
-                        if (outcome != null && outcome.shouldBlock()) {
-                            engine.onProxyHeldRequest(service, raw, req.url(), outcome.matchedRule());
-                            if (outcome.effect() == themythofcrawl.model.ActionInterceptRule.Effect.BLOCK_DROP) {
-                                return RequestToBeSentAction.drop();
+                        String spoof = consumePendingSpoof(pendingSpoofsExact, pendingSpoofsRoute, service, raw);
+                        if (spoof != null) {
+                            RequestToBeSentAction spoofed = invokeSpoof(HttpResponse.httpResponse(spoof));
+                            if (spoofed != null) {
+                                return spoofed;
                             }
-                            return RequestToBeSentAction.spoof(HttpResponse.httpResponse(outcome.spoofResponse()));
+                            RequestToBeSentAction dropped = invokeDrop();
+                            if (dropped != null) {
+                                return dropped;
+                            }
                         }
                     }
-                } catch (RuntimeException e) {
-                    api.logging().logToError(Text.EXT_NAME + " proxy-hold: " + e);
+                } catch (Throwable e) {
+                    api.logging().logToError(Text.EXT_NAME + " proxy-spoof: " + e);
                 }
                 return RequestToBeSentAction.continueWith(req);
             }
@@ -111,6 +290,9 @@ public final class Extension implements BurpExtension {
             @Override
             public ProxyResponseToBeSentAction handleResponseToBeSent(InterceptedResponse r) {
                 try {
+                    if ("true".equalsIgnoreCase(r.headerValue("X-JCrawl-Held"))) {
+                        return ProxyResponseToBeSentAction.continueWith(r);
+                    }
                     var req = r.initiatingRequest();
                     var svc = req.httpService();
                     engine.onProxyMessage(new Engine.Message(new Service(svc.host(), svc.port(), svc.secure()),
@@ -162,12 +344,57 @@ public final class Extension implements BurpExtension {
         });
 
         api.extension().registerUnloadingHandler(() -> {
+            engine.proxyQueue().releaseAll(ProxyInterceptQueue.ResolutionKind.DROP);
             if (panel[0] != null) {
                 panel[0].dispose();
             }
             engine.close();
         });
         engine.log(loadLine[0] != null ? loadLine[0] : themythofcrawl.ui.Diagnostics.loadLogLine(), null);
+    }
+
+    private static void recordPendingSpoof(
+            ConcurrentHashMap<String, TimedSpoof> exactMap,
+            ConcurrentHashMap<String, TimedSpoof> routeMap,
+            Service service,
+            byte[] raw,
+            String spoofResponse) {
+        long now = System.currentTimeMillis();
+        if (exactMap.size() > 64) {
+            exactMap.entrySet().removeIf(e -> !e.getValue().alive(now));
+            routeMap.entrySet().removeIf(e -> !e.getValue().alive(now));
+        }
+        TimedSpoof entry = new TimedSpoof(spoofResponse, now + BRIDGE_TTL_MS);
+        String exact = exactFingerprint(service, raw);
+        if (!exact.isEmpty()) {
+            exactMap.put(exact, entry);
+        }
+        String route = routeFingerprint(service, raw);
+        if (!route.isEmpty()) {
+            routeMap.put(route, entry);
+        }
+    }
+
+    private static String consumePendingSpoof(
+            ConcurrentHashMap<String, TimedSpoof> exactMap,
+            ConcurrentHashMap<String, TimedSpoof> routeMap,
+            Service service,
+            byte[] raw) {
+        long now = System.currentTimeMillis();
+        String exact = exactFingerprint(service, raw);
+        String route = routeFingerprint(service, raw);
+        TimedSpoof hit = !exact.isEmpty() ? exactMap.remove(exact) : null;
+        if (hit != null) {
+            if (!route.isEmpty()) {
+                routeMap.remove(route);
+            }
+            return hit.alive(now) ? hit.rawResponse() : null;
+        }
+        TimedSpoof routeHit = !route.isEmpty() ? routeMap.remove(route) : null;
+        if (routeHit != null && routeHit.alive(now)) {
+            return routeHit.rawResponse();
+        }
+        return null;
     }
 
     private static String safeFilename(MontoyaApi api) {

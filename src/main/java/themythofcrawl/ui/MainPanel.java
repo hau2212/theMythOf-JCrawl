@@ -94,12 +94,31 @@ public final class MainPanel {
     private final Pill queue = new Pill("Hàng đợi: 0", t -> t.neutral, t -> Icons.clock(t.muted, 12));
     final Breadcrumb dest = new Breadcrumb();
     private final Pill todo = new Pill("Cần xử lý: 0", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 12));
+    private static final java.util.WeakHashMap<Engine, java.lang.ref.WeakReference<MainPanel>> BY_ENGINE =
+            new java.util.WeakHashMap<>();
+
+    static void openInterceptQueue(Engine engine) {
+        if (engine == null) {
+            return;
+        }
+        MainPanel mp;
+        synchronized (BY_ENGINE) {
+            var ref = BY_ENGINE.get(engine);
+            mp = ref != null ? ref.get() : null;
+        }
+        if (mp != null) {
+            ProxyInterceptDialog.showFloating(mp);
+        }
+    }
+
     private final JButton spotlightBtn = new JButton();
+    private final JButton proxyInterceptBtn = new JButton();
     private final JButton options = new JButton();
     private final JButton detach = new JButton();
     private final JButton workspace = new JButton();
     private final JButton topChromeToggleBtn = new JButton();
     private final JButton compactControlsBtn = new JButton();
+    private Runnable proxyQueueListener;
     private JPanel headerRow1;
     private JPanel headerDrawerRow;
     private JPanel headerLeftZone;
@@ -201,6 +220,18 @@ public final class MainPanel {
         }
         settings.load();
         updateResponsiveChrome(lastChromeWidth);
+        synchronized (BY_ENGINE) {
+            BY_ENGINE.put(engine, new java.lang.ref.WeakReference<>(this));
+        }
+        proxyQueueListener = () -> javax.swing.SwingUtilities.invokeLater(() -> {
+            syncProxyInterceptButton();
+            if (engine.proxyQueue().pendingCount() > 0
+                    && engine.proxyQueue().isAutoOpenWindow()
+                    && !java.awt.GraphicsEnvironment.isHeadless()) {
+                ProxyInterceptDialog.showFloating(this);
+            }
+        });
+        engine.proxyQueue().addListener(proxyQueueListener);
         syncHeader();
         api.reloadAll();
         timer = new Timer(TICK_MS, e -> tick(false));
@@ -218,6 +249,17 @@ public final class MainPanel {
 
     public void dispose() {
         timer.stop();
+        if (proxyQueueListener != null) {
+            engine.proxyQueue().removeListener(proxyQueueListener);
+            proxyQueueListener = null;
+        }
+        ProxyInterceptDialog.closeFor(this);
+        synchronized (BY_ENGINE) {
+            var ref = BY_ENGINE.get(engine);
+            if (ref != null && ref.get() == this) {
+                BY_ENGINE.remove(engine);
+            }
+        }
         toastPane.dispose();
         ColumnMemory.disposeIn(root);
         if (window != null) {
@@ -266,7 +308,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setCellWidth(68);
+        dest.setCellWidth(54);
         dest.setCellHeight(24);
         dest.setIconResolver(segPath -> Icons.nodeIcon(engine.nodeTypeOf(segPath), Theme.current(), 12));
         dest.onSegmentClick(seg -> {
@@ -311,6 +353,33 @@ public final class MainPanel {
                 t -> t.info,
                 null));
 
+        proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 14)));
+        proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
+        proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+        proxyInterceptBtn.addActionListener(e -> ProxyInterceptDialog.showFloating(this));
+        themythofcrawl.ui.kit.RichHoverCard.install(proxyInterceptBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)",
+                "Bật chặn request ngay tại Proxy theo Toàn bộ / Nhánh / API / Method. Khi bấm nút trên trình duyệt (VD: Save), request dừng lại chờ bạn xem/sửa và bấm Gửi lên Server.",
+                null,
+                t -> {
+                    int n = engine.proxyQueue().pendingCount();
+                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
+                    return Icons.strategyShield(n > 0 ? t.danger.text() : (on ? t.success.text() : t.muted), 14);
+                },
+                t -> {
+                    int n = engine.proxyQueue().pendingCount();
+                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
+                    return n > 0 ? t.danger : (on ? t.success : t.neutral);
+                },
+                () -> {
+                    int n = engine.proxyQueue().pendingCount();
+                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
+                    if (n > 0) {
+                        return "Đang chặn chờ duyệt: " + n + " request — bấm để Gửi lên Server";
+                    }
+                    return on ? "Đang BẬT Chặn chờ duyệt (0 request đang đợi)" : "Đang TẮT — bấm để mở cấu hình & bật chặn";
+                }));
+
         JButton workbenchBtn = new JButton();
         workbenchBtn.setIcon(Icons.themed(t -> Icons.workbench(t.accent.text(), 14)));
         workbenchBtn.setMargin(new Insets(0, 0, 0, 0));
@@ -351,8 +420,8 @@ public final class MainPanel {
                 () -> "Hiện tại: " + UiDisplayMode.current().label));
 
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
-        options.setMargin(new Insets(0, 4, 0, 4));
-        options.setPreferredSize(new Dimension(Theme.current().scaled(32), h24));
+        options.setMargin(new Insets(0, 2, 0, 2));
+        options.setPreferredSize(new Dimension(Theme.current().scaled(28), h24));
         options.addActionListener(e -> optionsMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(options, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tùy chọn nhanh & Danh mục",
@@ -376,8 +445,8 @@ public final class MainPanel {
 
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
-        workspace.setMargin(new Insets(0, 4, 0, 4));
-        workspace.setPreferredSize(new Dimension(Theme.current().scaled(62), h24));
+        workspace.setMargin(new Insets(0, 3, 0, 3));
+        workspace.setPreferredSize(new Dimension(Theme.current().scaled(54), h24));
         workspace.addActionListener(e -> workspaceMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Workspace (Phiên làm việc)",
@@ -453,7 +522,7 @@ public final class MainPanel {
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
 
-        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, workbenchBtn, displayModeBtn, options, detach, workspace);
+        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, proxyInterceptBtn, workbenchBtn, displayModeBtn, options, detach, workspace);
         ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
 
@@ -518,6 +587,14 @@ public final class MainPanel {
         }
         m.addSeparator();
         m.add(Ui.item("Tìm kiếm toàn cục (Spotlight · Ctrl+K)", Icons::search, () -> spotlight.open()));
+        int pendingIntercept = engine.proxyQueue().pendingCount();
+        boolean waitOn = engine.actionEngine().isInterceptWaitEnabled();
+        String waitLabel = pendingIntercept > 0
+                ? "Hàng chờ Chặn Proxy trực tiếp (" + pendingIntercept + " đang đợi)..."
+                : (waitOn ? "Hàng chờ Chặn Proxy trực tiếp (Đang BẬT)..." : "Hàng chờ Chặn Proxy trực tiếp (Đang TẮT)...");
+        m.add(Ui.item(waitLabel,
+                t -> Icons.strategyShield(pendingIntercept > 0 ? t.danger.text() : (waitOn ? t.success.text() : t.fg), 14),
+                () -> ProxyInterceptDialog.showFloating(this)));
         int blockRules = engine.actionEngine().activeBlockRuleCount();
         m.add(Ui.item("Action Workbench & Luật Chặn Proxy" + (blockRules > 0 ? " (" + blockRules + " luật bật)" : "") + "...",
                 Icons::workbench, () -> ActionWorkbenchDialog.show(root, engine,
@@ -581,7 +658,7 @@ public final class MainPanel {
                 headerRightFull.setVisible(true);
                 headerRightCompact.setVisible(false);
                 dest.setMaxSegments(2);
-                dest.setCellWidth(68);
+                dest.setCellWidth(54);
             } else if (narrow && narrowExpanded) {
                 // Split-screen explicitly expanded by user: cleanly show drawer row 2 (zero collision!)
                 headerRightCompact.setVisible(false);
@@ -647,11 +724,47 @@ public final class MainPanel {
         }
     }
 
+    void syncProxyInterceptButton() {
+        Theme th = Theme.current();
+        int h24 = th.scaled(24);
+        int pending = engine.proxyQueue().pendingCount();
+        boolean armed = engine.actionEngine().isInterceptWaitEnabled();
+        if (pending > 0) {
+            proxyInterceptBtn.setText(Integer.toString(pending));
+            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.onSolid(), 13)));
+            proxyInterceptBtn.setOpaque(true);
+            proxyInterceptBtn.setBackground(th.danger.solidFill());
+            proxyInterceptBtn.setForeground(th.danger.onSolid());
+            proxyInterceptBtn.setFont(th.smallBoldFont);
+            proxyInterceptBtn.setMargin(new Insets(0, 3, 0, 3));
+            proxyInterceptBtn.setPreferredSize(new Dimension(th.scaled(36), h24));
+        } else if (armed) {
+            proxyInterceptBtn.setText("");
+            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 14)));
+            proxyInterceptBtn.setOpaque(true);
+            proxyInterceptBtn.setBackground(th.danger.fill());
+            proxyInterceptBtn.setForeground(th.danger.text());
+            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
+            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+        } else {
+            proxyInterceptBtn.setText("");
+            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 14)));
+            proxyInterceptBtn.setOpaque(false);
+            proxyInterceptBtn.setBackground(null);
+            proxyInterceptBtn.setForeground(th.fg);
+            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
+            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+        }
+        proxyInterceptBtn.revalidate();
+        proxyInterceptBtn.repaint();
+    }
+
     void syncHeader() {
         Theme th = Theme.current();
         Config c = engine.config();
         captureToggle.setSelectedIndex(c.captureEnabled ? 1 : 0);
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
+        syncProxyInterceptButton();
 
         Branch b = engine.activeBranch();
         String name = b.name();

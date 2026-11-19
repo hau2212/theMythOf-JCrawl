@@ -29,6 +29,7 @@ public final class ActionInterceptRule {
     public static final String DEFAULT_SPOOF_BODY = "{\"status\":\"held_by_jcrawl\",\"ok\":true,\"server_id\":\"kept\"}";
 
     public enum Effect {
+        INTERCEPT_WAIT("Chặn chờ duyệt (Đợi tôi bấm Gửi)", "Chặn đứng request tại Proxy và hiện ngay trong Hàng chờ Chặn để bạn xem/sửa rồi bấm Gửi lên Server hoặc Hủy"),
         BLOCK_SPOOF("Chặn & Trả giả lập", "Chặn trước khi gửi lên Server, ghi nhận request vào Extension và trả JSON giả cho trình duyệt"),
         BLOCK_DROP("Chặn & Drop kết nối", "Chặn và ngắt kết nối ngay tại Proxy (không gửi lên Server), vẫn ghi nhận request vào Extension"),
         ALLOW("Cho qua (Ngoại lệ)", "Cho phép Request đi thẳng lên Server bình thường, ưu tiên vượt qua các luật chặn bên dưới");
@@ -42,7 +43,11 @@ public final class ActionInterceptRule {
         }
 
         public boolean isBlock() {
-            return this == BLOCK_SPOOF || this == BLOCK_DROP;
+            return this == INTERCEPT_WAIT || this == BLOCK_SPOOF || this == BLOCK_DROP;
+        }
+
+        public boolean isWait() {
+            return this == INTERCEPT_WAIT;
         }
 
         public static Effect parse(String raw) {

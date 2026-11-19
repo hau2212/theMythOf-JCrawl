@@ -28,6 +28,7 @@ import themythofcrawl.core.CopyFormat;
 import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.HttpBytes;
 import themythofcrawl.core.Json;
+import themythofcrawl.core.ProxyInterceptQueue;
 import themythofcrawl.core.Text;
 import themythofcrawl.excel.HitLog;
 import themythofcrawl.excel.PathMatch;
@@ -70,13 +71,26 @@ public final class Engine {
     public static final String PREF_INTERCEPT_RULES = "tmoc.intercept_rules.v1";
     public static final String PREF_EXCEL_PLACEHOLDERS = "tmoc.excel_placeholders.v1";
 
-    /** Outcome returned by {@link #evaluateProxyIntercept(Service, byte[], String)} for Montoya HttpHandler. */
+    /** Outcome returned by {@link #evaluateProxyIntercept(Service, byte[], String)} for Montoya Proxy/Http handlers. */
     public record ProxyInterceptOutcome(
             ActionInterceptRule.Effect effect,
             String spoofResponse,
-            ActionInterceptRule matchedRule) {
+            ActionInterceptRule matchedRule,
+            String reason) {
+        public ProxyInterceptOutcome(
+                ActionInterceptRule.Effect effect,
+                String spoofResponse,
+                ActionInterceptRule matchedRule) {
+            this(effect, spoofResponse, matchedRule,
+                    matchedRule != null ? ("Luật: " + matchedRule.name()) : "Chặn tại Proxy");
+        }
+
         public boolean shouldBlock() {
             return effect != null && effect.isBlock();
+        }
+
+        public boolean shouldWait() {
+            return effect == ActionInterceptRule.Effect.INTERCEPT_WAIT;
         }
     }
 
@@ -94,6 +108,7 @@ public final class Engine {
     private final Logbook logbook = new Logbook();
     private final Roles roles = new Roles();
     private final ActionEngine actionEngine = new ActionEngine();
+    private final ProxyInterceptQueue proxyQueue = new ProxyInterceptQueue();
     private final NodeTypeCatalog nodeTypes = new NodeTypeCatalog();
     private final ApiTagCatalog tagCatalog = new ApiTagCatalog();
     private final PlaceholderCatalog placeholders = new PlaceholderCatalog();
@@ -1046,18 +1061,24 @@ public final class Engine {
                     + "Content-Length: 45\r\n\r\n"
                     + "{\"status\":\"held_by_jcrawl\",\"server_id\":\"kept\"}";
 
+    public ProxyInterceptQueue proxyQueue() {
+        return proxyQueue;
+    }
+
     /**
      * Đánh giá toàn diện việc chặn request tại Burp Proxy TRƯỚC khi gửi lên Server:
      * <ol>
      *   <li>Ưu tiên bộ Luật Chặn Proxy chủ động ({@link ActionInterceptRule}) theo thứ tự từ trên xuống:
      *       hỗ trợ chọn nhánh/path + ma trận Method (GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS),
-     *       gồm {@code ALLOW} (ngoại lệ cho qua), {@code BLOCK_SPOOF} (trả giả lập), và {@code BLOCK_DROP}.</li>
-     *   <li>Nếu không trúng luật nào, fallback sang chế độ chặn Action toàn cục / từng endpoint.</li>
+     *       gồm {@code ALLOW}, {@code INTERCEPT_WAIT} (đợi bấm Gửi), {@code BLOCK_SPOOF}, và {@code BLOCK_DROP}.</li>
+     *   <li>Kế tiếp: Chế độ #5 Chặn Chờ Duyệt trực tiếp ({@code INTERCEPT_WAIT}) theo API cụ thể, nhánh đang chọn,
+     *       hoặc toàn bộ các Method đã chọn — hoạt động ngay cả khi nút Capture đang tắt!</li>
+     *   <li>Cuối cùng: fallback sang chế độ giữ tại Proxy ({@code HOLD_AT_PROXY}) toàn cục / từng endpoint.</li>
      * </ol>
      */
     public ProxyInterceptOutcome evaluateProxyIntercept(Service svc, byte[] request, String url) {
         Config c = config;
-        if (!c.captureEnabled || closed || svc == null || request == null) {
+        if (closed || svc == null || request == null) {
             return null;
         }
         String[] rl = Text.requestLine(request);
@@ -1066,44 +1087,65 @@ public final class Engine {
         }
         String method = rl[0];
         String path = rl[1];
-
-        // 1. Evaluate proactive user-defined Proxy Interception Rules first (any selected method)
         String activeBranchName = activeBranch().name();
+
+        // 1. Evaluate proactive user-defined Proxy Interception Rules first (works even when Capture is OFF)
         ActionEngine.InterceptDecision decision = actionEngine.evaluateInterceptRules(activeBranchName, svc.host(), method, path);
         if (decision.matched()) {
             ActionInterceptRule rule = decision.rule();
             if (decision.effect() == ActionInterceptRule.Effect.ALLOW) {
                 rule.incrementHit();
-                return new ProxyInterceptOutcome(ActionInterceptRule.Effect.ALLOW, null, rule);
+                return new ProxyInterceptOutcome(ActionInterceptRule.Effect.ALLOW, null, rule, "Cho qua: " + rule.name());
             }
-            if (quickReject(method, path, svc.host()) != null) {
+            if (c.ignoreStatic && "GET".equalsIgnoreCase(method) && Text.isStaticPath(path, staticExts)
+                    && Text.blank(rule.pathPattern())) {
                 return null;
             }
             rule.incrementHit();
-            String spoof = decision.effect() == ActionInterceptRule.Effect.BLOCK_SPOOF ? rule.buildSpoofResponse() : null;
-            return new ProxyInterceptOutcome(decision.effect(), spoof, rule);
+            String spoof = (decision.effect() == ActionInterceptRule.Effect.BLOCK_SPOOF
+                    || decision.effect() == ActionInterceptRule.Effect.INTERCEPT_WAIT)
+                    ? rule.buildSpoofResponse() : null;
+            return new ProxyInterceptOutcome(decision.effect(), spoof, rule, "Luật: " + rule.name());
         }
 
-        // 2. Fallback: legacy global or per-endpoint HOLD_AT_PROXY for Action methods
+        // 2. Live Interactive Intercept Wait (Mode #5): pause request in Extension queue & wait for user Forward/Drop
+        String waitReason = actionEngine.matchInterceptWaitReason(activeBranchName, method, path);
+        if (waitReason != null) {
+            boolean explicitEndpoint = actionEngine.isEndpointInterceptWait(method, path);
+            if (!explicitEndpoint && c.ignoreStatic && "GET".equalsIgnoreCase(method)
+                    && Text.isStaticPath(path, staticExts)) {
+                return null;
+            }
+            return new ProxyInterceptOutcome(ActionInterceptRule.Effect.INTERCEPT_WAIT,
+                    DEFAULT_HOLD_SPOOF_RESPONSE, null, waitReason);
+        }
+
+        // 3. Fallback: global or per-endpoint HOLD_AT_PROXY for Action methods
         if (!ActionEngine.isActionMethod(method)) {
             return null;
         }
+        boolean endpointHold = actionEngine.isEndpointProxyHold(method, path);
         boolean holdMode = c.holdActionAtProxy
                 || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
                 || actionEngine.isHoldAllActionAtProxy()
-                || actionEngine.isEndpointProxyHold(method, path);
+                || endpointHold;
         if (!holdMode) {
             return null;
         }
         if (quickReject(method, path, svc.host()) != null) {
             return null;
         }
-        String fullUrl = url != null ? url : svc.protocol() + "://" + svc.hostLabel() + path;
-        TargetEntry target = targetMatch(method, path, svc.host());
-        if (filterReason(c, fullUrl, method, path, target) != null) {
-            return null;
+        if (!endpointHold && c.captureEnabled) {
+            String fullUrl = url != null ? url : svc.protocol() + "://" + svc.hostLabel() + path;
+            TargetEntry target = targetMatch(method, path, svc.host());
+            if (filterReason(c, fullUrl, method, path, target) != null) {
+                return null;
+            }
         }
-        return new ProxyInterceptOutcome(ActionInterceptRule.Effect.BLOCK_SPOOF, DEFAULT_HOLD_SPOOF_RESPONSE, null);
+        return new ProxyInterceptOutcome(ActionInterceptRule.Effect.BLOCK_SPOOF,
+                DEFAULT_HOLD_SPOOF_RESPONSE, null,
+                endpointHold ? ("Giữ ở Proxy: " + method + " " + ActionEngine.normalizePathTemplate(path))
+                        : "Giữ ở Proxy (Action API)");
     }
 
     /**
@@ -1119,17 +1161,22 @@ public final class Engine {
      * Phương pháp 1 (HOLD_AT_PROXY): Thu nhận Action request đã được giữ tại Proxy (chưa thực thi trên Server).
      */
     public void onProxyHeldRequest(Service svc, byte[] request, String url) {
-        onProxyHeldRequest(svc, request, url, null);
+        onProxyHeldRequest(svc, request, url, null, null);
     }
 
     public void onProxyHeldRequest(Service svc, byte[] request, String url, ActionInterceptRule matchedRule) {
+        onProxyHeldRequest(svc, request, url, matchedRule, null);
+    }
+
+    public void onProxyHeldRequest(Service svc, byte[] request, String url, ActionInterceptRule matchedRule, String customSource) {
         if (closed) {
             return;
         }
         int dest = activeBranch().id();
-        String source = matchedRule != null ? ("Proxy-Rule[" + matchedRule.name() + "]") : "Proxy-Held";
+        String source = !Text.blank(customSource) ? customSource
+                : (matchedRule != null ? ("Proxy-Rule[" + matchedRule.name() + "]") : "Proxy-Held");
         Message m = new Message(svc, request, null, url);
-        captureExec.execute(() -> safely(() -> process(m, source, true, dest)));
+        captureExec.execute(() -> safely(() -> process(m, source, false, dest)));
     }
 
     /** Manual capture from the context menu. */
@@ -1327,11 +1374,11 @@ public final class Engine {
         g.setPending(pending);
         g.setPlaceHint(hint);
         boolean isHeld = "Proxy-Held".equals(source)
-                || (source != null && source.contains("Chặn"))
+                || (source != null && (source.startsWith("Proxy-Rule[") || source.startsWith("Proxy-Wait[") || source.contains("Chặn")))
                 || (m.response() != null && "true".equalsIgnoreCase(HttpBytes.header(m.response(), "X-JCrawl-Held")));
         if (isHeld) {
             g.setHeldAtProxy(true);
-            g.setActiveIdNote("Đã chặn ở Proxy (Server giữ nguyên ID)");
+            g.setActiveIdNote("Đã chặn ở Proxy (Chưa gửi Server — bấm Gửi thủ công)");
         } else if (m.response() != null) {
             g.setOrigMeta(HttpBytes.statusCode(m.response()), HttpBytes.bodyLength(m.response()));
             actionEngine.harvest(method, path, m.request(), m.response(),
@@ -1445,7 +1492,7 @@ public final class Engine {
         if (!autoHideRefresh && c.autoRepeater) {
             toRepeater(g, defaultTargets(g, false), false);
         }
-        if (!autoHideRefresh && c.autoSend) {
+        if (!autoHideRefresh && c.autoSend && !g.heldAtProxy()) {
             List<RoleResult> t = new ArrayList<>(g.results());
             if (c.autoSendOriginal) {
                 t.add(0, g.origResult());
@@ -1618,6 +1665,12 @@ public final class Engine {
     public void setApiActionMode(ApiGroup g, ActionEngine.ActionMode mode) {
         if (g == null) return;
         g.setActionModeOverride(mode);
+        if (mode == ActionEngine.ActionMode.HOLD_AT_PROXY) {
+            actionEngine.setEndpointProxyHold(g.method(), g.path(), true);
+        } else if (mode == ActionEngine.ActionMode.INTERCEPT_WAIT) {
+            actionEngine.setEndpointInterceptWait(g.method(), g.path(), true);
+            actionEngine.setInterceptWaitEnabled(true);
+        }
         g.setActiveIdNote(mode == null ? "Theo mặc định (" + config.actionMode.label + ")" : mode.label);
         touch(g);
         log("Đặt chế độ xử lý Action cho API #" + g.gid() + " -> " + (mode == null ? "Mặc định" : mode.label), g.gid());
@@ -1630,6 +1683,36 @@ public final class Engine {
         touch(g);
         log((hold ? "Bật" : "Tắt") + " Chặn tại Proxy (Phương pháp 1) cho endpoint " + g.method() + " "
                 + ActionEngine.normalizePathTemplate(g.path()), g.gid());
+    }
+
+    public void toggleEndpointInterceptWait(ApiGroup g, boolean on) {
+        if (g == null) return;
+        actionEngine.setEndpointInterceptWait(g.method(), g.path(), on);
+        if (on) {
+            actionEngine.setInterceptWaitEnabled(true);
+        }
+        g.setActiveIdNote(on ? "Chặn chờ duyệt (Đợi tôi bấm Gửi)" : null);
+        touch(g);
+        changes.structure();
+        log((on ? "Bật" : "Tắt") + " Chặn chờ duyệt (Đợi tôi bấm Gửi) cho endpoint " + g.method() + " "
+                + ActionEngine.normalizePathTemplate(g.path()), g.gid());
+    }
+
+    public void toggleBranchInterceptWait(String branchPath, boolean on) {
+        if (Text.blank(branchPath)) return;
+        String norm = Hierarchy.normalize(branchPath);
+        actionEngine.setBranchInterceptWait(norm, on);
+        if (on) {
+            actionEngine.setInterceptWaitEnabled(true);
+        }
+        changes.structure();
+        log((on ? "Bật" : "Tắt") + " Chặn chờ duyệt (Đợi tôi bấm Gửi) cho nhánh '" + norm + "'", null);
+    }
+
+    public void setInterceptWaitEnabled(boolean on) {
+        actionEngine.setInterceptWaitEnabled(on);
+        changes.structure();
+        log((on ? "BẬT" : "TẮT") + " chế độ Chặn chờ duyệt trực tiếp tại Proxy", null);
     }
 
     /**
@@ -3154,6 +3237,7 @@ public final class Engine {
 
     public void close() {
         closed = true;
+        proxyQueue.releaseAll(ProxyInterceptQueue.ResolutionKind.DROP);
         dispatcher.cancelAll();
         flushQuietly();
         captureExec.shutdownNow();

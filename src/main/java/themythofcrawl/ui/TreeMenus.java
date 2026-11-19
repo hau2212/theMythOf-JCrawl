@@ -90,6 +90,23 @@ final class TreeMenus {
                     m.add(Ui.item("Copy STT + Path của các API trong nhánh", t -> Icons.copy(t.muted), () -> ui.copy(many)));
                     m.add(Ui.item("Bật / Tắt Role cho nhánh \"" + title + "\"...", Icons::sliders,
                             () -> ui.roleScopeDialog(false, RoleScopes.Scope.BRANCH, List.of(prefix), null, null)));
+                    boolean branchWait = engine.actionEngine().isBranchInterceptWait(prefix)
+                            && engine.actionEngine().isInterceptWaitEnabled();
+                    m.add(Ui.item(branchWait
+                                    ? "Tắt Chặn chờ duyệt (Đợi tôi bấm Gửi) cho nhánh \"" + Hierarchy.leaf(prefix) + "\""
+                                    : "Bật Chặn chờ duyệt (Đợi tôi bấm Gửi) cho nhánh \"" + Hierarchy.leaf(prefix) + "\"",
+                            t -> Icons.strategyShield(branchWait ? t.danger.text() : t.accent.text(), 14),
+                            () -> {
+                                boolean next = !branchWait;
+                                engine.toggleBranchInterceptWait(prefix, next);
+                                ui.syncHeader();
+                                ui.flash(next
+                                        ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — bấm nút trên UI sẽ đợi bạn duyệt!"
+                                        : "Đã TẮT Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
+                                if (next) {
+                                    ProxyInterceptDialog.showFloating(ui);
+                                }
+                            }));
                     m.add(Ui.item("Luật Chặn Proxy cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (theo Method)...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();

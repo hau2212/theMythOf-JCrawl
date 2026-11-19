@@ -85,23 +85,26 @@ jobs:
           cat <<EOF > /tmp/release_notes.md
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
-          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Quy ước phiên bản xem tại \`VERSIONING.md\` (nâng tính năng/UI tăng số sau: \`2.2 -> 2.3 -> 2.4\`; nâng thuật toán/kiến trúc lõi từ \`2.X\` giữ nguyên nhánh sau: \`2.2 -> 3.2\`, \`2.3 -> 3.3\`).
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Quy ước phiên bản xem tại \`VERSIONING.md\` (nâng tính năng/UI tăng số sau: \`2.3 -> 2.4\`; nâng thuật toán/kiến trúc lõi từ \`2.X\` giữ nguyên nhánh sau: \`2.4 -> 3.4\`).
 
           ### Các nâng cấp & sửa lỗi trọng tâm trong \`${TAG}\`
 
-          1. **Loại bỏ 100% lỗi rò rỉ thẻ \`<html>\` & mã \`&amp;\` / \`&gt;\` trên Burp Suite**:
-             - Thay thế hoàn toàn toàn bộ \`JLabel("<html>...")\` bằng thành phần xuống dòng thuần Swing mới \`WrappedText\` (miễn nhiễm với \`UIManager.put("html.disable", true)\` của Burp Suite).
-             - Sửa triệt để lỗi thụt lề 200px & khoảng trắng rỗng trong thẻ hướng dẫn \`StructuredAdviceCard\` và 4 thẻ chiến lược ở **Action Workbench**.
-             - Bổ sung kiểm thử tự động vĩnh viễn cấm tuyệt đối thẻ \`<html>\` trong toàn bộ mã nguồn UI.
+          1. **Chế độ #5 mới — Chặn chờ duyệt trực tiếp tại Proxy (\`INTERCEPT_WAIT\` — Đợi tôi bấm Gửi lên Server)**:
+             - Cho phép bật chặn đứng request ngay khi bạn bấm nút trên trình duyệt (VD: **Save / Xóa / Cập nhật...**) theo **mọi phạm vi**:
+               - **Toàn bộ** (chọn ma trận HTTP Method: \`POST\`, \`PUT\`, \`PATCH\`, \`DELETE\`, \`GET\`, \`HEAD\`, \`OPTIONS\`),
+               - **1 Nhánh / Path bất kỳ** (kèm nhánh con, bật nhanh qua chuột phải hoặc nút \`+ Chặn nhánh hiện tại\`),
+               - **1 API đã xuất hiện** (chuột phải API -> \`Chặn chờ duyệt cho API này\`),
+               - **Luật Chặn Proxy nâng cao** (wildcard/regex/host với hành động mới \`Chặn chờ duyệt\`).
+             - Bổ sung cửa sổ nổi kéo thả & co giãn **Hàng chờ Chặn Proxy trực tiếp** (\`ProxyInterceptDialog\`, hỗ trợ **Ghim nổi**, xem/chỉnh sửa trực tiếp raw HTTP request kèm tự động tính lại \`Content-Length\`) với các nút 1 chạm: **\`Gửi lên Server (Forward)\`**, **\`Lưu vào bảng & Giữ (Không đẩy Server)\`**, **\`Hủy bỏ (Drop)\`**, **\`Gửi tất cả\`**, **\`Hủy tất cả\`**.
+             - Nút trạng thái trực tiếp ngay trên thanh tiêu đề chính (hiện số request đang bị chặn màu đỏ nổi bật & tự động bật cửa sổ Hàng chờ khi có request bị chặn).
 
-          2. **Thiết kế lại Công tắc \`BẬT | TẮT\` trong Tab Vai trò (Roles)**:
-             - Thay thế ô \`[ □ TẮT ]\` lạc quẻ bằng cụm công tắc phân đoạn 2 ô vuông góc tối giản **\`[ BẬT | TẮT ]\`** (\`arc = 0\`, viền hairline \`1px\`, xanh ngọc khi BẬT / xám đá thanh lịch có gạch chân \`2px\` khi TẮT) đồng bộ hoàn hảo với thanh chọn ở khung cấu hình bên phải và không còn bị chói nền khi chọn dòng.
-             - Bổ sung bộ biên tập ô tùy chỉnh \`SquareStatusEditor\` bấm 1 chạm mượt mà, loại bỏ hoàn toàn hiện tượng nhấp nháy checkbox mặc định của Swing.
-
-          3. **Cửa sổ Quản lý Bản Trùng & Bản Gốc (#1) dạng Nổi (Floating) — Kéo thả & Mở rộng tùy ý**:
-             - Thay thế popup \`JPopupMenu\` bị ghim cứng tại chỗ bằng cửa sổ nổi không khóa thao tác (**modeless**), cho phép **kéo thả di chuyển tự do**, **kéo viền mở rộng/thu gọn tùy ý**, ghi nhớ kích thước yêu thích (\`UiPrefs\`), bấm **\`Ghim\`** để nổi trên cùng, và bấm \`ESC\` để đóng nhanh.
-             - Cột \`Vị trí trong cây\` tự động giãn lấp đầy khung khi mở rộng cửa sổ; nới rộng cột \`Trạng thái\` & \`Lần cuối\` để không bao giờ bị cắt chữ \`Chờ bạn chọn\` hay giờ \`07:21:45\`.
+          2. **Sửa triệt để 5 lỗi gốc khiến Chiến lược #1 ("Giữ ở Proxy") không chặn được khi bấm Save**:
+             - Chuyển cổng chặn chính sang \`api.proxy().registerRequestHandler(ProxyRequestHandler)\` — tương thích **100% mọi phiên bản Burp Suite Montoya (2023 -> 2026.7+)**, dùng reflection an toàn cho \`RequestToBeSentAction.spoof()\` để không bao giờ bị lỗi \`NoSuchMethodError\` trên Burp bản cũ (tự rơi về \`ProxyRequestReceivedAction.drop()\` an toàn tuyệt đối).
+             - Sửa lỗi chọn Chiến lược #1 ở phạm vi \`Riêng API đang chọn\` không đăng ký vào danh sách giữ ở Proxy.
+             - Sửa lỗi \`autoSend = true\` tự động bắn lại request vừa bị giữ lên Server.
+             - Sửa lỗi bộ lọc Capture (\`captureEnabled = false\`, \`apiRegex\`, \`targetOnly\`) âm thầm bỏ qua luật chặn chủ động của người dùng.
+             - Bỏ qua \`X-JCrawl-Held: true\` trong \`ProxyResponseHandler\` để tránh ghi trùng request đã giữ.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

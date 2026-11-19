@@ -256,8 +256,11 @@ public final class ActionWorkbenchDialog {
 
         JPanel topRow = new JPanel(new BorderLayout(8, 0));
         topRow.setOpaque(false);
+        String perApiLbl = focusGroup != null
+                ? "Riêng API: " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 22)
+                : "Riêng API đang chọn";
         SegmentedToggle scopeToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("Riêng API đang chọn", "Ghi đè chiến lược chỉ cho API này", t -> t.accent, (t, s) -> null, false),
+                new SegmentedToggle.Option(perApiLbl, "Ghi đè chiến lược chỉ cho API đang chọn", t -> t.accent, (t, s) -> null, false),
                 new SegmentedToggle.Option("Mặc định toàn cục", "Áp dụng cho mọi Action API trong Extension", t -> t.info, (t, s) -> null, false));
         scopeToggle.setFixedHeight(26);
         scopeToggle.setSelectedIndex(perApiScope[0] ? 0 : 1);
@@ -272,10 +275,60 @@ public final class ActionWorkbenchDialog {
 
         topRow.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Phạm vi áp dụng:"), scopeToggle), BorderLayout.WEST);
         topRow.add(smartAutoBtn, BorderLayout.EAST);
-        p.add(topRow, BorderLayout.NORTH);
+
+        // Mode #5: Live Interactive Proxy Intercept Wait banner (pause & wait for manual Forward)
+        Theme th = Theme.current();
+        JPanel liveWaitBanner = new JPanel(new BorderLayout(10, 0));
+        liveWaitBanner.setOpaque(true);
+        liveWaitBanner.setBackground(th.danger.fill());
+        liveWaitBanner.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 4, 1, 1, th.danger.solidFill()),
+                BorderFactory.createEmptyBorder(8, 12, 8, 10)));
+
+        JPanel waitTextCol = new JPanel(new BorderLayout(0, 2));
+        waitTextCol.setOpaque(false);
+        JLabel waitTitle = new JLabel("5. Chặn chờ duyệt trực tiếp tại Proxy (Đợi tôi bấm Gửi lên Server)",
+                Icons.strategyShield(th.danger.text(), 15), JLabel.LEFT);
+        waitTitle.setFont(th.boldFont);
+        waitTitle.setForeground(th.danger.text());
+        waitTextCol.add(waitTitle, BorderLayout.NORTH);
+        waitTextCol.add(themythofcrawl.ui.kit.WrappedText.body(
+                "Chặn đứng request ngay khi bạn bấm nút trên UI (Save / Xóa / Cập nhật...) theo Toàn bộ, 1 Nhánh/Path, hoặc 1 API bất kỳ -> giữ tại Hàng chờ Chặn để bạn xem/sửa và bấm Gửi lên Server.",
+                520), BorderLayout.CENTER);
+        liveWaitBanner.add(waitTextCol, BorderLayout.CENTER);
+
+        final boolean[] syncingBanner = {false};
+        SegmentedToggle waitMasterToggle = new SegmentedToggle(
+                new SegmentedToggle.Option("TẮT", "Tắt chặn chờ duyệt trực tiếp", t -> t.slate, null, false),
+                new SegmentedToggle.Option("BẬT CHẶN", "Bật chặn đứng request tại Proxy và đợi thao tác", t -> t.danger, null, false));
+        waitMasterToggle.setFixedHeight(26);
+        waitMasterToggle.setSelectedIndex(engine.actionEngine().isInterceptWaitEnabled() ? 1 : 0);
+
+        JButton openWaitQueueBtn = Ui.accent("Mở Hàng chờ Chặn...",
+                t -> Icons.send(t.danger.onSolid(), 13), t -> t.danger, () -> MainPanel.openInterceptQueue(engine));
+        JPanel waitRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        waitRight.setOpaque(false);
+        waitRight.add(waitMasterToggle);
+        waitRight.add(openWaitQueueBtn);
+        liveWaitBanner.add(waitRight, BorderLayout.EAST);
+
+        JPanel northWrap = new JPanel(new BorderLayout(0, 8));
+        northWrap.setOpaque(false);
+        northWrap.add(topRow, BorderLayout.NORTH);
+        northWrap.add(liveWaitBanner, BorderLayout.SOUTH);
+        p.add(northWrap, BorderLayout.NORTH);
 
         JPanel cardsGrid = new JPanel(new GridLayout(2, 2, 10, 10));
         cardsGrid.setOpaque(false);
+
+        JCheckBox holdAllChk = new JCheckBox("Bật Chặn tại Proxy cho mọi Action API khi Crawl", engine.config().holdActionAtProxy);
+        holdAllChk.setOpaque(false);
+        JCheckBox holdEpChk = focusGroup == null ? null : new JCheckBox("Chỉ chặn tại Proxy cho endpoint này (" + focusGroup.method() + " "
+                + ActionEngine.normalizePathTemplate(focusGroup.path()) + ")",
+                engine.actionEngine().isEndpointProxyHold(focusGroup.method(), focusGroup.path()));
+        if (holdEpChk != null) {
+            holdEpChk.setOpaque(false);
+        }
 
         List<StrategyCard> cards = new ArrayList<>();
         Runnable refreshCards = () -> {
@@ -283,13 +336,35 @@ public final class ActionWorkbenchDialog {
             for (StrategyCard sc : cards) {
                 sc.setSelected(sc.mode == active, active == ActionMode.AUTO_SMART);
             }
+            holdAllChk.setSelected(engine.config().holdActionAtProxy);
+            if (holdEpChk != null && focusGroup != null) {
+                holdEpChk.setSelected(engine.actionEngine().isEndpointProxyHold(focusGroup.method(), focusGroup.path()));
+            }
+            syncingBanner[0] = true;
+            try {
+                waitMasterToggle.setSelectedIndex(engine.actionEngine().isInterceptWaitEnabled() ? 1 : 0);
+            } finally {
+                syncingBanner[0] = false;
+            }
         };
+
+        waitMasterToggle.onChange(idx -> {
+            if (syncingBanner[0]) {
+                return;
+            }
+            engine.setInterceptWaitEnabled(idx == 1);
+            if (idx == 1 && perApiScope[0] && focusGroup != null) {
+                engine.toggleEndpointInterceptWait(focusGroup, true);
+            }
+            refreshBanner.run();
+            if (onAfterAction != null) onAfterAction.run();
+        });
 
         cards.add(new StrategyCard(
                 ActionMode.HOLD_AT_PROXY,
                 "Giữ ở Proxy (Không xóa trên Server)",
-                "Trình duyệt nhận 200 OK ảo khi crawl; Server vẫn giữ nguyên bản ghi chưa bị xóa, để lúc bạn bấm Gửi trong Extension mới thực thi thật.",
-                "Phù hợp nhất khi: bạn đang bấm xóa/hủy trực tiếp trên trình duyệt lúc crawl.",
+                "Trình duyệt nhận 200 OK ảo (hoặc Drop) khi crawl; Server vẫn giữ nguyên bản ghi chưa bị xóa, để lúc bạn bấm Gửi trong Extension mới thực thi thật.",
+                "Phù hợp nhất khi: bạn muốn lưu nháp vào bảng Extension mà không làm thay đổi Server ngay.",
                 t -> t.warning,
                 t -> Icons.strategyShield(t.warning.text(), 18),
                 () -> {
@@ -358,8 +433,6 @@ public final class ActionWorkbenchDialog {
         bottom.setBackground(Theme.current().surfaceAlt);
         bottom.setBorder(BorderFactory.createLineBorder(Theme.current().border, 1));
 
-        JCheckBox holdAllChk = new JCheckBox("Bật Chặn tại Proxy cho mọi Action API khi Crawl", engine.config().holdActionAtProxy);
-        holdAllChk.setOpaque(false);
         holdAllChk.addActionListener(e -> {
             Config next = engine.config().copy();
             next.holdActionAtProxy = holdAllChk.isSelected();
@@ -369,11 +442,7 @@ public final class ActionWorkbenchDialog {
         });
         bottom.add(holdAllChk);
 
-        if (focusGroup != null) {
-            JCheckBox holdEpChk = new JCheckBox("Chỉ chặn tại Proxy cho endpoint này (" + focusGroup.method() + " "
-                    + ActionEngine.normalizePathTemplate(focusGroup.path()) + ")",
-                    engine.actionEngine().isEndpointProxyHold(focusGroup.method(), focusGroup.path()));
-            holdEpChk.setOpaque(false);
+        if (holdEpChk != null && focusGroup != null) {
             holdEpChk.addActionListener(e -> {
                 engine.toggleEndpointProxyHold(focusGroup, holdEpChk.isSelected());
                 refreshBanner.run();
@@ -404,6 +473,9 @@ public final class ActionWorkbenchDialog {
                 next.holdActionAtProxy = true;
             }
             engine.applyConfig(next);
+            if (mode == ActionMode.INTERCEPT_WAIT) {
+                engine.setInterceptWaitEnabled(true);
+            }
         }
     }
 
@@ -929,6 +1001,7 @@ public final class ActionWorkbenchDialog {
             case LOCK_2XX -> "Khóa 200 OK (Snapshot)";
             case LIVE_ID_POOL -> "Kho ID Sống";
             case PRODUCER_RECREATE -> "Chuỗi Tạo Mới -> Hành Động";
+            case INTERCEPT_WAIT -> "Chặn chờ duyệt trực tiếp (Đợi bấm Gửi)";
         };
     }
 
@@ -1133,6 +1206,10 @@ public final class ActionWorkbenchDialog {
                 testResultPill.setText("CHO QUA (Ngoại lệ #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
                 testResultPill.setToken(t -> t.success);
                 testResultPill.setIcon(t -> Icons.check(t.success.text()));
+            } else if (dec.effect() == ActionInterceptRule.Effect.INTERCEPT_WAIT) {
+                testResultPill.setText("CHẶN CHỜ DUYỆT — Đợi bạn bấm Gửi (Luật #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
+                testResultPill.setToken(t -> t.danger);
+                testResultPill.setIcon(t -> Icons.strategyShield(t.danger.text(), 12));
             } else if (dec.effect() == ActionInterceptRule.Effect.BLOCK_DROP) {
                 testResultPill.setText("CHẶN & DROP (Luật #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
                 testResultPill.setToken(t -> t.danger);

@@ -555,6 +555,9 @@ final class ApiTab {
         }
         m.add(sendSub);
         m.addSeparator();
+        m.add(Ui.item("Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)...",
+                t -> Icons.strategyShield(engine.proxyQueue().pendingCount() > 0 ? t.danger.text() : t.accent.text(), 14),
+                () -> ProxyInterceptDialog.showFloating(ui)));
         m.add(Ui.item("Action Workbench & Luật Chặn Proxy (5 tab)...", Icons::workbench,
                 () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                     resultModel.refresh();
@@ -1734,6 +1737,23 @@ final class ApiTab {
                 ui.renameBranchDialog(b);
             }
         }));
+        String curBranchForWait = ui.selectedBranch();
+        if (curBranchForWait != null && !curBranchForWait.isBlank()) {
+            boolean bw = engine.actionEngine().isBranchInterceptWait(curBranchForWait)
+                    && engine.actionEngine().isInterceptWaitEnabled();
+            m.add(Ui.item(bw
+                            ? "Tắt Chặn chờ duyệt (Đợi bấm Gửi) cho nhánh \"" + Hierarchy.leaf(curBranchForWait) + "\""
+                            : "Bật Chặn chờ duyệt (Đợi bấm Gửi) cho nhánh \"" + Hierarchy.leaf(curBranchForWait) + "\"",
+                    t -> Icons.strategyShield(bw ? t.danger.text() : t.accent.text(), 14),
+                    () -> {
+                        boolean next = !bw;
+                        engine.toggleBranchInterceptWait(curBranchForWait, next);
+                        ui.syncHeader();
+                        if (next) {
+                            ProxyInterceptDialog.showFloating(ui);
+                        }
+                    }));
+        }
         m.add(Ui.item("Quản lý các cấp & Loại Sub-folder...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));
         m.add(Ui.item("Xóa Nhánh đang chọn...", t -> Icons.trash(t.danger.text()), () -> ui.deleteBranchDialog(ui.selectedBranch())));
         m.addSeparator();

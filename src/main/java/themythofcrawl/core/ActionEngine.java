@@ -32,7 +32,8 @@ public final class ActionEngine {
         HOLD_AT_PROXY("1. Chặn ở Proxy (Giữ trạng thái Server)", "Trình duyệt nhận 200 ảo; Server giữ nguyên ID cho tới khi bấm Gửi"),
         LOCK_2XX("2. Khóa bảo vệ 200 OK (Snapshot & 3 tùy chọn)", "Lưu bản sao 200 OK gốc; cho phép Kế thừa 200 OK, Đổi ID đẩy thật, hoặc Gửi cưỡng bức"),
         LIVE_ID_POOL("3. Giỏ ID sống (Tự động nạp & Đổi ID)", "Thu thập ID từ API danh sách/chi tiết để thay thế ID đã bị xóa"),
-        PRODUCER_RECREATE("4. Gọi API Tạo mới (Producer -> ID mới)", "Gọi POST tạo bản ghi mới lấy ID tươi trước khi gửi DELETE/PUT/POST");
+        PRODUCER_RECREATE("4. Gọi API Tạo mới (Producer -> ID mới)", "Gọi POST tạo bản ghi mới lấy ID tươi trước khi gửi DELETE/PUT/POST"),
+        INTERCEPT_WAIT("5. Chặn chờ duyệt trực tiếp (Đợi tôi bấm Gửi)", "Chặn đứng request tại Proxy và hiện ngay trong Hàng chờ Chặn để bạn xem/sửa rồi bấm Gửi lên Server");
 
         public final String label;
         public final String description;
@@ -90,6 +91,17 @@ public final class ActionEngine {
     private volatile Lock2xxStrategy defaultLock2xxStrategy = Lock2xxStrategy.REAL_SEND_FRESH_ID;
     private final AtomicInteger uniqueSeq = new AtomicInteger(100);
 
+    // Chế độ #5 (INTERCEPT_WAIT): Chặn đứng request tại Proxy và đợi người dùng bấm Gửi / Hủy trong Extension
+    private volatile boolean interceptWaitEnabled = false;
+    private volatile boolean interceptWaitAllScope = true;
+    private final Set<String> interceptWaitMethods = ConcurrentHashMap.newKeySet();
+    private final Set<String> interceptWaitBranches = ConcurrentHashMap.newKeySet();
+    private final Set<String> interceptWaitEndpoints = ConcurrentHashMap.newKeySet();
+
+    public ActionEngine() {
+        interceptWaitMethods.addAll(ACTION_METHODS);
+    }
+
     public static boolean isActionMethod(String method) {
         if (method == null) return false;
         return ACTION_METHODS.contains(method.toUpperCase(Locale.ROOT));
@@ -109,6 +121,134 @@ public final class ActionEngine {
 
     public void setHoldAllActionAtProxy(boolean holdAll) {
         this.holdAllActionAtProxy = holdAll;
+    }
+
+    public boolean isInterceptWaitEnabled() {
+        return interceptWaitEnabled;
+    }
+
+    public void setInterceptWaitEnabled(boolean enabled) {
+        this.interceptWaitEnabled = enabled;
+    }
+
+    public boolean isInterceptWaitAllScope() {
+        return interceptWaitAllScope;
+    }
+
+    public void setInterceptWaitAllScope(boolean allScope) {
+        this.interceptWaitAllScope = allScope;
+    }
+
+    public Set<String> getInterceptWaitMethods() {
+        return new LinkedHashSet<>(interceptWaitMethods);
+    }
+
+    public void setInterceptWaitMethods(Collection<String> methods) {
+        interceptWaitMethods.clear();
+        if (methods != null) {
+            for (String m : methods) {
+                if (m != null && !m.isBlank()) {
+                    interceptWaitMethods.add(m.trim().toUpperCase(Locale.ROOT));
+                }
+            }
+        }
+    }
+
+    public void toggleInterceptWaitMethod(String method, boolean on) {
+        if (method == null || method.isBlank()) {
+            return;
+        }
+        String m = method.trim().toUpperCase(Locale.ROOT);
+        if (on) {
+            interceptWaitMethods.add(m);
+        } else {
+            interceptWaitMethods.remove(m);
+        }
+    }
+
+    public Set<String> getInterceptWaitBranches() {
+        return new LinkedHashSet<>(interceptWaitBranches);
+    }
+
+    public void setBranchInterceptWait(String branchPath, boolean on) {
+        if (branchPath == null || branchPath.isBlank()) {
+            return;
+        }
+        String norm = Hierarchy.normalize(branchPath);
+        if (on) {
+            interceptWaitBranches.add(norm);
+        } else {
+            interceptWaitBranches.remove(norm);
+        }
+    }
+
+    public boolean isBranchInterceptWait(String branchPath) {
+        if (branchPath == null || branchPath.isBlank()) {
+            return false;
+        }
+        String norm = Hierarchy.normalize(branchPath);
+        for (String b : interceptWaitBranches) {
+            if (b.equalsIgnoreCase(norm)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Set<String> getInterceptWaitEndpoints() {
+        return new LinkedHashSet<>(interceptWaitEndpoints);
+    }
+
+    public void setEndpointInterceptWait(String method, String path, boolean on) {
+        String key = endpointHoldKey(method, path);
+        if (on) {
+            interceptWaitEndpoints.add(key);
+        } else {
+            interceptWaitEndpoints.remove(key);
+        }
+    }
+
+    public boolean isEndpointInterceptWait(String method, String path) {
+        return interceptWaitEndpoints.contains(endpointHoldKey(method, path));
+    }
+
+    /**
+     * Checks whether the incoming Proxy request matches the user's Live Intercept Wait configuration
+     * (by specific endpoint, active branch/sub-branch, or global scope + selected HTTP methods).
+     * Returns a concise Vietnamese reason when matched, or {@code null} when not matched.
+     */
+    public String matchInterceptWaitReason(String activeBranch, String method, String path) {
+        if (!interceptWaitEnabled) {
+            return null;
+        }
+        String m = method == null ? "" : method.trim().toUpperCase(Locale.ROOT);
+        // 1. Specific API endpoint match (any method explicitly pinned by user)
+        if (isEndpointInterceptWait(m, path)) {
+            return "Chặn API: " + m + " " + normalizePathTemplate(path);
+        }
+        boolean methodOk = interceptWaitMethods.isEmpty() || interceptWaitMethods.contains(m);
+        // 2. Specific branch / path match (exact or sub-branch)
+        if (!interceptWaitBranches.isEmpty() && methodOk && activeBranch != null && !activeBranch.isBlank()) {
+            String cur = Hierarchy.normalize(activeBranch);
+            for (String b : interceptWaitBranches) {
+                if (cur.equalsIgnoreCase(b)
+                        || cur.toLowerCase(Locale.ROOT).startsWith((b + " > ").toLowerCase(Locale.ROOT))) {
+                    return "Chặn nhánh: " + b + " (" + m + ")";
+                }
+            }
+        }
+        // 3. Global scope match for selected HTTP methods
+        if (interceptWaitAllScope && methodOk) {
+            return "Chặn toàn bộ (" + m + ")";
+        }
+        return null;
+    }
+
+    public boolean hasAnyActiveProxyIntercept() {
+        return interceptWaitEnabled
+                || holdAllActionAtProxy
+                || !proxyHoldEndpoints.isEmpty()
+                || activeBlockRuleCount() > 0;
     }
 
     public Lock2xxStrategy getDefaultLock2xxStrategy() {
