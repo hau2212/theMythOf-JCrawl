@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      restore_v1_commit:
+        description: 'Optional commit SHA to rebuild and restore the V_1.0 release asset'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -14,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,19 +32,71 @@ jobs:
         with:
           name: theMythOf-JCrawl-jar
           path: build/libs/theMythOf-JCrawl.jar
-      - name: Publish the "V_1.0" release (jar ready to load in Burp, keeping previous release intact)
+      - name: Publish the "V_2.0_beta" prerelease (keeping V_1.0 and previous releases intact)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_1.0.jar
-          NOTES="Bản V_1.0 (tự động build từ commit ${GITHUB_SHA::7}) — Đã tích hợp đầy đủ 4 Phương pháp Bảo vệ & Tái tạo ID sống cho Action API (POST/PUT/PATCH/DELETE), Menu chuột phải chọn đổi ID bất kỳ lúc nào cho từng API, và giao diện tối giản hình chữ nhật/vuông sắc cạnh + Tree-Table. Tải file theMythOf-JCrawl_V_1.0.jar rồi nạp vào Burp (Extensions > Installed > Add > Java). (Bản chưa cập nhật chức năng Action vẫn được giữ nguyên ở bản release bên dưới)."
-          git tag -f V_1.0 "$GITHUB_SHA"
-          git push -f origin refs/tags/V_1.0
-          if gh release view V_1.0 > /dev/null 2>&1; then
-            gh release upload V_1.0 build/libs/theMythOf-JCrawl_V_1.0.jar --clobber
-            gh release edit V_1.0 --title "theMythOf-JCrawl V_1.0 — Bản cập nhật 4 Phương pháp Action API & Giao diện Vuông/Tree-Table" --notes "$NOTES" --prerelease=false --latest
+          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_2.0_beta.jar
+          cat <<'EOF' > /tmp/release_notes.md
+          ## theMythOf-JCrawl `V_2.0_beta` (Prerelease)
+
+          > Bản beta phát hành song song từ commit `${GITHUB_SHA::7}` (giữ nguyên toàn bộ các bản phát hành cũ `V_1.0` và bản tiêu chuẩn). Tương thích ngược 100% với workspace `V_1.0`.
+
+          ### 7 Nâng cấp chính trong `V_2.0_beta`
+
+          1. **Thanh Header & Đích (`Breadcrumb`) kiến trúc vuông / chữ nhật đồng kích cỡ (`24px`, `arc = 0`)**:
+             - Toàn bộ ô điều khiển, pill trạng thái, và các ô cấp trong `Đích` đồng bộ chiều cao `24px`, viền `1px`, không bo tròn.
+             - Hiển thị icon theo Loại phần tử (`NodeType`), đường gạch chân nhấn mạnh cho nhánh đang chọn, nút `«` xem cấp cha, `v` mở menu, `+` thêm nhanh mục con.
+          2. **Chế độ Tập trung (`Focus Mode`) cho nhánh / đường dẫn**:
+             - Nút `Tập trung` trên `ApiTab` và menu chuột phải vào nhánh giúp cô lập cây & bảng chỉ hiển thị API thuộc đường dẫn đó.
+             - Thanh banner ghim sắc cạnh `26px` cho phép chuyển nhanh giữa **`Chỉ nhánh này`** và **`Kèm nhánh con`** hoặc **`Thoát`**.
+          3. **Nhóm trực quan (`GroupCluster` — Cụm hiển thị)**:
+             - Gom các API liên quan thành Cụm trong cùng một nhánh để mở/thu gọn dễ nhìn (dùng icon cụm riêng, nhãn `[CỤM]`, viền đứt nét — hoàn toàn tách biệt với Sub-folder).
+             - **Đảm bảo bất biến**: không làm thay đổi `ApiGroup.branch()`, Copy STT+Path, vị trí xuất Excel hay `PlacementBook`.
+          4. **Phân loại phần tử UI cho Sub-node (`NodeTypeCatalog`) + CRUD & Custom Icon**:
+             - 7 loại dựng sẵn: `Thư mục`, `Đường Link`, `Button`, `Icon`, `Tab`, `Modal / Popup`, `Form`.
+             - Hỗ trợ **Thêm / Sửa / Xóa** loại phần tử tùy ý, tùy chỉnh icon (Vector dựng sẵn / Chữ viết tắt Monogram / Ảnh tùy chọn).
+          5. **Thiết kế lại Tab `Roles` tối giản (vuông/chữ nhật) + 4 Tính năng nâng cao**:
+             - Thay thế hoàn toàn nút gạt bo tròn bằng ô trạng thái vuông `[BẬT]` / `[TẮT]` (`SquareStatusRenderer`) và chip rule góc vuông.
+             - Huy hiệu phân tầng `Role.Tier` (`[ADM]`, `[MGR]`, `[STF]`, `[USR]`, `[GST]`, `[CUS]`), dải tóm tắt 3 ô chữ nhật đồng kích cỡ.
+             - **4 tính năng nâng cao**: Đếm ngược hạn JWT live, Trích Token/Cookie tự động từ API đã bắt, Ping kiểm tra Session sống/chết hàng loạt (`[200 LIVE]`/`[401 DEAD]`), So sánh Diff Rules giữa 2 Role.
+          6. **Quản lý chuỗi API Gốc & Trùng lặp (`LineageDialog` + `SmartAdvice`)**:
+             - Phân biệt rạch ròi `#1 API GỐC ĐỊNH HÌNH` (ghim đầu bảng, hoặc Ghost nếu gốc đã xóa) và các bản trùng `#2..#N`.
+             - Đầy đủ CRUD: Sửa đường dẫn, Sửa STT, Đặt bản khác làm GỐC `#1`, Chỉ giữ GỐC `#1` & Ẩn `#2+`, Đưa bản trùng về nhánh Gốc, Hiện/Ẩn/Xóa.
+             - Diễn giải bằng lời nói tự nhiên + **Khuyến nghị hành động** 1-click trong `LineageDialog`, `DupPopup`, và `AuditTab`.
+          7. **Hệ thống API Tag & Tag `[REFRESH]` cho API GET tự tải lại sau hành động**:
+             - Danh mục Tag dựng sẵn (`REFRESH`, `INIT`, `POLLING`, `ACTION-CORE`) + CRUD Tag tùy biến (`TagManagerDialog`).
+             - Tự động phát hiện API `GET` xuất hiện ngay sau `POST/PUT/PATCH/DELETE` (`[? Refresh]`) và hỗ trợ 4 chính sách **M1–M4** (`TAG_ONLY`, `AUTO_SKIP_DUP`, `AUTO_CLUSTER`, `AUTO_HIDE`).
+
+          Tải file `theMythOf-JCrawl_V_2.0_beta.jar` rồi nạp vào Burp (`Extensions > Installed > Add > Java`).
+          EOF
+          sed -i "s/\${GITHUB_SHA::7}/${GITHUB_SHA:0:7}/g" /tmp/release_notes.md
+          git tag -f V_2.0_beta "$GITHUB_SHA"
+          git push -f origin refs/tags/V_2.0_beta
+          if gh release view V_2.0_beta > /dev/null 2>&1; then
+            gh release upload V_2.0_beta build/libs/theMythOf-JCrawl_V_2.0_beta.jar --clobber
+            gh release edit V_2.0_beta \
+              --title "theMythOf-JCrawl V_2.0_beta — Giao diện Vuông đồng bộ, Tập trung, Cụm hiển thị, Loại Node, Roles tối giản, Lineage & Tag REFRESH" \
+              --notes-file /tmp/release_notes.md \
+              --prerelease
           else
-            gh release create V_1.0 build/libs/theMythOf-JCrawl_V_1.0.jar --title "theMythOf-JCrawl V_1.0 — Bản cập nhật 4 Phương pháp Action API & Giao diện Vuông/Tree-Table" \
-              --notes "$NOTES" --latest --target "$GITHUB_SHA"
+            gh release create V_2.0_beta build/libs/theMythOf-JCrawl_V_2.0_beta.jar \
+              --title "theMythOf-JCrawl V_2.0_beta — Giao diện Vuông đồng bộ, Tập trung, Cụm hiển thị, Loại Node, Roles tối giản, Lineage & Tag REFRESH" \
+              --notes-file /tmp/release_notes.md \
+              --prerelease --target "$GITHUB_SHA"
           fi
+      - name: Restore V_1.0 release asset from specified commit (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch' && inputs.restore_v1_commit != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESTORE_SHA: ${{ inputs.restore_v1_commit }}
+        run: |
+          git checkout "$RESTORE_SHA"
+          ./gradlew --no-daemon clean jar
+          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_1.0.jar
+          NOTES="Bản V_1.0 (build từ commit ${RESTORE_SHA:0:7}) — Đã tích hợp đầy đủ 4 Phương pháp Bảo vệ & Tái tạo ID sống cho Action API (POST/PUT/PATCH/DELETE), Menu chuột phải chọn đổi ID bất kỳ lúc nào cho từng API, và giao diện tối giản hình chữ nhật/vuông sắc cạnh + Tree-Table. Tải file theMythOf-JCrawl_V_1.0.jar rồi nạp vào Burp (Extensions > Installed > Add > Java). (Bản chưa cập nhật chức năng Action vẫn được giữ nguyên ở bản release bên dưới)."
+          git tag -f V_1.0 "$RESTORE_SHA"
+          git push -f origin refs/tags/V_1.0
+          gh release upload V_1.0 build/libs/theMythOf-JCrawl_V_1.0.jar --clobber
+          gh release edit V_1.0 --title "theMythOf-JCrawl V_1.0 — Bản cập nhật 4 Phương pháp Action API & Giao diện Vuông/Tree-Table" --notes "$NOTES" --prerelease=false --latest
