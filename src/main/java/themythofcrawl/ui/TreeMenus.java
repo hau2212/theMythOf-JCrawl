@@ -90,6 +90,8 @@ final class TreeMenus {
                     m.add(Ui.item("Copy STT + Path của các API trong nhánh", t -> Icons.copy(t.muted), () -> ui.copy(many)));
                     m.add(Ui.item("Bật / Tắt Role cho nhánh \"" + title + "\"...", Icons::sliders,
                             () -> ui.roleScopeDialog(false, RoleScopes.Scope.BRANCH, List.of(prefix), null, null)));
+                    m.add(Ui.item("Luật Chặn Proxy cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (theo Method)...", Icons::strategyShield,
+                            () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),
                             () -> ui.deleteBranchDialog(prefix)));

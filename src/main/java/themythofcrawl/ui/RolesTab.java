@@ -93,7 +93,12 @@ final class RolesTab {
         @Override
         public void updateUI() {
             super.updateUI();
-            setRowHeight(Theme.current().scaled(36));
+            super.setRowHeight(Theme.current().scaled(36));
+        }
+
+        @Override
+        public void setRowHeight(int rowHeight) {
+            super.setRowHeight(Math.max(rowHeight, Theme.current().scaled(36)));
         }
     };
     private final Card profileCard = new Card(t -> t.orig, true);
@@ -104,7 +109,7 @@ final class RolesTab {
     private final JLabel summaryWarn = makeSummaryCell("Hết hạn / Lỗi: 0", false);
 
     private final JLabel title = Ui.bold("Profile:");
-    private final JTextField name = new JTextField(15);
+    private final JTextField name = new JTextField(16);
     private final JComboBox<Role.Tier> tierBox = new JComboBox<>(Role.Tier.values());
     private boolean enabledState = true;
     private final JButton enabledToggle = new JButton("BẬT") {
@@ -115,7 +120,18 @@ final class RolesTab {
         }
     };
     private final RuleModel rules = new RuleModel();
-    private final ThemedTable rulesTable = new ThemedTable(rules);
+    private final ThemedTable rulesTable = new ThemedTable(rules) {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            super.setRowHeight(Theme.current().scaled(32));
+        }
+
+        @Override
+        public void setRowHeight(int rowHeight) {
+            super.setRowHeight(Math.max(rowHeight, Theme.current().scaled(32)));
+        }
+    };
     private final Pill expBadge = new Pill("", t -> t.danger, t -> Icons.warn(t.danger.text(), 11));
     private final JTextPane jwt = new JTextPane() {
         @Override
@@ -127,6 +143,9 @@ final class RolesTab {
             }
         }
     };
+    private final JButton jwtToggleBtn = new JButton();
+    private JScrollPane jwtScroll;
+    private boolean jwtExpanded = false;
     private final JLabel dirty = new JLabel(" ");
     private final Map<String, Engine.ProbeResult> probeResults = new ConcurrentHashMap<>();
     private String lastJwtPreview = "";
@@ -137,6 +156,7 @@ final class RolesTab {
         this.engine = ui.engine;
         Ui.style(table);
         table.setRowHeight(Theme.current().scaled(36));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -152,7 +172,11 @@ final class RolesTab {
         table.getColumnModel().getColumn(1).setCellRenderer(new SquareStatusRenderer());
         table.getColumnModel().getColumn(2).setCellRenderer(new AvatarNameRenderer());
         table.getColumnModel().getColumn(3).setCellRenderer(new RuleChipsRenderer());
-        Ui.widths(table, 32, 68, 178, 300);
+        Ui.widths(table, 38, 86, 205, 320);
+        table.getColumnModel().getColumn(0).setMinWidth(34);
+        table.getColumnModel().getColumn(1).setMinWidth(82);
+        table.getColumnModel().getColumn(2).setMinWidth(150);
+        table.getColumnModel().getColumn(3).setMinWidth(200);
 
         profileBadge.setFixedHeight(24).onClick(this::editOriginal);
         profileCard.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
@@ -169,17 +193,26 @@ final class RolesTab {
         JButton diffBtn = Ui.button("So sánh", Icons::compare, this::compareRolesDialog);
         diffBtn.setToolTipText("So sánh trực tiếp bảng Header/Cookie giữa 2 Role bất kỳ");
 
-        JPanel top = Ui.flow(FlowLayout.LEFT,
-                Ui.button("Thêm Role", t -> Icons.plus(t.fg), this::addRole),
-                Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles),
-                pingBtn,
-                diffBtn,
-                profileBadge,
-                more);
+        JPanel topLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        topLeft.setOpaque(false);
+        topLeft.add(Ui.accent("Thêm Role", t -> Icons.plus(t.accent.onSolid()), t -> t.accent, this::addRole));
+        topLeft.add(Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles));
+        topLeft.add(profileBadge);
 
-        JPanel summaryStrip = new JPanel(new GridLayout(1, 3, 4, 0));
+        JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
+        topRight.setOpaque(false);
+        topRight.add(pingBtn);
+        topRight.add(diffBtn);
+        topRight.add(more);
+
+        JPanel top = new JPanel(new BorderLayout(4, 0));
+        top.setOpaque(false);
+        top.add(topLeft, BorderLayout.WEST);
+        top.add(topRight, BorderLayout.EAST);
+
+        JPanel summaryStrip = new JPanel(new GridLayout(1, 3, 6, 0));
         summaryStrip.setOpaque(false);
-        summaryStrip.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        summaryStrip.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
         summaryStrip.add(summaryTotal);
         summaryStrip.add(summaryActive);
         summaryStrip.add(summaryWarn);
@@ -190,20 +223,22 @@ final class RolesTab {
         leftNorth.add(summaryStrip, BorderLayout.SOUTH);
 
         JPanel left = new JPanel(new BorderLayout(4, Theme.SPACE_1));
-        left.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_1));
+        left.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_1));
         left.add(leftNorth, BorderLayout.NORTH);
         left.add(MainPanel.scroll(table), BorderLayout.CENTER);
 
         Ui.style(rulesTable);
+        rulesTable.setRowHeight(Theme.current().scaled(32));
         rulesTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         rulesTable.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(new JComboBox<>(RuleMode.values())));
         rulesTable.getColumnModel().getColumn(2).setCellRenderer(new ModeRenderer());
-        Ui.widths(rulesTable, 160, 320, 120);
+        Ui.widths(rulesTable, 175, 290, 128);
         Ui.onPopup(rulesTable, e -> ruleEditorMenu().show(e.getComponent(), e.getX(), e.getY()));
 
         name.putClientProperty("JTextField.placeholderText", "VD: 01_Admin, 02_Staff...");
-        name.setPreferredSize(new Dimension(150, 24));
-        tierBox.setPreferredSize(new Dimension(126, 24));
+        name.setPreferredSize(new Dimension(168, 26));
+        name.setMinimumSize(new Dimension(120, 26));
+        tierBox.setPreferredSize(new Dimension(132, 26));
         tierBox.setToolTipText("Phân tầng cấp quyền dự kiến của Role (ADM / MGR / STF / USR / GST / CUS)");
         tierBox.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -222,7 +257,7 @@ final class RolesTab {
         });
 
         enabledToggle.setFocusPainted(false);
-        enabledToggle.setPreferredSize(new Dimension(74, 24));
+        enabledToggle.setPreferredSize(new Dimension(72, 26));
         enabledToggle.setToolTipText("Bấm để bật / tắt Role này");
         enabledToggle.addActionListener(e -> {
             setEnabledState(!enabledState);
@@ -232,60 +267,128 @@ final class RolesTab {
 
         jwt.setEditable(false);
         jwt.setFont(Theme.current().monoFont);
-        jwt.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
+        jwt.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
         expBadge.setVisible(false);
 
-        JPanel head = Ui.flow(FlowLayout.LEFT,
-                title,
-                name,
-                tierBox,
-                enabledToggle,
-                Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save),
-                dirty);
+        // Minimalist bordered Profile Header Card
+        JPanel headCard = new JPanel(new BorderLayout(8, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.surface);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(t.border),
+                        BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+            }
+        };
+        headCard.setOpaque(true);
+        headCard.setBackground(Theme.current().surface);
+        headCard.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Theme.current().border),
+                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
 
-        JButton[] ruleMoreRef = new JButton[1];
-        JButton ruleMore = Ui.dropdown("Thêm / Paste", null,
-                "Thêm rule xóa Header/Cookie, dán hàng loạt hoặc xem chú giải Mode",
-                () -> ruleEditorMenu().show(ruleMoreRef[0], 0, ruleMoreRef[0].getHeight()));
-        ruleMoreRef[0] = ruleMore;
+        JPanel headLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        headLeft.setOpaque(false);
+        headLeft.add(title);
+        headLeft.add(name);
+        headLeft.add(tierBox);
+        headLeft.add(enabledToggle);
 
-        JButton extractBtn = Ui.button("Trích từ API", t -> Icons.key(t.accent.text(), 13), this::extractTokenDialog);
-        extractBtn.setToolTipText("Tự động quét & trích xuất Authorization / Cookie / JWT từ các API đã bắt");
+        JPanel headRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        headRight.setOpaque(false);
+        headRight.add(dirty);
+        headRight.add(Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save));
 
-        JPanel tools = Ui.flow(FlowLayout.LEFT,
-                Ui.button("Header", t -> Icons.plus(t.fg),
-                        () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))),
-                Ui.button("JWT / Bearer", t -> Icons.codeBraces(t.fg), this::setJwt),
-                Ui.button("Cookie", t -> Icons.plus(t.fg), this::setCookie),
-                extractBtn,
-                ruleMore,
-                Ui.button("Lên", Icons::arrowUp, () -> moveRule(-1)),
-                Ui.button("Xuống", Icons::arrowDown, () -> moveRule(1)),
-                Ui.button("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
+        headCard.add(headLeft, BorderLayout.WEST);
+        headCard.add(headRight, BorderLayout.EAST);
 
-        JPanel editorTop = new JPanel(new BorderLayout(0, 2));
+        // Streamlined 3-group Rules Action Bar (no clutter)
+        JButton[] quickRef = new JButton[1];
+        JButton quickTemplatesBtn = Ui.dropdown("Mẫu nhanh", t -> Icons.withChevron(Icons.key(t.accent.text(), 13), t.fg),
+                "Thêm nhanh JWT/Bearer, Cookie, Trích Token từ API đã bắt, Xóa Header hoặc Dán hàng loạt", () -> {
+                    JPopupMenu qm = new JPopupMenu();
+                    qm.add(Ui.item("Thêm JWT / Bearer Authorization...", Icons::codeBraces, this::setJwt));
+                    qm.add(Ui.item("Thêm Cookie (COOKIE_SET)...", Icons::plus, this::setCookie));
+                    qm.add(Ui.item("Trích xuất Token / Cookie từ API đã bắt...", t -> Icons.key(t.accent.text(), 14), this::extractTokenDialog));
+                    qm.addSeparator();
+                    for (Component c : ruleEditorMenu().getComponents()) {
+                        qm.add(c);
+                    }
+                    qm.show(quickRef[0], 0, quickRef[0].getHeight());
+                });
+        quickRef[0] = quickTemplatesBtn;
+
+        JPanel toolsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        toolsLeft.setOpaque(false);
+        toolsLeft.add(Ui.button("Thêm Rule", t -> Icons.plus(t.fg),
+                () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
+        toolsLeft.add(quickTemplatesBtn);
+
+        JPanel toolsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
+        toolsRight.setOpaque(false);
+        toolsRight.add(Ui.button("Lên", Icons::arrowUp, () -> moveRule(-1)));
+        toolsRight.add(Ui.button("Xuống", Icons::arrowDown, () -> moveRule(1)));
+        toolsRight.add(Ui.button("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
+
+        JPanel tools = new JPanel(new BorderLayout(4, 0));
+        tools.setOpaque(false);
+        tools.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        tools.add(toolsLeft, BorderLayout.WEST);
+        tools.add(toolsRight, BorderLayout.EAST);
+
+        JPanel editorTop = new JPanel(new BorderLayout(0, 4));
         editorTop.setOpaque(false);
-        editorTop.add(head, BorderLayout.NORTH);
+        editorTop.add(headCard, BorderLayout.NORTH);
         editorTop.add(tools, BorderLayout.SOUTH);
 
-        JPanel jwtPanel = new JPanel(new BorderLayout(0, Theme.SPACE_1));
-        jwtPanel.setOpaque(false);
-        JPanel jwtHeader = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
-        jwtHeader.setOpaque(false);
-        jwtHeader.add(Ui.bold("JWT / Token Inspector (tự giải mã eyJ... & đếm ngược TTL)"), BorderLayout.WEST);
-        jwtHeader.add(expBadge, BorderLayout.EAST);
-        jwtPanel.add(jwtHeader, BorderLayout.NORTH);
-        jwtPanel.add(new JScrollPane(jwt), BorderLayout.CENTER);
+        // Collapsible JWT / Token Inspector Panel
+        jwtToggleBtn.setMargin(new java.awt.Insets(0, 0, 0, 0));
+        jwtToggleBtn.setPreferredSize(new Dimension(20, 20));
+        jwtToggleBtn.setToolTipText("Mở rộng / Thu gọn bảng giải mã JWT");
+        jwtToggleBtn.addActionListener(e -> setJwtExpanded(!jwtExpanded));
 
-        JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(rulesTable), jwtPanel);
-        rightSplit.setResizeWeight(0.64);
+        JPanel jwtHeader = new JPanel(new BorderLayout(Theme.SPACE_2, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.surfaceAlt);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(t.border),
+                        BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+            }
+        };
+        jwtHeader.setOpaque(true);
+        jwtHeader.setBackground(Theme.current().surfaceAlt);
+        jwtHeader.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Theme.current().border),
+                BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+
+        JPanel jwtHeadLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        jwtHeadLeft.setOpaque(false);
+        jwtHeadLeft.add(jwtToggleBtn);
+        jwtHeadLeft.add(Ui.bold("JWT / Token Inspector"));
+        jwtHeadLeft.add(Ui.muted("(Tự giải mã eyJ... & đếm ngược TTL)"));
+        jwtHeader.add(jwtHeadLeft, BorderLayout.WEST);
+        jwtHeader.add(expBadge, BorderLayout.EAST);
+
+        jwtScroll = new JScrollPane(jwt);
+        jwtScroll.setPreferredSize(new Dimension(0, 145));
+        JPanel jwtPanel = new JPanel(new BorderLayout(0, 0));
+        jwtPanel.setOpaque(false);
+        jwtPanel.add(jwtHeader, BorderLayout.NORTH);
+        jwtPanel.add(jwtScroll, BorderLayout.CENTER);
+        setJwtExpanded(false);
+
         JPanel right = new JPanel(new BorderLayout(4, Theme.SPACE_1));
-        right.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_2));
+        right.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2, Theme.SPACE_2));
         right.add(editorTop, BorderLayout.NORTH);
-        right.add(rightSplit, BorderLayout.CENTER);
+        right.add(MainPanel.scroll(rulesTable), BorderLayout.CENTER);
+        right.add(jwtPanel, BorderLayout.SOUTH);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
-        split.setResizeWeight(0.45);
+        split.setResizeWeight(0.46);
         panel.add(split, BorderLayout.CENTER);
 
         rules.addTableModelListener(e -> {
@@ -298,6 +401,16 @@ final class RolesTab {
         if (model.getRowCount() > 0) {
             table.setRowSelectionInterval(0, 0);
         }
+    }
+
+    private void setJwtExpanded(boolean expanded) {
+        this.jwtExpanded = expanded;
+        if (jwtScroll != null) {
+            jwtScroll.setVisible(expanded);
+        }
+        jwtToggleBtn.setIcon(Icons.themed(t -> expanded ? Icons.chevronDown(t.fg, 12) : Icons.chevronRight(t.fg, 12)));
+        panel.revalidate();
+        panel.repaint();
     }
 
     private static JLabel makeSummaryCell(String text, boolean warn) {
@@ -1531,8 +1644,8 @@ final class RolesTab {
                 g2.setColor(selected ? th.selectionBg : th.zebra[row & 1]);
                 g2.fillRect(0, 0, w, h);
 
-                int bw = Math.min(w - 8, th.scaled(56));
-                int bh = Math.min(h - 8, th.scaled(20));
+                int bw = Math.min(w - th.scaled(12), th.scaled(62));
+                int bh = Math.min(h - th.scaled(14), th.scaled(22));
                 int bx = (w - bw) / 2;
                 int by = (h - bh) / 2;
 
@@ -1543,7 +1656,7 @@ final class RolesTab {
 
                 // Sharp 6x6 square status indicator on the left
                 int sq = 6;
-                int sqx = bx + 6;
+                int sqx = bx + 7;
                 int sqy = by + (bh - sq) / 2;
                 if (on) {
                     g2.setColor(th.success.text());
@@ -1557,7 +1670,7 @@ final class RolesTab {
                 FontMetrics fm = g2.getFontMetrics();
                 String txt = on ? "BẬT" : "TẮT";
                 g2.setColor(on ? th.success.text() : th.muted);
-                int tx = sqx + sq + 5;
+                int tx = sqx + sq + 6;
                 int ty = by + (bh - fm.getHeight()) / 2 + fm.getAscent();
                 g2.drawString(txt, tx, ty);
             } finally {
@@ -1811,17 +1924,24 @@ final class RolesTab {
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
             JLabel l = (JLabel) super.getTableCellRendererComponent(t, v, sel, focus, row, col);
             Theme th = Theme.of(t.getBackground(), t.getForeground());
+            l.setHorizontalAlignment(CENTER);
+            l.setFont(th.smallBoldFont);
             if (!sel) {
                 if (v instanceof RuleMode m) {
                     Theme.Token tok = th.mode(m);
                     l.setBackground(tok.fill());
                     l.setForeground(tok.text());
+                    l.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createMatteBorder(4, 6, 4, 6, th.zebra[row & 1]),
+                            BorderFactory.createLineBorder(tok.border())));
                 } else {
-                    l.setBackground(t.getBackground());
+                    l.setBackground(th.zebra[row & 1]);
                     l.setForeground(t.getForeground());
+                    l.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
                 }
+            } else {
+                l.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
             }
-            l.setFont(th.boldFont);
             return l;
         }
     }

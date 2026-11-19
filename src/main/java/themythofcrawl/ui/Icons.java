@@ -826,6 +826,15 @@ public final class Icons {
         });
     }
 
+    public static Icon chevronUp(Color color) { return chevronUp(color, 12); }
+
+    public static Icon chevronUp(Color color, int size) {
+        return grid16("chevUp", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            g.draw(poly(false, 3.5, 10.5, 8, 6, 12.5, 10.5));
+        });
+    }
+
     public static Icon chevronRight(Color color) { return chevronRight(color, 12); }
 
     public static Icon chevronRight(Color color, int size) {
@@ -1606,6 +1615,7 @@ public final class Icons {
     public static Icon globe(Theme t) { return globe(t.info.text()); }
     public static Icon clean(Theme t) { return clean(t.danger.text()); }
     public static Icon chevronDown(Theme t) { return chevronDown(t.fg); }
+    public static Icon chevronUp(Theme t) { return chevronUp(t.fg); }
     public static Icon chevronRight(Theme t) { return chevronRight(t.fg); }
     public static Icon codeBraces(Theme t) { return codeBraces(t.fg); }
     public static Icon cluster(Theme t) { return cluster(t.accent.text(), 14); }

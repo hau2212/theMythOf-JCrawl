@@ -19,6 +19,8 @@ public final class UiPrefs {
     public static final String KEY_FONT_UI = "tmoc.ui.fontUi";
     public static final String KEY_FONT_MONO = "tmoc.ui.fontMono";
     public static final String KEY_DISPLAY_MODE = "tmoc.ui.displayMode";
+    public static final String KEY_TOP_COMPACT = "tmoc.ui.topCompact";
+    public static final String KEY_INSPECTOR_EXPANDED = "tmoc.ui.inspectorExpanded";
     public static final String KEY_COLUMNS_PREFIX = "tmoc.ui.columns.";
 
     public static final int[] FONT_SCALE_CHOICES = {90, 100, 110, 115, 120};
@@ -170,6 +172,32 @@ public final class UiPrefs {
             prefs.set(KEY_DISPLAY_MODE, m.id);
         }
         UiDisplayMode.set(m);
+    }
+
+    public static boolean topCompact(Prefs prefs) {
+        if (prefs == null) {
+            return false;
+        }
+        return "true".equalsIgnoreCase(prefs.get(KEY_TOP_COMPACT));
+    }
+
+    public static void setTopCompact(Prefs prefs, boolean compact) {
+        if (prefs != null) {
+            prefs.set(KEY_TOP_COMPACT, Boolean.toString(compact));
+        }
+    }
+
+    public static boolean inspectorExpanded(Prefs prefs) {
+        if (prefs == null) {
+            return false;
+        }
+        return "true".equalsIgnoreCase(prefs.get(KEY_INSPECTOR_EXPANDED));
+    }
+
+    public static void setInspectorExpanded(Prefs prefs, boolean expanded) {
+        if (prefs != null) {
+            prefs.set(KEY_INSPECTOR_EXPANDED, Boolean.toString(expanded));
+        }
     }
 
     public static void applyStartup(Prefs prefs) {

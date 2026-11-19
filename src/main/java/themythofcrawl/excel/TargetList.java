@@ -52,6 +52,15 @@ public final class TargetList {
         return source + "|" + sheet + "|" + entries.size();
     }
 
+    /** Returns a copy of this TargetList with the specified row's path updated (preserving STT, methods, position). */
+    public TargetList withReplacedPath(int rowNo, String newPath) {
+        List<TargetEntry> next = new ArrayList<>(entries.size());
+        for (TargetEntry e : entries) {
+            next.add(e.rowNo() == rowNo ? e.withPath(newPath) : e);
+        }
+        return new TargetList(next, source, sheet, headers);
+    }
+
     /**
      * Best row for this request. A row only matches if its host (full URL in the file) agrees and, with
      * query mode NAMES / VALUES, if the request carries the row's query parameters. Ranking: exact before

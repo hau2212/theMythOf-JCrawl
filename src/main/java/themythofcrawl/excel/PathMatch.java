@@ -115,13 +115,38 @@ public final class PathMatch {
         return out;
     }
 
+    private static volatile PlaceholderCatalog activeCatalog;
+    private static final java.util.concurrent.atomic.AtomicInteger CATALOG_VERSION = new java.util.concurrent.atomic.AtomicInteger(1);
+
+    public static void setActiveCatalog(PlaceholderCatalog catalog) {
+        activeCatalog = catalog;
+        CATALOG_VERSION.incrementAndGet();
+    }
+
+    public static PlaceholderCatalog activeCatalog() {
+        return activeCatalog;
+    }
+
+    public static void notifyCatalogChanged() {
+        CATALOG_VERSION.incrementAndGet();
+    }
+
+    public static int catalogVersion() {
+        return CATALOG_VERSION.get();
+    }
+
     /** Regex of one documented segment and whether it is literal (no parameter). */
     public record Segment(String regex, boolean literal) {
     }
 
     public static Segment segment(String seg, boolean idsAsParams) {
+        return segment(seg, idsAsParams, activeCatalog);
+    }
+
+    public static Segment segment(String seg, boolean idsAsParams, PlaceholderCatalog catalog) {
         if (seg.startsWith(":") && seg.length() > 1) {
-            return new Segment("[^/]+", false);
+            String rx = catalog != null ? catalog.regexForToken(seg.substring(1)) : "[^/]+";
+            return new Segment(rx, false);
         }
         if (idsAsParams && Text.isIdSegment(seg)) {
             return new Segment("[^/]+", false);
@@ -132,7 +157,15 @@ public final class PathMatch {
         Matcher m = PLACEHOLDER.matcher(seg);
         while (m.find()) {
             sb.append(Pattern.quote(seg.substring(pos, m.start())));
-            sb.append(m.group().equals("*") ? "[^/]*" : "[^/]+");
+            String token = m.group();
+            if (token.equals("*")) {
+                sb.append("[^/]*");
+            } else if (catalog != null) {
+                String cleanName = PlaceholderCatalog.sanitizeName(token);
+                sb.append(cleanName.isEmpty() ? "[^/]+" : catalog.regexForToken(cleanName));
+            } else {
+                sb.append("[^/]+");
+            }
             pos = m.end();
             param = true;
         }
@@ -145,10 +178,14 @@ public final class PathMatch {
     }
 
     public static Template template(String rawPath, boolean idsAsParams) {
+        return template(rawPath, idsAsParams, activeCatalog);
+    }
+
+    public static Template template(String rawPath, boolean idsAsParams, PlaceholderCatalog catalog) {
         List<String> parts = new ArrayList<>();
         int literal = 0;
         for (String seg : segments(rawPath)) {
-            Segment s = segment(seg, idsAsParams);
+            Segment s = segment(seg, idsAsParams, catalog);
             parts.add(s.regex());
             literal += s.literal() ? 1 : 0;
         }
@@ -156,6 +193,42 @@ public final class PathMatch {
         int flags = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
         return new Template(Pattern.compile("^" + body + "/?$", flags),
                 Pattern.compile("^(?:/[^/]+)*" + body + "/?$", flags), literal);
+    }
+
+    /** Result of verifying a sample request path against a template path, including extracted {placeholder} values. */
+    public record MatchVerification(boolean matched, boolean exact, Map<String, String> capturedValues) {
+    }
+
+    /**
+     * Live-verifies whether {@code samplePath} matches {@code templatePath} and extracts each placeholder's matched value
+     * (e.g. {@code /api/a/{session}/c} against {@code /api/a/rand99/c} -> {@code {"{session}": "rand99"}}).
+     */
+    public static MatchVerification verifyMatch(String templatePath, String samplePath,
+                                                boolean allowPrefix, boolean idsAsParams,
+                                                PlaceholderCatalog catalog) {
+        String normSample = normalize(samplePath);
+        Template tpl = template(templatePath, idsAsParams, catalog);
+        boolean exact = tpl.exact().matcher(normSample).matches();
+        boolean prefixed = !exact && allowPrefix && tpl.prefixed().matcher(normSample).matches();
+        if (!exact && !prefixed) {
+            return new MatchVerification(false, false, Map.of());
+        }
+        List<String> tplSegs = segments(templatePath);
+        List<String> smpSegs = segments(samplePath);
+        int offset = Math.max(0, smpSegs.size() - tplSegs.size());
+        Map<String, String> captured = new LinkedHashMap<>();
+        for (int i = 0; i < tplSegs.size() && (offset + i) < smpSegs.size(); i++) {
+            String ts = tplSegs.get(i);
+            String ss = smpSegs.get(offset + i);
+            if (hasPlaceholder(ts) || (ts.startsWith(":") && ts.length() > 1) || (idsAsParams && Text.isIdSegment(ts))) {
+                String key = ts;
+                if (captured.containsKey(key)) {
+                    key = ts + " (#" + (i + 1) + ")";
+                }
+                captured.put(key, ss);
+            }
+        }
+        return new MatchVerification(true, exact, captured);
     }
 
     public static final String ANY_METHOD = "ANY";

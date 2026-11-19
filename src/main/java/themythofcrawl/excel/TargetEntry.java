@@ -17,8 +17,9 @@ public final class TargetEntry {
     private final List<String[]> query;
     private final String norm;
     private final List<String> segments;
-    private final PathMatch.Template plain;
-    private final PathMatch.Template ids;
+    private volatile PathMatch.Template plain;
+    private volatile PathMatch.Template ids;
+    private volatile int compiledVersion;
 
     public TargetEntry(Object stt, List<String> methods, String path, String position, int rowNo) {
         this.stt = stt instanceof Double d && d == Math.rint(d) ? (Object) d.longValue() : stt;
@@ -31,8 +32,17 @@ public final class TargetEntry {
         this.query = hq.query();
         this.norm = PathMatch.normalize(this.path);
         this.segments = PathMatch.segments(this.path);
+        recompile();
+    }
+
+    private void recompile() {
+        this.compiledVersion = PathMatch.catalogVersion();
         this.plain = PathMatch.template(this.path, false);
         this.ids = PathMatch.template(this.path, true);
+    }
+
+    public TargetEntry withPath(String newPath) {
+        return new TargetEntry(stt, methods, newPath, position, rowNo);
     }
 
     public Object stt() { return stt; }
@@ -47,6 +57,9 @@ public final class TargetEntry {
     public List<String> segments() { return segments; }
 
     public PathMatch.Template patterns(boolean idsAsParams) {
+        if (compiledVersion != PathMatch.catalogVersion()) {
+            recompile();
+        }
         return idsAsParams ? ids : plain;
     }
 

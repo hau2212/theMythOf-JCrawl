@@ -36,7 +36,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "2.0.0";
+    public static final String VERSION = "2.2-beta";
 
     @Override
     public void initialize(MontoyaApi api) {
@@ -81,14 +81,13 @@ public final class Extension implements BurpExtension {
                         var svc = req.httpService();
                         Service service = new Service(svc.host(), svc.port(), svc.secure());
                         byte[] raw = req.toByteArray().getBytes();
-                        if (engine.shouldHoldAtProxy(service, raw, req.url())) {
-                            engine.onProxyHeldRequest(service, raw, req.url());
-                            String spoof = "HTTP/1.1 200 OK\r\n"
-                                    + "Content-Type: application/json\r\n"
-                                    + "X-JCrawl-Held: true\r\n"
-                                    + "Content-Length: 45\r\n\r\n"
-                                    + "{\"status\":\"held_by_jcrawl\",\"server_id\":\"kept\"}";
-                            return RequestToBeSentAction.spoof(HttpResponse.httpResponse(spoof));
+                        Engine.ProxyInterceptOutcome outcome = engine.evaluateProxyIntercept(service, raw, req.url());
+                        if (outcome != null && outcome.shouldBlock()) {
+                            engine.onProxyHeldRequest(service, raw, req.url(), outcome.matchedRule());
+                            if (outcome.effect() == themythofcrawl.model.ActionInterceptRule.Effect.BLOCK_DROP) {
+                                return RequestToBeSentAction.drop();
+                            }
+                            return RequestToBeSentAction.spoof(HttpResponse.httpResponse(outcome.spoofResponse()));
                         }
                     }
                 } catch (RuntimeException e) {

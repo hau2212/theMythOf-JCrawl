@@ -101,13 +101,21 @@ final class ExcelTab {
             filterStrip.add(pill);
         }
 
+        JButton placeholderBtn = Ui.button("{...} Placeholder", t -> Icons.codeBraces(t.accent.text()),
+                "Khai báo {session}, {id}, Regex tùy chỉnh và kiểm thử khớp đường dẫn Excel trực tiếp",
+                () -> openPlaceholderDialog(selected()));
+
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.dropdown("Thao tác Excel", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
                 "Xuất độ phủ, Gửi các API trong danh sách, Đặt lại bộ đếm, Bỏ danh sách",
                 () -> excelMenu().show(moreRef[0], 0, moreRef[0].getHeight()));
         moreRef[0] = more;
 
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, targetOnly, more);
+        JPanel rightBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        rightBar.setOpaque(false);
+        rightBar.add(targetOnly);
+        rightBar.add(placeholderBtn);
+        rightBar.add(more);
         JPanel north = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         north.setOpaque(false);
         north.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_1, 2, Theme.SPACE_1));
@@ -174,6 +182,8 @@ final class ExcelTab {
             m.add(Ui.item("Đẩy -> Burp Repeater", t -> Icons.repeater(t.fg), !gs.isEmpty(), () -> ui.push(gs)));
             m.add(Ui.item("Copy STT + Path", t -> Icons.copy(t.fg), !gs.isEmpty(), () -> ui.copy(gs)));
             m.addSeparator();
+            m.add(Ui.item("Gắn {placeholder} / Sửa mẫu đường dẫn dòng #" + te.sttText() + "...",
+                    t -> Icons.codeBraces(t.accent.text()), () -> openPlaceholderDialog(te)));
             m.add(Ui.item("Copy dòng: " + te.sttText() + ". " + te.methodLabel() + " " + te.path(),
                     t -> Icons.copy(t.muted), () -> Ui.copyToClipboard(
                             te.sttText() + "\t" + te.methodLabel() + "\t" + te.path() + "\t" + Text.nz(te.position()))));
@@ -233,6 +243,8 @@ final class ExcelTab {
         javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
         boolean hasTargets = engine.targets() != null;
         m.add(Ui.item("Nạp file Excel (.xlsx)...", Icons::excel, this::load));
+        m.add(Ui.item("Quản lý {Placeholder} & Kiểm thử khớp...", t -> Icons.codeBraces(t.accent.text()),
+                () -> openPlaceholderDialog(selected())));
         m.add(Ui.item("Xuất Excel độ phủ (.xlsx)...", Icons::export, ui::exportExcel));
         m.add(Ui.item("Gửi các API đã bắt trong danh sách", Icons::sendAll, hasTargets, this::sendListed));
         m.addSeparator();
@@ -247,6 +259,15 @@ final class ExcelTab {
         m.addSeparator();
         m.add(Ui.item("Hướng dẫn đối chiếu Excel...", Icons::info, () -> Ui.popover(panel, "Excel", Help.EXCEL)));
         return m;
+    }
+
+    void openPlaceholderDialog(TargetEntry focus) {
+        ExcelPlaceholderDialog.show(panel, engine, focus, () -> {
+            stale = true;
+            nextOk = 0;
+            reload();
+            ui.tick(true);
+        });
     }
 
     void selectFilter(int idx) {

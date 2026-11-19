@@ -111,6 +111,15 @@ final class ApiTab {
     private String focusPath;
     private boolean focusRecursive;
     private boolean expandedTabs = false;
+    private boolean toolbarCompact = false;
+    private JButton compactToolsDropdownBtn;
+    private java.awt.Component[] secondaryToolbarBtns = new java.awt.Component[0];
+    private boolean inspectorExpanded = false;
+    private JPanel inspectorHostBar;
+    private JPanel compactInspectorBar;
+    private JPanel fullInspectorBar;
+    private JButton compactSummaryBtn;
+    private JLabel compactMiniStats;
     private boolean treeStale = true;
     private boolean branchStale = true;
     private boolean selecting;
@@ -321,6 +330,13 @@ final class ApiTab {
         barMoreRef[0] = barMore;
         JPanel barLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
         barLeft.setOpaque(false);
+        JButton collapseInspectorBtn = new JButton();
+        collapseInspectorBtn.setIcon(Icons.themed(t -> Icons.chevronUp(t.fg, 12)));
+        collapseInspectorBtn.setMargin(new Insets(0, 0, 0, 0));
+        collapseInspectorBtn.setPreferredSize(new Dimension(22, 22));
+        collapseInspectorBtn.setToolTipText("Thu gọn thanh Request / Response thành 1 đường ngang tối giản");
+        collapseInspectorBtn.addActionListener(e -> setInspectorExpanded(false));
+        barLeft.add(collapseInspectorBtn);
         barLeft.add(pill);
         barLeft.add(resOkPill);
         barLeft.add(resInfoPill);
@@ -332,11 +348,89 @@ final class ApiTab {
         barRight.add(sendOne);
         barRight.add(repActionBtn);
         barRight.add(barMore);
-        JPanel bar = new JPanel(new BorderLayout(4, 1));
-        bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        bar.add(barLeft, BorderLayout.WEST);
-        bar.add(tabsScroll, BorderLayout.CENTER);
-        bar.add(barRight, BorderLayout.EAST);
+
+        fullInspectorBar = new JPanel(new BorderLayout(4, 0));
+        fullInspectorBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
+                BorderFactory.createEmptyBorder(2, 4, 2, 4)));
+        fullInspectorBar.add(barLeft, BorderLayout.CENTER);
+        fullInspectorBar.add(barRight, BorderLayout.EAST);
+
+        // Ultra-slim 24px collapsed Request/Response Inspector bar (default state)
+        JButton expandInspectorBtn = new JButton();
+        expandInspectorBtn.setIcon(Icons.themed(t -> Icons.chevronRight(t.fg, 12)));
+        expandInspectorBtn.setMargin(new Insets(0, 0, 0, 0));
+        expandInspectorBtn.setPreferredSize(new Dimension(20, 20));
+        expandInspectorBtn.setToolTipText("Mở rộng đầy đủ thanh Request / Response & Tab Role");
+        expandInspectorBtn.addActionListener(e -> setInspectorExpanded(true));
+
+        compactSummaryBtn = new JButton("Chưa chọn API") {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setFont(t.smallBoldFont);
+                setForeground(t.fg);
+            }
+        };
+        compactSummaryBtn.setContentAreaFilled(false);
+        compactSummaryBtn.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 6));
+        compactSummaryBtn.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        compactSummaryBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        compactSummaryBtn.setToolTipText("Bấm để chọn nhanh Role / chuyển API Group");
+        compactSummaryBtn.addActionListener(e -> pillMenu(compactSummaryBtn));
+
+        compactMiniStats = Ui.muted("");
+        compactMiniStats.setFont(Theme.current().smallFont);
+
+        JButton compactSendBtn = Ui.accent("Gửi", t -> Icons.send(t.critical.onSolid(), 11), t -> t.critical, this::sendCurrentTab);
+        compactSendBtn.setMargin(new Insets(0, 6, 0, 6));
+        compactSendBtn.setPreferredSize(new Dimension(Theme.current().scaled(54), 20));
+        compactSendBtn.setToolTipText("Gửi lại Tab Role đang chọn (Send Tab này)");
+
+        JButton[] compactMoreRef = new JButton[1];
+        JButton compactMoreBtn = new JButton();
+        compactMoreBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.menu(t.fg, 12), t.fg)));
+        compactMoreBtn.setMargin(new Insets(0, 4, 0, 4));
+        compactMoreBtn.setPreferredSize(new Dimension(Theme.current().scaled(32), 20));
+        compactMoreBtn.setToolTipText("Mở menu đầy đủ (Action/ID, Send Group, Repeater, Tab Role, Khôi phục)");
+        compactMoreBtn.addActionListener(e -> buildCompactInspectorMenu().show(compactMoreRef[0], 0, compactMoreRef[0].getHeight()));
+        compactMoreRef[0] = compactMoreBtn;
+
+        JPanel compactLeft = new JPanel(new BorderLayout(2, 0));
+        compactLeft.setOpaque(false);
+        compactLeft.add(expandInspectorBtn, BorderLayout.WEST);
+        compactLeft.add(compactSummaryBtn, BorderLayout.CENTER);
+
+        JPanel compactRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        compactRight.setOpaque(false);
+        compactRight.add(compactMiniStats);
+        compactRight.add(compactSendBtn);
+        compactRight.add(compactMoreBtn);
+
+        compactInspectorBar = new JPanel(new BorderLayout(6, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.surfaceAlt);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 0, 1, 0, t.border),
+                        BorderFactory.createEmptyBorder(1, 4, 1, 4)));
+            }
+        };
+        compactInspectorBar.setOpaque(true);
+        compactInspectorBar.setBackground(Theme.current().surfaceAlt);
+        compactInspectorBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
+                BorderFactory.createEmptyBorder(1, 4, 1, 4)));
+        compactInspectorBar.setPreferredSize(new Dimension(0, Theme.current().scaled(24)));
+        compactInspectorBar.add(compactLeft, BorderLayout.CENTER);
+        compactInspectorBar.add(compactRight, BorderLayout.EAST);
+
+        inspectorHostBar = new JPanel(new BorderLayout(0, 0));
+        inspectorHostBar.setOpaque(false);
+
         JPanel reqPanel = new JPanel(new BorderLayout());
         reqPanel.add(reqHeader, BorderLayout.NORTH);
         reqPanel.add(reqViewer.component(), BorderLayout.CENTER);
@@ -345,9 +439,14 @@ final class ApiTab {
         respPanel.add(respViewer.component(), BorderLayout.CENTER);
         JSplitPane viewers = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, reqPanel, respPanel);
         viewers.setResizeWeight(0.5);
-        JPanel repeater = new JPanel(new BorderLayout(2, 2));
-        repeater.add(bar, BorderLayout.NORTH);
+        JPanel repeater = new JPanel(new BorderLayout(0, 0));
+        repeater.add(inspectorHostBar, BorderLayout.NORTH);
         repeater.add(viewers, BorderLayout.CENTER);
+
+        // Apply saved (default collapsed) inspector state
+        this.inspectorExpanded = UiPrefs.inspectorExpanded(ui.uiPrefs);
+        applyInspectorBarState(false);
+
         JSplitPane detail = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resPanel, repeater);
         detail.setResizeWeight(0.30);
         JSplitPane master = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, detail);
@@ -372,7 +471,7 @@ final class ApiTab {
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
         JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Mở Action Workbench 4 tab, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động (chống lỗi 400/404 do ID đã xóa)", () -> {
+                "Mở Action Workbench 5 tab, Luật Chặn Proxy, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {
                         resultModel.refresh();
@@ -403,6 +502,15 @@ final class ApiTab {
                 null, t -> Icons.focus(t.info.text(), 14), t -> t.info,
                 () -> focusPath != null ? "Đang tập trung: " + focusPath : "Chế độ xem bình thường"));
 
+        JButton[] compactToolsRef = new JButton[1];
+        compactToolsDropdownBtn = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.menu(t.fg, 13), t.fg),
+                "Menu tổng hợp (Tùy chọn Gửi, Action Workbench & Luật Chặn Proxy, Repeater, Nhánh, Tập trung, Công cụ)",
+                () -> buildCompactToolbarMenu().show(compactToolsRef[0], 0, compactToolsRef[0].getHeight()));
+        compactToolsRef[0] = compactToolsDropdownBtn;
+        compactToolsDropdownBtn.setVisible(false);
+
+        secondaryToolbarBtns = new java.awt.Component[] {sendMenu, actionMenuBtn, repMenu, branchBtn, focusBtn, tools};
+
         search.setColumns(13);
         search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh, tag hoặc Excel STT (Ctrl+F)");
         search.onChange(q -> {
@@ -421,7 +529,9 @@ final class ApiTab {
 
         JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 1));
         leftActions.setOpaque(false);
-        for (java.awt.Component comp : new java.awt.Component[] {sendApi, sendMenu, actionMenuBtn, repMenu, branchBtn, focusBtn, tools}) {
+        leftActions.add(sendApi);
+        leftActions.add(compactToolsDropdownBtn);
+        for (java.awt.Component comp : secondaryToolbarBtns) {
             leftActions.add(comp);
         }
         JPanel rightMode = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 1));
@@ -434,6 +544,139 @@ final class ApiTab {
         bar.add(leftActions, BorderLayout.WEST);
         bar.add(rightMode, BorderLayout.EAST);
         return bar;
+    }
+
+    private JPopupMenu buildCompactToolbarMenu() {
+        JPopupMenu m = new JPopupMenu();
+        m.add(Ui.item("Gửi Nhánh đang chọn", Icons::sendAll, this::sendBranchSelection));
+        javax.swing.JMenu sendSub = new javax.swing.JMenu("Tùy chọn Gửi");
+        for (java.awt.Component c : sendMenu().getComponents()) {
+            sendSub.add(c);
+        }
+        m.add(sendSub);
+        m.addSeparator();
+        m.add(Ui.item("Action Workbench & Luật Chặn Proxy (5 tab)...", Icons::workbench,
+                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
+                    resultModel.refresh();
+                    refreshBar();
+                })));
+        m.add(Ui.item("Luật Chặn Proxy (Trước khi gửi)...", Icons::strategyShield,
+                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_INTERCEPT_RULES, () -> {
+                    resultModel.refresh();
+                    refreshBar();
+                })));
+        m.addSeparator();
+        m.add(Ui.item(focusPath != null ? "Thoát chế độ Tập trung (" + Hierarchy.leaf(focusPath) + ")" : "Bật chế độ Tập trung nhánh đang chọn",
+                Icons::focus, this::toggleFocusFromSelection));
+        javax.swing.JMenu repSub = new javax.swing.JMenu("Burp Repeater");
+        for (java.awt.Component c : repeaterMenu().getComponents()) {
+            repSub.add(c);
+        }
+        m.add(repSub);
+        javax.swing.JMenu brSub = new javax.swing.JMenu("Nhánh & Sub-folder");
+        for (java.awt.Component c : branchMenu().getComponents()) {
+            brSub.add(c);
+        }
+        m.add(brSub);
+        javax.swing.JMenu toolSub = new javax.swing.JMenu("Công cụ & Xuất báo cáo");
+        for (java.awt.Component c : toolsMenu().getComponents()) {
+            toolSub.add(c);
+        }
+        m.add(toolSub);
+        return m;
+    }
+
+    void applyResponsiveChrome(boolean headerCompact, int width) {
+        boolean compact = headerCompact || (width > 0 && width < 960);
+        this.toolbarCompact = compact;
+        if (compactToolsDropdownBtn != null) {
+            compactToolsDropdownBtn.setVisible(compact);
+            for (java.awt.Component c : secondaryToolbarBtns) {
+                c.setVisible(!compact);
+            }
+            search.setColumns(width > 0 && width < 780 ? 8 : 13);
+            panel.revalidate();
+            panel.repaint();
+        }
+    }
+
+    boolean isToolbarCompact() {
+        return toolbarCompact;
+    }
+
+    boolean isInspectorExpanded() {
+        return inspectorExpanded;
+    }
+
+    void setInspectorExpanded(boolean expanded) {
+        this.inspectorExpanded = expanded;
+        UiPrefs.setInspectorExpanded(ui.uiPrefs, expanded);
+        applyInspectorBarState(true);
+    }
+
+    int inspectorBarHeight() {
+        if (inspectorHostBar == null) {
+            return 0;
+        }
+        return inspectorHostBar.getHeight() > 0 ? inspectorHostBar.getHeight() : inspectorHostBar.getPreferredSize().height;
+    }
+
+    private void applyInspectorBarState(boolean revalidate) {
+        if (inspectorHostBar == null) {
+            return;
+        }
+        inspectorHostBar.removeAll();
+        if (inspectorExpanded) {
+            inspectorHostBar.add(fullInspectorBar, BorderLayout.NORTH);
+            if (expandedTabs) {
+                JScrollPane ts = new JScrollPane(roleTabs, JScrollPane.VERTICAL_SCROLLBAR_NEVER, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+                ts.setBorder(BorderFactory.createEmptyBorder());
+                ts.setPreferredSize(new Dimension(240, 26));
+                ts.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 6));
+                inspectorHostBar.add(ts, BorderLayout.SOUTH);
+            }
+            reqHeader.setVisible(true);
+            respHeader.setVisible(true);
+        } else {
+            inspectorHostBar.add(compactInspectorBar, BorderLayout.CENTER);
+            reqHeader.setVisible(false);
+            respHeader.setVisible(false);
+        }
+        if (revalidate) {
+            inspectorHostBar.revalidate();
+            inspectorHostBar.repaint();
+            panel.revalidate();
+            panel.repaint();
+        }
+    }
+
+    private JPopupMenu buildCompactInspectorMenu() {
+        JPopupMenu m = new JPopupMenu();
+        ApiGroup g = currentGroup();
+        if (g != null) {
+            RoleResult cur = selectedResult();
+            for (RoleResult r : g.entries()) {
+                String lbl = (r.original() ? "[GỐC] " : "") + r.roleName()
+                        + (r.status() != null ? "  —  HTTP " + r.status() : "  —  " + r.state());
+                m.add(Ui.item(lbl, t -> Icons.circle(r == cur ? t.accent.text() : t.muted, r == cur),
+                        () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
+            }
+            m.addSeparator();
+            m.add(ActionMenus.buildForApi(panel, engine, g, selectedResults(), () -> {
+                resultModel.refresh();
+                refreshBar();
+            }));
+            m.add(Ui.item("Gửi toàn bộ Roles của Group (" + g.results().size() + ")", Icons::sendAll,
+                    () -> ui.send(listOf(g))));
+            m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
+            m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
+            m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
+            m.addSeparator();
+        }
+        m.add(Ui.item(inspectorExpanded ? "Thu gọn thanh Inspector thành 1 đường ngang" : "Mở rộng thanh Inspector đầy đủ",
+                t -> inspectorExpanded ? Icons.chevronUp(t.fg, 12) : Icons.chevronDown(t.fg, 12),
+                () -> setInspectorExpanded(!inspectorExpanded)));
+        return m;
     }
 
     private JPanel buildFocusBanner() {
@@ -1198,11 +1441,27 @@ final class ApiTab {
         roleTabs.removeAll();
         if (g == null) {
             pill.setText("Chưa chọn API Group");
+            if (compactSummaryBtn != null) {
+                compactSummaryBtn.setText("Chưa chọn API — Bấm biểu tượng mũi tên để mở rộng");
+            }
+            if (compactMiniStats != null) {
+                compactMiniStats.setText("");
+            }
         } else {
             List<RoleResult> entries = g.entries();
+            RoleResult cur = selectedResult();
             pill.setText(Text.groupId(g.gid()) + ": " + g.method() + " " + Text.shortPath(g.path(), 26) + " (" + entries.size() + ")");
+            if (compactSummaryBtn != null) {
+                String curRole = cur == null ? "" : (" · " + (cur.original() ? "GỐC" : cur.roleName())
+                        + (cur.status() != null ? " [" + cur.status() + "]" : ""));
+                compactSummaryBtn.setText(Text.groupId(g.gid()) + " · " + g.method() + " " + Text.shortPath(g.path(), 34) + curRole);
+            }
+            if (compactMiniStats != null) {
+                compactMiniStats.setText(resOkPill.getText() + " · " + resInfoPill.getText()
+                        + (resWarnPill.getText().endsWith(" 0") ? "" : " · " + resWarnPill.getText())
+                        + (resErrPill.getText().endsWith(" 0") ? "" : " · " + resErrPill.getText()));
+            }
             if (expandedTabs) {
-                RoleResult cur = selectedResult();
                 Theme th = Theme.current();
                 for (RoleResult r : entries) {
                     String lbl = (r.original() ? "GỐC" : r.roleName()) + (r.status() != null ? " (" + r.status() + ")" : "");
@@ -1235,6 +1494,10 @@ final class ApiTab {
     }
 
     private void pillMenu() {
+        pillMenu(pill);
+    }
+
+    private void pillMenu(java.awt.Component anchor) {
         JPopupMenu m = new JPopupMenu();
         ApiGroup g = currentGroup();
         if (g != null) {
@@ -1259,6 +1522,7 @@ final class ApiTab {
         m.add(Ui.item(expandedTabs ? "Thu gọn dải nút Tab Role ngang (Gọn giao diện)" : "Mở rộng dải nút Tab Role ngang",
                 t -> expandedTabs ? Icons.chevronDown(t.fg, 12) : Icons.chevronRight(t.fg, 12), () -> {
                     expandedTabs = !expandedTabs;
+                    applyInspectorBarState(true);
                     refreshBar();
                 }));
         List<ApiGroup> all = engine.groups();
@@ -1271,7 +1535,8 @@ final class ApiTab {
             }
             m.add(switchGroupMenu);
         }
-        m.show(pill, 0, pill.getHeight());
+        java.awt.Component invoker = (anchor != null && anchor.isShowing()) ? anchor : panel;
+        m.show(invoker, 0, anchor != null ? anchor.getHeight() : 0);
     }
 
     // =================================================================== menus

@@ -5,11 +5,6 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      restore_v1_commit:
-        description: 'Optional commit SHA to rebuild and restore the V_1.0 release asset'
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -26,84 +21,117 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
+      - name: Load version metadata from version.properties
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          get_prop() {
+            grep -E "^${1}=" version.properties | head -n 1 | cut -d'=' -f2-
+          }
+          TAG="$(get_prop releaseTag)"
+          VER="$(get_prop versionName)"
+          JAR="$(get_prop jarName)"
+          CHANNEL="$(get_prop channel)"
+          TITLE="$(get_prop releaseTitle)"
+          if [ -z "$TAG" ] || [ -z "$JAR" ]; then
+            echo "ERROR: version.properties is missing releaseTag or jarName." >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "Loaded release metadata: tag=$TAG version=$VER channel=$CHANNEL jar=$JAR"
+
       - name: Build and test
         run: ./gradlew --no-daemon build
+
+      - name: Stage versioned JAR
+        run: cp build/libs/theMythOf-JCrawl.jar "build/libs/${{ steps.ver.outputs.jar }}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: theMythOf-JCrawl-jar
-          path: build/libs/theMythOf-JCrawl.jar
-      - name: Publish the "V_2.1_beta" prerelease (keeping V_2.0_beta, V_1.0 and previous releases intact)
+          path: |
+            build/libs/theMythOf-JCrawl.jar
+            build/libs/${{ steps.ver.outputs.jar }}
+
+      - name: Publish IMMUTABLE release from version.properties (NEVER modifies existing tags or releases)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VER: ${{ steps.ver.outputs.version }}
+          JAR: ${{ steps.ver.outputs.jar }}
+          CHANNEL: ${{ steps.ver.outputs.channel }}
+          TITLE: ${{ steps.ver.outputs.title }}
         run: |
-          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_2.1_beta.jar
-          cat <<'EOF' > /tmp/release_notes.md
-          ## theMythOf-JCrawl `V_2.1_beta` (Prerelease)
+          set -euo pipefail
 
-          > Bản beta phát hành song song từ commit `${GITHUB_SHA::7}` (giữ nguyên toàn bộ các bản phát hành trước đó: `V_2.0_beta`, `V_1.0`, và `v2.0.0`). Tương thích ngược 100% với toàn bộ workspace cũ.
-
-          ### 6 Trụ cột nâng cấp trong `V_2.1_beta`
-
-          1. **Phông chữ hiện đại tối ưu tiếng Việt (nhúng sẵn offline trong JAR)**:
-             - Tích hợp bộ phông chữ mã nguồn mở SIL OFL **Be Vietnam Pro** (mặc định, tối ưu dấu tiếng Việt sắc nét), **IBM Plex Sans**, và **JetBrains Mono** (cho URL, JSON, HTTP Request/Response).
-             - Hỗ trợ chuyển đổi trực tiếp phông UI, phông Mono và tỷ lệ chữ (`90%`, `100%`, `110%`, `115%`, `120%`) ngay trong tab **Cấu hình** mà không cần khởi động lại Burp.
-             - Tự động khử răng cưa LCD/Fractional Metrics, tăng chiều cao hàng bảng (`26px`) và cây (`24px`), giữ cỡ chữ nhỏ `>= 11.5pt` để dễ đọc lâu dài.
-
-          2. **Bộ 42 Icon Vector sắc nét + 3 Chế độ Hiển thị & Thẻ mô tả khi rê chuột (`RichHoverCard`)**:
-             - Thiết kế lại toàn bộ icon vector `16×16` theo phong cách kiến trúc vuông/chữ nhật đồng nhất, chia thành 6 nhóm nghiệp vụ (`Cấu trúc`, `Tương tác UI`, `Nghiệp vụ`, `Hệ thống & API`, `Bảo mật`, v.v.).
-             - **3 Chế độ Hiển thị thanh công cụ** (chuyển đổi ngay trên Header hoặc tab Cấu hình):
-               1. **Chỉ Icon (Tối giản)** — ẩn nhãn chữ để tối đa không gian làm việc, kèm **Thẻ mô tả trực quan (`RichHoverCard`)** tự động bật khi rê chuột (hiển thị icon, tên chức năng, mô tả tiếng Việt dễ hiểu, phím tắt và trạng thái hiện tại).
-               2. **Icon + Chữ** (Mặc định) — hiển thị đầy đủ cả biểu tượng và nhãn.
-               3. **Chỉ Chữ** — giao diện thuần văn bản tối giản không dùng icon.
-
-          3. **Thiết kế lại UI/UX chức năng Trùng lặp & Giữ chỗ (hết đè chữ, tiếng Việt tự nhiên)**:
-             - Toàn bộ bảng trong tab **Audit** (`Cần xử lý`, `Giữ chỗ`, `API trùng & ẩn`, `Nhật ký`), `LineageDialog`, và `DupPopup` dùng `AUTO_RESIZE_OFF` với bề rộng cột chuẩn hóa, tách riêng cột **Trạng thái** và cột **Nhãn (`Tag`)** — triệt tiêu hoàn toàn lỗi đè chữ và cắt chữ.
-             - Rút gọn bảng **Giữ chỗ** còn 7 cột cốt lõi dễ quét mắt; thay khung chữ thô bằng thẻ phân tích có cấu trúc (`StructuredAdviceCard`) diễn giải nguồn gốc bằng tiếng Việt tự nhiên, không dùng ký tự rác.
-
-          4. **Trình tạo Mục con & Bộ chọn Icon Tùy biến (`IconPickerPanel v2`)**:
-             - Hộp thoại thêm/sửa mục con (`NodeEditorDialog`) tích hợp sẵn bộ chọn **42 icon vector** có ô tìm kiếm & lọc theo 6 nhóm ngay trong form, xem trước trực tiếp dạng Cây & đường dẫn `Đích`.
-             - Hỗ trợ **13 màu chuẩn + mã màu Hex `#RRGGBB` tùy ý**, tùy chọn **đặt trong khung vuông viền sắc nét**, **3 kiểu chữ viết tắt Monogram** (`Nền nhẹ`, `Nền đậm`, `Viền vuông`), và **tải ảnh PNG/JPG/GIF tự động nhúng Base64** (không lo mất ảnh khi chuyển máy).
-             - Trình quản lý Loại mục con (`NodeTypeManagerDialog`) hỗ trợ **Nhân bản (Clone)**, **Sắp xếp thứ tự**, và **Xuất / Nhập gói JSON**.
-
-          5. **Action Workbench v2 — Làm chủ Action API trực quan 4 Tab**:
-             - Thay thế hoàn toàn menu chuột phải 18 mục `PP1..PP4` khó nhớ bằng **menu gọn 5 mục** và cửa sổ trực quan **Action Workbench** (mở từ Header, `ApiTab`, tab `Cấu hình`, hoặc chuột phải API):
-               - **Tab 1 — Chiến lược xử lý**: 4 thẻ vuông trực quan 2×2 (*Giữ ở Proxy*, *Khóa 200 OK*, *Kho ID Sống*, *Chuỗi Tạo Mới -> Hành Động*) kèm nút 1-click *Tự động thông minh* và chuyển phạm vi *Riêng API này / Toàn cục*.
-               - **Tab 2 — Kho ID Sống (Live Pool)**: quản lý bảng ID sống/đã dùng, nạp hàng loạt, tự quét từ API GET, khôi phục ID đã tiêu thụ, Xuất/Nhập CSV.
-               - **Tab 3 — Chuỗi Tạo Mới -> Hành Động**: tự động gợi ý `JSONPath` / `header:Location` từ Response thật, kiểm tra trích xuất trực tiếp, xem trước Diff **Dry-Run** các vị trí sẽ thay ID (URL Path / Query / Body / Header), và nút **Chạy thử 1 lượt**.
-               - **Tab 4 — Khóa 200 OK & Gửi lại**: so sánh trực quan 3 lựa chọn khi gửi lại API đã xóa (Giữ 200 OK gốc / Đổi ID mới đẩy thật / Gửi cưỡng bức chịu rủi ro 400/404).
-
-          6. **Kiểm thử tự động & Xác minh giao diện Sáng / Tối**:
-             - 81/81 test tự động (gồm `V21BetaTest`, `ThemeContrastTest`, `V2BetaFeaturesTest`, `ThemedComponentTest`, `CoreTest`, `EngineTest`) đều đạt 100%, xác minh cả 2 giao diện Light/Dark và cả 3 Chế độ Hiển thị.
-
-          Tải file `theMythOf-JCrawl_V_2.1_beta.jar` rồi nạp vào Burp (`Extensions > Installed > Add > Java`).
-          EOF
-          sed -i "s/\${GITHUB_SHA::7}/${GITHUB_SHA:0:7}/g" /tmp/release_notes.md
-          git tag -f V_2.1_beta "$GITHUB_SHA"
-          git push -f origin refs/tags/V_2.1_beta
-          if gh release view V_2.1_beta > /dev/null 2>&1; then
-            gh release upload V_2.1_beta build/libs/theMythOf-JCrawl_V_2.1_beta.jar --clobber
-            gh release edit V_2.1_beta \
-              --title "theMythOf-JCrawl V_2.1_beta — Phông tiếng Việt, 42 Icon + 3 Chế độ Hiển thị, Trùng lặp v2, Icon Picker Custom & Action Workbench 4 Tab" \
-              --notes-file /tmp/release_notes.md \
-              --prerelease
-          else
-            gh release create V_2.1_beta build/libs/theMythOf-JCrawl_V_2.1_beta.jar \
-              --title "theMythOf-JCrawl V_2.1_beta — Phông tiếng Việt, 42 Icon + 3 Chế độ Hiển thị, Trùng lặp v2, Icon Picker Custom & Action Workbench 4 Tab" \
-              --notes-file /tmp/release_notes.md \
-              --prerelease --target "$GITHUB_SHA"
+          # STRICT IMMUTABLE RELEASE GUARD:
+          # Never force-tag, never --clobber, never edit/overwrite any existing tag or release.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "IMMUTABLE GUARD: Release '$TAG' đã tồn tại — chính sách bất biến KHÔNG cho phép ghi đè release cũ. Bỏ qua bước tạo release."
+            echo "Để phát hành bản mới, hãy nâng version trong version.properties (VD: 2.2 -> 2.3 hoặc 2.2 -> 3.2 theo VERSIONING.md)."
+            exit 0
           fi
-      - name: Restore V_1.0 release asset from specified commit (manual dispatch only)
-        if: github.event_name == 'workflow_dispatch' && inputs.restore_v1_commit != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RESTORE_SHA: ${{ inputs.restore_v1_commit }}
-        run: |
-          git checkout "$RESTORE_SHA"
-          ./gradlew --no-daemon clean jar
-          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_1.0.jar
-          NOTES="Bản V_1.0 (build từ commit ${RESTORE_SHA:0:7}) — Đã tích hợp đầy đủ 4 Phương pháp Bảo vệ & Tái tạo ID sống cho Action API (POST/PUT/PATCH/DELETE), Menu chuột phải chọn đổi ID bất kỳ lúc nào cho từng API, và giao diện tối giản hình chữ nhật/vuông sắc cạnh + Tree-Table. Tải file theMythOf-JCrawl_V_1.0.jar rồi nạp vào Burp (Extensions > Installed > Add > Java). (Bản chưa cập nhật chức năng Action vẫn được giữ nguyên ở bản release bên dưới)."
-          git tag -f V_1.0 "$RESTORE_SHA"
-          git push -f origin refs/tags/V_1.0
-          gh release upload V_1.0 build/libs/theMythOf-JCrawl_V_1.0.jar --clobber
-          gh release edit V_1.0 --title "theMythOf-JCrawl V_1.0 — Bản cập nhật 4 Phương pháp Action API & Giao diện Vuông/Tree-Table" --notes "$NOTES" --prerelease=false --latest
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null 2>&1; then
+            echo "IMMUTABLE GUARD: Git tag '$TAG' đã tồn tại trên remote — KHÔNG ghi đè tag cũ. Bỏ qua bước tạo release."
+            exit 0
+          fi
+
+          cat <<EOF > /tmp/release_notes.md
+          ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
+
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Quy ước phiên bản xem tại \`VERSIONING.md\` (nâng tính năng/UI tăng số sau: \`2.2 -> 2.3 -> 2.4\`; nâng thuật toán/kiến trúc lõi từ \`2.X\` giữ nguyên nhánh sau: \`2.2 -> 3.2\`, \`2.3 -> 3.3\`).
+
+          ### 7 Trụ cột nâng cấp trong \`${TAG}\`
+
+          1. **Chính sách phát hành Bất biến & Quản lý Phiên bản chuẩn hóa**:
+             - Tập trung phiên bản tại \`version.properties\` và quy chuẩn đặt tên tại \`VERSIONING.md\`.
+             - CI gắn cổng **IMMUTABLE RELEASE GUARD**: từ chối ghi đè mọi tag/release cũ, mỗi bản mới luôn tạo release riêng độc lập.
+
+          2. **Luật Chặn Request chủ động tại Proxy (Proactive Interception Rules)**:
+             - Khai báo trước luật chặn theo **Nhánh / Đường dẫn** và ma trận từng **HTTP Method** (\`GET / POST / PUT / PATCH / DELETE / HEAD / OPTIONS\`) ngay từ trước khi bấm crawl.
+             - Hỗ trợ 3 chế độ theo thứ tự ưu tiên: **Chặn & Giả lập 200 OK** (tùy chỉnh status code + JSON body), **Chặn & Hủy (Drop)**, và **Ngoại lệ Cho phép (Allow)** để vượt qua luật chặn tổng quát.
+             - Tích hợp Tab **2. Luật Chặn Proxy** trong **Action Workbench** (kèm trình **Kiểm thử khớp trực tiếp — Dry-Run**) và menu chuột phải trực tiếp trên từng nhánh cây.
+
+          3. **Sửa triệt để lỗi dồn chữ & bẹp ô nhập liệu trong Tab Cấu hình**:
+             - Cố định độ rộng tối thiểu cho mọi \`JComboBox\` và ô nhập số trong Mục 3, tự động chuyển 1 cột / 2 cột mượt mà không bao giờ bị bẹp 10px hay cắt nhãn chữ.
+
+          4. **Căn cân đối khu vực \`Đích\` + Thanh công cụ Thu gọn / Responsive chia đôi màn hình**:
+             - Căn giữa đồng bộ chiều cao \`24px\` cho ô \`Đích\`, chỉ báo \`Đợi: 0\` và đường dẫn nhánh.
+             - Thêm nút thu gọn / mở rộng thanh công cụ phía trên (lưu cấu hình lâu dài) hoạt động cho cả toàn màn hình và chế độ chia đôi màn hình: khi cửa sổ hẹp, tự động gom gọn vào dropdown **Điều khiển** & **Thao tác**; bấm mở rộng sẽ xổ hàng drawer tách biệt, không đè chữ.
+
+          5. **Thanh xem Request / Response siêu gọn thu gọn mặc định (\`24px\`)**:
+             - Thu gọn mặc định thành 1 dải ngang mảnh \`24px\` tối đa hóa diện tích đọc Request/Response và bảng API; bấm biểu tượng mở rộng để xem đầy đủ chi tiết & nút chức năng.
+
+          6. **Thiết kế lại toàn diện Tab Vai trò (Roles) & Quy tắc (Rules) theo phong cách Tối giản Hiện đại**:
+             - Bảo vệ chiều cao hàng thoáng (\`38px\` cho bảng Vai trò, \`32px\` cho bảng Quy tắc) với \`AUTO_RESIZE_OFF\` giúp tiêu đề **"Trạng thái"** và tên vai trò không bao giờ bị cắt cụt.
+             - Thiết kế lại thẻ tiêu đề vai trò, thanh thao tác Rules 3 nhóm tinh gọn, badge chế độ sắc nét, và thanh **JWT / Token Inspector** có thể thu gọn.
+
+          7. **Trình quản lý \`{Placeholder}\` & Xác minh khớp trực tiếp cho Excel**:
+             - Mở từ nút **\`{...} Placeholder\`** trên tab Excel hoặc chuột phải bất kỳ dòng Excel nào để bấm trực tiếp vào từng đoạn đường dẫn (VD: \`/api/a/9f8e7d6c/c\` -> \`/api/a/{session}/c\`).
+             - Hỗ trợ CRUD danh mục \`{placeholder}\` (mặc định + tùy chỉnh Regex) và bảng **Kiểm thử khớp trực tiếp (Live Match Verifier)** trích xuất ngay giá trị từng biến động để yên tâm 100%.
+
+          Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "Release $TAG ($VER)"
+          git push origin "refs/tags/$TAG"
+
+          PRERELEASE_FLAG=""
+          if [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "alpha" ] || [ "$CHANNEL" = "rc" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "$TAG" "build/libs/${JAR}" \
+            --title "$TITLE" \
+            --notes-file /tmp/release_notes.md \
+            --target "$GITHUB_SHA" \
+            $PRERELEASE_FLAG

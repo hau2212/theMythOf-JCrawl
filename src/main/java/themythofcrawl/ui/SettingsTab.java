@@ -161,6 +161,26 @@ final class SettingsTab {
             displayModeBox.addItem(dm.label);
         }
 
+        for (JComboBox<String> cb : List.of(refreshPolicyBox, profile, actionModeBox, lock2xxStrategyBox,
+                queryMode, copyFallback, uiFontBox, monoFontBox, displayModeBox, fontScaleBox)) {
+            cb.setPrototypeDisplayValue("Chế độ tiêu chuẩn (mặc định)");
+            cb.setMinimumSize(new Dimension(150, 26));
+            cb.addActionListener(ev -> {
+                Object sel = cb.getSelectedItem();
+                if (sel != null) {
+                    cb.setToolTipText(sel.toString());
+                }
+            });
+        }
+        for (JTextField nf : List.of(delay, jitter, concurrency, retries, threads, pathLen)) {
+            nf.setMinimumSize(new Dimension(76, 26));
+            nf.setPreferredSize(new Dimension(92, 26));
+        }
+        for (JTextField tf : List.of(staticExt, regex, copyFormat)) {
+            tf.setMinimumSize(new Dimension(120, 26));
+            tf.setPreferredSize(new Dimension(180, 26));
+        }
+
         staticExt.putClientProperty("JTextField.placeholderText", "css,js,png,jpg,svg,woff...");
         regex.putClientProperty("JTextField.placeholderText", "^/api/.*");
         delay.putClientProperty("JTextField.placeholderText", "50");
@@ -181,27 +201,27 @@ final class SettingsTab {
                 field("Chính sách API [REFRESH]:", refreshPolicyBox, null),
                 row(autoDetectRefreshChk),
                 pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
-                        Ui.muted("Danh mục Tag & hành vi M1–M4 cho API GET tự tải lại"))));
+                        Ui.muted("Danh mục Tag & hành vi M1-M4"))));
         sections.add(section("3.  Gửi request, Bảo vệ Action API & chống lỗi 429", t -> t.success,
-                "Hàng đợi theo host chống 429/503; quản lý trực quan 4 chiến lược bảo vệ & tự phục hồi ID cho Action API (POST/PUT/PATCH/DELETE).",
+                "Hàng đợi theo host chống 429/503; quản lý trực quan Chiến lược bảo vệ, Luật Chặn Proxy & Kho ID cho Action API.",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
                 field("Dao động (%):", jitter, Ui.muted("nghỉ = khoảng nghỉ +/- %")),
                 field("Song song mỗi host:", concurrency, Ui.muted("1 = tuần tự")),
                 field("Tự gửi lại 429/503:", retries, null), field("Tổng luồng gửi:", threads, null),
                 row(sendOriginal),
-                field("Chiến lược Action mặc định:", actionModeBox, null),
-                field("Khi gửi lại ở Khóa 200 OK:", lock2xxStrategyBox, null),
+                field("Chiến lược Action:", actionModeBox, null),
+                field("Khi gửi lại Khóa 200 OK:", lock2xxStrategyBox, null),
                 row(holdActionProxyChk),
-                pair(Ui.accent("Mở Action Workbench (4 tab trực quan)...",
+                pair(Ui.accent("Mở Action Workbench...",
                         t -> Icons.workbench(t.accent.onSolid(), 14), t -> t.accent,
                         () -> ActionWorkbenchDialog.show(panel, engine, ui.api != null ? ui.api.currentGroup() : null,
                                 null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                                     load();
                                     ui.syncHeader();
                                 })),
-                        Ui.muted("Cấu hình trực quan Chiến lược, Kho ID Sống, Chuỗi Tạo Mới & Khóa 200 OK"))));
+                        Ui.muted("Chiến lược, Luật Chặn Proxy & Kho ID"))));
         sections.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
-                "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} [id] (id) <id> :id * là giá trị bất kỳ.",
+                "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} {session} [id] (id) <id> :id * là giá trị động.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
                 row(targetPrefix), row(targetIds), field("Query trong Excel:", queryMode, null)));
         sections.add(section("5.  Burp Repeater & tên tab", t -> t.critical, "Cách đặt tên tab khi đẩy sang Burp Repeater.",
@@ -232,9 +252,9 @@ final class SettingsTab {
         animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
         sections.add(section("8.  Giao diện, Font chữ & Chẩn đoán", t -> t.info,
                 "Tùy chỉnh phông chữ tiếng Việt, chế độ hiển thị nút 3 trạng thái, cỡ chữ, hiệu ứng nhẹ và thông tin chẩn đoán.",
-                field("Chế độ nút công cụ:", displayModeBox, Ui.muted("3 trạng thái · đổi ngay")),
+                field("Chế độ nút công cụ:", displayModeBox, Ui.muted("3 trạng thái")),
                 field("Font giao diện:", uiFontBox, Ui.muted("Be Vietnam Pro / IBM Plex")),
-                field("Font URL & Mã (Mono):", monoFontBox, Ui.muted("JetBrains Mono")),
+                field("Font URL & Mã:", monoFontBox, Ui.muted("JetBrains Mono")),
                 field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("áp dụng ngay")),
                 row(animationsBox),
                 field("Phiên bản:", diagVersion, null),
@@ -405,7 +425,7 @@ final class SettingsTab {
             }
         }
         int w = panel.getWidth() > 0 ? panel.getWidth() : scroll.getViewport().getWidth();
-        twoCol = w >= 900;
+        twoCol = w >= 1040;
 
         content.removeAll();
         if (visible.isEmpty()) {
@@ -714,6 +734,11 @@ final class SettingsTab {
                     gc.fill = GridBagConstraints.HORIZONTAL;
                     gc.weightx = 1;
                     Component comp = (Component) r[1];
+                    if (comp instanceof JCheckBox cb) {
+                        cb.setToolTipText(cb.getText());
+                        cb.setMinimumSize(new Dimension(80, 22));
+                        cb.setPreferredSize(new Dimension(Math.min(440, cb.getPreferredSize().width), Math.max(22, cb.getPreferredSize().height)));
+                    }
                     collectText(comp, corpus);
                     body.add(comp, gc);
                 }
@@ -721,6 +746,10 @@ final class SettingsTab {
                     if (r[1] != null) {
                         Component c1 = (Component) r[1];
                         collectText(c1, corpus);
+                        if (c1 instanceof JComponent jc) {
+                            Dimension pref = jc.getPreferredSize();
+                            jc.setMinimumSize(new Dimension(Math.min(200, pref.width), Math.max(24, pref.height)));
+                        }
                         body.add(c1, gc);
                     }
                     gc.gridx = 1;
@@ -728,6 +757,9 @@ final class SettingsTab {
                     gc.weightx = 1;
                     gc.fill = GridBagConstraints.HORIZONTAL;
                     Component c2 = (Component) r[2];
+                    if (c2 instanceof JLabel l) {
+                        l.setMinimumSize(new Dimension(40, 20));
+                    }
                     collectText(c2, corpus);
                     body.add(c2, gc);
                 }
@@ -735,21 +767,27 @@ final class SettingsTab {
                     String lbl = (String) r[1];
                     corpus.append(lbl).append(' ');
                     JLabel fl = new JLabel(lbl);
-                    fl.setMinimumSize(fl.getPreferredSize());
+                    Dimension lpref = fl.getPreferredSize();
+                    fl.setMinimumSize(new Dimension(lpref.width, Math.max(22, lpref.height)));
                     body.add(fl, gc);
                     gc.gridx = 1;
                     Component c2 = (Component) r[2];
                     collectText(c2, corpus);
-                    if (r[3] == null && c2 instanceof JLabel) {
+                    if (r[3] == null && (c2 instanceof JLabel || c2 instanceof JComboBox<?>)) {
                         gc.gridwidth = 2;
                         gc.weightx = 1;
+                        gc.fill = GridBagConstraints.HORIZONTAL;
+                    } else if (c2 instanceof JComboBox<?>) {
+                        gc.weightx = 0.6;
                         gc.fill = GridBagConstraints.HORIZONTAL;
                     }
                     body.add(c2, gc);
                     if (r[3] != null) {
                         gc.gridx = 2;
                         gc.weightx = 1;
+                        gc.fill = GridBagConstraints.HORIZONTAL;
                         JComponent note = (JComponent) r[3];
+                        note.setMinimumSize(new Dimension(40, 20));
                         collectText(note, corpus);
                         body.add(note, gc);
                     }

@@ -24,6 +24,8 @@ import java.util.function.Predicate;
 import java.awt.Color;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
@@ -96,6 +98,16 @@ public final class MainPanel {
     private final JButton options = new JButton();
     private final JButton detach = new JButton();
     private final JButton workspace = new JButton();
+    private final JButton topChromeToggleBtn = new JButton();
+    private final JButton compactControlsBtn = new JButton();
+    private JPanel headerRow1;
+    private JPanel headerDrawerRow;
+    private JPanel headerLeftZone;
+    private JPanel headerRightFull;
+    private JPanel headerRightCompact;
+    private boolean userTopCompact;
+    private boolean effectiveHeaderCompact;
+    private int lastChromeWidth = 1280;
 
     private final Pill rolesChip = new Pill("Roles 0/0", t -> t.neutral, t -> Icons.role(t.muted, 12));
     private final Pill branchChip = new Pill("Nhánh 1", t -> t.neutral, t -> Icons.branch(t.muted));
@@ -146,6 +158,7 @@ public final class MainPanel {
         this.projectId = projectId;
         this.uiPrefs = UiPrefs.resolve(workspaces, engine);
         UiPrefs.applyStartup(this.uiPrefs);
+        this.userTopCompact = UiPrefs.topCompact(this.uiPrefs);
         this.headerPanel = buildHeader();
         main.add(headerPanel, BorderLayout.NORTH);
         spotlight = new SpotlightDialog(this);
@@ -173,6 +186,12 @@ public final class MainPanel {
         tabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
         root.add(toastPane, BorderLayout.CENTER);
+        root.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateResponsiveChrome(root.getWidth());
+            }
+        });
         installShortcuts();
         Theme.track(root);
         try {
@@ -181,6 +200,7 @@ public final class MainPanel {
             // outside Burp
         }
         settings.load();
+        updateResponsiveChrome(lastChromeWidth);
         syncHeader();
         api.reloadAll();
         timer = new Timer(TICK_MS, e -> tick(false));
@@ -246,7 +266,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setCellWidth(74);
+        dest.setCellWidth(68);
         dest.setCellHeight(24);
         dest.setIconResolver(segPath -> Icons.nodeIcon(engine.nodeTypeOf(segPath), Theme.current(), 12));
         dest.onSegmentClick(seg -> {
@@ -301,12 +321,16 @@ public final class MainPanel {
                     if (settings != null) settings.load();
                 }));
         themythofcrawl.ui.kit.RichHoverCard.install(workbenchBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Action Workbench (Bảo vệ Action API)",
-                "Mở giao diện trực quan 4 tab: Chiến lược xử lý, Kho ID Sống, Chuỗi Tạo Mới -> Hành Động và Khóa 200 OK.",
+                "Action Workbench & Luật Chặn Proxy",
+                "Mở giao diện 5 tab: Chiến lược xử lý, Luật Chặn Proxy (theo nhánh/path/method), Kho ID Sống, Chuỗi Tạo Mới & Khóa 200 OK.",
                 null,
                 t -> Icons.workbench(t.accent.text(), 14),
                 t -> t.accent,
-                () -> "Đang dùng: " + engine.config().actionMode.label));
+                () -> {
+                    int rules = engine.actionEngine().activeBlockRuleCount();
+                    return "Đang dùng: " + engine.config().actionMode.label
+                            + (rules > 0 ? " · Luật Chặn Proxy: " + rules + " bật" : "");
+                }));
 
         JButton displayModeBtn = new JButton();
         displayModeBtn.setIcon(Icons.themed(Icons::displayMode));
@@ -353,7 +377,7 @@ public final class MainPanel {
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
         workspace.setMargin(new Insets(0, 4, 0, 4));
-        workspace.setPreferredSize(new Dimension(Theme.current().scaled(68), h24));
+        workspace.setPreferredSize(new Dimension(Theme.current().scaled(62), h24));
         workspace.addActionListener(e -> workspaceMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Workspace (Phiên làm việc)",
@@ -363,46 +387,105 @@ public final class MainPanel {
                 t -> t.info,
                 () -> "Đang mở: " + engine.workspaceName()));
 
-        JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        leftZone.setOpaque(false);
-        leftZone.add(captureToggle);
-        leftZone.add(sendModeToggle);
-        leftZone.add(queue);
+        topChromeToggleBtn.setMargin(new Insets(0, 0, 0, 0));
+        topChromeToggleBtn.setPreferredSize(new Dimension(h24, h24));
+        topChromeToggleBtn.addActionListener(e -> setTopCompact(!effectiveHeaderCompact));
+        themythofcrawl.ui.kit.RichHoverCard.install(topChromeToggleBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Thu gọn / Mở rộng thanh công cụ phía trên",
+                "Rút gọn các nút điều khiển vào menu thả xuống để tối ưu diện tích làm việc (hữu ích cho cả màn hình thường và chia đôi màn hình).",
+                null,
+                t -> effectiveHeaderCompact ? Icons.chevronDown(t.accent.text(), 12) : Icons.chevronUp(t.accent.text(), 12),
+                t -> t.accent,
+                () -> effectiveHeaderCompact ? "Đang ở chế độ thu gọn (bấm để mở rộng)" : "Đang hiện đầy đủ (bấm để thu gọn)"));
 
-        JLabel destLabel = new JLabel("Đích", Icons.themed(t -> Icons.arrowRight(t.critical.text())), SwingConstants.LEFT) {
+        compactControlsBtn.setText("Điều khiển");
+        compactControlsBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.sliders(t.fg), t.fg)));
+        compactControlsBtn.setHorizontalTextPosition(SwingConstants.LEADING);
+        compactControlsBtn.setMargin(new Insets(0, 6, 0, 6));
+        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(112), h24));
+        compactControlsBtn.setToolTipText("Mở menu điều khiển nhanh (Trạng thái, Action Workbench, Tùy chọn, Workspace...)");
+        compactControlsBtn.addActionListener(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight()));
+
+        headerLeftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        headerLeftZone.setOpaque(false);
+        headerLeftZone.add(captureToggle);
+        headerLeftZone.add(sendModeToggle);
+        headerLeftZone.add(queue);
+
+        // Crisp 24px height-matched vertically centered Dich prefix aligned with Doi: 0 and Breadcrumb
+        JLabel destLabel = new JLabel("Đích", Icons.themed(t -> Icons.arrowRight(t.critical.text(), 12)), SwingConstants.CENTER) {
             @Override
             public void updateUI() {
                 super.updateUI();
-                setFont(Theme.current().smallBoldFont);
+                Theme t = Theme.current();
+                setFont(t.smallBoldFont);
+                setForeground(t.fg);
+                setBackground(t.surfaceAlt);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(t.border),
+                        BorderFactory.createEmptyBorder(0, 4, 0, 4)));
             }
         };
+        destLabel.setOpaque(true);
+        destLabel.setIconTextGap(3);
         destLabel.setFont(Theme.current().smallBoldFont);
-        JPanel destPrefix = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        destLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Theme.current().border),
+                BorderFactory.createEmptyBorder(0, 4, 0, 4)));
+        destLabel.setPreferredSize(new Dimension(destLabel.getPreferredSize().width + 2, h24));
+        destLabel.setMinimumSize(new Dimension(destLabel.getPreferredSize().width, h24));
+        destLabel.setMaximumSize(new Dimension(destLabel.getPreferredSize().width + 8, h24));
+        destLabel.setAlignmentY(Component.CENTER_ALIGNMENT);
+
+        JSeparator destSep = vSep();
+        destSep.setAlignmentY(Component.CENTER_ALIGNMENT);
+        JPanel destPrefix = new JPanel();
+        destPrefix.setLayout(new BoxLayout(destPrefix, BoxLayout.X_AXIS));
         destPrefix.setOpaque(false);
-        destPrefix.add(vSep());
+        destPrefix.setPreferredSize(new Dimension(destLabel.getPreferredSize().width + 8, h24));
+        destPrefix.add(destSep);
+        destPrefix.add(Box.createHorizontalStrut(3));
         destPrefix.add(destLabel);
-        JPanel centerZone = new JPanel(new BorderLayout(2, 0));
+        destPrefix.add(Box.createHorizontalStrut(3));
+
+        JPanel centerZone = new JPanel(new BorderLayout(0, 0));
         centerZone.setOpaque(false);
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
 
         ToolbarGroup actions = new ToolbarGroup(spotlightBtn, workbenchBtn, displayModeBtn, options, detach, workspace);
-        ((java.awt.FlowLayout) actions.getLayout()).setHgap(2);
+        ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
-        JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        rightZone.setOpaque(false);
-        rightZone.add(status);
-        rightZone.add(todo);
-        rightZone.add(vSep());
-        rightZone.add(actions);
 
-        JPanel row1 = new JPanel(new BorderLayout(2, 0));
-        row1.setOpaque(false);
-        row1.add(leftZone, BorderLayout.WEST);
-        row1.add(centerZone, BorderLayout.CENTER);
-        row1.add(rightZone, BorderLayout.EAST);
+        headerRightFull = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        headerRightFull.setOpaque(false);
+        headerRightFull.add(status);
+        headerRightFull.add(todo);
+        headerRightFull.add(vSep());
+        headerRightFull.add(actions);
 
-        JPanel top = new JPanel(new BorderLayout(0, 0)) {
+        headerRightCompact = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        headerRightCompact.setOpaque(false);
+        headerRightCompact.add(compactControlsBtn);
+        headerRightCompact.setVisible(false);
+
+        JPanel rightWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 1, 0));
+        rightWrapper.setOpaque(false);
+        rightWrapper.add(headerRightFull);
+        rightWrapper.add(headerRightCompact);
+        rightWrapper.add(topChromeToggleBtn);
+
+        headerRow1 = new JPanel(new BorderLayout(2, 0));
+        headerRow1.setOpaque(false);
+        headerRow1.add(headerLeftZone, BorderLayout.WEST);
+        headerRow1.add(centerZone, BorderLayout.CENTER);
+        headerRow1.add(rightWrapper, BorderLayout.EAST);
+
+        headerDrawerRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        headerDrawerRow.setOpaque(false);
+        headerDrawerRow.setVisible(false);
+
+        JPanel top = new JPanel(new BorderLayout(0, 2)) {
             @Override
             public void updateUI() {
                 super.updateUI();
@@ -415,8 +498,129 @@ public final class MainPanel {
         top.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
                 BorderFactory.createEmptyBorder(3, 6, 3, 6)));
-        top.add(row1, BorderLayout.CENTER);
+        top.add(headerRow1, BorderLayout.NORTH);
+        top.add(headerDrawerRow, BorderLayout.SOUTH);
         return top;
+    }
+
+    private JPopupMenu compactControlsMenu() {
+        JPopupMenu m = new JPopupMenu();
+        Engine.Stats st = engine.stats();
+        SendDispatcher.Snapshot q = engine.queue();
+        int waiting = q.queued() + q.inFlight();
+        m.add(Ui.item("Trạng thái: " + status.getText() + " · " + todo.getText()
+                + (waiting > 0 ? " · Đợi: " + waiting : ""), Icons::api, this::statusMenu));
+        if (st.pending() > 0) {
+            m.add(Ui.item("Mở danh sách chờ xử lý (" + st.pending() + ")", Icons::hourglass, this::todoMenu));
+        }
+        if (waiting > 0) {
+            m.add(Ui.item("Hủy hàng đợi gửi (" + waiting + ")", Icons::stop, () -> engine.cancelPending("Đã hủy")));
+        }
+        m.addSeparator();
+        m.add(Ui.item("Tìm kiếm toàn cục (Spotlight · Ctrl+K)", Icons::search, () -> spotlight.open()));
+        int blockRules = engine.actionEngine().activeBlockRuleCount();
+        m.add(Ui.item("Action Workbench & Luật Chặn Proxy" + (blockRules > 0 ? " (" + blockRules + " luật bật)" : "") + "...",
+                Icons::workbench, () -> ActionWorkbenchDialog.show(root, engine,
+                        api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
+                            syncHeader();
+                            if (settings != null) settings.load();
+                        })));
+        m.add(Ui.item("Chế độ nút công cụ: " + UiDisplayMode.current().label + " (Đổi)", Icons::displayMode, () -> {
+            UiDisplayMode next = UiDisplayMode.cycle();
+            UiPrefs.setDisplayMode(uiPrefs, next);
+            if (settings != null) settings.load();
+            flash("Chế độ nút công cụ: " + next.label);
+        }));
+        m.add(Ui.item("Tùy chọn nhanh & Danh mục...", Icons::gear, this::optionsMenu));
+        m.add(Ui.item("Workspace: " + engine.workspaceName() + "...", Icons::folder, this::workspaceMenu));
+        m.add(Ui.item(window != null ? "Gắn lại vào tab Burp" : "Tách cửa sổ riêng", Icons::window, this::toggleDetach));
+        m.addSeparator();
+        m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh công cụ phía trên" : "Thu gọn thanh công cụ phía trên",
+                t -> effectiveHeaderCompact ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12),
+                () -> setTopCompact(!effectiveHeaderCompact)));
+        return m;
+    }
+
+    private boolean narrowExpanded;
+
+    boolean isHeaderCompact() {
+        return effectiveHeaderCompact;
+    }
+
+    void setTopCompact(boolean compact) {
+        int w = root.getWidth() > 0 ? root.getWidth() : lastChromeWidth;
+        if (w < 1040) {
+            this.narrowExpanded = !compact;
+        } else {
+            this.userTopCompact = compact;
+            UiPrefs.setTopCompact(uiPrefs, compact);
+        }
+        updateResponsiveChrome(w);
+    }
+
+    void updateResponsiveChrome(int width) {
+        if (width > 0) {
+            lastChromeWidth = width;
+        }
+        int w = width > 0 ? width : lastChromeWidth;
+        boolean narrow = w < 1040;
+        boolean compact = narrow ? !narrowExpanded : userTopCompact;
+        effectiveHeaderCompact = compact;
+
+        if (headerRightFull != null && headerRightCompact != null) {
+            if (!narrow && !userTopCompact) {
+                // Full wide mode: everything on 1 crisp row
+                headerDrawerRow.setVisible(false);
+                if (queue.getParent() != headerLeftZone) {
+                    headerLeftZone.add(queue);
+                }
+                if (headerRightFull.getParent() == headerDrawerRow) {
+                    headerDrawerRow.remove(headerRightFull);
+                    ((JPanel) headerRow1.getComponent(2)).add(headerRightFull, 0);
+                }
+                headerRightFull.setVisible(true);
+                headerRightCompact.setVisible(false);
+                dest.setMaxSegments(2);
+                dest.setCellWidth(68);
+            } else if (narrow && narrowExpanded) {
+                // Split-screen explicitly expanded by user: cleanly show drawer row 2 (zero collision!)
+                headerRightCompact.setVisible(false);
+                headerRightFull.setVisible(true);
+                if (queue.getParent() == headerLeftZone) {
+                    headerLeftZone.remove(queue);
+                }
+                if (headerRightFull.getParent() != headerDrawerRow) {
+                    if (headerRightFull.getParent() != null) {
+                        headerRightFull.getParent().remove(headerRightFull);
+                    }
+                    headerDrawerRow.removeAll();
+                    headerDrawerRow.add(queue);
+                    headerDrawerRow.add(headerRightFull);
+                }
+                headerDrawerRow.setVisible(true);
+                dest.setMaxSegments(1);
+                dest.setCellWidth(Math.max(58, Math.min(82, (w - 300) / 2)));
+            } else {
+                // Collapsed compact mode (split-screen default OR user collapsed in normal mode): crisp 1-row bar + Dropdown
+                headerDrawerRow.setVisible(false);
+                if (queue.getParent() != headerLeftZone && !narrow) {
+                    headerLeftZone.add(queue);
+                } else if (narrow && queue.getParent() == headerLeftZone) {
+                    headerLeftZone.remove(queue);
+                }
+                headerRightFull.setVisible(false);
+                headerRightCompact.setVisible(true);
+                dest.setMaxSegments(narrow ? 1 : 2);
+                dest.setCellWidth(narrow ? 64 : 74);
+            }
+            topChromeToggleBtn.setIcon(Icons.themed(t -> effectiveHeaderCompact
+                    ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12)));
+            headerPanel.revalidate();
+            headerPanel.repaint();
+        }
+        if (api != null) {
+            api.applyResponsiveChrome(effectiveHeaderCompact, w);
+        }
     }
 
     void update(java.util.function.Consumer<Config> f) {

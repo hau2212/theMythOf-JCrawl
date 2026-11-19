@@ -2,8 +2,11 @@ plugins {
     id 'java'
 }
 
+def versionProps = new Properties()
+file('version.properties').withInputStream { versionProps.load(it) }
+
 group = 'themythofcrawl'
-version = '2.1.0-beta'
+version = versionProps.getProperty('versionName', '2.2-beta')
 
 repositories {
     mavenCentral()

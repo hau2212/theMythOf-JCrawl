@@ -8,6 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import themythofcrawl.model.ActionInterceptRule;
+
 /**
  * Engine xử lý 4 cơ chế bảo vệ & tái tạo trạng thái cho các Action API (POST / PUT / PATCH / DELETE)
  * trong quá trình Crawl và Gửi lại:
@@ -858,5 +860,122 @@ public final class ActionEngine {
         }
         String flat = s.replace('\r', ' ').replace('\n', ' ').trim();
         return flat.length() > 140 ? flat.substring(0, 140) + "..." : flat;
+    }
+
+    // =========================================================================
+    // V2.2 Proactive Proxy Request Interception Rules (Branch/Path + Method Matrix)
+    // =========================================================================
+
+    public record InterceptDecision(ActionInterceptRule.Effect effect, ActionInterceptRule rule, int ruleIndex) {
+        public boolean matched() {
+            return rule != null && effect != null;
+        }
+    }
+
+    private final CopyOnWriteArrayList<ActionInterceptRule> interceptRules = new CopyOnWriteArrayList<>();
+
+    public List<ActionInterceptRule> interceptRules() {
+        return new ArrayList<>(interceptRules);
+    }
+
+    public int activeBlockRuleCount() {
+        int count = 0;
+        for (ActionInterceptRule r : interceptRules) {
+            if (r.enabled() && r.effect().isBlock()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public synchronized void setInterceptRules(List<ActionInterceptRule> rules) {
+        interceptRules.clear();
+        if (rules != null) {
+            for (ActionInterceptRule r : rules) {
+                if (r != null) {
+                    interceptRules.add(r.copy());
+                }
+            }
+        }
+    }
+
+    public synchronized ActionInterceptRule upsertInterceptRule(ActionInterceptRule rule) {
+        if (rule == null) {
+            return null;
+        }
+        ActionInterceptRule copy = rule.copy();
+        for (int i = 0; i < interceptRules.size(); i++) {
+            if (interceptRules.get(i).id().equals(copy.id())) {
+                interceptRules.set(i, copy);
+                return copy;
+            }
+        }
+        interceptRules.add(copy);
+        return copy;
+    }
+
+    public synchronized boolean removeInterceptRule(String ruleId) {
+        if (ruleId == null || ruleId.isBlank()) {
+            return false;
+        }
+        return interceptRules.removeIf(r -> ruleId.equals(r.id()));
+    }
+
+    public synchronized boolean moveInterceptRule(String ruleId, int delta) {
+        if (ruleId == null || delta == 0) {
+            return false;
+        }
+        int idx = -1;
+        for (int i = 0; i < interceptRules.size(); i++) {
+            if (ruleId.equals(interceptRules.get(i).id())) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            return false;
+        }
+        int target = idx + delta;
+        if (target < 0 || target >= interceptRules.size()) {
+            return false;
+        }
+        ActionInterceptRule item = interceptRules.remove(idx);
+        interceptRules.add(target, item);
+        return true;
+    }
+
+    public synchronized boolean toggleInterceptRule(String ruleId) {
+        if (ruleId == null) {
+            return false;
+        }
+        for (ActionInterceptRule r : interceptRules) {
+            if (ruleId.equals(r.id())) {
+                r.setEnabled(!r.enabled());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Evaluates active proactive Proxy rules in top-to-bottom priority order.
+     * First matching enabled rule wins (ALLOW stops evaluation and permits request through).
+     */
+    public InterceptDecision evaluateInterceptRules(String activeBranch, String host, String method, String path) {
+        for (int i = 0; i < interceptRules.size(); i++) {
+            ActionInterceptRule r = interceptRules.get(i);
+            if (r.matches(activeBranch, host, method, path)) {
+                return new InterceptDecision(r.effect(), r, i);
+            }
+        }
+        return new InterceptDecision(null, null, -1);
+    }
+
+    public synchronized void loadInterceptRulesJson(String json) {
+        setInterceptRules(ActionInterceptRule.listFromJson(json));
+    }
+
+    public synchronized String interceptRulesToJson() {
+        return ActionInterceptRule.listToJson(interceptRules);
     }
 }
