@@ -48,7 +48,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "2.4-beta";
+    public static final String VERSION = "3.4-beta";
 
     private static final long BRIDGE_TTL_MS = 15_000L;
     private static final Method SPOOF_METHOD = resolveStaticMethod(
@@ -195,10 +195,12 @@ public final class Extension implements BurpExtension {
                             case FORWARD -> {
                                 HttpRequest finalReq = HttpRequest.httpRequest(
                                         req.httpService(), ByteArray.byteArray(finalBytes));
+                                engine.recordGateAuditOutcome(outcome.auditSeq(), "Đã bấm Gửi lên Server");
                                 engine.log("ĐÃ GỬI LÊN SERVER [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
                                 return ProxyRequestReceivedAction.doNotIntercept(finalReq);
                             }
                             case HOLD_AND_SPOOF -> {
+                                engine.recordGateAuditOutcome(outcome.auditSeq(), "Giữ lại + trả 200 ảo");
                                 engine.onProxyHeldRequest(service, finalBytes, url, outcome.matchedRule(),
                                         "Proxy-Wait[" + outcome.reason() + "]");
                                 if (supportsSpoof() && res.spoofResponse() != null) {
@@ -209,11 +211,13 @@ public final class Extension implements BurpExtension {
                                 return ProxyRequestReceivedAction.drop();
                             }
                             case DROP_AND_SAVE -> {
+                                engine.recordGateAuditOutcome(outcome.auditSeq(), "Đã Drop & Lưu Extension");
                                 engine.onProxyHeldRequest(service, finalBytes, url, outcome.matchedRule(),
                                         "Proxy-Wait[" + outcome.reason() + "]");
                                 return ProxyRequestReceivedAction.drop();
                             }
                             case DROP -> {
+                                engine.recordGateAuditOutcome(outcome.auditSeq(), "Đã Hủy (Drop)");
                                 engine.log("ĐÃ HỦY (DROP) [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
                                 return ProxyRequestReceivedAction.drop();
                             }

@@ -28,6 +28,8 @@ import themythofcrawl.model.ActionInterceptRule;
 public final class ActionEngine {
 
     public enum ActionMode {
+        NONE("0. Nguyên bản (Không can thiệp — Tắt xử lý Action)",
+                "Cho request đi thẳng nguyên bản lên Server, không chặn Proxy, không tự đổi ID hay kế thừa 200 ảo (200 -> 400/404 hiển thị trung thực)"),
         AUTO_SMART("Tự động thông minh (Kết hợp cả 4)", "Ưu tiên giữ 2xx, tự thay ID sống hoặc gọi Producer khi gặp 4xx"),
         HOLD_AT_PROXY("1. Chặn ở Proxy (Giữ trạng thái Server)", "Trình duyệt nhận 200 ảo; Server giữ nguyên ID cho tới khi bấm Gửi"),
         LOCK_2XX("2. Khóa bảo vệ 200 OK (Snapshot & 3 tùy chọn)", "Lưu bản sao 200 OK gốc; cho phép Kế thừa 200 OK, Đổi ID đẩy thật, hoặc Gửi cưỡng bức"),
@@ -41,6 +43,18 @@ public final class ActionEngine {
         ActionMode(String label, String description) {
             this.label = label;
             this.description = description;
+        }
+
+        public String shortTitle() {
+            return switch (this) {
+                case NONE -> "Nguyên bản (Tắt)";
+                case AUTO_SMART -> "Tự động thông minh";
+                case HOLD_AT_PROXY -> "Giữ ở Proxy";
+                case LOCK_2XX -> "Khóa 200 OK";
+                case LIVE_ID_POOL -> "Kho ID Sống";
+                case PRODUCER_RECREATE -> "Gọi API Tạo mới";
+                case INTERCEPT_WAIT -> "Chặn chờ duyệt";
+            };
         }
     }
 
@@ -244,11 +258,35 @@ public final class ActionEngine {
         return null;
     }
 
+    // V_3.4_beta: Unified Policy Ledger & Live Action Gate Auditor
+    private final ActionPolicyLedger policyLedger = new ActionPolicyLedger();
+    private final ActionGateAuditLog gateAuditLog = new ActionGateAuditLog();
+
+    public ActionPolicyLedger policyLedger() {
+        return policyLedger;
+    }
+
+    public ActionGateAuditLog gateAuditLog() {
+        return gateAuditLog;
+    }
+
+    public void clearAllProxyControls() {
+        holdAllActionAtProxy = false;
+        proxyHoldEndpoints.clear();
+        interceptWaitEnabled = false;
+        interceptWaitAllScope = false;
+        interceptWaitBranches.clear();
+        interceptWaitEndpoints.clear();
+        interceptRules.clear();
+        policyLedger.resetAllToNone();
+    }
+
     public boolean hasAnyActiveProxyIntercept() {
         return interceptWaitEnabled
                 || holdAllActionAtProxy
                 || !proxyHoldEndpoints.isEmpty()
-                || activeBlockRuleCount() > 0;
+                || activeBlockRuleCount() > 0
+                || policyLedger.activeBlockingCount() > 0;
     }
 
     public Lock2xxStrategy getDefaultLock2xxStrategy() {

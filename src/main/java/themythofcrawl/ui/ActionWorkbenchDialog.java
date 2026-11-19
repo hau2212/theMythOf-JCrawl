@@ -82,10 +82,12 @@ import themythofcrawl.ui.theme.Theme;
  */
 public final class ActionWorkbenchDialog {
     public static final int TAB_STRATEGY = 0;
-    public static final int TAB_INTERCEPT_RULES = 1;
+    public static final int TAB_LEDGER = 1;
+    public static final int TAB_INTERCEPT_RULES = TAB_LEDGER;
     public static final int TAB_POOL = 2;
     public static final int TAB_CHAIN = 3;
     public static final int TAB_LOCK200 = 4;
+    public static final int TAB_PROTOCOL_AUDIT = 5;
 
     private ActionWorkbenchDialog() {
     }
@@ -96,7 +98,7 @@ public final class ActionWorkbenchDialog {
     }
 
     public static void showForBranch(Component parent, Engine engine, String prefillBranch, Runnable onAfterAction) {
-        showInternal(parent, engine, null, null, prefillBranch, TAB_INTERCEPT_RULES, onAfterAction);
+        showInternal(parent, engine, null, null, prefillBranch, TAB_LEDGER, onAfterAction);
     }
 
     private static void showInternal(Component parent, Engine engine, ApiGroup focusGroup,
@@ -106,8 +108,8 @@ public final class ActionWorkbenchDialog {
         String title = focusGroup != null
                 ? "Action Workbench — " + Text.apiLabel(focusGroup.gid()) + " " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 44)
                 : (prefillBranch != null && !prefillBranch.isBlank()
-                        ? "Action Workbench — Luật Chặn Proxy cho " + prefillBranch
-                        : "Action Workbench — Bảo vệ & Tái tạo Action API");
+                        ? "Action Workbench — Sổ cái & Luật Chặn cho " + prefillBranch
+                        : "Action Workbench — Trung tâm Kiểm soát Action & Dò Giao thức");
         JDialog dlg = new JDialog(owner, title, JDialog.ModalityType.APPLICATION_MODAL);
 
         JPanel content = buildWorkbenchPanel(dlg, engine, focusGroup, explicitTargets, prefillBranch, initialTab, () -> {
@@ -119,13 +121,13 @@ public final class ActionWorkbenchDialog {
         dlg.setLayout(new BorderLayout());
         dlg.add(content, BorderLayout.CENTER);
         Theme.track(dlg);
-        dlg.setMinimumSize(new Dimension(920, 600));
-        dlg.setSize(new Dimension(1040, 690));
+        dlg.setMinimumSize(new Dimension(960, 620));
+        dlg.setSize(new Dimension(1120, 720));
         dlg.setLocationRelativeTo(owner);
         dlg.setVisible(true);
     }
 
-    /** Builds the full 5-tab Workbench panel (also reusable for headless tests &amp; previews). */
+    /** Builds the full 6-tab Workbench panel (also reusable for headless tests &amp; previews). */
     public static JPanel buildWorkbenchPanel(Component dialogParent, Engine engine, ApiGroup focusGroup,
                                              Collection<RoleResult> explicitTargets, int initialTab,
                                              Runnable onAfterAction, Runnable onClose) {
@@ -146,65 +148,83 @@ public final class ActionWorkbenchDialog {
         JPanel topWrap = new JPanel(new BorderLayout());
         String headTitle = focusGroup != null
                 ? "Action Workbench — " + Text.apiLabel(focusGroup.gid()) + " [" + focusGroup.method() + " " + focusGroup.path() + "]"
-                : "Action Workbench — Cấu hình Bảo vệ & Luật Chặn Action API";
-        String headSub = "Chặn chủ động theo Nhánh / Path / Method ngay tại Proxy, quản lý Kho ID sống và bảo vệ trạng thái 200 OK.";
+                : "Action Workbench — Trung tâm Kiểm soát Chính sách & Dò Giao thức Action";
+        String headSub = "Kiểm soát mọi ngữ cảnh (Toàn cục / Nhánh / Path / API / Method), nhả về Nguyên bản tức thì, dò giao thức Proxy và sửa/gửi lại Request.";
         topWrap.add(Ui.dialogHeader(headTitle, headSub), BorderLayout.NORTH);
 
-        JPanel statusStrip = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        JPanel statusStrip = new JPanel(new BorderLayout(8, 0));
         statusStrip.setOpaque(true);
         statusStrip.setBackground(Theme.current().surfaceAlt);
-        statusStrip.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border));
+        statusStrip.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
 
-        Pill idPill = new Pill("Chưa phát hiện ID", t -> t.neutral, t -> Icons.idPool(t.muted, 12));
-        Pill snapPill = new Pill("Chưa có Snapshot 200 OK", t -> t.neutral, t -> Icons.strategySnapshot(t.muted, 12));
-        Pill rulesPill = new Pill("Luật Chặn Proxy: 0", t -> t.neutral, t -> Icons.strategyShield(t.muted, 12));
-        Pill modePill = new Pill("Chiến lược", t -> t.accent, t -> Icons.workbench(t.accent.text(), 12));
+        JPanel pillsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        pillsLeft.setOpaque(false);
+        Pill idPill = new Pill("ID: —", t -> t.neutral, t -> Icons.idPool(t.muted, 12));
+        Pill snapPill = new Pill("2xx: —", t -> t.neutral, t -> Icons.strategySnapshot(t.muted, 12));
+        Pill rulesPill = new Pill("Sổ cái: 0 bật", t -> t.success, t -> Icons.strategyShield(t.success.text(), 12));
+        Pill modePill = new Pill("Chế độ: Nguyên bản", t -> t.accent, t -> Icons.workbench(t.accent.text(), 12));
         Pill poolCountPill = new Pill("Kho ID: 0", t -> t.info, t -> Icons.idPool(t.info.text(), 12));
-        statusStrip.add(idPill);
-        statusStrip.add(snapPill);
-        statusStrip.add(rulesPill);
-        statusStrip.add(modePill);
-        statusStrip.add(poolCountPill);
+        for (Pill pill : new Pill[] {idPill, snapPill, rulesPill, modePill, poolCountPill}) {
+            pill.setPadding(2, 6, 2, 6);
+            pillsLeft.add(pill);
+        }
+
+        JPanel quickRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        quickRight.setOpaque(false);
+        if (focusGroup != null) {
+            JButton openComposerBtn = Ui.secondaryBtn("Sửa & Gửi lại...", t -> Icons.edit(t.accent.text()));
+            openComposerBtn.addActionListener(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null));
+            quickRight.add(openComposerBtn);
+        }
+        statusStrip.add(pillsLeft, BorderLayout.CENTER);
+        statusStrip.add(quickRight, BorderLayout.EAST);
         topWrap.add(statusStrip, BorderLayout.SOUTH);
         root.add(topWrap, BorderLayout.NORTH);
 
         Runnable refreshBanner = () -> {
             ActionEngine ae = engine.actionEngine();
-            int activeBlocks = ae.activeBlockRuleCount();
-            int totalRules = ae.interceptRules().size();
-            rulesPill.setText("Luật Chặn Proxy: " + activeBlocks + "/" + totalRules + " bật");
-            rulesPill.setToken(activeBlocks > 0 ? t -> t.warning : t -> t.neutral);
-            rulesPill.setIcon(t -> Icons.strategyShield(activeBlocks > 0 ? t.warning.text() : t.muted, 12));
+            int activeLedger = ae.policyLedger().activeCount();
+            int totalLedger = ae.policyLedger().size();
+            int legacyBlocks = ae.activeBlockRuleCount();
+            int totalActive = activeLedger + legacyBlocks;
+            rulesPill.setText(totalActive == 0 ? "Sổ cái: 0 bật"
+                    : "Sổ cái: " + activeLedger + "/" + totalLedger + " bật"
+                            + (legacyBlocks > 0 ? " (+" + legacyBlocks + ")" : ""));
+            rulesPill.setToolTipText(ae.policyLedger().activeSummaryText());
+            rulesPill.setToken(totalActive > 0 ? t -> t.warning : t -> t.success);
+            rulesPill.setIcon(t -> Icons.strategyShield(totalActive > 0 ? t.warning.text() : t.success.text(), 12));
 
             if (focusGroup != null) {
                 List<String> ids = ae.detectIds(focusGroup.path(), Blob.bytesOf(focusGroup.origRequest()));
                 String curId = ids.isEmpty() ? null : ids.get(0);
                 if (curId != null) {
                     boolean consumed = ae.isConsumed(curId);
-                    idPill.setText("ID: " + curId + (consumed ? " (Đã bị xóa / tiêu thụ)" : " (Đang sống)"));
+                    idPill.setText("ID " + curId + (consumed ? " (Đã dùng)" : " (Sống)"));
                     idPill.setToken(consumed ? t -> t.danger : t -> t.success);
                     idPill.setIcon(t -> Icons.idPool(consumed ? t.danger.text() : t.success.text(), 12));
                 } else {
-                    idPill.setText("Không có ID tĩnh trên Path/Body");
+                    idPill.setText("Không có ID tĩnh");
                     idPill.setToken(t -> t.neutral);
                 }
                 if (focusGroup.hasFirstOkSnapshot()) {
-                    snapPill.setText("Snapshot gốc: HTTP " + focusGroup.firstOkStatus() + " · " + focusGroup.firstOkLength() + "B");
+                    snapPill.setText("2xx: " + focusGroup.firstOkStatus() + " · " + focusGroup.firstOkLength() + "B");
                     snapPill.setToken(t -> t.success);
                     snapPill.setIcon(t -> Icons.strategySnapshot(t.success.text(), 12));
                 } else {
-                    snapPill.setText("Chưa có Snapshot 2xx gốc");
+                    snapPill.setText("Chưa có 2xx");
                     snapPill.setToken(t -> t.neutral);
                 }
-                ActionMode eff = focusGroup.actionModeOverride() != null ? focusGroup.actionModeOverride() : engine.config().actionMode;
-                modePill.setText("Đang dùng: " + shortModeName(eff)
-                        + (focusGroup.actionModeOverride() != null ? " (Riêng API này)" : " (Toàn cục)"));
+                ActionMode eff = engine.effectiveActionMode(focusGroup);
+                modePill.setText("Hiệu lực: " + eff.shortTitle()
+                        + (focusGroup.actionModeOverride() != null ? " (Riêng)" : ""));
             } else {
-                idPill.setText("Phạm vi: Toàn bộ Extension");
+                idPill.setText("Phạm vi: Toàn cục");
                 idPill.setToken(t -> t.info);
-                snapPill.setText("Chặn Proxy toàn cục: " + (engine.config().holdActionAtProxy ? "Đang BẬT" : "Đang TẮT"));
+                snapPill.setText("Giữ Proxy: " + (engine.config().holdActionAtProxy ? "BẬT" : "TẮT"));
                 snapPill.setToken(engine.config().holdActionAtProxy ? t -> t.warning : t -> t.neutral);
-                modePill.setText("Mặc định: " + shortModeName(engine.config().actionMode));
+                modePill.setText("Mặc định: " + engine.config().actionMode.shortTitle());
             }
             int alive = 0;
             for (List<String> list : ae.getAllResourceLiveIds().values()) {
@@ -214,18 +234,19 @@ public final class ActionWorkbenchDialog {
                     }
                 }
             }
-            poolCountPill.setText("Kho ID: " + alive + " còn sống · " + ae.getConsumedIds().size() + " đã dùng");
+            poolCountPill.setText("Kho ID: " + alive + " sống · " + ae.getConsumedIds().size() + " hết");
         };
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.putClientProperty("JTabbedPane.tabType", "card");
         tabs.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
 
-        tabs.addTab("1. Chiến lược xử lý", buildStrategyTab(engine, focusGroup, refreshBanner, onAfterAction));
-        tabs.addTab("2. Luật Chặn Proxy", buildInterceptRulesTab(dialogParent, engine, focusGroup, prefillBranch, refreshBanner, onAfterAction));
+        tabs.addTab("1. Chiến lược & Nhả", buildStrategyTab(dialogParent, engine, focusGroup, refreshBanner, onAfterAction));
+        tabs.addTab("2. Sổ cái & Luật (CRUD)", ActionLedgerTabBuilder.build(dialogParent, engine, focusGroup, prefillBranch, refreshBanner, onAfterAction));
         tabs.addTab("3. Kho ID Sống", buildPoolTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
         tabs.addTab("4. Chuỗi Tạo Mới -> Hành Động", buildChainTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
         tabs.addTab("5. Khóa 200 OK & Gửi lại", buildLock200Tab(engine, focusGroup, targets, refreshBanner, onAfterAction));
+        tabs.addTab("6. Dò & Căn chỉnh Giao thức", ActionProtocolAuditTabBuilder.build(dialogParent, engine, refreshBanner, onAfterAction));
 
         if (initialTab >= 0 && initialTab < tabs.getTabCount()) {
             tabs.setSelectedIndex(initialTab);
@@ -234,7 +255,7 @@ public final class ActionWorkbenchDialog {
 
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_3, 0, Theme.SPACE_3));
-        footer.add(Ui.muted("Mọi thay đổi chiến lược, Luật Chặn Proxy và Kho ID được lưu và áp dụng ngay lập tức."), BorderLayout.WEST);
+        footer.add(Ui.muted("Mọi chính sách CRUD, thao tác Nhả về Nguyên bản và Bộ Dò giao thức được đồng bộ & áp dụng tức thì."), BorderLayout.WEST);
         if (onClose != null) {
             footer.add(Ui.button("Đóng", onClose), BorderLayout.EAST);
         }
@@ -245,9 +266,9 @@ public final class ActionWorkbenchDialog {
     }
 
     // =========================================================================
-    // TAB 1: 4 VISUAL STRATEGY CARDS
+    // TAB 1: REVERSIBLE STRATEGY CARDS + EXPLICIT NONE / RESET CONTROLS
     // =========================================================================
-    private static JPanel buildStrategyTab(Engine engine, ApiGroup focusGroup,
+    private static JPanel buildStrategyTab(Component dialogParent, Engine engine, ApiGroup focusGroup,
                                            Runnable refreshBanner, Runnable onAfterAction) {
         JPanel p = new JPanel(new BorderLayout(0, Theme.SPACE_2));
         p.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
@@ -257,24 +278,39 @@ public final class ActionWorkbenchDialog {
         JPanel topRow = new JPanel(new BorderLayout(8, 0));
         topRow.setOpaque(false);
         String perApiLbl = focusGroup != null
-                ? "Riêng API: " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 22)
-                : "Riêng API đang chọn";
+                ? "Riêng " + Text.apiLabel(focusGroup.gid()) + " [" + focusGroup.method() + "]"
+                : "Riêng API";
         SegmentedToggle scopeToggle = new SegmentedToggle(
-                new SegmentedToggle.Option(perApiLbl, "Ghi đè chiến lược chỉ cho API đang chọn", t -> t.accent, (t, s) -> null, false),
-                new SegmentedToggle.Option("Mặc định toàn cục", "Áp dụng cho mọi Action API trong Extension", t -> t.info, (t, s) -> null, false));
+                new SegmentedToggle.Option(perApiLbl, "Áp dụng chiến lược chỉ cho API đang chọn", t -> t.accent, (t, s) -> null, false),
+                new SegmentedToggle.Option("Toàn cục", "Áp dụng mặc định cho mọi Action API trong Extension", t -> t.info, (t, s) -> null, false));
         scopeToggle.setFixedHeight(26);
         scopeToggle.setSelectedIndex(perApiScope[0] ? 0 : 1);
         scopeToggle.setEnabled(focusGroup != null);
 
-        JButton smartAutoBtn = Ui.accent("Bật chế độ Tự động thông minh (Kết hợp cả 4)",
+        JButton noneReleaseBtn = Ui.secondaryBtn("0. Nhả về Nguyên bản",
+                t -> Icons.undo(t.success.text()));
+        noneReleaseBtn.setToolTipText("Nhả về trạng thái Nguyên bản (không chặn Proxy, không đổi ID hay 200 ảo; 200 -> 400 hiển thị đúng thực tế)");
+
+        JButton smartAutoBtn = Ui.accent("Tự động (Cả 4)",
                 t -> Icons.workbench(t.accent.onSolid(), 14), t -> t.accent, () -> {
-                    applyMode(engine, focusGroup, perApiScope[0], ActionMode.AUTO_SMART);
+                    ActionMode cur = activeMode(engine, focusGroup, perApiScope[0]);
+                    ActionMode nextMode = (cur == ActionMode.AUTO_SMART) ? ActionMode.NONE : ActionMode.AUTO_SMART;
+                    applyMode(engine, focusGroup, perApiScope[0], nextMode);
                     refreshBanner.run();
                     if (onAfterAction != null) onAfterAction.run();
                 });
 
-        topRow.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Phạm vi áp dụng:"), scopeToggle), BorderLayout.WEST);
-        topRow.add(smartAutoBtn, BorderLayout.EAST);
+        JButton resetAllBtn = Ui.secondaryBtn("Nhả toàn bộ (Reset All)", t -> Icons.trash(t.danger.text()));
+        resetAllBtn.setToolTipText("Tắt sạch toàn bộ chặn Proxy, đưa chính sách vào Thùng rác Undo và đặt toàn hệ thống về Nguyên bản");
+
+        JPanel topBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        topBtns.setOpaque(false);
+        topBtns.add(noneReleaseBtn);
+        topBtns.add(smartAutoBtn);
+        topBtns.add(resetAllBtn);
+
+        topRow.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Phạm vi:"), scopeToggle), BorderLayout.WEST);
+        topRow.add(topBtns, BorderLayout.EAST);
 
         // Mode #5: Live Interactive Proxy Intercept Wait banner (pause & wait for manual Forward)
         Theme th = Theme.current();
@@ -321,9 +357,9 @@ public final class ActionWorkbenchDialog {
         JPanel cardsGrid = new JPanel(new GridLayout(2, 2, 10, 10));
         cardsGrid.setOpaque(false);
 
-        JCheckBox holdAllChk = new JCheckBox("Bật Chặn tại Proxy cho mọi Action API khi Crawl", engine.config().holdActionAtProxy);
+        JCheckBox holdAllChk = new JCheckBox("Bật Giữ ở Proxy cho mọi Action API khi Crawl", engine.config().holdActionAtProxy);
         holdAllChk.setOpaque(false);
-        JCheckBox holdEpChk = focusGroup == null ? null : new JCheckBox("Chỉ chặn tại Proxy cho endpoint này (" + focusGroup.method() + " "
+        JCheckBox holdEpChk = focusGroup == null ? null : new JCheckBox("Chỉ giữ ở Proxy cho endpoint này (" + focusGroup.method() + " "
                 + ActionEngine.normalizePathTemplate(focusGroup.path()) + ")",
                 engine.actionEngine().isEndpointProxyHold(focusGroup.method(), focusGroup.path()));
         if (holdEpChk != null) {
@@ -336,6 +372,8 @@ public final class ActionWorkbenchDialog {
             for (StrategyCard sc : cards) {
                 sc.setSelected(sc.mode == active, active == ActionMode.AUTO_SMART);
             }
+            boolean isNone = (active == null || active == ActionMode.NONE);
+            noneReleaseBtn.setText(isNone ? "0. Đang ở Nguyên bản (Tắt)" : "0. Nhả về Nguyên bản (Tắt can thiệp)");
             holdAllChk.setSelected(engine.config().holdActionAtProxy);
             if (holdEpChk != null && focusGroup != null) {
                 holdEpChk.setSelected(engine.actionEngine().isEndpointProxyHold(focusGroup.method(), focusGroup.path()));
@@ -348,73 +386,88 @@ public final class ActionWorkbenchDialog {
             }
         };
 
+        // Helper: clicking an already-selected strategy card toggles it OFF back to ActionMode.NONE!
+        java.util.function.Consumer<ActionMode> toggleStrategy = chosen -> {
+            ActionMode cur = activeMode(engine, focusGroup, perApiScope[0]);
+            ActionMode nextMode = (cur == chosen) ? ActionMode.NONE : chosen;
+            applyMode(engine, focusGroup, perApiScope[0], nextMode);
+            refreshCards.run();
+            refreshBanner.run();
+            if (onAfterAction != null) onAfterAction.run();
+        };
+
+        noneReleaseBtn.addActionListener(e -> {
+            if (perApiScope[0] && focusGroup != null) {
+                engine.releaseApiToNone(focusGroup, false);
+            } else {
+                applyMode(engine, null, false, ActionMode.NONE);
+            }
+            refreshCards.run();
+            refreshBanner.run();
+            if (onAfterAction != null) onAfterAction.run();
+        });
+
+        resetAllBtn.addActionListener(e -> {
+            int ok = JOptionPane.showConfirmDialog(dialogParent,
+                    "Nhả toàn bộ cấu hình Action về Nguyên bản (NONE)?\n"
+                            + "Mọi chính sách hiện có sẽ được chuyển vào Thùng rác Undo để khôi phục khi cần.",
+                    "Nhả toàn bộ về Nguyên bản", JOptionPane.YES_NO_OPTION);
+            if (ok == JOptionPane.YES_OPTION) {
+                engine.resetAllActionControls();
+                refreshCards.run();
+                refreshBanner.run();
+                if (onAfterAction != null) onAfterAction.run();
+            }
+        });
+
         waitMasterToggle.onChange(idx -> {
             if (syncingBanner[0]) {
                 return;
             }
             engine.setInterceptWaitEnabled(idx == 1);
-            if (idx == 1 && perApiScope[0] && focusGroup != null) {
-                engine.toggleEndpointInterceptWait(focusGroup, true);
+            if (perApiScope[0] && focusGroup != null) {
+                engine.toggleEndpointInterceptWait(focusGroup, idx == 1);
             }
+            refreshCards.run();
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
         });
 
         cards.add(new StrategyCard(
                 ActionMode.HOLD_AT_PROXY,
-                "Giữ ở Proxy (Không xóa trên Server)",
-                "Trình duyệt nhận 200 OK ảo (hoặc Drop) khi crawl; Server vẫn giữ nguyên bản ghi chưa bị xóa, để lúc bạn bấm Gửi trong Extension mới thực thi thật.",
+                "1. Giữ ở Proxy (Không xóa trên Server)",
+                "Trình duyệt nhận 200 OK ảo (hoặc Drop) khi crawl; Server vẫn giữ nguyên bản ghi chưa bị xóa, để lúc bạn bấm Gửi trong Extension mới thực thi thật. Bấm lại thẻ để Tắt/Nhả.",
                 "Phù hợp nhất khi: bạn muốn lưu nháp vào bảng Extension mà không làm thay đổi Server ngay.",
                 t -> t.warning,
                 t -> Icons.strategyShield(t.warning.text(), 18),
-                () -> {
-                    applyMode(engine, focusGroup, perApiScope[0], ActionMode.HOLD_AT_PROXY);
-                    refreshCards.run();
-                    refreshBanner.run();
-                    if (onAfterAction != null) onAfterAction.run();
-                }));
+                () -> toggleStrategy.accept(ActionMode.HOLD_AT_PROXY)));
 
         cards.add(new StrategyCard(
                 ActionMode.LOCK_2XX,
-                "Khóa kết quả 200 OK (Snapshot)",
-                "Tự chụp lại response 200 OK lúc crawl. Khi gửi lại, bạn tự chọn giữa giữ 200 OK gốc, đổi sang ID mới để đẩy thật, hoặc gửi cưỡng bức.",
+                "2. Khóa kết quả 200 OK (Snapshot)",
+                "Tự chụp lại response 200 OK lúc crawl. Khi gửi lại, bạn tự chọn giữa giữ 200 OK gốc, đổi sang ID mới để đẩy thật, hoặc gửi cưỡng bức. Bấm lại thẻ để Tắt/Nhả.",
                 "Phù hợp nhất khi: bạn muốn đảm bảo báo cáo & bằng chứng luôn giữ trạng thái 200 OK.",
                 t -> t.info,
                 t -> Icons.strategySnapshot(t.info.text(), 18),
-                () -> {
-                    applyMode(engine, focusGroup, perApiScope[0], ActionMode.LOCK_2XX);
-                    refreshCards.run();
-                    refreshBanner.run();
-                    if (onAfterAction != null) onAfterAction.run();
-                }));
+                () -> toggleStrategy.accept(ActionMode.LOCK_2XX)));
 
         cards.add(new StrategyCard(
                 ActionMode.LIVE_ID_POOL,
-                "Tự đổi từ Kho ID Sống",
-                "Extension tự động gom các ID còn sống từ các API GET danh sách / chi tiết, sau đó thay ID tươi vào URL/Body thay cho ID đã xóa.",
+                "3. Tự đổi từ Kho ID Sống",
+                "Extension tự động gom các ID còn sống từ các API GET danh sách / chi tiết, sau đó thay ID tươi vào URL/Body thay cho ID đã xóa. Bấm lại thẻ để Tắt/Nhả.",
                 "Phù hợp nhất khi: hệ thống có sẵn nhiều bản ghi (ví dụ đơn hàng 101, 102, 103).",
                 t -> t.success,
                 t -> Icons.strategySwap(t.success.text(), 18),
-                () -> {
-                    applyMode(engine, focusGroup, perApiScope[0], ActionMode.LIVE_ID_POOL);
-                    refreshCards.run();
-                    refreshBanner.run();
-                    if (onAfterAction != null) onAfterAction.run();
-                }));
+                () -> toggleStrategy.accept(ActionMode.LIVE_ID_POOL)));
 
         cards.add(new StrategyCard(
                 ActionMode.PRODUCER_RECREATE,
-                "Chuỗi Tạo Mới -> Hành Động",
-                "Trước khi gửi DELETE/PUT, Extension tự động gọi API POST tạo bản ghi mới, rút ID vừa sinh ra từ Response và điền vào request này.",
+                "4. Chuỗi Tạo Mới -> Hành Động",
+                "Trước khi gửi DELETE/PUT, Extension tự động gọi API POST tạo bản ghi mới, rút ID vừa sinh ra từ Response và điền vào request này. Bấm lại thẻ để Tắt/Nhả.",
                 "Phù hợp nhất khi: bạn cần gửi đi gửi lại nhiều lần mà không sợ cạn ID.",
                 t -> t.accent,
                 t -> Icons.strategyChain(t.accent.text(), 18),
-                () -> {
-                    applyMode(engine, focusGroup, perApiScope[0], ActionMode.PRODUCER_RECREATE);
-                    refreshCards.run();
-                    refreshBanner.run();
-                    if (onAfterAction != null) onAfterAction.run();
-                }));
+                () -> toggleStrategy.accept(ActionMode.PRODUCER_RECREATE)));
 
         for (StrategyCard sc : cards) {
             cardsGrid.add(sc);
@@ -436,7 +489,11 @@ public final class ActionWorkbenchDialog {
         holdAllChk.addActionListener(e -> {
             Config next = engine.config().copy();
             next.holdActionAtProxy = holdAllChk.isSelected();
+            if (!next.holdActionAtProxy && next.actionMode == ActionMode.HOLD_AT_PROXY) {
+                next.actionMode = ActionMode.NONE;
+            }
             engine.applyConfig(next);
+            refreshCards.run();
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
         });
@@ -445,6 +502,10 @@ public final class ActionWorkbenchDialog {
         if (holdEpChk != null && focusGroup != null) {
             holdEpChk.addActionListener(e -> {
                 engine.toggleEndpointProxyHold(focusGroup, holdEpChk.isSelected());
+                if (!holdEpChk.isSelected() && focusGroup.actionModeOverride() == ActionMode.HOLD_AT_PROXY) {
+                    engine.setApiActionMode(focusGroup, ActionMode.NONE);
+                }
+                refreshCards.run();
                 refreshBanner.run();
                 if (onAfterAction != null) onAfterAction.run();
             });
@@ -457,24 +518,26 @@ public final class ActionWorkbenchDialog {
     }
 
     private static ActionMode activeMode(Engine engine, ApiGroup g, boolean perApi) {
-        if (perApi && g != null && g.actionModeOverride() != null) {
-            return g.actionModeOverride();
+        if (perApi && g != null) {
+            return engine.effectiveActionMode(g);
         }
-        return engine.config().actionMode;
+        return engine.config().actionMode != null ? engine.config().actionMode : ActionMode.NONE;
     }
 
     private static void applyMode(Engine engine, ApiGroup g, boolean perApi, ActionMode mode) {
+        ActionMode target = mode == null ? ActionMode.NONE : mode;
         if (perApi && g != null) {
-            engine.setApiActionMode(g, mode);
+            engine.setApiActionMode(g, target);
         } else {
             Config next = engine.config().copy();
-            next.actionMode = mode;
-            if (mode == ActionMode.HOLD_AT_PROXY) {
-                next.holdActionAtProxy = true;
-            }
+            next.actionMode = target;
+            // Atomic release of global Proxy hold when switching away from HOLD_AT_PROXY!
+            next.holdActionAtProxy = (target == ActionMode.HOLD_AT_PROXY);
             engine.applyConfig(next);
-            if (mode == ActionMode.INTERCEPT_WAIT) {
+            if (target == ActionMode.INTERCEPT_WAIT) {
                 engine.setInterceptWaitEnabled(true);
+            } else if (target == ActionMode.NONE) {
+                engine.setInterceptWaitEnabled(false);
             }
         }
     }
@@ -993,9 +1056,10 @@ public final class ActionWorkbenchDialog {
 
     private static String shortModeName(ActionMode m) {
         if (m == null) {
-            return "Tự động thông minh";
+            return "Nguyên bản (Không can thiệp)";
         }
         return switch (m) {
+            case NONE -> "Nguyên bản (Không can thiệp)";
             case AUTO_SMART -> "Tự động thông minh (Kết hợp cả 4)";
             case HOLD_AT_PROXY -> "Giữ ở Proxy";
             case LOCK_2XX -> "Khóa 200 OK (Snapshot)";
@@ -1505,7 +1569,7 @@ public final class ActionWorkbenchDialog {
             this.selected = directSelected;
             this.autoIncluded = !directSelected && autoMode;
             if (directSelected) {
-                statePill.setText("Đang áp dụng");
+                statePill.setText("Đang bật · Bấm để Tắt");
                 statePill.setToken(tokenFn);
             } else if (autoMode) {
                 statePill.setText("Bật trong Tự động");

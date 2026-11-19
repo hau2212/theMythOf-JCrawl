@@ -21,6 +21,8 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import themythofcrawl.core.ActionEngine;
+import themythofcrawl.core.ActionGateAuditLog;
+import themythofcrawl.core.ActionPolicyLedger;
 import themythofcrawl.core.Audit;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Config;
@@ -36,6 +38,7 @@ import themythofcrawl.excel.PlaceholderCatalog;
 import themythofcrawl.excel.TargetEntry;
 import themythofcrawl.excel.TargetList;
 import themythofcrawl.model.ActionInterceptRule;
+import themythofcrawl.model.ActionPolicy;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ApiTagCatalog;
 import themythofcrawl.model.Blob;
@@ -69,6 +72,7 @@ public final class Engine {
     public static final String PREF_NODE_TYPES = "tmoc.nodetypes.v1";
     public static final String PREF_TAGS = "tmoc.tags.v1";
     public static final String PREF_INTERCEPT_RULES = "tmoc.intercept_rules.v1";
+    public static final String PREF_ACTION_POLICIES = "tmoc.action_policies.v1";
     public static final String PREF_EXCEL_PLACEHOLDERS = "tmoc.excel_placeholders.v1";
 
     /** Outcome returned by {@link #evaluateProxyIntercept(Service, byte[], String)} for Montoya Proxy/Http handlers. */
@@ -76,13 +80,24 @@ public final class Engine {
             ActionInterceptRule.Effect effect,
             String spoofResponse,
             ActionInterceptRule matchedRule,
-            String reason) {
+            String reason,
+            ActionPolicy matchedPolicy,
+            long auditSeq) {
+
+        public ProxyInterceptOutcome(
+                ActionInterceptRule.Effect effect,
+                String spoofResponse,
+                ActionInterceptRule matchedRule,
+                String reason) {
+            this(effect, spoofResponse, matchedRule, reason, null, 0L);
+        }
+
         public ProxyInterceptOutcome(
                 ActionInterceptRule.Effect effect,
                 String spoofResponse,
                 ActionInterceptRule matchedRule) {
             this(effect, spoofResponse, matchedRule,
-                    matchedRule != null ? ("Luật: " + matchedRule.name()) : "Chặn tại Proxy");
+                    matchedRule != null ? ("Luật: " + matchedRule.name()) : "Chặn tại Proxy", null, 0L);
         }
 
         public boolean shouldBlock() {
@@ -92,6 +107,18 @@ public final class Engine {
         public boolean shouldWait() {
             return effect == ActionInterceptRule.Effect.INTERCEPT_WAIT;
         }
+    }
+
+    /** Result of a live Ad-Hoc send executed from RequestComposerDialog. */
+    public record AdHocSendResult(
+            String roleLabel,
+            Service service,
+            byte[] requestSent,
+            byte[] response,
+            Integer status,
+            int bodyLength,
+            long elapsedMs,
+            String error) {
     }
 
     /** A message handed to the capture pipeline. */
@@ -163,6 +190,12 @@ public final class Engine {
         nodeTypes.loadJson(prefs.get(PREF_NODE_TYPES));
         tagCatalog.loadJson(prefs.get(PREF_TAGS));
         actionEngine.loadInterceptRulesJson(prefs.get(PREF_INTERCEPT_RULES));
+        String savedPolicies = prefs.get(PREF_ACTION_POLICIES);
+        if (savedPolicies != null && !savedPolicies.isBlank()) {
+            actionEngine.policyLedger().loadJson(savedPolicies);
+        } else if (!actionEngine.interceptRules().isEmpty()) {
+            actionEngine.policyLedger().migrateFromLegacyRules(actionEngine.interceptRules());
+        }
         placeholders.loadJson(prefs.get(PREF_EXCEL_PLACEHOLDERS));
         PathMatch.setActiveCatalog(placeholders);
         captureExec = Executors.newSingleThreadExecutor(daemon("JCrawl-capture"));
@@ -186,6 +219,24 @@ public final class Engine {
 
     public ActionEngine actionEngine() {
         return actionEngine;
+    }
+
+    public ActionPolicyLedger actionPolicyLedger() {
+        return actionEngine.policyLedger();
+    }
+
+    public ActionGateAuditLog actionGateAuditLog() {
+        return actionEngine.gateAuditLog();
+    }
+
+    public void saveActionPolicies() {
+        prefs.set(PREF_ACTION_POLICIES, actionEngine.policyLedger().toJson());
+        changes.status();
+        changes.structure();
+    }
+
+    public void recordGateAuditOutcome(long auditSeq, String finalOutcome) {
+        actionEngine.gateAuditLog().updateFinalOutcome(auditSeq, finalOutcome);
     }
 
     public void saveInterceptRules() {
@@ -1066,15 +1117,16 @@ public final class Engine {
     }
 
     /**
-     * Đánh giá toàn diện việc chặn request tại Burp Proxy TRƯỚC khi gửi lên Server:
+     * Đánh giá toàn diện việc chặn request tại Burp Proxy TRƯỚC khi gửi lên Server (V_3.4_beta):
      * <ol>
-     *   <li>Ưu tiên bộ Luật Chặn Proxy chủ động ({@link ActionInterceptRule}) theo thứ tự từ trên xuống:
-     *       hỗ trợ chọn nhánh/path + ma trận Method (GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS),
-     *       gồm {@code ALLOW}, {@code INTERCEPT_WAIT} (đợi bấm Gửi), {@code BLOCK_SPOOF}, và {@code BLOCK_DROP}.</li>
-     *   <li>Kế tiếp: Chế độ #5 Chặn Chờ Duyệt trực tiếp ({@code INTERCEPT_WAIT}) theo API cụ thể, nhánh đang chọn,
-     *       hoặc toàn bộ các Method đã chọn — hoạt động ngay cả khi nút Capture đang tắt!</li>
-     *   <li>Cuối cùng: fallback sang chế độ giữ tại Proxy ({@code HOLD_AT_PROXY}) toàn cục / từng endpoint.</li>
+     *   <li>Ưu tiên số 1: Sổ cái Chính sách Hợp nhất ({@link ActionPolicyLedger}) theo thứ tự ưu tiên từ trên xuống
+     *       (hỗ trợ 5 phạm vi Toàn cục / Method / Nhánh / Path / API cụ thể, cả ALLOW lẫn Chặn).</li>
+     *   <li>Ưu tiên số 2: Luật Chặn Proxy tương thích ngược ({@link ActionInterceptRule}).</li>
+     *   <li>Ưu tiên số 3: Chế độ Chặn Chờ Duyệt trực tiếp ({@code INTERCEPT_WAIT}) theo API/Nhánh/Toàn bộ.</li>
+     *   <li>Ưu tiên số 4: Chế độ giữ tại Proxy ({@code HOLD_AT_PROXY}) toàn cục / từng endpoint.</li>
      * </ol>
+     * Đồng thời mọi request thuộc giao thức Action (hoặc khớp chính sách) đều được ghi vào
+     * {@link ActionGateAuditLog} (cả Bị Chặn lẫn Cho Qua) để người dùng dò &amp; căn chỉnh chính xác.
      */
     public ProxyInterceptOutcome evaluateProxyIntercept(Service svc, byte[] request, String url) {
         Config c = config;
@@ -1088,27 +1140,62 @@ public final class Engine {
         String method = rl[0];
         String path = rl[1];
         String activeBranchName = activeBranch().name();
+        boolean isActionProto = ActionEngine.isDestructiveOrMutating(method, path);
+        ActionGateAuditLog auditLog = actionEngine.gateAuditLog();
 
-        // 1. Evaluate proactive user-defined Proxy Interception Rules first (works even when Capture is OFF)
+        // 1. Evaluate Unified ActionPolicyLedger FIRST (deterministic priority + explicit ALLOW cuts off all lower rules)
+        ActionPolicyLedger.EvaluationResult ledgerEval = actionEngine.policyLedger()
+                .evaluateProxy(activeBranchName, svc.host(), method, path, null);
+        if (ledgerEval.matched()) {
+            ActionPolicy win = ledgerEval.winningPolicy();
+            if (c.ignoreStatic && "GET".equalsIgnoreCase(method) && Text.isStaticPath(path, staticExts)
+                    && Text.blank(win.pathPattern()) && win.scopeType() != ActionPolicy.ScopeType.API_EXACT) {
+                return null;
+            }
+            actionEngine.policyLedger().recordHit(win.id(), method + " " + path + " (" + activeBranchName + ")");
+            ActionPolicy.ProxyEffect eff = win.proxyEffect();
+            long seq = auditLog.record(method, svc.host(), path, activeBranchName, isActionProto,
+                    eff, win.id(), win.name(), win.scopeType().label, ledgerEval.reasonVi(), null);
+            if (eff == ActionPolicy.ProxyEffect.ALLOW_EXPLICIT) {
+                return new ProxyInterceptOutcome(ActionInterceptRule.Effect.ALLOW, null, win.toLegacyRule(),
+                        "Cho qua: " + win.name(), win, seq);
+            }
+            if (eff == ActionPolicy.ProxyEffect.PASS_NONE) {
+                return null;
+            }
+            String spoof = (eff == ActionPolicy.ProxyEffect.HOLD_SPOOF || eff == ActionPolicy.ProxyEffect.INTERCEPT_WAIT)
+                    ? win.buildSpoofResponse() : null;
+            return new ProxyInterceptOutcome(eff.toLegacyEffect(), spoof, win.toLegacyRule(),
+                    ledgerEval.reasonVi(), win, seq);
+        }
+
+        // 2. Evaluate legacy proactive Proxy Interception Rules (100% compatibility)
         ActionEngine.InterceptDecision decision = actionEngine.evaluateInterceptRules(activeBranchName, svc.host(), method, path);
         if (decision.matched()) {
             ActionInterceptRule rule = decision.rule();
             if (decision.effect() == ActionInterceptRule.Effect.ALLOW) {
                 rule.incrementHit();
-                return new ProxyInterceptOutcome(ActionInterceptRule.Effect.ALLOW, null, rule, "Cho qua: " + rule.name());
+                long seq = auditLog.record(method, svc.host(), path, activeBranchName, isActionProto,
+                        ActionPolicy.ProxyEffect.ALLOW_EXPLICIT, rule.id(), rule.name(), "Luật Proxy",
+                        "Cho qua: " + rule.name(), null);
+                return new ProxyInterceptOutcome(ActionInterceptRule.Effect.ALLOW, null, rule,
+                        "Cho qua: " + rule.name(), null, seq);
             }
             if (c.ignoreStatic && "GET".equalsIgnoreCase(method) && Text.isStaticPath(path, staticExts)
                     && Text.blank(rule.pathPattern())) {
                 return null;
             }
             rule.incrementHit();
+            ActionPolicy.ProxyEffect pe = ActionPolicy.ProxyEffect.fromLegacy(decision.effect());
+            long seq = auditLog.record(method, svc.host(), path, activeBranchName, isActionProto,
+                    pe, rule.id(), rule.name(), "Luật Proxy", "Luật: " + rule.name(), null);
             String spoof = (decision.effect() == ActionInterceptRule.Effect.BLOCK_SPOOF
                     || decision.effect() == ActionInterceptRule.Effect.INTERCEPT_WAIT)
                     ? rule.buildSpoofResponse() : null;
-            return new ProxyInterceptOutcome(decision.effect(), spoof, rule, "Luật: " + rule.name());
+            return new ProxyInterceptOutcome(decision.effect(), spoof, rule, "Luật: " + rule.name(), null, seq);
         }
 
-        // 2. Live Interactive Intercept Wait (Mode #5): pause request in Extension queue & wait for user Forward/Drop
+        // 3. Live Interactive Intercept Wait (Mode #5): pause request in Extension queue & wait for user Forward/Drop
         String waitReason = actionEngine.matchInterceptWaitReason(activeBranchName, method, path);
         if (waitReason != null) {
             boolean explicitEndpoint = actionEngine.isEndpointInterceptWait(method, path);
@@ -1116,36 +1203,49 @@ public final class Engine {
                     && Text.isStaticPath(path, staticExts)) {
                 return null;
             }
+            long seq = auditLog.record(method, svc.host(), path, activeBranchName, isActionProto,
+                    ActionPolicy.ProxyEffect.INTERCEPT_WAIT, "", "Chặn chờ duyệt nhanh", "Chặn trực tiếp",
+                    waitReason, null);
             return new ProxyInterceptOutcome(ActionInterceptRule.Effect.INTERCEPT_WAIT,
-                    DEFAULT_HOLD_SPOOF_RESPONSE, null, waitReason);
+                    DEFAULT_HOLD_SPOOF_RESPONSE, null, waitReason, null, seq);
         }
 
-        // 3. Fallback: global or per-endpoint HOLD_AT_PROXY for Action methods
-        if (!ActionEngine.isActionMethod(method)) {
-            return null;
-        }
-        boolean endpointHold = actionEngine.isEndpointProxyHold(method, path);
-        boolean holdMode = c.holdActionAtProxy
-                || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
-                || actionEngine.isHoldAllActionAtProxy()
-                || endpointHold;
-        if (!holdMode) {
-            return null;
-        }
-        if (quickReject(method, path, svc.host()) != null) {
-            return null;
-        }
-        if (!endpointHold && c.captureEnabled) {
-            String fullUrl = url != null ? url : svc.protocol() + "://" + svc.hostLabel() + path;
-            TargetEntry target = targetMatch(method, path, svc.host());
-            if (filterReason(c, fullUrl, method, path, target) != null) {
-                return null;
+        // 4. Fallback: global or per-endpoint HOLD_AT_PROXY for Action methods
+        if (ActionEngine.isActionMethod(method)) {
+            boolean endpointHold = actionEngine.isEndpointProxyHold(method, path);
+            boolean holdMode = c.holdActionAtProxy
+                    || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
+                    || actionEngine.isHoldAllActionAtProxy()
+                    || endpointHold;
+            if (holdMode && quickReject(method, path, svc.host()) == null) {
+                boolean allowedByFilter = true;
+                if (!endpointHold && c.captureEnabled) {
+                    String fullUrl = url != null ? url : svc.protocol() + "://" + svc.hostLabel() + path;
+                    TargetEntry target = targetMatch(method, path, svc.host());
+                    if (filterReason(c, fullUrl, method, path, target) != null) {
+                        allowedByFilter = false;
+                    }
+                }
+                if (allowedByFilter) {
+                    String holdReason = endpointHold
+                            ? ("Giữ ở Proxy: " + method + " " + ActionEngine.normalizePathTemplate(path))
+                            : "Giữ ở Proxy (Action API)";
+                    long seq = auditLog.record(method, svc.host(), path, activeBranchName, true,
+                            ActionPolicy.ProxyEffect.HOLD_SPOOF, "", holdReason,
+                            endpointHold ? "API cụ thể" : "Toàn cục", holdReason, null);
+                    return new ProxyInterceptOutcome(ActionInterceptRule.Effect.BLOCK_SPOOF,
+                            DEFAULT_HOLD_SPOOF_RESPONSE, null, holdReason, null, seq);
+                }
             }
         }
-        return new ProxyInterceptOutcome(ActionInterceptRule.Effect.BLOCK_SPOOF,
-                DEFAULT_HOLD_SPOOF_RESPONSE, null,
-                endpointHold ? ("Giữ ở Proxy: " + method + " " + ActionEngine.normalizePathTemplate(path))
-                        : "Giữ ở Proxy (Action API)");
+
+        // 5. No blocking policy matched: record Action protocol requests as PASSED (Nguyên bản) so user can probe & calibrate!
+        if (isActionProto && !(c.ignoreStatic && Text.isStaticPath(path, staticExts))) {
+            auditLog.record(method, svc.host(), path, activeBranchName, true,
+                    ActionPolicy.ProxyEffect.PASS_NONE, "", "(Mặc định — Nguyên bản)", "Mặc định",
+                    "Không có chính sách chặn khớp -> Đi thẳng lên Server", null);
+        }
+        return null;
     }
 
     /**
@@ -1656,24 +1756,303 @@ public final class Engine {
     private static final Set<String> BUSY = Set.of(ResultState.QUEUED, ResultState.SENDING, ResultState.RETRY);
 
     public ActionEngine.ActionMode effectiveActionMode(ApiGroup g) {
-        if (g != null && g.actionModeOverride() != null) {
-            return g.actionModeOverride();
+        ActionEngine.ActionMode fallback = (g != null && g.actionModeOverride() != null)
+                ? g.actionModeOverride()
+                : (config.actionMode != null ? config.actionMode : ActionEngine.ActionMode.NONE);
+        if (g == null) {
+            return fallback;
         }
-        return config.actionMode != null ? config.actionMode : ActionEngine.ActionMode.AUTO_SMART;
+        ActionPolicyLedger.EvaluationResult ev = actionEngine.policyLedger().evaluateReplay(
+                g.branch(), g.host(), g.method(), g.path(), g.gid(), fallback);
+        return ev.effectiveReplayMode() != null ? ev.effectiveReplayMode() : fallback;
     }
 
+    /**
+     * Đặt hoặc nhả chế độ xử lý Action cho một API cụ thể một cách nguyên tử (V_3.4_beta):
+     * luôn dọn sạch cờ HOLD_AT_PROXY / INTERCEPT_WAIT cũ khi chuyển chế độ hoặc nhả về NONE/null,
+     * đồng thời đồng bộ vào Sổ cái Chính sách Hợp nhất để người dùng luôn kiểm soát được.
+     */
     public void setApiActionMode(ApiGroup g, ActionEngine.ActionMode mode) {
         if (g == null) return;
         g.setActionModeOverride(mode);
+
+        // Atomic cleanup of stale per-endpoint flags first so switching/unselecting ALWAYS releases cleanly!
+        if (mode != ActionEngine.ActionMode.HOLD_AT_PROXY) {
+            actionEngine.setEndpointProxyHold(g.method(), g.path(), false);
+        }
+        if (mode != ActionEngine.ActionMode.INTERCEPT_WAIT) {
+            actionEngine.setEndpointInterceptWait(g.method(), g.path(), false);
+        }
+
+        // Remove any previously auto-synced API_EXACT quick-strategy policy for this API before adding the new one
+        String quickPolId = "pol-api-" + g.gid();
+        if (actionEngine.policyLedger().findById(quickPolId) != null) {
+            actionEngine.policyLedger().delete(quickPolId, "Đổi chiến lược API #" + g.gid());
+        }
+
         if (mode == ActionEngine.ActionMode.HOLD_AT_PROXY) {
             actionEngine.setEndpointProxyHold(g.method(), g.path(), true);
+            long now = System.currentTimeMillis();
+            actionEngine.policyLedger().upsert(new ActionPolicy(
+                    quickPolId, "Giữ ở Proxy cho " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 32),
+                    "Tạo từ Chiến lược riêng của API #" + g.gid(), true, 0,
+                    ActionPolicy.ScopeType.API_EXACT, List.of(), true, g.host(),
+                    ActionPolicy.PathMatchType.TEMPLATE, ActionEngine.normalizePathTemplate(g.path()), g.gid(),
+                    List.of(g.method()), ActionPolicy.Stage.BOTH, ActionPolicy.ProxyEffect.HOLD_SPOOF,
+                    ActionEngine.ActionMode.HOLD_AT_PROXY, 200, null, null, "",
+                    now, now, "Chiến lược API #" + g.gid(), 0L, "", 0));
+            saveActionPolicies();
         } else if (mode == ActionEngine.ActionMode.INTERCEPT_WAIT) {
             actionEngine.setEndpointInterceptWait(g.method(), g.path(), true);
             actionEngine.setInterceptWaitEnabled(true);
+            long now = System.currentTimeMillis();
+            actionEngine.policyLedger().upsert(new ActionPolicy(
+                    quickPolId, "Chặn chờ duyệt " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 32),
+                    "Tạo từ Chiến lược riêng của API #" + g.gid(), true, 0,
+                    ActionPolicy.ScopeType.API_EXACT, List.of(), true, g.host(),
+                    ActionPolicy.PathMatchType.TEMPLATE, ActionEngine.normalizePathTemplate(g.path()), g.gid(),
+                    List.of(g.method()), ActionPolicy.Stage.BOTH, ActionPolicy.ProxyEffect.INTERCEPT_WAIT,
+                    ActionEngine.ActionMode.INTERCEPT_WAIT, 200, null, null, "",
+                    now, now, "Chiến lược API #" + g.gid(), 0L, "", 0));
+            saveActionPolicies();
+        } else if (mode == ActionEngine.ActionMode.NONE) {
+            // Explicitly pin passthrough if needed and persist cleanup
+            saveActionPolicies();
+        } else if (mode != null) {
+            long now = System.currentTimeMillis();
+            actionEngine.policyLedger().upsert(new ActionPolicy(
+                    quickPolId, mode.shortTitle() + " cho " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 28),
+                    "Tạo từ Chiến lược riêng của API #" + g.gid(), true, 0,
+                    ActionPolicy.ScopeType.API_EXACT, List.of(), true, g.host(),
+                    ActionPolicy.PathMatchType.TEMPLATE, ActionEngine.normalizePathTemplate(g.path()), g.gid(),
+                    List.of(g.method()), ActionPolicy.Stage.REPLAY_EXEC, ActionPolicy.ProxyEffect.PASS_NONE,
+                    mode, 200, null, g.producerGid(), "",
+                    now, now, "Chiến lược API #" + g.gid(), 0L, "", 0));
+            saveActionPolicies();
+        } else {
+            saveActionPolicies();
         }
-        g.setActiveIdNote(mode == null ? "Theo mặc định (" + config.actionMode.label + ")" : mode.label);
+
+        g.setActiveIdNote(mode == null
+                ? "Theo mặc định (" + config.actionMode.shortTitle() + ")"
+                : (mode == ActionEngine.ActionMode.NONE ? null : mode.shortTitle()));
         touch(g);
-        log("Đặt chế độ xử lý Action cho API #" + g.gid() + " -> " + (mode == null ? "Mặc định" : mode.label), g.gid());
+        changes.structure();
+        log("Đặt chế độ xử lý Action cho API #" + g.gid() + " -> " + (mode == null ? "Theo mặc định" : mode.label), g.gid());
+    }
+
+    /**
+     * Nhả hoàn toàn 1 API về trạng thái Nguyên bản (NONE): gỡ toàn bộ chặn Proxy, bỏ override cũ,
+     * và tùy chọn chèn ngoại lệ ALLOW ở độ ưu tiên cao nhất nếu đang có luật toàn cục/nhánh chặn nó.
+     */
+    public void releaseApiToNone(ApiGroup g, boolean addExplicitAllowOverride) {
+        if (g == null) return;
+        actionEngine.setEndpointProxyHold(g.method(), g.path(), false);
+        actionEngine.setEndpointInterceptWait(g.method(), g.path(), false);
+        actionEngine.policyLedger().clearScope(ActionPolicy.ScopeType.API_EXACT, g.path(), g.gid());
+        g.setActionModeOverride(ActionEngine.ActionMode.NONE);
+        g.setActiveIdNote(null);
+        if (addExplicitAllowOverride) {
+            long now = System.currentTimeMillis();
+            actionEngine.policyLedger().createAtTop(new ActionPolicy(
+                    null, "Cho qua nguyên bản " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 32),
+                    "Nhả riêng API này về Nguyên bản (vượt qua các luật chặn bên dưới)", true, 0,
+                    ActionPolicy.ScopeType.API_EXACT, List.of(), true, g.host(),
+                    ActionPolicy.PathMatchType.TEMPLATE, ActionEngine.normalizePathTemplate(g.path()), g.gid(),
+                    List.of(g.method()), ActionPolicy.Stage.BOTH, ActionPolicy.ProxyEffect.ALLOW_EXPLICIT,
+                    ActionEngine.ActionMode.NONE, 200, null, null, "",
+                    now, now, "Nhả API #" + g.gid(), 0L, "", 0));
+        }
+        saveActionPolicies();
+        touch(g);
+        changes.structure();
+        log("Đã nhả API #" + g.gid() + " về Nguyên bản (Không can thiệp)"
+                + (addExplicitAllowOverride ? " + thêm ngoại lệ Cho qua (ALLOW)." : "."), g.gid());
+    }
+
+    /**
+     * Nút Nhả khẩn cấp toàn hệ thống (Reset All to NONE):
+     * tắt toàn bộ chặn Proxy, đưa mọi chính sách vào Thùng rác Undo, đặt chế độ toàn cục về NONE,
+     * và xóa mọi actionModeOverride trên tất cả các API đã bắt.
+     */
+    public int resetAllActionControls() {
+        int clearedPolicies = actionEngine.policyLedger().size();
+        actionEngine.clearAllProxyControls();
+        Config next = config.copy();
+        next.actionMode = ActionEngine.ActionMode.NONE;
+        next.holdActionAtProxy = false;
+        applyConfig(next);
+        for (ApiGroup g : allGroups()) {
+            if (g.actionModeOverride() != null || g.activeIdNote() != null) {
+                g.setActionModeOverride(null);
+                g.setActiveIdNote(null);
+                touch(g);
+            }
+        }
+        saveInterceptRules();
+        saveActionPolicies();
+        changes.structure();
+        log("ĐÃ NHẢ TOÀN BỘ về Nguyên bản (NONE): đã đưa " + clearedPolicies
+                + " chính sách vào Thùng rác Undo và tắt sạch mọi chặn Proxy.", null);
+        return clearedPolicies;
+    }
+
+    // =================================================================== Live Request Composer (V_3.4_beta)
+
+    /**
+     * Gửi trực tiếp một Raw HTTP Request đã chỉnh sửa từ RequestComposerDialog (Ad-hoc).
+     * Tôn trọng hoàn toàn lựa chọn Role và chế độ Action của riêng lần gửi này (mặc định NONE = gửi nguyên từng byte).
+     */
+    public AdHocSendResult sendAdHocRequest(
+            Service svc,
+            byte[] rawRequest,
+            Role applyRole,
+            ApiGroup sourceApi,
+            ActionEngine.ActionMode sendActionMode) {
+        if (svc == null || rawRequest == null || rawRequest.length == 0) {
+            return new AdHocSendResult(applyRole != null ? applyRole.name() : "Raw",
+                    svc, rawRequest, null, null, 0, 0L, "Request trống hoặc thiếu đích Host/Port.");
+        }
+        String roleLabel = applyRole != null ? applyRole.name() : "Raw (Vừa sửa)";
+        byte[] built = (applyRole != null && !applyRole.rules().isEmpty())
+                ? builder.build(rawRequest, applyRole.rules())
+                : rawRequest;
+        ActionEngine.ActionMode mode = sendActionMode == null ? ActionEngine.ActionMode.NONE : sendActionMode;
+        if (mode != ActionEngine.ActionMode.NONE && sourceApi != null) {
+            built = prepareActionRequestBeforeSend(sourceApi, built, mode);
+        }
+        long started = System.currentTimeMillis();
+        try {
+            Bridge.Sent sent = bridge.send(svc, built);
+            long elapsed = sent.elapsedMs() > 0 ? sent.elapsedMs() : Math.max(1L, System.currentTimeMillis() - started);
+            byte[] resp = sent.response();
+            if (resp == null || resp.length == 0) {
+                return new AdHocSendResult(roleLabel, svc, built, null, null, 0, elapsed,
+                        sent.error() != null ? sent.error() : "Không có phản hồi (timeout / lỗi kết nối)");
+            }
+            Integer st = HttpBytes.statusCode(resp);
+            int len = HttpBytes.bodyLength(resp);
+            String[] rl = Text.requestLine(built);
+            if (rl != null && st != null) {
+                actionEngine.harvest(rl[0], rl[1], built, resp, st, sourceApi != null ? sourceApi.gid() : -1);
+            }
+            log("Composer gửi [" + roleLabel + "] " + (rl != null ? rl[0] + " " + rl[1] : svc.hostLabel())
+                    + " -> HTTP " + (st != null ? st : "?") + " (" + elapsed + " ms, " + len + " B)",
+                    sourceApi != null ? sourceApi.gid() : null);
+            return new AdHocSendResult(roleLabel, svc, built, resp, st, len, elapsed, "");
+        } catch (RuntimeException ex) {
+            long elapsed = System.currentTimeMillis() - started;
+            return new AdHocSendResult(roleLabel, svc, built, null, null, 0, elapsed,
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    /**
+     * CRUD Update từ RequestComposerDialog: lưu đè Request (và tùy chọn Response mới nhất)
+     * vào API gốc hoặc vào customRequest của một dòng Role cụ thể.
+     */
+    public boolean updateApiRequestFromComposer(
+            ApiGroup g,
+            RoleResult targetRow,
+            Service newService,
+            byte[] editedRequest,
+            byte[] latestResponse) {
+        if (g == null || editedRequest == null || editedRequest.length == 0) {
+            return false;
+        }
+        String[] rl = Text.requestLine(editedRequest);
+        synchronized (g) {
+            if (targetRow == null || targetRow.original()) {
+                if (newService != null) {
+                    g.setService(newService);
+                }
+                if (rl != null) {
+                    g.setMethod(rl[0]);
+                    String newUrl = g.service().protocol() + "://" + g.service().hostLabel() + rl[1];
+                    g.setPathAndUrl(rl[1], newUrl);
+                }
+                Blob reqBlob = storage.put(g.gid(), GroupCodec.ORIG_REQ, editedRequest);
+                Blob respBlob = (latestResponse != null && latestResponse.length > 0)
+                        ? storage.put(g.gid(), GroupCodec.ORIG_RESP, latestResponse)
+                        : g.origResponse();
+                g.setOriginal(reqBlob, respBlob);
+                if (latestResponse != null && latestResponse.length > 0) {
+                    Integer st = HttpBytes.statusCode(latestResponse);
+                    int len = HttpBytes.bodyLength(latestResponse);
+                    g.setOrigMeta(st, len);
+                    RoleResult orig = g.origResult();
+                    orig.setResponse(respBlob);
+                    orig.setStatus(st);
+                    orig.setLength(len);
+                    orig.setState(ResultState.DONE);
+                    orig.setError("");
+                }
+                // Also clear customRequest on origResult so requestOf() returns the updated origRequest
+                g.origResult().setCustomRequest(null);
+            } else {
+                Blob customBlob = storage.put(g.gid(), GroupCodec.reqName(targetRow), editedRequest);
+                targetRow.setCustomRequest(customBlob);
+                if (latestResponse != null && latestResponse.length > 0) {
+                    Blob respBlob = storage.put(g.gid(), GroupCodec.respName(targetRow), latestResponse);
+                    targetRow.setResponse(respBlob);
+                    targetRow.setStatus(HttpBytes.statusCode(latestResponse));
+                    targetRow.setLength(HttpBytes.bodyLength(latestResponse));
+                    targetRow.setState(ResultState.DONE);
+                    targetRow.setError("");
+                }
+            }
+        }
+        Audit.recalc(g);
+        touch(g);
+        changes.structure();
+        log("Composer: Đã lưu đè Request cho API #" + g.gid()
+                + (targetRow != null && !targetRow.original() ? " [" + targetRow.roleName() + "]" : " (API gốc)"),
+                g.gid());
+        return true;
+    }
+
+    /**
+     * CRUD Create từ RequestComposerDialog: tạo một API Group mới hoàn toàn trong nhánh đích
+     * từ request đã chỉnh sửa (giữ nguyên API gốc ban đầu, bỏ qua dedup để bạn giữ song song cả 2 bản).
+     */
+    public ApiGroup cloneApiFromComposer(
+            Service svc,
+            byte[] editedRequest,
+            byte[] latestResponse,
+            Integer targetBranchId,
+            String note) {
+        if (svc == null || editedRequest == null || editedRequest.length == 0) {
+            return null;
+        }
+        String[] rl = Text.requestLine(editedRequest);
+        if (rl == null) {
+            return null;
+        }
+        String url = svc.protocol() + "://" + svc.hostLabel() + rl[1];
+        int bid = targetBranchId != null ? targetBranchId : activeBranch().id();
+        String src = Text.blank(note) ? "Composer" : ("Composer (" + note.trim() + ")");
+        ApiGroup created = process(new Message(svc, editedRequest, latestResponse, url), src, false, bid);
+        if (created != null) {
+            log("Composer: Đã tạo API mới #" + created.gid() + " [" + created.method() + " " + created.path()
+                    + "] trong nhánh '" + created.branch() + "'.", created.gid());
+        }
+        return created;
+    }
+
+    /** Đẩy trực tiếp một Raw HTTP Request từ Composer sang Burp Repeater. */
+    public void pushRawToRepeater(Service svc, byte[] rawRequest, String tabName) {
+        if (svc == null || rawRequest == null || rawRequest.length == 0) {
+            return;
+        }
+        String title = Text.blank(tabName) ? "JCrawl Composer" : tabName;
+        captureExec.execute(() -> {
+            try {
+                bridge.toRepeater(svc, rawRequest, title);
+                log("Composer: Đã đẩy request sang Burp Repeater (" + title + ").", null);
+            } catch (RuntimeException e) {
+                log("Composer đẩy Repeater lỗi: " + e, null);
+            }
+        });
     }
 
     public void toggleEndpointProxyHold(ApiGroup g, boolean hold) {
@@ -2023,6 +2402,9 @@ public final class Engine {
         if (!ActionEngine.isActionMethod(g.method()) || request == null) {
             return request;
         }
+        if (mode == null || mode == ActionEngine.ActionMode.NONE || mode == ActionEngine.ActionMode.INTERCEPT_WAIT) {
+            return request;
+        }
         if (mode == ActionEngine.ActionMode.LOCK_2XX && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.FORCE_RAW_SEND) {
             return request;
         }
@@ -2059,7 +2441,9 @@ public final class Engine {
         if (statusCode != 400 && statusCode != 404 && statusCode != 409 && statusCode != 410 && statusCode != 422) {
             return null;
         }
-        if (mode == ActionEngine.ActionMode.HOLD_AT_PROXY) {
+        if (mode == null || mode == ActionEngine.ActionMode.NONE
+                || mode == ActionEngine.ActionMode.HOLD_AT_PROXY
+                || mode == ActionEngine.ActionMode.INTERCEPT_WAIT) {
             return null;
         }
         if (mode == ActionEngine.ActionMode.LOCK_2XX && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.FORCE_RAW_SEND) {

@@ -287,9 +287,19 @@ final class ApiTab {
         tabsScroll.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 6));
         tabsScroll.getHorizontalScrollBar().setUnitIncrement(40);
         JButton sendOne = Ui.accent("Send Tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
+        JButton composerBtn = Ui.button("Sửa & Gửi", t -> Icons.edit(t.info.text()), () -> {
+            ApiGroup cur = currentGroup();
+            if (cur != null) {
+                RequestComposerDialog.showFloating(panel, engine, cur, selectedResult(), () -> {
+                    resultModel.refresh();
+                    refreshBar();
+                });
+            }
+        });
+        composerBtn.setToolTipText("Mở trình soạn thảo Request (Composer) để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
         JButton[] repActionRef = new JButton[1];
         JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Action Workbench & xử lý Action API (POST/PUT/DELETE): Đổi ID sống, Chuỗi Tạo Mới, Khóa 200 OK, Giữ ở Proxy", () -> {
+                "Action Workbench 6 tab: Chiến lược, Sổ cái CRUD, Dò Giao thức, Kho ID Sống, Chuỗi Tạo Mới, Khóa 200 OK", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ApiGroup cur = currentGroup();
                     if (cur != null) {
@@ -304,11 +314,18 @@ final class ApiTab {
                 });
         repActionRef[0] = repActionBtn;
         JButton[] barMoreRef = new JButton[1];
-        JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả Group, đẩy Repeater hoặc khôi phục Request", () -> {
+        JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả Group, mở Composer, đẩy Repeater hoặc khôi phục Request", () -> {
             JPopupMenu m = new JPopupMenu();
+            ApiGroup cur = currentGroup();
+            if (cur != null) {
+                m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                        () -> RequestComposerDialog.showFloating(panel, engine, cur, selectedResult(), () -> {
+                            resultModel.refresh();
+                            refreshBar();
+                        })));
+            }
             m.add(Ui.item("Gửi toàn bộ Roles của API Group này (Send Group)", Icons::sendAll,
                     () -> ui.send(listOf(currentGroup()))));
-            ApiGroup cur = currentGroup();
             if (cur != null) {
                 m.add(ActionMenus.buildForApi(panel, engine, cur, selectedResults(), () -> {
                     resultModel.refresh();
@@ -346,6 +363,7 @@ final class ApiTab {
         JPanel barRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 1));
         barRight.setOpaque(false);
         barRight.add(sendOne);
+        barRight.add(composerBtn);
         barRight.add(repActionBtn);
         barRight.add(barMore);
 
@@ -558,13 +576,18 @@ final class ApiTab {
         m.add(Ui.item("Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)...",
                 t -> Icons.strategyShield(engine.proxyQueue().pendingCount() > 0 ? t.danger.text() : t.accent.text(), 14),
                 () -> ProxyInterceptDialog.showFloating(ui)));
-        m.add(Ui.item("Action Workbench & Luật Chặn Proxy (5 tab)...", Icons::workbench,
+        m.add(Ui.item("Action Workbench (6 tab: Chiến lược, Sổ cái, Dò Giao thức)...", Icons::workbench,
                 () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                     resultModel.refresh();
                     refreshBar();
                 })));
-        m.add(Ui.item("Luật Chặn Proxy (Trước khi gửi)...", Icons::strategyShield,
-                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_INTERCEPT_RULES, () -> {
+        m.add(Ui.item("Sổ cái Chính sách CRUD...", Icons::sliders,
+                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_LEDGER, () -> {
+                    resultModel.refresh();
+                    refreshBar();
+                })));
+        m.add(Ui.item("Dò Giao thức Action & Mô phỏng hàng loạt...", Icons::playTest,
+                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_PROTOCOL_AUDIT, () -> {
                     resultModel.refresh();
                     refreshBar();
                 })));
@@ -665,6 +688,11 @@ final class ApiTab {
                         () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
             }
             m.addSeparator();
+            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                    () -> RequestComposerDialog.showFloating(panel, engine, g, cur, () -> {
+                        resultModel.refresh();
+                        refreshBar();
+                    })));
             m.add(ActionMenus.buildForApi(panel, engine, g, selectedResults(), () -> {
                 resultModel.refresh();
                 refreshBar();
@@ -1586,6 +1614,11 @@ final class ApiTab {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Gửi " + n + " API đang chọn (N Roles)", Icons::send, () -> ui.send(gs)));
         if (primary != null) {
+            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                    () -> RequestComposerDialog.showFloating(panel, engine, primary, null, () -> {
+                        resultModel.refresh();
+                        refreshBar();
+                    })));
             m.add(ActionMenus.buildForApi(panel, engine, primary, null, () -> {
                 resultModel.refresh();
                 refreshBar();
@@ -1625,6 +1658,12 @@ final class ApiTab {
         }));
         m.add(Ui.item("Gửi toàn bộ Roles của API này", Icons::sendAll, () -> ui.send(listOf(g))));
         if (g != null) {
+            RoleResult selRole = selectedResult();
+            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                    () -> RequestComposerDialog.showFloating(panel, engine, g, selRole, () -> {
+                        resultModel.refresh();
+                        refreshBar();
+                    })));
             m.add(ActionMenus.buildForApi(panel, engine, g, selectedResults(), () -> {
                 resultModel.refresh();
                 refreshBar();

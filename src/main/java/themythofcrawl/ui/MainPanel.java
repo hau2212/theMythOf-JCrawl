@@ -359,25 +359,26 @@ public final class MainPanel {
         proxyInterceptBtn.addActionListener(e -> ProxyInterceptDialog.showFloating(this));
         themythofcrawl.ui.kit.RichHoverCard.install(proxyInterceptBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)",
-                "Bật chặn request ngay tại Proxy theo Toàn bộ / Nhánh / API / Method. Khi bấm nút trên trình duyệt (VD: Save), request dừng lại chờ bạn xem/sửa và bấm Gửi lên Server.",
+                "Bật chặn request ngay tại Proxy theo Toàn bộ / Nhánh / API / Method hoặc Sổ cái CRUD. Khi bấm nút trên trình duyệt (VD: Save), request dừng lại chờ bạn xem/sửa và bấm Gửi lên Server.",
                 null,
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
-                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
+                    boolean on = engine.actionEngine().isInterceptWaitEnabled()
+                            || engine.actionEngine().policyLedger().activeBlockingCount() > 0;
                     return Icons.strategyShield(n > 0 ? t.danger.text() : (on ? t.success.text() : t.muted), 14);
                 },
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
-                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
+                    boolean on = engine.actionEngine().isInterceptWaitEnabled()
+                            || engine.actionEngine().policyLedger().activeBlockingCount() > 0;
                     return n > 0 ? t.danger : (on ? t.success : t.neutral);
                 },
                 () -> {
                     int n = engine.proxyQueue().pendingCount();
-                    boolean on = engine.actionEngine().isInterceptWaitEnabled();
                     if (n > 0) {
                         return "Đang chặn chờ duyệt: " + n + " request — bấm để Gửi lên Server";
                     }
-                    return on ? "Đang BẬT Chặn chờ duyệt (0 request đang đợi)" : "Đang TẮT — bấm để mở cấu hình & bật chặn";
+                    return engine.actionEngine().policyLedger().activeSummaryText();
                 }));
 
         JButton workbenchBtn = new JButton();
@@ -390,16 +391,13 @@ public final class MainPanel {
                     if (settings != null) settings.load();
                 }));
         themythofcrawl.ui.kit.RichHoverCard.install(workbenchBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Action Workbench & Luật Chặn Proxy",
-                "Mở giao diện 5 tab: Chiến lược xử lý, Luật Chặn Proxy (theo nhánh/path/method), Kho ID Sống, Chuỗi Tạo Mới & Khóa 200 OK.",
+                "Action Workbench, Sổ cái CRUD & Dò Giao thức",
+                "Mở giao diện 6 tab: Chiến lược (bật/tắt hoàn tác về Nguyên bản), Sổ cái Chính sách CRUD, Kho ID Sống, Chuỗi Tạo Mới, Khóa 200 OK và Dò Giao thức Action / Mô phỏng.",
                 null,
                 t -> Icons.workbench(t.accent.text(), 14),
                 t -> t.accent,
-                () -> {
-                    int rules = engine.actionEngine().activeBlockRuleCount();
-                    return "Đang dùng: " + engine.config().actionMode.label
-                            + (rules > 0 ? " · Luật Chặn Proxy: " + rules + " bật" : "");
-                }));
+                () -> "Mặc định: " + engine.config().actionMode.shortTitle() + " · "
+                        + engine.actionEngine().policyLedger().activeSummaryText()));
 
         JButton displayModeBtn = new JButton();
         displayModeBtn.setIcon(Icons.themed(Icons::displayMode));
@@ -728,7 +726,8 @@ public final class MainPanel {
         Theme th = Theme.current();
         int h24 = th.scaled(24);
         int pending = engine.proxyQueue().pendingCount();
-        boolean armed = engine.actionEngine().isInterceptWaitEnabled();
+        boolean armedWait = engine.actionEngine().isInterceptWaitEnabled();
+        int ledgerBlocking = engine.actionEngine().policyLedger().activeBlockingCount();
         if (pending > 0) {
             proxyInterceptBtn.setText(Integer.toString(pending));
             proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.onSolid(), 13)));
@@ -738,12 +737,20 @@ public final class MainPanel {
             proxyInterceptBtn.setFont(th.smallBoldFont);
             proxyInterceptBtn.setMargin(new Insets(0, 3, 0, 3));
             proxyInterceptBtn.setPreferredSize(new Dimension(th.scaled(36), h24));
-        } else if (armed) {
+        } else if (armedWait) {
             proxyInterceptBtn.setText("");
             proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 14)));
             proxyInterceptBtn.setOpaque(true);
             proxyInterceptBtn.setBackground(th.danger.fill());
             proxyInterceptBtn.setForeground(th.danger.text());
+            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
+            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+        } else if (ledgerBlocking > 0) {
+            proxyInterceptBtn.setText("");
+            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.warning.text(), 14)));
+            proxyInterceptBtn.setOpaque(true);
+            proxyInterceptBtn.setBackground(th.warning.fill());
+            proxyInterceptBtn.setForeground(th.warning.text());
             proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
             proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
         } else {

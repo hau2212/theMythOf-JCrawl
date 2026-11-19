@@ -89,13 +89,20 @@ public final class ActionMenus {
         addItem(menuContainer, info);
         addSep(menuContainer);
 
-        // 1. Open visual 4-tab Action Workbench
-        JMenuItem openWb = new JMenuItem("Mở Action Workbench (Trực quan 4 tab)...", Icons.workbench(th.accent.text(), 14));
+        // 1. Open visual 6-tab Action Workbench (Strategy + Ledger + Audit + Pool + Chain + Lock200)
+        JMenuItem openWb = new JMenuItem("Mở Action Workbench (6 tab: Chiến lược, Sổ cái, Dò Giao thức)...", Icons.workbench(th.accent.text(), 14));
         openWb.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_STRATEGY, onAfterAction));
         addItem(menuContainer, openWb);
 
-        // 2. Quick send with next live ID
+        // 2. Quick Request Composer & Live Replay
+        RoleResult initialRole = (explicitTargets != null && !explicitTargets.isEmpty())
+                ? explicitTargets.iterator().next() : null;
+        JMenuItem composerItem = new JMenuItem("Sửa Request & Gửi lại (Composer)...", Icons.edit(th.info.text()));
+        composerItem.addActionListener(e -> RequestComposerDialog.showFloating(parent, engine, g, initialRole, onAfterAction));
+        addItem(menuContainer, composerItem);
+
+        // 3. Quick send with next live ID
         JMenuItem quickSwap = new JMenuItem(
                 !liveIds.isEmpty()
                         ? "Gửi nhanh với ID sống kế tiếp (-> " + liveIds.get(0) + ")"
@@ -108,7 +115,7 @@ public final class ActionMenus {
         });
         addItem(menuContainer, quickSwap);
 
-        // 3. Pick another ID from Live Pool or manual swap
+        // 4. Pick another ID from Live Pool or manual swap
         JMenu pickMenu = new JMenu("Chọn ID khác từ Kho (" + liveIds.size() + " ID sống) & Gửi");
         pickMenu.setIcon(Icons.idPool(th.info.text(), 14));
         if (!liveIds.isEmpty()) {
@@ -135,13 +142,13 @@ public final class ActionMenus {
         pickMenu.add(openPoolItem);
         addItem(menuContainer, pickMenu);
 
-        // 4. Producer Chain / Proxy Hold toggle
+        // 5. Producer Chain
         JMenuItem chainItem = new JMenuItem("Chuỗi Tạo Mới -> Hành Động (Producer)...", Icons.strategyChain(th.accent.text(), 14));
         chainItem.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_CHAIN, onAfterAction));
         addItem(menuContainer, chainItem);
 
-        // 5. Lock 200 OK & Replay (3 choices) + Proxy Hold quick toggle
+        // 6. Lock 200 OK & Replay
         JMenuItem lockItem = new JMenuItem(
                 hasSnap ? "Khóa 200 OK & Chọn cách gửi lại (Snapshot " + g.firstOkStatus() + ")..."
                         : "Khóa 200 OK & Chọn cách gửi lại...",
@@ -150,10 +157,12 @@ public final class ActionMenus {
                 ActionWorkbenchDialog.TAB_LOCK200, onAfterAction));
         addItem(menuContainer, lockItem);
 
-        addSep(menuContainer);
+        // 7. Proxy Intercept / Policy Control & Reversible Release submenu (total items == 9 <= 9!)
         boolean epWait = engine.actionEngine().isEndpointInterceptWait(g.method(), g.path())
                 && engine.actionEngine().isInterceptWaitEnabled();
-        JMenu proxyMenu = new JMenu(epWait ? "Chặn Proxy cho API này [ĐANG CHẶN]" : "Chặn Proxy cho API này");
+        boolean hasOverride = g.actionModeOverride() != null || epHeld || epWait;
+        JMenu proxyMenu = new JMenu(epWait ? "Chặn Proxy / Chính sách [ĐANG CHẶN]"
+                : (hasOverride ? "Chặn Proxy / Chính sách [ĐANG CAN THIỆP]" : "Chặn Proxy / Chính sách cho API này"));
         proxyMenu.setIcon(Icons.strategyShield(epWait ? th.danger.text() : th.warning.text(), 14));
 
         JCheckBoxMenuItem waitEpItem = new JCheckBoxMenuItem("Chặn chờ duyệt (Đợi tôi bấm Gửi) cho API này", epWait);
@@ -168,11 +177,6 @@ public final class ActionMenus {
         });
         proxyMenu.add(waitEpItem);
 
-        JMenuItem openQueueItem = new JMenuItem("Mở Hàng chờ Chặn Proxy trực tiếp...", Icons.strategyShield(th.accent.text(), 14));
-        openQueueItem.addActionListener(e -> MainPanel.openInterceptQueue(engine));
-        proxyMenu.add(openQueueItem);
-        proxyMenu.addSeparator();
-
         JCheckBoxMenuItem holdEpItem = new JCheckBoxMenuItem("Giữ ở Proxy cho endpoint này (200 ảo / Không gửi Server)", epHeld);
         holdEpItem.setIcon(Icons.strategyShield(th.warning.text(), 14));
         holdEpItem.addActionListener(e -> {
@@ -180,6 +184,24 @@ public final class ActionMenus {
             if (onAfterAction != null) onAfterAction.run();
         });
         proxyMenu.add(holdEpItem);
+
+        proxyMenu.addSeparator();
+        JMenuItem releaseApiItem = new JMenuItem("Nhả API này về Nguyên bản (Tắt mọi can thiệp / Cho Server trả thật)",
+                Icons.undo(th.success.text()));
+        releaseApiItem.addActionListener(e -> {
+            engine.releaseApiToNone(g, false);
+            if (onAfterAction != null) onAfterAction.run();
+        });
+        proxyMenu.add(releaseApiItem);
+
+        JMenuItem openLedgerItem = new JMenuItem("Mở Sổ cái Chính sách CRUD cho API này...", Icons.sliders(th.accent.text()));
+        openLedgerItem.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
+                ActionWorkbenchDialog.TAB_LEDGER, onAfterAction));
+        proxyMenu.add(openLedgerItem);
+
+        JMenuItem openQueueItem = new JMenuItem("Mở Hàng chờ Chặn Proxy trực tiếp...", Icons.strategyShield(th.accent.text(), 14));
+        openQueueItem.addActionListener(e -> MainPanel.openInterceptQueue(engine));
+        proxyMenu.add(openQueueItem);
         addItem(menuContainer, proxyMenu);
     }
 
@@ -192,11 +214,33 @@ public final class ActionMenus {
         Config cfg = engine.config();
         ApiGroup active = activeGroupSupplier != null ? activeGroupSupplier.get() : null;
 
-        JMenuItem openWorkbench = new JMenuItem("Mở Action Workbench (4 Tab trực quan)...", Icons.workbench(th.accent.text(), 14));
+        JMenuItem openWorkbench = new JMenuItem("Mở Action Workbench (6 Tab trực quan)...", Icons.workbench(th.accent.text(), 14));
         openWorkbench.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
                 ActionWorkbenchDialog.TAB_STRATEGY, onAfterAction));
         menu.add(openWorkbench);
 
+        int ledgerActive = engine.actionEngine().policyLedger().activeCount();
+        JMenuItem openLedger = new JMenuItem("Sổ cái Chính sách CRUD (" + ledgerActive + " đang bật)...",
+                Icons.sliders(th.accent.text()));
+        openLedger.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
+                ActionWorkbenchDialog.TAB_LEDGER, onAfterAction));
+        menu.add(openLedger);
+
+        int auditedCount = engine.actionEngine().gateAuditLog().size();
+        JMenuItem openAudit = new JMenuItem("Dò Giao thức Action & Mô phỏng hàng loạt (" + auditedCount + " đã ghi)...",
+                Icons.playTest(th.info.text(), 14));
+        openAudit.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
+                ActionWorkbenchDialog.TAB_PROTOCOL_AUDIT, onAfterAction));
+        menu.add(openAudit);
+
+        if (active != null) {
+            JMenuItem openComposer = new JMenuItem("Sửa Request & Gửi lại: " + Text.apiLabel(active.gid()) + " [" + active.method() + "]...",
+                    Icons.edit(th.info.text()));
+            openComposer.addActionListener(e -> RequestComposerDialog.showFloating(parent, engine, active, null, onAfterAction));
+            menu.add(openComposer);
+        }
+
+        menu.addSeparator();
         Map<String, List<String>> poolMap = engine.actionEngine().getAllResourceLiveIds();
         int totalIds = poolMap.values().stream().mapToInt(List::size).sum();
         JMenuItem openPool = new JMenuItem("Quản lý Kho ID Sống (" + totalIds + " ID · " + poolMap.size() + " tài nguyên)...",
@@ -220,6 +264,14 @@ public final class ActionMenus {
             if (onAfterAction != null) onAfterAction.run();
         });
         menu.add(holdAll);
+
+        JMenuItem resetAllItem = new JMenuItem("Nhả toàn bộ cấu hình Action về Nguyên bản (Reset All)",
+                Icons.undo(th.danger.text()));
+        resetAllItem.addActionListener(e -> {
+            engine.resetAllActionControls();
+            if (onAfterAction != null) onAfterAction.run();
+        });
+        menu.add(resetAllItem);
 
         if (active != null) {
             menu.addSeparator();

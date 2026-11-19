@@ -85,26 +85,30 @@ jobs:
           cat <<EOF > /tmp/release_notes.md
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
-          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Quy ước phiên bản xem tại \`VERSIONING.md\` (nâng tính năng/UI tăng số sau: \`2.3 -> 2.4\`; nâng thuật toán/kiến trúc lõi từ \`2.X\` giữ nguyên nhánh sau: \`2.4 -> 3.4\`).
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.4_beta\`, \`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Theo quy ước trong \`VERSIONING.md\`: nâng cấp kiến trúc lõi từ nền \`V_2.4_beta\` tăng MAJOR và giữ nhánh phụ \`4\` -> **\`V_3.4_beta\`**.
 
-          ### Các nâng cấp & sửa lỗi trọng tâm trong \`${TAG}\`
+          ### 4 Trụ cột Kiến trúc Mới trong \`${TAG}\`
 
-          1. **Chế độ #5 mới — Chặn chờ duyệt trực tiếp tại Proxy (\`INTERCEPT_WAIT\` — Đợi tôi bấm Gửi lên Server)**:
-             - Cho phép bật chặn đứng request ngay khi bạn bấm nút trên trình duyệt (VD: **Save / Xóa / Cập nhật...**) theo **mọi phạm vi**:
-               - **Toàn bộ** (chọn ma trận HTTP Method: \`POST\`, \`PUT\`, \`PATCH\`, \`DELETE\`, \`GET\`, \`HEAD\`, \`OPTIONS\`),
-               - **1 Nhánh / Path bất kỳ** (kèm nhánh con, bật nhanh qua chuột phải hoặc nút \`+ Chặn nhánh hiện tại\`),
-               - **1 API đã xuất hiện** (chuột phải API -> \`Chặn chờ duyệt cho API này\`),
-               - **Luật Chặn Proxy nâng cao** (wildcard/regex/host với hành động mới \`Chặn chờ duyệt\`).
-             - Bổ sung cửa sổ nổi kéo thả & co giãn **Hàng chờ Chặn Proxy trực tiếp** (\`ProxyInterceptDialog\`, hỗ trợ **Ghim nổi**, xem/chỉnh sửa trực tiếp raw HTTP request kèm tự động tính lại \`Content-Length\`) với các nút 1 chạm: **\`Gửi lên Server (Forward)\`**, **\`Lưu vào bảng & Giữ (Không đẩy Server)\`**, **\`Hủy bỏ (Drop)\`**, **\`Gửi tất cả\`**, **\`Hủy tất cả\`**.
-             - Nút trạng thái trực tiếp ngay trên thanh tiêu đề chính (hiện số request đang bị chặn màu đỏ nổi bật & tự động bật cửa sổ Hàng chờ khi có request bị chặn).
+          1. **Chế độ \`0. Nguyên bản (ActionMode.NONE)\` & Nhả 100% — Hết cảnh "chọn rồi không nhả được"**:
+             - Chế độ mặc định khi mở Extension là **Nguyên bản (Không can thiệp)**: request đi thẳng lên Server (xóa 1 lần trả \`200\`, bấm lại trả \`400/404\` trung thực).
+             - Thẻ chiến lược hỗ trợ **bấm lại để Tắt/Nhả**; dọn cờ Proxy nguyên tử khi chuyển chế độ; bổ sung nút **\`Nhả API này về Nguyên bản\`** và **\`Nhả toàn bộ về Nguyên bản (Reset All)\`**.
 
-          2. **Sửa triệt để 5 lỗi gốc khiến Chiến lược #1 ("Giữ ở Proxy") không chặn được khi bấm Save**:
-             - Chuyển cổng chặn chính sang \`api.proxy().registerRequestHandler(ProxyRequestHandler)\` — tương thích **100% mọi phiên bản Burp Suite Montoya (2023 -> 2026.7+)**, dùng reflection an toàn cho \`RequestToBeSentAction.spoof()\` để không bao giờ bị lỗi \`NoSuchMethodError\` trên Burp bản cũ (tự rơi về \`ProxyRequestReceivedAction.drop()\` an toàn tuyệt đối).
-             - Sửa lỗi chọn Chiến lược #1 ở phạm vi \`Riêng API đang chọn\` không đăng ký vào danh sách giữ ở Proxy.
-             - Sửa lỗi \`autoSend = true\` tự động bắn lại request vừa bị giữ lên Server.
-             - Sửa lỗi bộ lọc Capture (\`captureEnabled = false\`, \`apiRegex\`, \`targetOnly\`) âm thầm bỏ qua luật chặn chủ động của người dùng.
-             - Bỏ qua \`X-JCrawl-Held: true\` trong \`ProxyResponseHandler\` để tránh ghi trùng request đã giữ.
+          2. **Sổ cái Chính sách Hợp nhất (\`ActionPolicyLedger\`) với Kiến trúc CRUD Đầy đủ & Mở rộng**:
+             - Gom toàn bộ cấu hình Action (Toàn cục / Nhóm Method / 1..N Nhánh cây / Đường dẫn Exact-Prefix-Wildcard-Template-Regex / API cụ thể) vào một Sổ cái duy nhất có đầy đủ dấu thời gian kiểm toán (**Tạo lúc**, **Sửa lúc**, **Khớp cuối**, **Số lần khớp**, **Nguồn tạo**).
+             - **Create**: Form đầy đủ, Quick-create 1-click, Nhân bản (\`Duplicate\`), Bộ mẫu nhanh (\`Presets\`), Import JSON.
+             - **Read**: Tìm kiếm & lọc đa chiều, **Bảng Giải thích Chuỗi luật đang tác động** cho API đang chọn (chỉ rõ luật nào thắng / bị ghi đè), thanh tổng quan phạm vi trên Header, Export JSON.
+             - **Update**: Công tắc \`BẬT/TẮT\` inline 1-click, sửa trực tiếp, đổi thứ tự ưu tiên \`Lên/Xuống/Lên đầu\`, cập nhật hàng loạt (\`Bulk Toggle\`).
+             - **Delete & Recovery**: Xóa đơn/hàng loạt, Nhả theo phạm vi, Reset All, kèm **Thùng rác Hoàn tác (Undo Trash 50 mục)** khôi phục ngay chỉ bằng 1 chạm.
+
+          3. **Bộ Dò & Căn chỉnh Giao thức Action (\`ActionGateAuditLog\` + \`Batch Pre-flight Simulator\`)**:
+             - Ghi nhận **mọi request giao thức Action** đi qua Proxy (cả **Đã Chặn** lẫn **Đã Cho Qua**) kèm chính sách thắng và nút căn chỉnh 1 chạm: **\`+ Chặn chờ duyệt\`**, **\`+ Giữ Proxy\`**, **\`+ Cho qua luôn (ALLOW)\`**.
+             - **Bộ Dò Hàng Loạt Trước Khi Chạy**: mô phỏng toàn bộ API đã bắt (hoặc 1 Nhánh) qua Sổ cái Chính sách mà không gửi gói tin thật, hiển thị thống kê & cho phép căn chỉnh trực tiếp.
+
+          4. **Trình Sửa & Gửi lại Request Trực tiếp (\`RequestComposerDialog\`) cho bất kỳ API nào**:
+             - Cửa sổ nổi modeless (kéo thả & co giãn tự do, ghim nổi, \`Ctrl+Enter\` gửi ngay, \`JetBrains Mono\`, 0% HTML).
+             - Chỉnh sửa Raw HTTP request, \`Protocol / Host / Port\`, \`Format JSON\`, tự tính \`Content-Length\`, chọn gửi bằng **Raw vừa sửa / API gốc / 1..N Roles**, chọn chế độ Action riêng cho lần gửi đó (\`Nguyên bản\` / \`Đổi ID sống\` / \`Chạy Producer\`), xem Response trực tiếp + Lịch sử phiên gửi.
+             - Đầy đủ CRUD lưu trữ: **Gửi thử (Ad-hoc)**, **Lưu đè vào API này (Update)**, **Lưu thành API mới trong nhánh (Create/Clone)**, **Đẩy sang Burp Repeater**, **Khôi phục gốc**.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

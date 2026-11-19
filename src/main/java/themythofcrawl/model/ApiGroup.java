@@ -19,8 +19,8 @@ import themythofcrawl.excel.TargetEntry;
  */
 public final class ApiGroup {
     private final int gid;
-    private final Service service;
-    private final String method;
+    private volatile Service service;
+    private volatile String method;
     private volatile String path;
     private volatile String url;
     private final String source;
@@ -86,10 +86,12 @@ public final class ApiGroup {
 
     public int gid() { return gid; }
     public Service service() { return service; }
+    public void setService(Service svc) { if (svc != null) this.service = svc; }
     public String host() { return service.host(); }
     public int port() { return service.port(); }
     public String protocol() { return service.protocol(); }
     public String method() { return method; }
+    public void setMethod(String method) { if (method != null && !method.isBlank()) this.method = method.trim().toUpperCase(java.util.Locale.ROOT); }
     public String path() { return path; }
     public String url() { return url; }
 

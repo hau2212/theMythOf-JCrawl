@@ -107,8 +107,8 @@ public final class Config {
     public CopyFallback copySttFallback = CopyFallback.NONE;
     public int copyCounter = 1;
     public boolean excelPositionCopyFormat = true;
-    // Action API (POST/PUT/PATCH/DELETE) crawl protection
-    public ActionEngine.ActionMode actionMode = ActionEngine.ActionMode.AUTO_SMART;
+    // Action API (POST/PUT/PATCH/DELETE) crawl protection (V_3.4_beta: default NONE = passthrough until user configures)
+    public ActionEngine.ActionMode actionMode = ActionEngine.ActionMode.NONE;
     public ActionEngine.Lock2xxStrategy lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
     public boolean holdActionAtProxy = false;
     // Tag REFRESH (GET-after-Action)
@@ -138,7 +138,7 @@ public final class Config {
         shortPathLen = clamp(shortPathLen, 8, 200);
         staticExt = Text.nz(staticExt);
         apiRegex = Text.nz(apiRegex);
-        if (actionMode == null) actionMode = ActionEngine.ActionMode.AUTO_SMART;
+        if (actionMode == null) actionMode = ActionEngine.ActionMode.NONE;
         if (lock2xxStrategy == null) lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
         if (refreshPolicy == null) refreshPolicy = RefreshPolicy.AUTO_SKIP_DUP;
         return this;

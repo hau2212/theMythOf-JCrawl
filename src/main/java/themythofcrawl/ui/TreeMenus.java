@@ -107,7 +107,7 @@ final class TreeMenus {
                                     ProxyInterceptDialog.showFloating(ui);
                                 }
                             }));
-                    m.add(Ui.item("Luật Chặn Proxy cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (theo Method)...", Icons::strategyShield,
+                    m.add(Ui.item("Sổ cái & Luật Chính sách cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (CRUD)...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),
@@ -156,11 +156,14 @@ final class TreeMenus {
             }
             case GROUP, ORIG, ROLE -> {
                 ApiGroup g = BranchTree.groupOf(n);
+                themythofcrawl.model.RoleResult nodeRole = n.kind == Node.Kind.ROLE && n.payload instanceof themythofcrawl.model.RoleResult rr ? rr : null;
                 List<ApiGroup> targetGs = many.isEmpty() ? List.of(g) : many;
                 m.add(Ui.item(g.results().isEmpty() ? "Gửi API #" + g.gid() + " (API gốc - 0 role)"
                         : "Gửi API #" + g.gid() + " (" + g.results().size() + " Roles)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
-                m.add(ActionMenus.buildForApi(c, engine, g, null, null));
+                m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                        () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
+                m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
                 m.add(Ui.item("Đẩy API #" + g.gid() + " sang Burp Repeater (Gọn)", Icons::repeater, () -> ui.push(g)));
                 String label = engine.copyLabel(g, false);
                 m.add(Ui.item("Copy STT + Path   (" + (label.length() > 60 ? label.substring(0, 60) : label) + ")",

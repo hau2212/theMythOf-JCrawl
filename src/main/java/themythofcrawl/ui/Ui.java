@@ -226,6 +226,53 @@ public final class Ui {
         return b;
     }
 
+    /** High-contrast primary semantic button (tinted accent fill + accent border + bold accent text). */
+    public static JButton primaryBtn(String text, Function<Theme, Icon> iconFn) {
+        JButton b = new JButton(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                Color bg = t.accent.fill();
+                Color fg = t.accent.text();
+                Color bd = t.accent.border();
+                setBackground(bg);
+                setForeground(fg);
+                setFont(t.boldFont);
+                putClientProperty("FlatLaf.style", String.format(
+                        "background: #%02X%02X%02X; foreground: #%02X%02X%02X; borderColor: #%02X%02X%02X; font: bold",
+                        bg.getRed(), bg.getGreen(), bg.getBlue(),
+                        fg.getRed(), fg.getGreen(), fg.getBlue(),
+                        bd.getRed(), bd.getGreen(), bd.getBlue()));
+            }
+        };
+        if (iconFn != null) {
+            bindDisplayMode(b, text, iconFn, false, null, null, t -> t.accent, null);
+        }
+        return b;
+    }
+
+    /** Standard secondary button (caller attaches ActionListener). */
+    public static JButton secondaryBtn(String text, Function<Theme, Icon> iconFn) {
+        return button(text, iconFn, () -> { });
+    }
+
+    /** Bold section heading label styled with the active Theme. */
+    public static JLabel h2(String text) {
+        JLabel l = new JLabel(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setFont(t.boldFont);
+                setForeground(t.fg);
+            }
+        };
+        l.setFont(Theme.current().boldFont);
+        l.setForeground(Theme.current().fg);
+        return l;
+    }
+
     public static JButton compact(JButton b) {
         b.setMargin(new Insets(1, 6, 1, 6));
         return ToolbarGroup.styleToolButton(b);
