@@ -185,7 +185,7 @@ final class ApiTab {
                 })
                 .numberCols(0, 8)
                 .timeCols(12);
-        int[] widths = {68, 62, 195, 195, 74, 130, 235, 58, 72, 95, 62, 62, 68, 220, 56, 115, 70};
+        int[] widths = {68, 62, 195, 205, 84, 130, 235, 58, 72, 95, 62, 62, 68, 220, 56, 115, 70};
         TableColumnModel cm = table.getColumnModel();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);   // keep readable widths, scroll sideways
         for (int i = 0; i < GroupTableModel.COLS.length; i++) {
@@ -279,8 +279,8 @@ final class ApiTab {
         tabsScroll.getHorizontalScrollBar().setUnitIncrement(40);
         JButton sendOne = Ui.accent("Send Tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
         JButton[] repActionRef = new JButton[1];
-        JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.send(t.accent.text()), t.fg),
-                "4 Phương pháp xử lý Action (POST/PUT/DELETE): Đổi ID sống, Gọi Producer, Khóa 200 OK, Chặn Proxy", () -> {
+        JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+                "Action Workbench & xử lý Action API (POST/PUT/DELETE): Đổi ID sống, Chuỗi Tạo Mới, Khóa 200 OK, Giữ ở Proxy", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ApiGroup cur = currentGroup();
                     if (cur != null) {
@@ -327,11 +327,16 @@ final class ApiTab {
         barLeft.add(resWarnPill);
         barLeft.add(resErrPill);
         barLeft.add(resMetaLabel);
+        JPanel barRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 1));
+        barRight.setOpaque(false);
+        barRight.add(sendOne);
+        barRight.add(repActionBtn);
+        barRight.add(barMore);
         JPanel bar = new JPanel(new BorderLayout(4, 1));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(barLeft, BorderLayout.WEST);
         bar.add(tabsScroll, BorderLayout.CENTER);
-        bar.add(Ui.flow(FlowLayout.RIGHT, sendOne, repActionBtn, barMore), BorderLayout.EAST);
+        bar.add(barRight, BorderLayout.EAST);
         JPanel reqPanel = new JPanel(new BorderLayout());
         reqPanel.add(reqHeader, BorderLayout.NORTH);
         reqPanel.add(reqViewer.component(), BorderLayout.CENTER);
@@ -355,7 +360,10 @@ final class ApiTab {
     private JPanel actionBar() {
         JButton sendApi = Ui.accent("Gửi API", t -> Icons.send(t.critical.onSolid()), t -> t.critical,
                 () -> ui.send(selectedOrScope()));
-        sendApi.setToolTipText("Gửi API / phạm vi đang chọn với N Roles (Ctrl+Enter)");
+        themythofcrawl.ui.kit.RichHoverCard.install(sendApi, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Gửi API với tất cả Roles",
+                "Thực thi các API đang chọn (hoặc phạm vi hiện tại) qua toàn bộ Role đang bật để so sánh phân quyền.",
+                "Ctrl+Enter", t -> Icons.send(t.critical.text()), t -> t.critical, null));
         findSendBranch = Ui.button("Gửi Nhánh", t -> Icons.sendAll(t.fg), this::sendBranchSelection);
         JButton[] sendRef = new JButton[1];
         JButton sendMenu = Ui.dropdown("Tùy chọn Gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg),
@@ -363,8 +371,8 @@ final class ApiTab {
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
-        JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.send(t.accent.text()), t.fg),
-                "Xử lý Action API (POST/PUT/DELETE): 4 Phương pháp chống lỗi 400 do ID đã xóa", () -> {
+        JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+                "Mở Action Workbench 4 tab, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động (chống lỗi 400/404 do ID đã xóa)", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {
                         resultModel.refresh();
@@ -389,7 +397,11 @@ final class ApiTab {
         toolsRef[0] = tools;
 
         focusBtn = Ui.button("Tập trung", t -> Icons.focus(t.fg, 14), this::toggleFocusFromSelection);
-        focusBtn.setToolTipText("Chế độ Tập trung: chỉ hiển thị cây & bảng API trong nhánh đang chọn");
+        themythofcrawl.ui.kit.RichHoverCard.install(focusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Chế độ Tập trung theo Nhánh",
+                "Chỉ hiển thị các API thuộc nhánh đang chọn để rà soát gọn gàng; bấm lại để quay về toàn bộ danh sách.",
+                null, t -> Icons.focus(t.info.text(), 14), t -> t.info,
+                () -> focusPath != null ? "Đang tập trung: " + focusPath : "Chế độ xem bình thường"));
 
         search.setColumns(13);
         search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh, tag hoặc Excel STT (Ctrl+F)");

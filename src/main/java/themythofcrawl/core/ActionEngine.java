@@ -203,7 +203,7 @@ public final class ActionEngine {
      * Thu thập ID sống và tự động nhận diện Producer API từ mỗi cặp Request/Response đi qua Engine.
      */
     public void harvest(String method, String path, byte[] request, byte[] response, int status, int gid) {
-        if (path == null) return;
+        if (!autoHarvest || path == null) return;
         String resource = extractResourceKey(path);
         String m = method == null ? "GET" : method.toUpperCase(Locale.ROOT);
 
@@ -509,5 +509,354 @@ public final class ActionEngine {
         System.arraycopy(headBytes, 0, out, 0, headBytes.length);
         System.arraycopy(body, 0, out, headBytes.length, body.length);
         return out;
+    }
+
+    // =========================================================================
+    // V2.1 Action Workbench Engine Upgrades:
+    // Auto-suggest JSONPath, live extractor, multi-location swap preview, CSV pool
+    // =========================================================================
+
+    public record SuggestedPath(String expr, String sampleValue, String fieldName, boolean prioritized) {
+        @Override
+        public String toString() {
+            return expr + "  =  " + sampleValue;
+        }
+    }
+
+    public record SwapPreview(String beforeRequestLine, String afterRequestLine,
+                              String beforeBodySnippet, String afterBodySnippet,
+                              int replacements, List<String> locations) {
+    }
+
+    private volatile boolean autoHarvest = true;
+
+    public boolean isAutoHarvest() {
+        return autoHarvest;
+    }
+
+    public void setAutoHarvest(boolean enabled) {
+        this.autoHarvest = enabled;
+    }
+
+    public void restoreConsumed(String id) {
+        if (id != null) {
+            consumedIds.remove(id);
+        }
+    }
+
+    public void clearConsumed() {
+        consumedIds.clear();
+    }
+
+    public boolean removeLiveId(String resource, String id) {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+        String res = (resource == null || resource.isBlank()) ? "default" : resource.toLowerCase(Locale.ROOT);
+        CopyOnWriteArrayList<String> list = resourceLiveIds.get(res);
+        boolean removed = list != null && list.remove(id);
+        if (removed) {
+            boolean stillElsewhere = resourceLiveIds.values().stream().anyMatch(l -> l.contains(id));
+            if (!stillElsewhere) {
+                globalLiveIds.remove(id);
+            }
+        }
+        return removed;
+    }
+
+    public int addBulkLiveIds(String resource, String rawText) {
+        if (rawText == null || rawText.isBlank()) {
+            return 0;
+        }
+        int added = 0;
+        for (String tok : rawText.split("[,;\\s\\r\\n]+")) {
+            String clean = tok.trim();
+            if (!clean.isEmpty()) {
+                addLiveId(resource, clean);
+                added++;
+            }
+        }
+        return added;
+    }
+
+    public String exportPoolCsv() {
+        StringBuilder sb = new StringBuilder("resource,id,status\n");
+        for (Map.Entry<String, CopyOnWriteArrayList<String>> e : resourceLiveIds.entrySet()) {
+            for (String id : e.getValue()) {
+                sb.append(e.getKey()).append(',').append(id).append(',')
+                        .append(consumedIds.contains(id) ? "consumed" : "alive").append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    public int importPoolCsv(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return 0;
+        }
+        int count = 0;
+        for (String line : csv.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.toLowerCase(Locale.ROOT).startsWith("resource,")) {
+                continue;
+            }
+            String[] cols = trimmed.split(",", 3);
+            if (cols.length >= 2) {
+                String res = cols[0].trim();
+                String id = cols[1].trim();
+                String st = cols.length >= 3 ? cols[2].trim().toLowerCase(Locale.ROOT) : "alive";
+                if (!res.isEmpty() && !id.isEmpty()) {
+                    addLiveId(res, id);
+                    if ("consumed".equals(st)) {
+                        markConsumed(id);
+                    }
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public Map<String, Integer> getAllProducers() {
+        return new LinkedHashMap<>(resourceProducers);
+    }
+
+    /**
+     * Quét Response HTTP (Header Location + JSON body) và tự động gợi ý các đường dẫn trích xuất ID (JSONPath)
+     * kèm giá trị thật tìm thấy để hiển thị trực quan trong Producer Chain Builder.
+     */
+    public static List<SuggestedPath> suggestJsonPaths(byte[] response) {
+        List<SuggestedPath> out = new ArrayList<>();
+        if (response == null || response.length == 0) {
+            return out;
+        }
+        String loc = HttpBytes.header(response, "Location");
+        if (loc != null && !loc.isBlank()) {
+            List<String> ids = extractPathIds(loc.trim());
+            if (!ids.isEmpty()) {
+                out.add(new SuggestedPath("header:Location", ids.get(ids.size() - 1), "Location", true));
+            }
+        }
+        byte[] body = bodyBytes(response);
+        if (body.length > 0) {
+            out.addAll(suggestJsonPaths(new String(body, StandardCharsets.UTF_8)));
+        }
+        return out;
+    }
+
+    public static List<SuggestedPath> suggestJsonPaths(String jsonBody) {
+        List<SuggestedPath> out = new ArrayList<>();
+        if (jsonBody == null || jsonBody.isBlank()) {
+            return out;
+        }
+        String trimmed = jsonBody.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                Object parsed = Json.parse(trimmed);
+                collectJsonSuggestions(parsed, "$", 0, out);
+            } catch (RuntimeException ignored) {
+                // fallback to regex below
+            }
+        }
+        if (out.isEmpty()) {
+            Matcher m = JSON_ID_FIELD.matcher(trimmed);
+            Set<String> seen = new LinkedHashSet<>();
+            while (m.find()) {
+                String k = m.group(1);
+                String v = m.group(2) != null ? m.group(2) : m.group(3);
+                String expr = "$." + k;
+                if (v != null && seen.add(expr)) {
+                    out.add(new SuggestedPath(expr, v, k, true));
+                }
+            }
+        }
+        out.sort(Comparator.comparing((SuggestedPath s) -> !s.prioritized()).thenComparing(SuggestedPath::expr));
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void collectJsonSuggestions(Object node, String path, int depth, List<SuggestedPath> out) {
+        if (node == null || depth > 5 || out.size() >= 32) {
+            return;
+        }
+        if (node instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                String key = String.valueOf(e.getKey());
+                Object val = e.getValue();
+                String childPath = path + "." + key;
+                if (val instanceof String || val instanceof Number) {
+                    String s = String.valueOf(val);
+                    if (!s.isBlank() && s.length() <= 64) {
+                        String kl = key.toLowerCase(Locale.ROOT);
+                        boolean isIdLike = kl.equals("id") || kl.endsWith("id") || kl.endsWith("_id")
+                                || kl.contains("uuid") || kl.contains("code") || kl.contains("token") || kl.contains("key");
+                        if (isIdLike || depth <= 1) {
+                            out.add(new SuggestedPath(childPath, s, key, isIdLike));
+                        }
+                    }
+                } else {
+                    collectJsonSuggestions(val, childPath, depth + 1, out);
+                }
+            }
+        } else if (node instanceof List<?> list && !list.isEmpty()) {
+            collectJsonSuggestions(list.get(0), path + "[0]", depth + 1, out);
+        }
+    }
+
+    /**
+     * Trích xuất giá trị từ HTTP Response theo biểu thức đơn giản:
+     * {@code $.data.id}, {@code $.items[0].id}, {@code header:Location}, hoặc {@code regex:...}.
+     */
+    public static String extractByExpr(byte[] response, String expr) {
+        if (response == null || response.length == 0 || expr == null || expr.isBlank()) {
+            return null;
+        }
+        String e = expr.trim();
+        if (e.toLowerCase(Locale.ROOT).startsWith("header:")) {
+            String headerName = e.substring(7).trim();
+            String hval = HttpBytes.header(response, headerName);
+            if (hval == null || hval.isBlank()) {
+                return null;
+            }
+            List<String> ids = extractPathIds(hval.trim());
+            return ids.isEmpty() ? hval.trim() : ids.get(ids.size() - 1);
+        }
+        byte[] body = bodyBytes(response);
+        if (body.length == 0) {
+            return null;
+        }
+        String bodyStr = new String(body, StandardCharsets.UTF_8);
+        if (e.toLowerCase(Locale.ROOT).startsWith("regex:")) {
+            try {
+                Matcher m = Pattern.compile(e.substring(6).trim()).matcher(bodyStr);
+                if (m.find()) {
+                    return m.groupCount() >= 1 ? m.group(1) : m.group(0);
+                }
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+            return null;
+        }
+        // Simple JSONPath: $.a.b[0].id
+        try {
+            Object cur = Json.parse(bodyStr.trim());
+            String path = e.startsWith("$.") ? e.substring(2) : (e.startsWith("$") ? e.substring(1) : e);
+            for (String seg : path.split("\\.")) {
+                if (seg.isEmpty() || cur == null) {
+                    continue;
+                }
+                int br = seg.indexOf('[');
+                if (br >= 0 && seg.endsWith("]")) {
+                    String key = seg.substring(0, br);
+                    int idx = Integer.parseInt(seg.substring(br + 1, seg.length() - 1));
+                    if (!key.isEmpty() && cur instanceof Map<?, ?> m) {
+                        cur = m.get(key);
+                    }
+                    if (cur instanceof List<?> list && idx >= 0 && idx < list.size()) {
+                        cur = list.get(idx);
+                    } else {
+                        return null;
+                    }
+                } else if (cur instanceof Map<?, ?> m) {
+                    cur = m.get(seg);
+                } else {
+                    return null;
+                }
+            }
+            return cur == null ? null : String.valueOf(cur);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Thay ID chọn lọc theo từng vị trí (Path / Query / Body / Header) và trả về bản xem trước trực quan.
+     */
+    public static SwapPreview previewSwap(byte[] rawRequest, String oldId, String newId,
+                                          boolean swapPath, boolean swapQuery, boolean swapBody, boolean swapHeader) {
+        if (rawRequest == null || rawRequest.length == 0) {
+            return new SwapPreview("", "", "", "", 0, List.of());
+        }
+        String beforeHead = headerText(rawRequest);
+        String[] beforeLines = beforeHead.split("\r?\n");
+        String beforeRl = beforeLines.length > 0 ? beforeLines[0] : "";
+        String beforeBody = new String(bodyBytes(rawRequest), StandardCharsets.UTF_8);
+
+        if (oldId == null || oldId.isEmpty() || newId == null || newId.isEmpty()) {
+            return new SwapPreview(beforeRl, beforeRl, snippet(beforeBody), snippet(beforeBody), 0, List.of());
+        }
+
+        List<String> locs = new ArrayList<>();
+        int count = 0;
+        String[] lines = Arrays.copyOf(beforeLines, beforeLines.length);
+        String escaped = Pattern.quote(oldId);
+
+        if (lines.length > 0) {
+            String[] rl = lines[0].split(" ", 3);
+            if (rl.length >= 2) {
+                String fullTarget = rl[1];
+                int q = fullTarget.indexOf('?');
+                String pathPart = q >= 0 ? fullTarget.substring(0, q) : fullTarget;
+                String queryPart = q >= 0 ? fullTarget.substring(q) : "";
+
+                if (swapPath) {
+                    String np = pathPart.replaceAll("(?<=/)" + escaped + "(?=/|$)", Matcher.quoteReplacement(newId));
+                    if (!np.equals(pathPart)) {
+                        pathPart = np;
+                        count++;
+                        locs.add("URL Path");
+                    }
+                }
+                if (swapQuery && !queryPart.isEmpty()) {
+                    String nq = queryPart.replaceAll("(?<==)" + escaped + "(?=&|$)", Matcher.quoteReplacement(newId));
+                    if (!nq.equals(queryPart)) {
+                        queryPart = nq;
+                        count++;
+                        locs.add("Query");
+                    }
+                }
+                rl[1] = pathPart + queryPart;
+                lines[0] = String.join(" ", rl);
+            }
+        }
+        if (swapHeader) {
+            for (int i = 1; i < lines.length; i++) {
+                String nl = lines[i].replaceAll("(?<=[:/\\s=])" + escaped + "(?=$|[/\\s;&,])", Matcher.quoteReplacement(newId));
+                if (!nl.equals(lines[i])) {
+                    lines[i] = nl;
+                    count++;
+                    if (!locs.contains("Header")) {
+                        locs.add("Header");
+                    }
+                }
+            }
+        }
+        String afterBody = beforeBody;
+        if (swapBody && !beforeBody.isEmpty()) {
+            String ub = beforeBody.replaceAll(
+                    "(\"[a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)\"\\s*:\\s*\")" + escaped + "(\")",
+                    "$1" + Matcher.quoteReplacement(newId) + "$2");
+            ub = ub.replaceAll(
+                    "(\"[a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)\"\\s*:\\s*)" + escaped + "(?=\\s*[,}\\]])",
+                    "$1" + Matcher.quoteReplacement(newId));
+            ub = ub.replaceAll(
+                    "(?<=^|[?&])([a-zA-Z0-9_]*(?:id|Id|ID|uuid|code)=)" + escaped + "(?=&|$)",
+                    "$1" + Matcher.quoteReplacement(newId));
+            if (!ub.equals(beforeBody)) {
+                afterBody = ub;
+                count++;
+                locs.add("Body");
+            }
+        }
+        String afterRl = lines.length > 0 ? lines[0] : "";
+        return new SwapPreview(beforeRl, afterRl, snippet(beforeBody), snippet(afterBody), count, locs);
+    }
+
+    private static String snippet(String s) {
+        if (s == null || s.isBlank()) {
+            return "(Không có body)";
+        }
+        String flat = s.replace('\r', ' ').replace('\n', ' ').trim();
+        return flat.length() > 140 ? flat.substring(0, 140) + "..." : flat;
     }
 }

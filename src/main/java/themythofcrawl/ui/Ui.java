@@ -11,10 +11,16 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JButton;
@@ -26,16 +32,121 @@ import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
 import themythofcrawl.core.Text;
 import themythofcrawl.ui.kit.Card;
+import themythofcrawl.ui.kit.RichHoverCard;
 import themythofcrawl.ui.kit.ToolbarGroup;
 import themythofcrawl.ui.theme.Theme;
 
-/** Small Swing helpers shared by every tab. */
+/** Small Swing helpers shared by every tab, including live 3-mode button display &amp; rich hover cards. */
 public final class Ui {
+    private record ManagedButton(
+            WeakReference<AbstractButton> ref,
+            String label,
+            Function<Theme, Icon> iconFn,
+            boolean dropdown,
+            boolean allowIconOnly
+    ) {
+    }
+
+    private static final List<ManagedButton> MANAGED = new ArrayList<>();
+
+    static {
+        UiDisplayMode.addListener(Ui::refreshDisplayMode);
+    }
+
     private Ui() {
+    }
+
+    /** Re-applies the active {@link UiDisplayMode} to every registered button instantaneously. */
+    public static void refreshDisplayMode() {
+        UiDisplayMode mode = UiDisplayMode.current();
+        synchronized (MANAGED) {
+            Iterator<ManagedButton> it = MANAGED.iterator();
+            while (it.hasNext()) {
+                ManagedButton mb = it.next();
+                AbstractButton b = mb.ref().get();
+                if (b == null) {
+                    it.remove();
+                } else {
+                    applyDisplayMode(b, mb, mode);
+                }
+            }
+        }
+    }
+
+    /** Registers any {@link AbstractButton} to respond live to {@link UiDisplayMode} and show a {@link RichHoverCard}. */
+    public static <T extends AbstractButton> T bindDisplayMode(T b, String label, Function<Theme, Icon> iconFn,
+                                                               boolean dropdown, String description, String shortcut,
+                                                               Function<Theme, Theme.Token> accentFn,
+                                                               Supplier<String> statusFn) {
+        String cleanLabel = label == null ? "" : label.trim();
+        boolean allowIconOnly = iconFn != null;
+        ManagedButton mb = new ManagedButton(new WeakReference<>(b), cleanLabel, iconFn, dropdown, allowIconOnly);
+        synchronized (MANAGED) {
+            if (MANAGED.size() > 600) {
+                MANAGED.removeIf(x -> x.ref().get() == null);
+            }
+            MANAGED.add(mb);
+        }
+        applyDisplayMode(b, mb, UiDisplayMode.current());
+
+        String title = !cleanLabel.isEmpty() ? cleanLabel : "Thao tác";
+        String desc = (description != null && !description.isBlank())
+                ? description.trim()
+                : defaultDescriptionFor(cleanLabel);
+        RichHoverCard.install(b, new RichHoverCard.Spec(
+                title, desc, shortcut,
+                iconFn != null ? iconFn : t -> Icons.info(t.muted, 14),
+                accentFn != null ? accentFn : t -> t.accent,
+                statusFn));
+        return b;
+    }
+
+    private static void applyDisplayMode(AbstractButton b, ManagedButton mb, UiDisplayMode mode) {
+        Icon themedIcon = mb.iconFn() != null ? Icons.themed(mb.iconFn()) : null;
+        if (mode == UiDisplayMode.ICON_ONLY && mb.allowIconOnly() && themedIcon != null) {
+            b.setText("");
+            b.setIcon(mb.dropdown()
+                    ? Icons.themed(t -> Icons.withChevron(mb.iconFn().apply(t), t.fg))
+                    : themedIcon);
+            b.setHorizontalTextPosition(SwingConstants.TRAILING);
+            b.setMargin(new Insets(3, 5, 3, 5));
+        } else if (mode == UiDisplayMode.TEXT_ONLY) {
+            b.setText(mb.label());
+            if (mb.dropdown()) {
+                b.setIcon(Icons.themed(t -> Icons.chevronDown(t.fg, 10)));
+                b.setHorizontalTextPosition(SwingConstants.LEADING);
+            } else {
+                b.setIcon(null);
+                b.setHorizontalTextPosition(SwingConstants.TRAILING);
+            }
+            b.setMargin(new Insets(2, 8, 2, 8));
+        } else {
+            b.setText(mb.label());
+            if (themedIcon != null) {
+                b.setIcon(themedIcon);
+                b.setHorizontalTextPosition(SwingConstants.TRAILING);
+            } else if (mb.dropdown()) {
+                b.setIcon(Icons.themed(t -> Icons.chevronDown(t.fg, 10)));
+                b.setHorizontalTextPosition(SwingConstants.LEADING);
+            } else {
+                b.setIcon(null);
+            }
+            b.setMargin(new Insets(2, 7, 2, 7));
+        }
+        b.revalidate();
+        b.repaint();
+    }
+
+    private static String defaultDescriptionFor(String label) {
+        if (label == null || label.isBlank()) {
+            return "Bấm để thực hiện thao tác này.";
+        }
+        return "Thực hiện chức năng \"" + label + "\" cho mục đang chọn.";
     }
 
     public static JButton button(String text, Runnable action) {
@@ -46,45 +157,49 @@ public final class Ui {
 
     public static JButton button(String text, String tip, Runnable action) {
         JButton b = button(text, action);
-        b.setToolTipText(tip);
+        if (tip != null && !tip.isBlank()) {
+            RichHoverCard.install(b, new RichHoverCard.Spec(text, tip, null, t -> Icons.info(t.info.text(), 14)));
+        }
         return b;
     }
 
     public static JButton button(String text, Function<Theme, Icon> iconFn, Runnable action) {
+        return button(text, iconFn, null, action);
+    }
+
+    public static JButton button(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
         JButton b = button(text, action);
         if (iconFn != null) {
-            b.setIcon(Icons.themed(iconFn));
+            bindDisplayMode(b, text, iconFn, false, tip, null, t -> t.info, null);
+        } else if (tip != null && !tip.isBlank()) {
+            RichHoverCard.install(b, new RichHoverCard.Spec(text, tip, null, t -> Icons.info(t.info.text(), 14)));
         }
         return b;
     }
 
-    public static JButton button(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
-        JButton b = button(text, iconFn, action);
-        b.setToolTipText(tip);
-        return b;
+    public static JButton actionButton(String text, Function<Theme, Icon> iconFn, String description,
+                                       String shortcut, Runnable action) {
+        JButton b = button(text, action);
+        return bindDisplayMode(b, text, iconFn, false, description, shortcut, t -> t.accent, null);
     }
 
     public static JButton dropdown(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
         JButton b = new JButton(text);
-        if (iconFn != null) {
-            b.setIcon(Icons.themed(iconFn));
-        } else {
-            b.setIcon(Icons.themed(t -> Icons.chevronDown(t.fg, 10)));
-            b.setHorizontalTextPosition(javax.swing.SwingConstants.LEADING);
-        }
-        if (tip != null) {
-            b.setToolTipText(tip);
-        }
         b.addActionListener(e -> action.run());
-        return b;
+        return bindDisplayMode(b, text, iconFn, true, tip, null, t -> t.accent, null);
     }
 
     public static JButton accent(String text, Function<Theme, Theme.Token> tokenSupplier, Runnable action) {
-        return accent(text, null, tokenSupplier, action);
+        return accent(text, null, tokenSupplier, null, null, action);
     }
 
     public static JButton accent(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenSupplier,
                                  Runnable action) {
+        return accent(text, iconFn, tokenSupplier, null, null, action);
+    }
+
+    public static JButton accent(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenSupplier,
+                                 String description, String shortcut, Runnable action) {
         Function<Theme, Theme.Token> fn = tokenSupplier != null ? tokenSupplier : t -> t.accent;
         JButton b = new JButton(text) {
             @Override
@@ -101,10 +216,13 @@ public final class Ui {
                         bg.getRed(), bg.getGreen(), bg.getBlue(), fg.getRed(), fg.getGreen(), fg.getBlue()));
             }
         };
-        if (iconFn != null) {
-            b.setIcon(Icons.themed(iconFn));
-        }
         b.addActionListener(e -> action.run());
+        if (iconFn != null) {
+            bindDisplayMode(b, text, iconFn, false, description, shortcut, fn, null);
+        } else if (description != null && !description.isBlank()) {
+            RichHoverCard.install(b, new RichHoverCard.Spec(text, description, shortcut,
+                    t -> Icons.bolt(fn.apply(t).text(), 14), fn, null));
+        }
         return b;
     }
 

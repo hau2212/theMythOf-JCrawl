@@ -40,9 +40,9 @@ public final class Theme {
     public static final int RADIUS_CARD = 0;
     public static final int RADIUS_PILL = 0;
 
-    /** Default row heights (compact, like Burp's Proxy history / Site map). */
-    public static final int ROW_TABLE = 24;
-    public static final int ROW_TREE = 22;
+    /** Default row heights (clean breathing room for Vietnamese diacritics). */
+    public static final int ROW_TABLE = 26;
+    public static final int ROW_TREE = 24;
 
     /**
      * Semantic colour token:
@@ -89,6 +89,7 @@ public final class Theme {
     public final Color[] zebra;
 
     public final Font baseFont;
+    public final Font mediumFont;
     public final Font boldFont;
     public final Font headingFont;
     public final Font smallFont;
@@ -112,7 +113,13 @@ public final class Theme {
     public final Token teal;
     public final Token orange;
     public final Token slate;
+    public final Token indigo;
+    public final Token cyan;
+    public final Token emerald;
+    public final Token amber;
     public final Token neutral;
+
+    private final Map<String, Token> customHexTokens = new HashMap<>();
 
     private final Map<AuditLevel, Token> auditTokens = new EnumMap<>(AuditLevel.class);
     private final Map<String, Token> methodTokens = new HashMap<>();
@@ -166,8 +173,10 @@ public final class Theme {
                         }
                     }
                 }
+                Theme cur = current();
                 for (Component c : roots) {
                     SwingUtilities.updateComponentTreeUI(c);
+                    FontManager.applyTreeFonts(c, cur);
                     c.invalidate();
                     c.repaint();
                 }
@@ -207,6 +216,7 @@ public final class Theme {
             }
             TRACKED.add(new WeakReference<>(root));
         }
+        FontManager.applyTreeFonts(root, current());
     }
 
     public static void addListener(Runnable onChange) {
@@ -256,7 +266,8 @@ public final class Theme {
         Color ac = accentColor != null ? accentColor : sb;
         String key = lafId + "|" + b.getRGB() + "|" + f.getRGB() + "|" + tb.getRGB() + "|" + ac.getRGB() + "|"
                 + sb.getRGB() + "|" + (sepFg != null ? sepFg.getRGB() : 0) + "|"
-                + (disabledFg != null ? disabledFg.getRGB() : 0) + "|" + fontSz + "|" + fontScaleMultiplier;
+                + (disabledFg != null ? disabledFg.getRGB() : 0) + "|" + fontSz + "|" + fontScaleMultiplier
+                + "|" + FontManager.uiChoice().id + "|" + FontManager.monoChoice().id;
         Theme t = CACHE.get(key);
         if (t == null) {
             if (CACHE.size() > 16) {
@@ -290,23 +301,22 @@ public final class Theme {
         this.selectionFg = uiSelFg != null && contrast(uiSelFg, selBg) >= 4.5 ? uiSelFg : bestInkOn(selBg);
 
         Font lf = labelFont != null ? labelFont : new Font(Font.SANS_SERIF, Font.PLAIN, 13);
-        float basePt = Math.max(10f, lf.getSize2D() * fontScaleMultiplier);
-        this.scale = Math.max(0.75f, basePt / 13f);
-        this.baseFont = Math.abs(basePt - lf.getSize2D()) < 0.1f ? lf : lf.deriveFont(basePt);
-        this.boldFont = baseFont.deriveFont(Font.BOLD);
-        this.headingFont = baseFont.deriveFont(Font.BOLD, basePt + 2f);
-        this.smallFont = baseFont.deriveFont(Font.PLAIN, Math.max(9f, basePt - 1f));
-        this.smallBoldFont = baseFont.deriveFont(Font.BOLD, Math.max(9f, basePt - 1f));
+        float basePt = Math.max(12f, Math.min(18f, Math.max(13f, lf.getSize2D()) * fontScaleMultiplier));
+        float smallPt = Math.max(11.5f, basePt - 1f);
+        this.scale = Math.max(0.82f, basePt / 13f);
+        this.baseFont = FontManager.uiRegular(lf, basePt);
+        this.mediumFont = FontManager.uiMedium(lf, basePt);
+        this.boldFont = FontManager.uiBold(lf, basePt);
+        this.headingFont = FontManager.uiBold(lf, basePt + 2f);
+        this.smallFont = FontManager.uiRegular(lf, smallPt);
+        this.smallBoldFont = FontManager.uiBold(lf, smallPt);
         this.italicFont = baseFont.deriveFont(Font.ITALIC);
+
         Font mf = UIManager.getFont("monospaced.font");
-        if (mf == null) {
-            mf = new Font(Font.MONOSPACED, Font.PLAIN, Math.round(basePt));
-        } else if (Math.abs(mf.getSize2D() - basePt) > 0.2f) {
-            mf = mf.deriveFont(basePt);
-        }
-        this.monoFont = mf;
-        this.monoBoldFont = mf.deriveFont(Font.BOLD);
-        this.monoSmallFont = mf.deriveFont(Math.max(9f, basePt - 1f));
+        float monoPt = Math.max(11.5f, basePt - 0.5f);
+        this.monoFont = FontManager.monoRegular(mf, monoPt);
+        this.monoBoldFont = FontManager.monoBold(mf, monoPt);
+        this.monoSmallFont = FontManager.monoRegular(mf, Math.max(11f, monoPt - 1f));
 
         this.success = token(new Color(22, 163, 74));     // #16A34A
         this.warning = token(new Color(217, 119, 6));     // #D97706
@@ -322,6 +332,10 @@ public final class Theme {
         this.teal = token(new Color(13, 148, 136));       // #0D9488
         this.orange = critical;
         this.slate = token(new Color(71, 85, 105));       // #475569
+        this.indigo = token(new Color(79, 70, 229));      // #4F46E5
+        this.cyan = token(new Color(8, 145, 178));        // #0891B2
+        this.emerald = token(new Color(5, 150, 105));     // #059669
+        this.amber = token(new Color(202, 138, 4));       // #CA8A04
         Color neuSolid = mix(surface, fg, dark ? 0.24 : 0.14);
         Color neuOnSolid = ensureContrast(this.fg, neuSolid, 4.6, !dark);
         this.neutral = new Token(dotNone, surfaceAlt, hover, border, this.fg, neuSolid, neuOnSolid);
@@ -447,6 +461,76 @@ public final class Theme {
     /** Palette token for a 0-based role / category index. */
     public Token accent(int index) {
         return accents[Math.floorMod(index, accents.length)];
+    }
+
+    /** Generates a WCAG-verified semantic {@link Token} from an arbitrary {@code #RRGGBB} hex string. */
+    public synchronized Token tokenForHex(String hex) {
+        if (hex == null || hex.isBlank()) {
+            return null;
+        }
+        String clean = hex.trim().toUpperCase(Locale.ROOT);
+        if (clean.startsWith("#")) {
+            clean = clean.substring(1);
+        }
+        if (clean.length() != 6) {
+            return null;
+        }
+        Token cached = customHexTokens.get(clean);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            int rgb = Integer.parseInt(clean, 16);
+            Color base = new Color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+            Token made = token(base);
+            if (customHexTokens.size() > 64) {
+                customHexTokens.clear();
+            }
+            customHexTokens.put(clean, made);
+            return made;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    /** Resolves one of the 12 semantic color keys (or an optional custom {@code #RRGGBB} override). */
+    public Token tokenForColorKey(String colorKey, String customHex) {
+        Token hexTok = tokenForHex(customHex);
+        if (hexTok != null) {
+            return hexTok;
+        }
+        if (colorKey == null || colorKey.isBlank()) {
+            return info;
+        }
+        return switch (colorKey.trim().toLowerCase(Locale.ROOT)) {
+            case "accent", "orange" -> accent;
+            case "warn", "warning" -> warning;
+            case "amber" -> amber;
+            case "purple", "dup" -> dup;
+            case "indigo" -> indigo;
+            case "teal" -> teal;
+            case "cyan" -> cyan;
+            case "bad", "danger", "red" -> danger;
+            case "pink", "rose" -> pink;
+            case "ok", "success", "green" -> success;
+            case "emerald" -> emerald;
+            case "muted", "slate" -> slate;
+            default -> info;
+        };
+    }
+
+    public static String normalizeHex(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String clean = raw.trim().toUpperCase(Locale.ROOT);
+        if (clean.startsWith("#")) {
+            clean = clean.substring(1);
+        }
+        if (clean.length() == 6 && clean.matches("[0-9A-F]{6}")) {
+            return "#" + clean;
+        }
+        return "";
     }
 
     public Border stripe(Object key) {

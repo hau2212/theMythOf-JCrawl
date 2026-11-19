@@ -1,7 +1,6 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.util.ArrayList;
@@ -11,489 +10,314 @@ import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JDialog;
-import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
-import javax.swing.JTextArea;
-import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
-import javax.swing.table.AbstractTableModel;
-import javax.swing.table.DefaultTableCellRenderer;
 
-import themythofcrawl.app.Engine;
+import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ApiTagCatalog;
 import themythofcrawl.place.Decisions;
 import themythofcrawl.place.PlacementBook;
+import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.StructuredAdviceCard;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Cửa sổ Quản lý Chuỗi Gốc & Trùng lặp (Duplicate Lineage & Placement Inspector):
- * - Khẳng định rõ vị trí #1 API GỐC ĐỊNH HÌNH (ghim trên cùng, hoặc Ghost nếu gốc đã xóa)
- * - Liệt kê toàn bộ các vị trí xuất hiện khác (#2 .. #N) cùng STT Copy/Excel, Đích lúc bắt, Trạng thái
- * - Đầy đủ thao tác CRUD: Thêm vị trí giữ chỗ, Sửa Đường dẫn, Sửa STT, Đặt làm GỐC #1, Ẩn/Hiện, Xóa, Mở
- * - Diễn giải bằng lời nói tự nhiên (SmartAdvice) + thanh nút Khuyến nghị hành động 1-click.
+ * Cửa sổ Quản lý Bản Gốc (#1) &amp; các bản trùng lặp v2:
+ * - Bảng rộng thoáng (AUTO_RESIZE_OFF) tách riêng cột Trạng thái và cột Nhãn, không đè/cắt chữ
+ * - Thẻ diễn giải tiếng Việt có cấu trúc {@link StructuredAdviceCard}
+ * - Đầy đủ thao tác: Chỉ giữ Bản Gốc, Đặt làm Bản Gốc, Sửa STT, Chuyển vị trí, Gắn nhãn Tự tải lại, Hiện/Ẩn/Xóa.
  */
 final class LineageDialog {
+    private static final List<String> COLS = List.of(
+            "Bản", "Vai trò", "Mã API", "Vị trí trong cây", "Trạng thái", "Nhãn", "STT / Excel", "Lần cuối");
+
     private LineageDialog() {
     }
 
-    static void show(MainPanel ui, ApiGroup focusGroup) {
-        if (ui == null || focusGroup == null) {
+    static void show(MainPanel ui, ApiGroup focus) {
+        if (focus == null || focus.bookKey() == null) {
+            ui.info("Chọn 1 API để xem Bản Gốc và các lần xuất hiện trùng.");
             return;
         }
-        showByKey(ui, focusGroup.bookKey(), focusGroup);
+        showByKey(ui, focus.bookKey(), focus);
     }
 
-    static void showByKey(MainPanel ui, String bookKey, ApiGroup initialSelection) {
-        if (ui == null || (bookKey == null && initialSelection == null)) {
+    static void showByKey(MainPanel ui, String bookKey, ApiGroup focus) {
+        if (Text.blank(bookKey)) {
+            ui.info("Không tìm thấy thông tin vị trí cho API này.");
             return;
         }
-        Engine engine = ui.engine;
-        String key = bookKey != null ? bookKey : initialSelection.bookKey();
+        PlacementBook.Record rec = ui.engine.book().get(bookKey);
+        String titleEndpoint = focus != null ? focus.endpoint()
+                : (rec != null ? Text.nz(rec.method) + " " + Text.nz(rec.path) : bookKey);
+
         JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(ui.root()),
-                "Chuỗi API Gốc & Trùng lặp (Lineage)", JDialog.ModalityType.APPLICATION_MODAL);
+                "Quản lý bản trùng & Bản Gốc — " + titleEndpoint, JDialog.ModalityType.APPLICATION_MODAL);
+        dlg.setLayout(new BorderLayout(0, Theme.SPACE_2));
 
-        LineageModel model = new LineageModel(engine, key);
-        ThemedTable table = new ThemedTable(model);
+        RowsModel<ApiGroup> model = new RowsModel<>(COLS);
+        JTable table = new ThemedTable(model);
         Ui.style(table);
-        table.setRowHeight(Theme.current().scaled(26));
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        Ui.widths(table, 64, 138, 66, 220, 175, 92, 118, 76);
-
-        DefaultTableCellRenderer cellRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
-                super.getTableCellRendererComponent(t, v, sel, focus, row, col);
-                Theme th = Theme.current();
-                LineageRow lr = model.rowAt(row);
-                setFont(col == 1 || (lr != null && lr.isOrigin) ? th.smallBoldFont : th.smallFont);
-                if (!sel && lr != null) {
-                    if (lr.ghost) {
-                        setBackground(th.surfaceAlt);
-                        setForeground(th.muted);
-                    } else if (lr.isOrigin) {
-                        setBackground(th.orig.fill());
-                        setForeground(col == 1 ? th.orig.text() : th.fg);
-                    } else if (lr.group != null && lr.group.hidden()) {
-                        setBackground(th.surfaceAlt);
-                        setForeground(th.muted);
-                    } else if (lr.group != null && lr.group.dupPending()) {
-                        setBackground(th.dup.fill());
-                        setForeground(col == 1 ? th.dup.text() : th.fg);
-                    } else {
-                        setBackground(th.zebra[row & 1]);
-                        setForeground(th.fg);
-                    }
-                }
-                return this;
-            }
-        };
-        for (int c = 0; c < table.getColumnCount(); c++) {
-            table.getColumnModel().getColumn(c).setCellRenderer(cellRenderer);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        Ui.widths(table, 60, 122, 82, 260, 126, 112, 98, 118);
+        AuditRenderer renderer = new AuditRenderer(model, null, 4, null, 0, 1)
+                .numberCols(0)
+                .timeCols(7);
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
 
-        JLabel headerTitle = Ui.bold("");
-        JLabel headerMeta = Ui.muted("");
-        JPanel headerBar = new JPanel(new BorderLayout(8, 2)) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                Theme t = Theme.current();
-                setBackground(t.surfaceAlt);
-                setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(t.border, 1),
-                        BorderFactory.createEmptyBorder(6, 10, 6, 10)));
-            }
-        };
-        headerBar.setOpaque(true);
-        headerBar.add(headerTitle, BorderLayout.NORTH);
-        headerBar.add(headerMeta, BorderLayout.SOUTH);
+        StructuredAdviceCard adviceCard = new StructuredAdviceCard();
+        Pill headerBadge = Pill.badge("Bản Gốc & Trùng", t -> t.dup);
 
-        JLabel adviceHead = Ui.bold("");
-        JTextArea adviceArea = new JTextArea(6, 70);
-        adviceArea.setEditable(false);
-        adviceArea.setLineWrap(true);
-        adviceArea.setWrapStyleWord(true);
-        adviceArea.setOpaque(false);
-        adviceArea.setFont(Theme.current().baseFont);
-        adviceArea.setBorder(BorderFactory.createEmptyBorder(4, 2, 4, 2));
+        JButton keepOrigBtn = Ui.accent("Chỉ giữ Bản Gốc (#1) & Ẩn bản lặp",
+                t -> Icons.originCrown(t.accent.onSolid(), 14), t -> t.accent,
+                "Giữ lại duy nhất Bản Gốc (#1) trên màn hình chính và ẩn toàn bộ các bản xuất hiện lại phía sau.",
+                null, () -> { });
+        JButton promoteBtn = Ui.button("Đặt làm Bản Gốc (#1)", t -> Icons.star(t.info.text(), 14),
+                "Đổi dòng đang chọn trở thành Bản Gốc (#1) chuẩn cho endpoint này.", () -> { });
+        JButton keepCopyBtn = Ui.button("Giữ bản này", t -> Icons.check(t.success.text(), 14),
+                "Xác nhận giữ bản trùng này hiển thị song song tại vị trí mới.", () -> { });
+        JButton toggleRefreshBtn = Ui.button("Nhãn Tự tải lại", Icons::refresh,
+                "Đánh dấu endpoint này là API tự tải lại dữ liệu (REFRESH) sau thao tác.", () -> { });
+        JButton openBtn = Ui.button("Mở API", Icons::search, "Nhảy tới đúng dòng API này trong tab API.", () -> { });
+        JButton editSttBtn = Ui.button("Sửa STT...", Icons::edit, "Đặt lại số thứ tự (STT) hiển thị khi copy báo cáo.", () -> { });
+        JButton moveBtn = Ui.button("Chuyển nhánh...", Icons::folder, "Di chuyển bản này sang một nhánh khác trong cây.", () -> { });
+        JButton moveOrigBtn = Ui.button("Về chỗ Bản Gốc", Icons::move, "Đưa bản trùng này về cùng nhánh với Bản Gốc (#1).", () -> { });
+        JButton toggleVisBtn = Ui.button("Ẩn / Hiện", Icons::hide, "Ẩn hoặc hiện lại bản trùng này trên danh sách chính.", () -> { });
+        JButton deleteBtn = Ui.button("Xóa bản này", t -> Icons.trash(t.danger.text(), 14),
+                "Xóa vĩnh viễn bản trùng đang chọn khỏi danh sách.", () -> { });
 
-        JPanel adviceBox = new JPanel(new BorderLayout(4, 4)) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                Theme t = Theme.current();
-                setBackground(t.surfaceAlt);
-                setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(t.accent.border(), 1),
-                        BorderFactory.createEmptyBorder(6, 8, 6, 8)));
-            }
-        };
-        adviceBox.setOpaque(true);
-
-        JButton recKeepOriginOnly = Ui.accent("Chỉ giữ GỐC #1 & Ẩn #2+",
-                t -> Icons.check(t.accent.onSolid()), t -> t.accent, null);
-        JButton recKeepSelected = Ui.button("Giữ bản ở chỗ mới", t -> Icons.check(t.success.text()), null);
-        JButton recMoveToOrigin = Ui.button("Đưa về chỗ Gốc", Icons::undo, null);
-        JButton recToggleRefresh = Ui.button("Gắn Tag [REFRESH]", Icons::tag, null);
-
-        JPanel recBar = Ui.flow(FlowLayout.LEFT, recKeepOriginOnly, recKeepSelected, recMoveToOrigin, recToggleRefresh);
-        adviceBox.add(adviceHead, BorderLayout.NORTH);
-        adviceBox.add(MainPanel.scroll(adviceArea), BorderLayout.CENTER);
-        adviceBox.add(recBar, BorderLayout.SOUTH);
-
-        Runnable[] refreshRef = new Runnable[1];
-        Runnable updateAdvice = () -> {
-            int sel = table.getSelectedRow();
-            LineageRow lr = sel >= 0 ? model.rowAt(sel) : null;
-            ApiGroup g = lr != null ? lr.group : null;
-            Decisions.SmartAdvice adv = g != null ? Decisions.advise(engine, g) : Decisions.adviseEndpoint(engine, key);
-            adviceHead.setText("Diễn giải & Khuyến nghị: " + adv.headline());
-            adviceHead.setForeground(adv.suspectedRefresh() ? Theme.current().warning.text() : Theme.current().accent.text());
-            adviceArea.setText(adv.toFormattedText());
-            adviceArea.setCaretPosition(0);
-
-            PlacementBook.Record rec = key != null ? engine.book().get(key) : null;
-            boolean hasRefresh = (g != null && g.hasTag(ApiTagCatalog.TAG_REFRESH))
-                    || (rec != null && rec.tags.contains(ApiTagCatalog.TAG_REFRESH));
-            recToggleRefresh.setText(hasRefresh ? "Gỡ Tag [REFRESH]" : "Gắn Tag [REFRESH]");
-            recMoveToOrigin.setEnabled(g != null && !lr.isOrigin);
-            recKeepSelected.setEnabled(g != null);
+        Runnable[] reloadRef = new Runnable[1];
+        java.util.function.Supplier<ApiGroup> selectedFn = () -> {
+            int r = table.getSelectedRow();
+            return r >= 0 ? model.payload(table.convertRowIndexToModel(r)) : null;
         };
 
-        refreshRef[0] = () -> {
-            int prev = table.getSelectedRow();
-            model.reload();
-            PlacementBook.Record rec = key != null ? engine.book().get(key) : null;
-            ApiGroup any = model.firstGroup();
-            String endpoint = any != null ? any.endpoint()
-                    : (rec != null ? Text.nz(rec.method) + " " + Text.nz(rec.path) : "(Endpoint)");
-            String host = any != null ? any.host() : (rec != null ? Text.nz(rec.host) : "");
-            headerTitle.setText(endpoint + (host.isEmpty() ? "" : "   ·   " + host));
+        Runnable updateDetails = () -> {
+            ApiGroup sel = selectedFn.get();
+            Decisions.SmartAdvice adv = sel != null
+                    ? Decisions.advise(ui.engine, sel)
+                    : Decisions.adviseEndpoint(ui.engine, bookKey);
+            adviceCard.setAdvice(adv);
 
-            List<String> meta = new ArrayList<>();
-            meta.add("Tổng: " + model.copyCount() + " bản");
-            if (rec != null && rec.originBranch != null && !rec.originBranch.isBlank()) {
-                meta.add("Gốc định hình: " + rec.originBranch);
-            }
-            if (rec != null && !rec.tags.isEmpty()) {
-                meta.add("Tag: " + String.join(", ", rec.tags));
-            }
-            if (rec != null && rec.refreshCount > 0) {
-                meta.add("Tự tải lại (REFRESH): " + rec.refreshCount + " lần");
-            }
-            if (rec != null && !rec.triggeredByActions.isEmpty()) {
-                meta.add("Sau hành động: " + String.join(", ", rec.triggeredByActions));
-            }
-            headerMeta.setText(String.join("   |   ", meta));
+            boolean hasSel = sel != null;
+            ApiGroup orig = ui.engine.originOf(bookKey);
+            boolean isOrig = hasSel && orig != null && orig.gid() == sel.gid();
+            boolean hasRefresh = ui.engine.book().hasTag(bookKey, ApiTagCatalog.TAG_REFRESH);
 
-            if (model.getRowCount() > 0) {
-                int targetRow = prev >= 0 && prev < model.getRowCount() ? prev : 0;
-                table.setRowSelectionInterval(targetRow, targetRow);
+            promoteBtn.setEnabled(hasSel && !isOrig);
+            keepCopyBtn.setEnabled(hasSel && sel.dupPending());
+            moveOrigBtn.setEnabled(hasSel && !isOrig && orig != null);
+            openBtn.setEnabled(hasSel);
+            editSttBtn.setEnabled(hasSel);
+            moveBtn.setEnabled(hasSel);
+            toggleVisBtn.setEnabled(hasSel);
+            toggleVisBtn.setText(hasSel && sel.hidden() ? "Hiện lại" : "Ẩn bản này");
+            deleteBtn.setEnabled(hasSel);
+            toggleRefreshBtn.setText(hasRefresh ? "Gỡ nhãn Tự tải lại" : "Gắn nhãn Tự tải lại");
+            keepOrigBtn.setEnabled(model.getRowCount() > 1);
+            headerBadge.setText(model.getRowCount() + " lần xuất hiện");
+        };
+
+        reloadRef[0] = () -> {
+            ApiGroup prev = selectedFn.get();
+            List<ApiGroup> copies = new ArrayList<>(ui.engine.copiesOf(bookKey));
+            copies.sort(Comparator.comparingInt(ApiGroup::dupNo));
+            ApiGroup origin = ui.engine.originOf(bookKey);
+            List<Decisions.Row<ApiGroup>> rows = new ArrayList<>();
+            for (ApiGroup c : copies) {
+                boolean isOrig = origin != null && c.gid() == origin.gid();
+                String role = isOrig ? "Bản Gốc (#1)" : "Bản trùng";
+                String state = Decisions.copyStateShort(c);
+                String tag = Decisions.copyTagLabel(c);
+                String stt = c.target() != null ? "Excel #" + c.target().sttText()
+                        : (c.copyStt() != null ? "STT " + c.copyStt() : "—");
+                AuditLevel lvl = isOrig ? AuditLevel.OK : Decisions.copyStateLevel(c);
+                rows.add(new Decisions.Row<>(c, lvl, List.of(
+                        "#" + c.dupNo(), role, Text.apiLabel(c.gid()), c.branch(), state, tag, stt, c.created())));
             }
-            updateAdvice.run();
-            ui.tick(true);
+            model.set(rows);
+            int idx = -1;
+            if (prev != null) {
+                idx = copies.indexOf(prev);
+            }
+            if (idx < 0 && focus != null) {
+                idx = copies.indexOf(focus);
+            }
+            if (idx < 0 && !copies.isEmpty()) {
+                idx = 0;
+            }
+            if (idx >= 0) {
+                table.setRowSelectionInterval(idx, idx);
+            }
+            updateDetails.run();
         };
 
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                updateAdvice.run();
+                updateDetails.run();
             }
         });
-
-        // CRUD Toolbar actions
-        JButton addPlaceBtn = Ui.button("+ Thêm / Sửa giữ chỗ", Icons::plus, () -> {
-            PlacementBook.Record rec = key != null ? engine.book().get(key) : null;
-            String cur = rec != null && rec.place != null ? rec.place : engine.activeBranch().name();
-            String chosen = PathPicker.pick(dlg, "Chọn đường dẫn giữ chỗ mặc định cho endpoint này",
-                    engine.knownPaths(), cur, "API khi bị xóa và bắt lại sau này sẽ tự động quay về vị trí này.");
-            if (chosen != null && key != null) {
-                engine.editPlace(key, chosen);
-                refreshRef[0].run();
-            }
-        });
-        JButton editPathBtn = Ui.button("Sửa Đường dẫn", Icons::edit, () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr == null || lr.group == null) {
-                return;
-            }
-            String chosen = PathPicker.pick(dlg, "Đổi Đường dẫn cho " + Text.groupId(lr.group.gid()),
-                    engine.knownPaths(), lr.group.branch(), null);
-            if (chosen != null) {
-                engine.moveToPath(List.of(lr.group), chosen, "sửa đường dẫn từ Lineage");
-                refreshRef[0].run();
-            }
-        });
-        JButton editSttBtn = Ui.button("Sửa STT", Icons::sliders, () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr == null || lr.group == null) {
-                return;
-            }
-            String init = lr.group.copyStt() != null ? String.valueOf(lr.group.copyStt()) : "";
-            String raw = JOptionPane.showInputDialog(dlg,
-                    "Nhập số STT Copy cho " + Text.groupId(lr.group.gid()) + " (để trống = tự động):", init);
-            if (raw == null) {
-                return;
-            }
-            String trimmed = raw.trim();
-            if (trimmed.isEmpty()) {
-                engine.setApiCopyStt(lr.group, null);
-                refreshRef[0].run();
-                return;
-            }
-            try {
-                int stt = Integer.parseInt(trimmed);
-                if (stt <= 0) {
-                    throw new NumberFormatException();
-                }
-                engine.setApiCopyStt(lr.group, stt);
-                refreshRef[0].run();
-            } catch (NumberFormatException ex) {
-                ui.info("STT phải là số nguyên dương (VD: 1, 2, 15...).");
-            }
-        });
-        JButton promoteBtn = Ui.button("Đặt làm GỐC #1", Icons::star, () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr == null || lr.group == null) {
-                return;
-            }
-            if (engine.promoteToOrigin(lr.group)) {
-                ui.flash("Đã đặt " + Text.groupId(lr.group.gid()) + " tại [" + lr.group.branch() + "] làm API GỐC #1");
-                refreshRef[0].run();
-            }
-        });
-        JButton toggleHideBtn = Ui.button("Ẩn / Hiện", Icons::hide, () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr == null || lr.group == null) {
-                return;
-            }
-            if (lr.group.hidden()) {
-                engine.show(List.of(lr.group));
-            } else {
-                engine.hide(List.of(lr.group), "ẩn từ Lineage");
-            }
-            refreshRef[0].run();
-        });
-        JButton deleteBtn = Ui.button("Xóa bản này", t -> Icons.trash(t.danger.text()), () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr == null || lr.group == null) {
-                return;
-            }
-            if (ui.confirmDialog("Xóa bản #" + lr.group.dupNo() + " (" + Text.groupId(lr.group.gid()) + ")?")) {
-                engine.remove(List.of(lr.group), "xóa từ Lineage");
-                refreshRef[0].run();
-            }
-        });
-        JButton openApiBtn = Ui.button("Mở ở Tab API", Icons::search, () -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr != null && lr.group != null) {
+        Ui.onDoubleClick(table, () -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null) {
                 dlg.dispose();
-                ui.jumpToGroup(lr.group);
+                ui.jumpToGroup(sel);
             }
         });
 
-        // Recommended 1-click actions
-        recKeepOriginOnly.addActionListener(e -> {
-            if (key == null) {
+        keepOrigBtn.addActionListener(e -> {
+            int n = ui.engine.keepOnlyOriginAndHideOthers(bookKey);
+            ui.flash("Đã giữ Bản Gốc (#1) và ẩn " + n + " bản trùng");
+            ui.tick(true);
+            reloadRef[0].run();
+        });
+        promoteBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null && ui.engine.promoteToOrigin(sel)) {
+                ui.flash("Đã đặt " + Text.apiLabel(sel.gid()) + " làm Bản Gốc (#1)");
+                ui.tick(true);
+                reloadRef[0].run();
+            }
+        });
+        keepCopyBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null) {
+                ui.engine.keepDuplicates(List.of(sel));
+                ui.flash("Đã giữ bản trùng #" + sel.dupNo() + " tại " + sel.branch());
+                ui.tick(true);
+                reloadRef[0].run();
+            }
+        });
+        toggleRefreshBtn.addActionListener(e -> {
+            boolean next = !ui.engine.book().hasTag(bookKey, ApiTagCatalog.TAG_REFRESH);
+            ui.engine.toggleEndpointTag(bookKey, ApiTagCatalog.TAG_REFRESH, next);
+            ui.flash(next ? "Đã gắn nhãn Tự tải lại (REFRESH)" : "Đã gỡ nhãn Tự tải lại");
+            ui.tick(true);
+            reloadRef[0].run();
+        });
+        openBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null) {
+                dlg.dispose();
+                ui.jumpToGroup(sel);
+            }
+        });
+        editSttBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel == null) {
                 return;
             }
-            int hidden = engine.keepOnlyOriginAndHideOthers(key);
-            ui.flash("Đã giữ nguyên API GỐC #1 và ẩn " + hidden + " bản trùng");
-            refreshRef[0].run();
-        });
-        recKeepSelected.addActionListener(e -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr != null && lr.group != null) {
-                if (lr.group.dupPending()) {
-                    engine.keepDuplicates(List.of(lr.group));
-                } else if (lr.group.hidden()) {
-                    engine.show(List.of(lr.group));
-                } else {
-                    engine.confirm(List.of(lr.group), "xác nhận giữ bản tại Lineage");
+            String cur = sel.copyStt() != null ? String.valueOf(sel.copyStt()) : "";
+            String input = JOptionPane.showInputDialog(dlg,
+                    "Nhập số thứ tự (STT) cho " + Text.apiLabel(sel.gid()) + " (để trống để tự động):", cur);
+            if (input == null) {
+                return;
+            }
+            Integer val = null;
+            if (!input.isBlank()) {
+                try {
+                    val = Integer.parseInt(input.trim());
+                } catch (NumberFormatException ex) {
+                    ui.info("STT phải là số nguyên dương (ví dụ: 1, 2, 15).");
+                    return;
                 }
-                refreshRef[0].run();
+            }
+            ui.engine.setApiCopyStt(sel, val);
+            ui.tick(true);
+            reloadRef[0].run();
+        });
+        moveBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null) {
+                ui.moveDialog(List.of(sel));
+                ui.tick(true);
+                reloadRef[0].run();
             }
         });
-        recMoveToOrigin.addActionListener(e -> {
-            LineageRow lr = selectedRow(table, model);
-            if (lr != null && lr.group != null && engine.moveCopyToOrigin(lr.group)) {
-                ui.flash("Đã đưa " + Text.groupId(lr.group.gid()) + " về nhánh Gốc");
-                refreshRef[0].run();
+        moveOrigBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel != null && ui.engine.moveCopyToOrigin(sel)) {
+                ui.flash("Đã chuyển " + Text.apiLabel(sel.gid()) + " về cùng nhánh với Bản Gốc (#1)");
+                ui.tick(true);
+                reloadRef[0].run();
             }
         });
-        recToggleRefresh.addActionListener(e -> {
-            if (key == null) {
+        toggleVisBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel == null) {
                 return;
             }
-            PlacementBook.Record rec = engine.book().get(key);
-            boolean currentlyTagged = rec != null && rec.tags.contains(ApiTagCatalog.TAG_REFRESH);
-            engine.toggleEndpointTag(key, ApiTagCatalog.TAG_REFRESH, !currentlyTagged);
-            ui.flash(!currentlyTagged ? "Đã gắn tag [REFRESH] cho toàn bộ chuỗi endpoint này"
-                    : "Đã gỡ tag [REFRESH] khỏi endpoint này");
-            refreshRef[0].run();
+            if (sel.hidden()) {
+                ui.engine.show(List.of(sel));
+                ui.flash("Đã hiện lại bản #" + sel.dupNo());
+            } else {
+                ui.engine.hide(List.of(sel), "ẩn từ Quản lý bản trùng");
+                ui.flash("Đã ẩn bản #" + sel.dupNo());
+            }
+            ui.tick(true);
+            reloadRef[0].run();
+        });
+        deleteBtn.addActionListener(e -> {
+            ApiGroup sel = selectedFn.get();
+            if (sel == null) {
+                return;
+            }
+            if (ui.confirmDialog("Xóa bản #" + sel.dupNo() + " (" + Text.apiLabel(sel.gid()) + ")?")) {
+                ui.engine.remove(List.of(sel), "xóa từ Quản lý bản trùng");
+                ui.tick(true);
+                reloadRef[0].run();
+            }
         });
 
-        JPanel crudBar = Ui.flow(FlowLayout.LEFT, addPlaceBtn, editPathBtn, editSttBtn, promoteBtn, toggleHideBtn, deleteBtn, openApiBtn);
-        JPanel topPanel = new JPanel(new BorderLayout(4, 4));
-        topPanel.add(headerBar, BorderLayout.NORTH);
-        topPanel.add(crudBar, BorderLayout.SOUTH);
+        JButton closeBtn = Ui.button("Đóng", dlg::dispose);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(table), adviceBox);
-        split.setResizeWeight(0.56);
+        JPanel primaryRow = Ui.flow(FlowLayout.LEFT, keepOrigBtn, promoteBtn, keepCopyBtn, toggleRefreshBtn);
+        JPanel secondaryRow = new JPanel(new BorderLayout());
+        secondaryRow.setOpaque(false);
+        secondaryRow.add(Ui.flow(FlowLayout.LEFT, openBtn, editSttBtn, moveBtn, moveOrigBtn, toggleVisBtn), BorderLayout.CENTER);
+        secondaryRow.add(Ui.flow(FlowLayout.RIGHT, deleteBtn, closeBtn), BorderLayout.EAST);
 
-        JPanel root = new JPanel(new BorderLayout(6, 6));
-        root.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        root.add(topPanel, BorderLayout.NORTH);
-        root.add(split, BorderLayout.CENTER);
-        root.add(Ui.flow(FlowLayout.RIGHT, Ui.button("Đóng", (String) null, dlg::dispose)), BorderLayout.SOUTH);
+        JPanel south = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        south.setOpaque(false);
+        south.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3));
+        south.add(primaryRow, BorderLayout.NORTH);
+        south.add(secondaryRow, BorderLayout.SOUTH);
 
-        refreshRef[0].run();
-        if (initialSelection != null) {
-            int idx = model.indexOf(initialSelection);
-            if (idx >= 0) {
-                table.setRowSelectionInterval(idx, idx);
-            }
-        }
+        JPanel topAdviceWrap = new JPanel(new BorderLayout());
+        topAdviceWrap.setOpaque(false);
+        topAdviceWrap.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_3, 0, Theme.SPACE_3));
+        topAdviceWrap.add(adviceCard, BorderLayout.CENTER);
 
-        dlg.setContentPane(root);
-        dlg.setSize(new Dimension(980, 560));
+        JPanel tableWrap = new JPanel(new BorderLayout());
+        tableWrap.setOpaque(false);
+        tableWrap.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_3, 0, Theme.SPACE_3));
+        tableWrap.add(MainPanel.scroll(table), BorderLayout.CENTER);
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topAdviceWrap, tableWrap);
+        split.setResizeWeight(0.42);
+        split.setDividerSize(5);
+        split.setBorder(BorderFactory.createEmptyBorder());
+
+        dlg.add(Ui.dialogHeader("Quản lý bản trùng & Bản Gốc (#1)",
+                "Endpoint: " + titleEndpoint + "  ·  Chọn dòng để xem chi tiết hoặc xử lý nhanh",
+                headerBadge), BorderLayout.NORTH);
+        dlg.add(split, BorderLayout.CENTER);
+        dlg.add(south, BorderLayout.SOUTH);
+
+        reloadRef[0].run();
+        Theme.track(dlg);
+        dlg.setMinimumSize(new Dimension(860, 540));
+        dlg.setPreferredSize(new Dimension(980, 620));
+        dlg.pack();
         dlg.setLocationRelativeTo(ui.root());
         dlg.setVisible(true);
-    }
-
-    private static LineageRow selectedRow(JTable t, LineageModel m) {
-        int r = t.getSelectedRow();
-        return r < 0 ? null : m.rowAt(r);
-    }
-
-    private record LineageRow(
-            String sttLabel,
-            String roleLabel,
-            String gidLabel,
-            String branch,
-            String capturedAt,
-            String copyStt,
-            String status,
-            String time,
-            boolean isOrigin,
-            boolean ghost,
-            ApiGroup group
-    ) {
-    }
-
-    private static final class LineageModel extends AbstractTableModel {
-        private static final String[] COLS = {
-                "Bản", "Vai trò", "API #", "Vị trí hiện tại (Đường dẫn)", "Đích lúc bắt", "STT Copy/Excel", "Trạng thái", "Bắt lúc"
-        };
-        private final Engine engine;
-        private final String bookKey;
-        private final List<LineageRow> rows = new ArrayList<>();
-
-        LineageModel(Engine engine, String bookKey) {
-            this.engine = engine;
-            this.bookKey = bookKey;
-        }
-
-        void reload() {
-            rows.clear();
-            List<ApiGroup> copies = bookKey == null ? List.of() : new ArrayList<>(engine.copiesOf(bookKey));
-            copies.sort(Comparator.comparingInt(ApiGroup::dupNo));
-            ApiGroup origin = bookKey == null ? null : engine.originOf(bookKey);
-            PlacementBook.Record rec = bookKey == null ? null : engine.book().get(bookKey);
-
-            // Pin #1 API GỐC at row 0 (or Ghost placeholder if origin was deleted)
-            if (origin != null) {
-                rows.add(rowFor(origin, true, copies.size()));
-            } else if (rec != null && rec.originBranch != null && !rec.originBranch.isBlank()) {
-                rows.add(new LineageRow("#1", "GỐC (Đã xóa / Ghost)",
-                        rec.originGid != null ? Text.groupId(rec.originGid) : "—",
-                        rec.originBranch, Text.nz(rec.lastFoundAt), "—",
-                        "Giữ chỗ (" + rec.deleted + "x xóa)", Text.nz(rec.originAt),
-                        true, true, null));
-            }
-            for (ApiGroup c : copies) {
-                if (origin != null && c.gid() == origin.gid()) {
-                    continue;
-                }
-                rows.add(rowFor(c, false, copies.size()));
-            }
-            fireTableDataChanged();
-        }
-
-        private LineageRow rowFor(ApiGroup g, boolean isOrig, int total) {
-            String role = isOrig ? "API GỐC ĐỊNH HÌNH" : "BẢN TRÙNG #" + g.dupNo();
-            String stt = g.target() != null ? "Excel #" + g.target().sttText()
-                    : (g.copyStt() != null ? "STT " + g.copyStt() : "(Tự động)");
-            String state = g.hidden() ? "Đang ẩn"
-                    : g.dupPending() ? "Chờ quyết định"
-                    : g.pending() ? "Chờ xác nhận" : "Đang hiện";
-            if (g.hasTag(ApiTagCatalog.TAG_REFRESH)) {
-                state += " · [REFRESH]";
-            } else if (g.suspectedRefresh()) {
-                state += " · [? Refresh]";
-            }
-            return new LineageRow("#" + g.dupNo() + "/" + Math.max(1, total), role,
-                    Text.groupId(g.gid()), g.branch(), g.capturedAtBranch(), stt, state, g.created(),
-                    isOrig, false, g);
-        }
-
-        LineageRow rowAt(int r) {
-            return r >= 0 && r < rows.size() ? rows.get(r) : null;
-        }
-
-        ApiGroup firstGroup() {
-            for (LineageRow lr : rows) {
-                if (lr.group != null) {
-                    return lr.group;
-                }
-            }
-            return null;
-        }
-
-        int copyCount() {
-            int n = 0;
-            for (LineageRow lr : rows) {
-                if (!lr.ghost) {
-                    n++;
-                }
-            }
-            return n;
-        }
-
-        int indexOf(ApiGroup target) {
-            if (target == null) {
-                return -1;
-            }
-            for (int i = 0; i < rows.size(); i++) {
-                if (rows.get(i).group != null && rows.get(i).group.gid() == target.gid()) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        @Override public int getRowCount() { return rows.size(); }
-        @Override public int getColumnCount() { return COLS.length; }
-        @Override public String getColumnName(int c) { return COLS[c]; }
-
-        @Override
-        public Object getValueAt(int r, int c) {
-            LineageRow lr = rows.get(r);
-            return switch (c) {
-                case 0 -> lr.sttLabel;
-                case 1 -> lr.roleLabel;
-                case 2 -> lr.gidLabel;
-                case 3 -> lr.branch;
-                case 4 -> lr.capturedAt;
-                case 5 -> lr.copyStt;
-                case 6 -> lr.status;
-                default -> lr.time;
-            };
-        }
     }
 }

@@ -23,7 +23,7 @@ public final class Diagnostics {
     private static String resolveVersion() {
         Package pkg = Diagnostics.class.getPackage();
         String v = pkg != null ? pkg.getImplementationVersion() : null;
-        return v != null && !v.isBlank() ? v : "2.0.0-beta";
+        return v != null && !v.isBlank() ? v : "2.1.0-beta";
     }
 
     public static String lafName() {
@@ -41,7 +41,10 @@ public final class Diagnostics {
     }
 
     public static String fontSummary() {
-        Font f = UIManager.getFont("Label.font");
+        Font f = themythofcrawl.ui.theme.Theme.current().baseFont;
+        if (f == null) {
+            f = UIManager.getFont("Label.font");
+        }
         return f != null ? f.getFamily() + ", " + f.getSize() : "(null)";
     }
 

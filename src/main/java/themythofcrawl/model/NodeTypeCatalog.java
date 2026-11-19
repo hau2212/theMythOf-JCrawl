@@ -11,19 +11,86 @@ import themythofcrawl.core.Text;
 
 /**
  * Danh mục loại node cho cây cấu trúc crawl (Thư mục, Link, Button, Icon, Tab, Popup/Modal, Form...)
- * kèm hỗ trợ thêm / sửa / xóa tùy biến, đổi biểu tượng vector, chữ viết tắt (monogram) hoặc ảnh tùy chọn.
+ * kèm 42 biểu tượng vector chia 5 nhóm, 12 màu chuẩn + mã Hex tùy ý, Monogram 3 kiểu và ảnh nhúng an toàn.
  */
 public final class NodeTypeCatalog {
     public static final String DEFAULT_ID = "folder";
 
-    public static final List<String> VECTOR_ICONS = List.of(
-            "folder", "link", "button", "icon", "tab", "modal", "form",
-            "star", "bell", "cart", "lock", "key", "globe", "database", "shield", "tag", "terminal"
+    public record VectorMeta(String id, String label, String category, String keywords) {
+        public boolean matches(String q) {
+            if (q == null || q.isBlank()) {
+                return true;
+            }
+            String needle = q.trim().toLowerCase(Locale.ROOT);
+            return id.contains(needle)
+                    || label.toLowerCase(Locale.ROOT).contains(needle)
+                    || category.toLowerCase(Locale.ROOT).contains(needle)
+                    || keywords.toLowerCase(Locale.ROOT).contains(needle);
+        }
+    }
+
+    public static final List<String> CATEGORIES = List.of(
+            "Tất cả", "Cấu trúc", "Tương tác UI", "Nghiệp vụ", "Hệ thống & API", "Bảo mật"
     );
 
-    public static final List<String> COLOR_KEYS = List.of(
-            "info", "accent", "warn", "purple", "teal", "bad", "ok", "muted"
+    public static final List<VectorMeta> VECTOR_META = List.of(
+            // Cấu trúc & Điều hướng (10)
+            new VectorMeta("folder", "Thư mục", "Cấu trúc", "folder thu muc directory man hinh page"),
+            new VectorMeta("folder-open", "Thư mục mở", "Cấu trúc", "folder open mo nhom group"),
+            new VectorMeta("page", "Trang / Màn hình", "Cấu trúc", "page screen trang view document"),
+            new VectorMeta("tab", "Tab / Sub-tab", "Cấu trúc", "tab subtab the chuyen"),
+            new VectorMeta("sidebar", "Thanh bên / Drawer", "Cấu trúc", "sidebar drawer panel menu ben"),
+            new VectorMeta("menu", "Danh sách Menu", "Cấu trúc", "menu list nav dieu huong"),
+            new VectorMeta("link", "Đường Link / URL", "Cấu trúc", "link url href dieu huong anchor"),
+            new VectorMeta("home", "Trang chủ", "Cấu trúc", "home toppage dashboard chinh"),
+            new VectorMeta("layers", "Lớp / Cụm chức năng", "Cấu trúc", "layers stack nhom group"),
+            new VectorMeta("sitemap", "Sơ đồ nhánh", "Cấu trúc", "sitemap tree cay cau truc"),
+            // Tương tác UI (10)
+            new VectorMeta("button", "Button / Nút bấm", "Tương tác UI", "button btn nut bam click action"),
+            new VectorMeta("icon", "Icon / Biểu tượng", "Tương tác UI", "icon glyph bieu tuong badge"),
+            new VectorMeta("modal", "Popup / Modal", "Tương tác UI", "modal popup dialog hop thoai"),
+            new VectorMeta("form", "Form / Biểu mẫu", "Tương tác UI", "form bieu mau submit nhap lieu"),
+            new VectorMeta("input", "Ô nhập liệu", "Tương tác UI", "input field text textbox"),
+            new VectorMeta("search", "Tìm kiếm / Lọc", "Tương tác UI", "search tim kiem filter lens"),
+            new VectorMeta("dropdown", "Danh sách xổ xuống", "Tương tác UI", "dropdown select combobox"),
+            new VectorMeta("toggle", "Nút bật/tắt", "Tương tác UI", "toggle switch bat tat"),
+            new VectorMeta("upload", "Tải lên (Upload)", "Tương tác UI", "upload file import tai len"),
+            new VectorMeta("download", "Tải xuống (Export)", "Tương tác UI", "download export file tai xuong"),
+            // Nghiệp vụ & Web App (10)
+            new VectorMeta("user", "Người dùng / Hồ sơ", "Nghiệp vụ", "user profile account tai khoan"),
+            new VectorMeta("users", "Nhóm / Vai trò", "Nghiệp vụ", "users roles team nhom quyen"),
+            new VectorMeta("cart", "Giỏ hàng / Đơn hàng", "Nghiệp vụ", "cart order gio hang don mua"),
+            new VectorMeta("credit-card", "Thanh toán / Ví", "Nghiệp vụ", "payment card billing thanh toan"),
+            new VectorMeta("receipt", "Hóa đơn / Giao dịch", "Nghiệp vụ", "receipt invoice hoa don"),
+            new VectorMeta("bell", "Thông báo", "Nghiệp vụ", "bell notification alert thong bao"),
+            new VectorMeta("mail", "Email / Hộp thư", "Nghiệp vụ", "mail email inbox gui thu"),
+            new VectorMeta("chat", "Tin nhắn / Hỗ trợ", "Nghiệp vụ", "chat message comment binh luan"),
+            new VectorMeta("calendar", "Lịch / Đặt hẹn", "Nghiệp vụ", "calendar date schedule lich"),
+            new VectorMeta("chart", "Báo cáo / Thống kê", "Nghiệp vụ", "chart analytics stats bao cao"),
+            // Hệ thống & API (6)
+            new VectorMeta("api", "API Endpoint", "Hệ thống & API", "api endpoint rest graphql"),
+            new VectorMeta("database", "Cơ sở dữ liệu", "Hệ thống & API", "database db storage du lieu"),
+            new VectorMeta("server", "Máy chủ / Dịch vụ", "Hệ thống & API", "server backend service host"),
+            new VectorMeta("terminal", "Lệnh / Script", "Hệ thống & API", "terminal console cli command"),
+            new VectorMeta("code", "Mã nguồn / JSON", "Hệ thống & API", "code json payload dev"),
+            new VectorMeta("webhook", "Webhook / Callback", "Hệ thống & API", "webhook event callback trigger"),
+            // Bảo mật & Trạng thái (6)
+            new VectorMeta("lock", "Đăng nhập / Khóa", "Bảo mật", "lock auth login khoa bao mat"),
+            new VectorMeta("key", "Token / API Key", "Bảo mật", "key token jwt otp mat khau"),
+            new VectorMeta("shield", "Phân quyền / Bảo vệ", "Bảo mật", "shield security admin guard"),
+            new VectorMeta("star", "Quan trọng / Ưu tiên", "Bảo mật", "star favorite quan trong goc"),
+            new VectorMeta("flag", "Đánh dấu / Cờ", "Bảo mật", "flag mark checkpoint co"),
+            new VectorMeta("tag", "Nhãn / Phân loại", "Bảo mật", "tag label nhan phan loai")
     );
+
+    public static final List<String> VECTOR_ICONS = VECTOR_META.stream().map(VectorMeta::id).toList();
+
+    public static final List<String> COLOR_KEYS = List.of(
+            "info", "indigo", "purple", "pink", "bad", "accent",
+            "warn", "amber", "ok", "emerald", "teal", "cyan", "muted"
+    );
+
+    public static final List<String> MONOGRAM_STYLES = List.of("soft", "solid", "outline");
 
     public record NodeType(
             String id,
@@ -32,8 +99,16 @@ public final class NodeTypeCatalog {
             String colorKey,
             String monogram,
             String imagePath,
-            boolean builtIn
+            boolean builtIn,
+            String customHex,
+            String monogramStyle,
+            boolean boxed
     ) {
+        public NodeType(String id, String label, String iconKind, String colorKey,
+                        String monogram, String imagePath, boolean builtIn) {
+            this(id, label, iconKind, colorKey, monogram, imagePath, builtIn, "", "soft", false);
+        }
+
         public NodeType {
             id = Text.blank(id) ? DEFAULT_ID : id.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "_");
             label = Text.blank(label) ? id : label.trim();
@@ -44,6 +119,22 @@ public final class NodeTypeCatalog {
                 monogram = monogram.substring(0, 3).toUpperCase(Locale.ROOT);
             }
             imagePath = imagePath == null ? "" : imagePath.trim();
+            customHex = normalizeHex(customHex);
+            monogramStyle = Text.blank(monogramStyle) ? "soft" : monogramStyle.trim().toLowerCase(Locale.ROOT);
+            if (!MONOGRAM_STYLES.contains(monogramStyle)) {
+                monogramStyle = "soft";
+            }
+        }
+
+        private static String normalizeHex(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return "";
+            }
+            String s = raw.trim().toUpperCase(Locale.ROOT);
+            if (s.startsWith("#")) {
+                s = s.substring(1);
+            }
+            return s.matches("[0-9A-F]{6}") ? "#" + s : "";
         }
 
         public Map<String, Object> toMap() {
@@ -55,6 +146,15 @@ public final class NodeTypeCatalog {
             m.put("monogram", monogram);
             m.put("image_path", imagePath);
             m.put("built_in", builtIn);
+            if (!customHex.isEmpty()) {
+                m.put("custom_hex", customHex);
+            }
+            if (!"soft".equals(monogramStyle)) {
+                m.put("monogram_style", monogramStyle);
+            }
+            if (boxed) {
+                m.put("boxed", true);
+            }
             return m;
         }
 
@@ -66,7 +166,10 @@ public final class NodeTypeCatalog {
                     Json.str(m, "color_key", "info"),
                     Json.str(m, "monogram", ""),
                     Json.str(m, "image_path", ""),
-                    Json.bool(m, "built_in", false)
+                    Json.bool(m, "built_in", false),
+                    Json.str(m, "custom_hex", ""),
+                    Json.str(m, "monogram_style", "soft"),
+                    Json.bool(m, "boxed", false)
             );
         }
     }
@@ -122,6 +225,33 @@ public final class NodeTypeCatalog {
         types.put(t.id(), t);
     }
 
+    /** Reorders a custom/built-in node type up or down in the catalog display order. */
+    public synchronized boolean move(String id, int delta) {
+        if (Text.blank(id) || delta == 0) {
+            return false;
+        }
+        String k = id.trim().toLowerCase(Locale.ROOT);
+        List<NodeType> list = new ArrayList<>(types.values());
+        int idx = -1;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).id().equals(k)) {
+                idx = i;
+                break;
+            }
+        }
+        int target = idx + delta;
+        if (idx < 0 || target < 0 || target >= list.size()) {
+            return false;
+        }
+        NodeType item = list.remove(idx);
+        list.add(target, item);
+        types.clear();
+        for (NodeType nt : list) {
+            types.put(nt.id(), nt);
+        }
+        return true;
+    }
+
     public synchronized boolean remove(String id) {
         if (Text.blank(id)) {
             return false;
@@ -166,7 +296,7 @@ public final class NodeTypeCatalog {
             list.add(t.toMap());
         }
         Map<String, Object> root = new LinkedHashMap<>();
-        root.put("version", 1);
+        root.put("version", 2);
         root.put("types", list);
         return Json.write(root);
     }

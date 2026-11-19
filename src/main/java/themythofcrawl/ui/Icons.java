@@ -1,34 +1,61 @@
 package themythofcrawl.ui;
 
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Composite;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.Stroke;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Arc2D;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.util.Base64;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
+import javax.imageio.ImageIO;
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 
 import themythofcrawl.core.AuditLevel;
+import themythofcrawl.model.NodeTypeCatalog;
+import themythofcrawl.ui.theme.FontManager;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Resolution-independent Java2D icons parameterized by colour (zero dependency on OS emoji fonts).
+ * Icons v2 — Sharp geometric 16x16 optical-grid Java2D vector icon pack inspired by JetBrains
+ * New UI (expui) and Lucide/Tabler, tailored to the sharp rectangular (arc = 0) aesthetic.
+ * Zero dependency on OS emoji fonts, zero raw Color construction, 100% theme-aware.
  */
 public final class Icons {
     private Icons() {
     }
 
-    private static final int MAX_CACHE = 1024;
+    private static final int MAX_CACHE = 2048;
     private static final Map<String, Icon> CACHE = new HashMap<>();
-    private static final Stroke STROKE_12 = new BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-    private static final Stroke STROKE_16 = new BasicStroke(1.65f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+
+    private static final Stroke STROKE_SHARP = new BasicStroke(1.38f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER, 10f);
+    private static final Stroke STROKE_BOLD = new BasicStroke(1.65f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER, 10f);
+    private static final Stroke STROKE_THIN = new BasicStroke(1.12f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER, 10f);
+    private static final Stroke STROKE_DASH = new BasicStroke(1.25f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+            10f, new float[] {2.4f, 2.0f}, 0f);
+    private static final AlphaComposite WASH_ALPHA = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.14f);
 
     static {
         Theme.addListener(Icons::clearCache);
@@ -73,13 +100,15 @@ public final class Icons {
     }
 
     @FunctionalInterface
-    private interface Painter {
-        void paint(Component c, Graphics2D g, int x, int y, int size, Color color);
+    private interface Grid16Painter {
+        void paint(Graphics2D g, Color col);
     }
 
-    private static synchronized Icon cached(String name, Color color, int size, Painter p) {
+    /** Caches a vector icon defined cleanly on a 16x16 coordinate canvas and scaled to {@code size}. */
+    private static synchronized Icon grid16(String name, Color color, int size, Grid16Painter p) {
         Color col = color != null ? color : Theme.current().fg;
-        String key = name + "|" + size + "|" + col.getRGB();
+        int sz = Math.max(8, size);
+        String key = "g16|" + name + "|" + sz + "|" + col.getRGB();
         Icon have = CACHE.get(key);
         if (have != null) {
             return have;
@@ -87,16 +116,61 @@ public final class Icons {
         if (CACHE.size() > MAX_CACHE) {
             CACHE.clear();
         }
-        Icon made = new Drawn(size, size) {
+        Icon made = new Drawn(sz, sz) {
             @Override
             void draw(Component c, Graphics2D g, int x, int y) {
+                AffineTransform saved = g.getTransform();
+                g.translate(x, y);
+                double k = sz / 16.0;
+                g.scale(k, k);
                 g.setColor(col);
-                g.setStroke(STROKE_12);
-                p.paint(c, g, x, y, size, col);
+                g.setStroke(STROKE_SHARP);
+                p.paint(g, col);
+                g.setTransform(saved);
             }
         };
         CACHE.put(key, made);
         return made;
+    }
+
+    /** Paints a subtle 14% duotone tint inside a closed geometric shape using only the icon color. */
+    private static void wash(Graphics2D g, Shape s) {
+        Composite prev = g.getComposite();
+        g.setComposite(WASH_ALPHA);
+        g.fill(s);
+        g.setComposite(prev);
+    }
+
+    private static void line(Graphics2D g, double x1, double y1, double x2, double y2) {
+        g.draw(new Line2D.Double(x1, y1, x2, y2));
+    }
+
+    private static void rect(Graphics2D g, double x, double y, double w, double h) {
+        g.draw(new Rectangle2D.Double(x, y, w, h));
+    }
+
+    private static void fillRect(Graphics2D g, double x, double y, double w, double h) {
+        g.fill(new Rectangle2D.Double(x, y, w, h));
+    }
+
+    private static void oval(Graphics2D g, double x, double y, double w, double h) {
+        g.draw(new Ellipse2D.Double(x, y, w, h));
+    }
+
+    private static void fillOval(Graphics2D g, double x, double y, double w, double h) {
+        g.fill(new Ellipse2D.Double(x, y, w, h));
+    }
+
+    private static Path2D poly(boolean close, double... pts) {
+        Path2D p = new Path2D.Double();
+        p.moveTo(pts[0], pts[1]);
+        for (int i = 2; i + 1 < pts.length; i += 2) {
+            p.lineTo(pts[i], pts[i + 1]);
+        }
+        if (close) {
+            p.closePath();
+        }
+        return p;
     }
 
     /** Dynamic icon whose colour / appearance resolves from {@link Theme#current()} on every repaint. */
@@ -119,11 +193,10 @@ public final class Icons {
         };
     }
 
-    // ------------------------------------------------------------------ core & tree icons
-    /** Filled circle (API / role marker) or rounded square (folder marker). */
+    // ------------------------------------------------------------------ core markers & status
     public static synchronized Icon dot(Color color, boolean square) {
         Color col = color != null ? color : Theme.current().dotNone;
-        String key = "dot|" + col.getRGB() + "|" + square;
+        String key = "dot2|" + col.getRGB() + "|" + square;
         Icon have = CACHE.get(key);
         if (have != null) {
             return have;
@@ -136,9 +209,9 @@ public final class Icons {
             void draw(Component c, Graphics2D g, int x, int y) {
                 g.setColor(col);
                 if (square) {
-                    g.fillRoundRect(x + 1, y, 10, 10, 4, 4);
+                    g.fillRect(x + 2, y + 1, 8, 8);
                 } else {
-                    g.fillOval(x + 1, y, 10, 10);
+                    g.fillOval(x + 2, y + 1, 8, 8);
                 }
             }
         };
@@ -146,895 +219,1151 @@ public final class Icons {
         return made;
     }
 
-    /** Crisp status dot of given diameter (e.g. 8 px). */
     public static Icon statusDot(Color color, int size) {
-        return cached("sdot", color, size, (c, g, x, y, s, col) -> g.fillOval(x + 1, y + 1, Math.max(4, s - 2), Math.max(4, s - 2)));
+        return grid16("sdot", color, size, (g, col) -> fillOval(g, 2.5, 2.5, 11, 11));
     }
 
-    /** Open / filled radio circle (for menu options). */
     public static Icon circle(Color color, boolean filled) {
-        return cached(filled ? "circF" : "circO", color, 12, (c, g, x, y, s, col) -> {
+        return grid16(filled ? "circF" : "circO", color, 12, (g, col) -> {
             if (filled) {
-                g.fillOval(x + 2, y + 2, 8, 8);
+                fillOval(g, 3, 3, 10, 10);
             } else {
-                g.drawOval(x + 2, y + 2, 7, 7);
+                oval(g, 3, 3, 10, 10);
             }
         });
     }
 
-    /** 'Two sheets' copy glyph. */
-    public static synchronized Icon copy(Color color) {
-        Color col = color != null ? color : Theme.current().muted;
-        String key = "copy|" + col.getRGB();
-        Icon have = CACHE.get(key);
-        if (have != null) {
-            return have;
-        }
-        Icon made = new Drawn(14, 14) {
-            @Override
-            void draw(Component c, Graphics2D g, int x, int y) {
-                g.setColor(col);
-                g.drawRoundRect(x + 1, y + 1, 8, 9, 3, 3);
-                Color bg = c != null ? c.getBackground() : null;
-                g.setColor(bg != null ? bg : Theme.current().surface);
-                g.fillRoundRect(x + 4, y + 4, 8, 9, 3, 3);
-                g.setColor(col);
-                g.drawRoundRect(x + 4, y + 4, 8, 9, 3, 3);
-                g.drawLine(x + 6, y + 7, x + 10, y + 7);
-                g.drawLine(x + 6, y + 10, x + 10, y + 10);
-            }
-        };
-        CACHE.put(key, made);
-        return made;
+    public static Icon copy(Color color) {
+        return grid16("copy", color != null ? color : Theme.current().muted, 14, (g, col) -> {
+            Rectangle2D back = new Rectangle2D.Double(2.5, 2, 7.5, 9.5);
+            Rectangle2D front = new Rectangle2D.Double(5.5, 4.5, 8, 9.5);
+            g.draw(back);
+            wash(g, front);
+            g.draw(front);
+        });
     }
 
-    /** API row marker in the trees: audit dot + copy glyph (the glyph copies 'STT. path'). */
-    public static final int GROUP_COPY_X = 14;
-
-    public static synchronized Icon group(Color dotColor, Color copyColor) {
+    public static synchronized Icon group(Color dotColor, Color sheetColor) {
         Color dc = dotColor != null ? dotColor : Theme.current().dotNone;
-        Color cc = copyColor != null ? copyColor : Theme.current().muted;
-        String key = "grp" + dc.getRGB() + "/" + cc.getRGB();
+        Color sc = sheetColor != null ? sheetColor : Theme.current().muted;
+        String key = "grp2|" + dc.getRGB() + "|" + sc.getRGB();
         Icon have = CACHE.get(key);
         if (have != null) {
             return have;
         }
-        Icon dot = dot(dc, false);
-        Icon cp = copy(cc);
-        Icon made = new Drawn(GROUP_COPY_X + 16, 14) {
+        if (CACHE.size() > MAX_CACHE) {
+            CACHE.clear();
+        }
+        Icon made = new Drawn(28, 14) {
             @Override
             void draw(Component c, Graphics2D g, int x, int y) {
-                dot.paintIcon(c, g, x, y + 2);
-                cp.paintIcon(c, g, x + GROUP_COPY_X + 1, y);
+                g.setColor(dc);
+                g.fillRect(x + 2, y + 3, 8, 8);
+                copy(sc).paintIcon(c, g, x + 13, y);
             }
         };
         CACHE.put(key, made);
         return made;
     }
 
-    // ------------------------------------------------------------------ full 14/16 px set
-    public static Icon send(Color color) {
-        return send(color, 14);
-    }
+    // ------------------------------------------------------------------ primary toolbar & crawl actions
+    public static Icon send(Color color) { return send(color, 14); }
 
     public static Icon send(Color color, int size) {
-        return cached("send", color, size, (c, g, x, y, s, col) -> {
-            int p = s / 4;
-            int[] xs = {x + p + 1, x + s - p, x + p + 1};
-            int[] ys = {y + p - 1, y + s / 2, y + s - p + 1};
-            g.fillPolygon(xs, ys, 3);
+        return grid16("send", color, size, (g, col) -> {
+            Path2D p = poly(true, 2.5, 2.5, 14, 8, 2.5, 13.5, 5, 8);
+            wash(g, p);
+            g.draw(p);
+            line(g, 5, 8, 10.5, 8);
         });
     }
 
-    public static Icon sendAll(Color color) {
-        return cached("sendAll", color, 14, (c, g, x, y, s, col) -> {
-            g.fillPolygon(new int[] {x + 2, x + 7, x + 2}, new int[] {y + 3, y + 7, y + 11}, 3);
-            g.fillPolygon(new int[] {x + 7, x + 12, x + 7}, new int[] {y + 3, y + 7, y + 11}, 3);
+    public static Icon sendAll(Color color) { return sendAll(color, 14); }
+
+    public static Icon sendAll(Color color, int size) {
+        return grid16("sendAll", color, size, (g, col) -> {
+            Path2D p1 = poly(true, 1.8, 3, 8.2, 8, 1.8, 13);
+            Path2D p2 = poly(true, 7.8, 3, 14.2, 8, 7.8, 13);
+            wash(g, p1);
+            wash(g, p2);
+            g.draw(p1);
+            g.draw(p2);
         });
     }
 
-    public static Icon stop(Color color) {
-        return cached("stop", color, 14, (c, g, x, y, s, col) -> g.fillRoundRect(x + 3, y + 3, 8, 8, 2, 2));
+    public static Icon stop(Color color) { return stop(color, 14); }
+
+    public static Icon stop(Color color, int size) {
+        return grid16("stop", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(3, 3, 10, 10);
+            wash(g, r);
+            g.draw(r);
+            fillRect(g, 5.5, 5.5, 5, 5);
+        });
     }
 
-    public static Icon repeater(Color color) {
-        return repeater(color, 14);
-    }
+    public static Icon repeater(Color color) { return repeater(color, 14); }
 
     public static Icon repeater(Color color, int size) {
-        return cached("repeater", color, size, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 2, y + 4, s - 6, s - 6, 3, 3);
-            g.drawLine(x + s / 2 - 1, y + s / 2 + 1, x + s - 2, y + 2);
-            g.drawLine(x + s - 6, y + 2, x + s - 2, y + 2);
-            g.drawLine(x + s - 2, y + 2, x + s - 2, y + 6);
+        return grid16("repeater", color, size, (g, col) -> {
+            Path2D box = poly(false, 8.5, 3, 2.5, 3, 2.5, 13.5, 13, 13.5, 13, 7.5);
+            g.draw(box);
+            line(g, 7.5, 8.5, 13.5, 2.5);
+            g.draw(poly(false, 9.5, 2.5, 13.5, 2.5, 13.5, 6.5));
         });
     }
 
-    public static Icon folder(Color color) {
-        return folder(color, 14);
-    }
+    public static Icon folder(Color color) { return folder(color, 14); }
 
     public static Icon folder(Color color, int size) {
-        return cached("folder", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + 1.5, y + 3.5);
-            p.lineTo(x + 5.5, y + 3.5);
-            p.lineTo(x + 7.0, y + 5.0);
-            p.lineTo(x + s - 1.5, y + 5.0);
-            p.lineTo(x + s - 1.5, y + s - 2.5);
-            p.lineTo(x + 1.5, y + s - 2.5);
-            p.closePath();
+        return grid16("folder", color, size, (g, col) -> {
+            Path2D p = poly(true, 1.8, 3, 6.4, 3, 8, 5, 14.2, 5, 14.2, 13.2, 1.8, 13.2);
+            wash(g, p);
             g.draw(p);
         });
     }
 
-    public static Icon api(Color color) {
-        return api(color, 14);
+    public static Icon folderOpen(Color color, int size) {
+        return grid16("folderOpen", color, size, (g, col) -> {
+            Path2D back = poly(false, 2, 12.5, 2, 3, 6.4, 3, 8, 5, 13.5, 5, 13.5, 7);
+            Path2D front = poly(true, 2, 13, 3.6, 7, 14.6, 7, 13, 13);
+            g.draw(back);
+            wash(g, front);
+            g.draw(front);
+        });
     }
+
+    public static Icon api(Color color) { return api(color, 14); }
 
     public static Icon api(Color color, int size) {
-        return cached("api", color, size, (c, g, x, y, s, col) -> {
-            int m = s / 2;
-            g.drawOval(x + 2, y + 2, s - 4, s - 4);
-            g.fillOval(x + m - 2, y + m - 2, 4, 4);
+        return grid16("api", color, size, (g, col) -> {
+            Rectangle2D outer = new Rectangle2D.Double(2, 2.5, 12, 11);
+            wash(g, outer);
+            g.draw(outer);
+            line(g, 2, 5.5, 14, 5.5);
+            g.draw(poly(false, 6.2, 7.5, 4.3, 9.5, 6.2, 11.5));
+            g.draw(poly(false, 9.8, 7.5, 11.7, 9.5, 9.8, 11.5));
+            line(g, 8.5, 7.3, 7.5, 11.7);
         });
     }
 
-    public static Icon role(Color color) {
-        return role(color, 14);
-    }
+    public static Icon role(Color color) { return role(color, 14); }
 
     public static Icon role(Color color, int size) {
-        return cached("role", color, size, (c, g, x, y, s, col) -> {
-            g.drawOval(x + s / 2 - 2, y + 2, 5, 5);
-            g.draw(new Arc2D.Float(x + 2.5f, y + 8.5f, s - 5f, s - 5f, 0, 180, Arc2D.OPEN));
+        return grid16("role", color, size, (g, col) -> {
+            Ellipse2D head = new Ellipse2D.Double(5.2, 2.2, 5.6, 5.6);
+            wash(g, head);
+            g.draw(head);
+            Path2D body = poly(true, 2.5, 13.8, 2.5, 11, 5, 9.4, 11, 9.4, 13.5, 11, 13.5, 13.8);
+            wash(g, body);
+            g.draw(body);
         });
     }
 
-    public static Icon check(Color color) {
-        return check(color, 14);
+    public static Icon users(Color color, int size) {
+        return grid16("users", color, size, (g, col) -> {
+            oval(g, 3, 2.5, 4.6, 4.6);
+            g.draw(poly(false, 1.5, 13.5, 1.5, 10.6, 3.5, 9.2, 7.2, 9.2, 9.2, 10.6, 9.2, 13.5));
+            oval(g, 9.2, 3.2, 3.8, 3.8);
+            g.draw(poly(false, 10.5, 9.4, 12.8, 9.4, 14.5, 10.8, 14.5, 13.5));
+        });
     }
+
+    // ------------------------------------------------------------------ semantic & audit icons
+    public static Icon check(Color color) { return check(color, 14); }
 
     public static Icon check(Color color, int size) {
-        return cached("check", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + s * 0.20, y + s * 0.54);
-            p.lineTo(x + s * 0.43, y + s * 0.76);
-            p.lineTo(x + s * 0.82, y + s * 0.28);
-            g.draw(p);
+        return grid16("check", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            g.draw(poly(false, 2.5, 8.5, 6.2, 12.2, 13.5, 4.2));
         });
     }
 
-    public static Icon warn(Color color) {
-        return warn(color, 14);
-    }
+    public static Icon warn(Color color) { return warn(color, 14); }
 
     public static Icon warn(Color color, int size) {
-        return cached("warn", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + s / 2.0, y + 1.5);
-            p.lineTo(x + s - 1.5, y + s - 2.0);
-            p.lineTo(x + 1.5, y + s - 2.0);
-            p.closePath();
-            g.draw(p);
-            int mx = x + s / 2;
-            g.drawLine(mx, y + 5, mx, y + s - 6);
-            g.fillRect(mx - 1, y + s - 4, 2, 2);
+        return grid16("warn", color, size, (g, col) -> {
+            Path2D tri = poly(true, 8, 2, 14.5, 13.5, 1.5, 13.5);
+            wash(g, tri);
+            g.draw(tri);
+            line(g, 8, 6, 8, 9.5);
+            fillRect(g, 7.3, 11, 1.4, 1.4);
         });
     }
 
-    /** Crisp '!' alert mark inside rounded diamond/badge for INFO divergence status. */
     public static Icon alertMark(Color color, int size) {
-        return cached("alert", color, size, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 1, y + 1, s - 3, s - 3);
-            int mx = x + s / 2;
-            g.drawLine(mx, y + 4, mx, y + s - 6);
-            g.fillRect(mx - 1, y + s - 4, 2, 2);
+        return grid16("alertMark", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2, 12, 12);
+            wash(g, r);
+            g.draw(r);
+            line(g, 8, 4.8, 8, 9.2);
+            fillRect(g, 7.2, 10.8, 1.6, 1.6);
         });
     }
 
-    public static Icon error(Color color) {
-        return error(color, 14);
-    }
+    public static Icon error(Color color) { return error(color, 14); }
 
     public static Icon error(Color color, int size) {
-        return cached("error", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int m = Math.max(3, s / 4);
-            g.drawLine(x + m, y + m, x + s - m, y + s - m);
-            g.drawLine(x + s - m, y + m, x + m, y + s - m);
+        return grid16("error", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            line(g, 3.2, 3.2, 12.8, 12.8);
+            line(g, 12.8, 3.2, 3.2, 12.8);
         });
     }
 
-    public static Icon info(Color color) {
-        return info(color, 14);
-    }
+    public static Icon info(Color color) { return info(color, 14); }
 
     public static Icon info(Color color, int size) {
-        return cached("info", color, size, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 1, y + 1, s - 3, s - 3);
-            int mx = x + s / 2;
-            g.fillRect(mx - 1, y + 6, 2, Math.max(3, s - 10));
-            g.fillRect(mx - 1, y + 3, 2, 2);
+        return grid16("info", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2, 12, 12);
+            wash(g, r);
+            g.draw(r);
+            fillRect(g, 7.2, 4.5, 1.6, 1.6);
+            line(g, 8, 7.4, 8, 11.6);
         });
     }
 
-    public static Icon redirect(Color color) {
-        return redirect(color, 14);
-    }
+    public static Icon redirect(Color color) { return redirect(color, 14); }
 
     public static Icon redirect(Color color, int size) {
-        return cached("redir", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            g.drawLine(x + 3, y + s - 3, x + s - 3, y + 3);
-            g.drawLine(x + s - 8, y + 3, x + s - 3, y + 3);
-            g.drawLine(x + s - 3, y + 3, x + s - 3, y + 8);
+        return grid16("redirect", color, size, (g, col) -> {
+            g.draw(poly(false, 2.5, 11.5, 2.5, 6.5, 13, 6.5));
+            g.draw(poly(false, 9.5, 3.2, 13.2, 6.5, 9.5, 9.8));
         });
     }
 
-    public static Icon hourglass(Color color) {
-        return hourglass(color, 14);
-    }
+    public static Icon hourglass(Color color) { return hourglass(color, 14); }
 
     public static Icon hourglass(Color color, int size) {
-        return cached("hourglass", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 3, y + 2, x + s - 3, y + 2);
-            g.drawLine(x + 3, y + s - 2, x + s - 3, y + s - 2);
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + 3.5, y + 2);
-            p.lineTo(x + s - 3.5, y + 2);
-            p.lineTo(x + s / 2.0, y + s / 2.0);
-            p.lineTo(x + 3.5, y + s - 2);
-            p.lineTo(x + s - 3.5, y + s - 2);
-            p.lineTo(x + s / 2.0, y + s / 2.0);
-            p.closePath();
+        return grid16("hourglass", color, size, (g, col) -> {
+            line(g, 3, 2, 13, 2);
+            line(g, 3, 14, 13, 14);
+            Path2D p = poly(true, 4, 2, 12, 2, 8, 8, 12, 14, 4, 14, 8, 8);
+            wash(g, p);
             g.draw(p);
         });
     }
 
-    public static Icon ghost(Color color) {
-        return ghost(color, 14);
-    }
+    /** Modern dashed slot icon replacing the cartoon ghost for remembered/deleted slots. */
+    public static Icon ghost(Color color) { return ghost(color, 14); }
 
     public static Icon ghost(Color color, int size) {
-        return cached("ghost", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + 3, y + s - 2);
-            p.lineTo(x + 3, y + 6);
-            p.quadTo(x + s / 2.0, y + 1, x + s - 3, y + 6);
-            p.lineTo(x + s - 3, y + s - 2);
-            p.lineTo(x + s - 5, y + s - 4);
-            p.lineTo(x + s / 2.0, y + s - 2);
-            p.lineTo(x + 5, y + s - 4);
-            p.closePath();
-            g.draw(p);
-            g.fillOval(x + 5, y + 5, 2, 2);
-            g.fillOval(x + s - 7, y + 5, 2, 2);
+        return grid16("ghostSlot", color, size, (g, col) -> {
+            Stroke prev = g.getStroke();
+            g.setStroke(STROKE_DASH);
+            rect(g, 2.2, 2.2, 11.6, 11.6);
+            g.setStroke(prev);
+            fillRect(g, 6.5, 6.5, 3, 3);
         });
     }
 
-    public static Icon dup(Color color) {
-        return dup(color, 14);
-    }
+    public static Icon dup(Color color) { return dup(color, 14); }
 
     public static Icon dup(Color color, int size) {
-        return cached("dup", color, size, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 1, y + 1, s - 6, s - 6, 2, 2);
-            g.drawRoundRect(x + 5, y + 5, s - 6, s - 6, 2, 2);
+        return grid16("dup", color, size, (g, col) -> {
+            rect(g, 2, 2, 8.2, 8.2);
+            Rectangle2D front = new Rectangle2D.Double(5.8, 5.8, 8.2, 8.2);
+            wash(g, front);
+            g.draw(front);
         });
     }
 
-    public static Icon hide(Color color) {
-        return hide(color, 14);
+    /** Crown / anchor star for API Gốc (#1). */
+    public static Icon originCrown(Color color, int size) {
+        return grid16("originCrown", color, size, (g, col) -> {
+            Path2D p = poly(true, 2, 12.5, 2, 5, 5.5, 8, 8, 3.5, 10.5, 8, 14, 5, 14, 12.5);
+            wash(g, p);
+            g.draw(p);
+            line(g, 2, 14, 14, 14);
+        });
     }
+
+    /** Lineage tree / origin-to-copies graph icon. */
+    public static Icon lineageGraph(Color color, int size) {
+        return grid16("lineageGraph", color, size, (g, col) -> {
+            Rectangle2D root = new Rectangle2D.Double(2, 2, 4.5, 4.5);
+            wash(g, root);
+            g.draw(root);
+            rect(g, 9.8, 2.5, 4, 4);
+            rect(g, 9.8, 9.8, 4, 4);
+            line(g, 4.2, 6.5, 4.2, 11.8);
+            line(g, 4.2, 11.8, 9.8, 11.8);
+            line(g, 6.5, 4.2, 9.8, 4.2);
+        });
+    }
+
+    public static Icon hide(Color color) { return hide(color, 14); }
 
     public static Icon hide(Color color, int size) {
-        return cached("hide", color, size, (c, g, x, y, s, col) -> {
-            g.draw(new Arc2D.Float(x + 1.5f, y + 3.5f, s - 3f, s - 7f, 0, 180, Arc2D.OPEN));
-            g.draw(new Arc2D.Float(x + 1.5f, y + 3.5f, s - 3f, s - 7f, 180, 180, Arc2D.OPEN));
-            g.drawLine(x + 2, y + s - 2, x + s - 2, y + 2);
+        return grid16("hide", color, size, (g, col) -> {
+            g.draw(new Arc2D.Double(1.8, 4, 12.4, 8, 0, 180, Arc2D.OPEN));
+            g.draw(new Arc2D.Double(1.8, 4, 12.4, 8, 180, 180, Arc2D.OPEN));
+            line(g, 2.4, 13.6, 13.6, 2.4);
         });
     }
 
-    public static Icon show(Color color) {
-        return show(color, 14);
-    }
+    public static Icon show(Color color) { return show(color, 14); }
 
     public static Icon show(Color color, int size) {
-        return cached("show", color, size, (c, g, x, y, s, col) -> {
-            g.draw(new Arc2D.Float(x + 1.5f, y + 3.5f, s - 3f, s - 7f, 0, 180, Arc2D.OPEN));
-            g.draw(new Arc2D.Float(x + 1.5f, y + 3.5f, s - 3f, s - 7f, 180, 180, Arc2D.OPEN));
-            g.fillOval(x + s / 2 - 2, y + s / 2 - 2, 4, 4);
+        return grid16("show", color, size, (g, col) -> {
+            g.draw(new Arc2D.Double(1.8, 4, 12.4, 8, 0, 180, Arc2D.OPEN));
+            g.draw(new Arc2D.Double(1.8, 4, 12.4, 8, 180, 180, Arc2D.OPEN));
+            fillOval(g, 6, 6, 4, 4);
         });
     }
 
-    public static Icon trash(Color color) {
-        return trash(color, 14);
-    }
+    public static Icon trash(Color color) { return trash(color, 14); }
 
     public static Icon trash(Color color, int size) {
-        return cached("trash", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 2, y + 3, x + s - 2, y + 3);
-            g.drawRect(x + 5, y + 1, s - 10, 2);
-            g.drawRoundRect(x + 3, y + 4, s - 6, s - 6, 2, 2);
-            g.drawLine(x + 6, y + 6, x + 6, y + s - 4);
-            g.drawLine(x + s - 6, y + 6, x + s - 6, y + s - 4);
+        return grid16("trash", color, size, (g, col) -> {
+            line(g, 2.2, 4, 13.8, 4);
+            rect(g, 5.5, 1.8, 5, 2.2);
+            Rectangle2D body = new Rectangle2D.Double(3.5, 4, 9, 10.2);
+            wash(g, body);
+            g.draw(body);
+            line(g, 6.5, 6.8, 6.5, 11.8);
+            line(g, 9.5, 6.8, 9.5, 11.8);
         });
     }
 
-    public static Icon move(Color color) {
-        return move(color, 14);
-    }
+    public static Icon move(Color color) { return move(color, 14); }
 
     public static Icon move(Color color, int size) {
-        return cached("move", color, size, (c, g, x, y, s, col) -> {
-            g.draw(new Arc2D.Float(x + 2f, y + 5f, s - 6f, s - 6f, 90, 120, Arc2D.OPEN));
-            g.drawLine(x + 4, y + 5, x + s - 3, y + 5);
-            g.drawLine(x + s - 6, y + 2, x + s - 3, y + 5);
-            g.drawLine(x + s - 6, y + 8, x + s - 3, y + 5);
+        return grid16("move", color, size, (g, col) -> {
+            g.draw(poly(false, 2.5, 12.5, 2.5, 6.5, 13.2, 6.5));
+            g.draw(poly(false, 9.5, 3, 13.2, 6.5, 9.5, 10));
         });
     }
 
-    public static Icon undo(Color color) {
-        return undo(color, 14);
-    }
+    public static Icon undo(Color color) { return undo(color, 14); }
 
     public static Icon undo(Color color, int size) {
-        return cached("undo", color, size, (c, g, x, y, s, col) -> {
-            g.draw(new Arc2D.Float(x + 4f, y + 5f, s - 6f, s - 6f, 90, -120, Arc2D.OPEN));
-            g.drawLine(x + 3, y + 5, x + s - 4, y + 5);
-            g.drawLine(x + 6, y + 2, x + 3, y + 5);
-            g.drawLine(x + 6, y + 8, x + 3, y + 5);
+        return grid16("undo", color, size, (g, col) -> {
+            g.draw(poly(false, 13.5, 12.5, 13.5, 6.5, 2.8, 6.5));
+            g.draw(poly(false, 6.5, 3, 2.8, 6.5, 6.5, 10));
         });
     }
 
-    public static Icon filter(Color color) {
-        return filter(color, 14);
-    }
+    public static Icon filter(Color color) { return filter(color, 14); }
 
     public static Icon filter(Color color, int size) {
-        return cached("filter", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + 2, y + 3);
-            p.lineTo(x + s - 2, y + 3);
-            p.lineTo(x + s / 2.0 + 1.5, y + 7.5);
-            p.lineTo(x + s / 2.0 + 1.5, y + s - 2);
-            p.lineTo(x + s / 2.0 - 1.5, y + s - 3);
-            p.lineTo(x + s / 2.0 - 1.5, y + 7.5);
-            p.closePath();
+        return grid16("filter", color, size, (g, col) -> {
+            Path2D p = poly(true, 2, 2.5, 14, 2.5, 9.5, 8.2, 9.5, 13.5, 6.5, 12.2, 6.5, 8.2);
+            wash(g, p);
             g.draw(p);
         });
     }
 
-    public static Icon export(Color color) {
-        return export(color, 14);
-    }
+    public static Icon export(Color color) { return export(color, 14); }
 
     public static Icon export(Color color, int size) {
-        return cached("export", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + s / 2, y + 2, x + s / 2, y + 9);
-            g.drawLine(x + s / 2 - 3, y + 5, x + s / 2, y + 2);
-            g.drawLine(x + s / 2 + 3, y + 5, x + s / 2, y + 2);
-            g.drawLine(x + 2, y + 9, x + 2, y + s - 2);
-            g.drawLine(x + 2, y + s - 2, x + s - 2, y + s - 2);
-            g.drawLine(x + s - 2, y + s - 2, x + s - 2, y + 9);
+        return grid16("export", color, size, (g, col) -> {
+            line(g, 8, 2.5, 8, 10.2);
+            g.draw(poly(false, 4.8, 5.7, 8, 2.5, 11.2, 5.7));
+            g.draw(poly(false, 2.2, 10, 2.2, 13.8, 13.8, 13.8, 13.8, 10));
         });
     }
 
-    public static Icon excel(Color color) {
-        return excel(color, 14);
+    public static Icon download(Color color, int size) {
+        return grid16("download", color, size, (g, col) -> {
+            line(g, 8, 2.2, 8, 10);
+            g.draw(poly(false, 4.8, 6.8, 8, 10, 11.2, 6.8));
+            g.draw(poly(false, 2.2, 10.5, 2.2, 13.8, 13.8, 13.8, 13.8, 10.5));
+        });
     }
+
+    public static Icon excel(Color color) { return excel(color, 14); }
 
     public static Icon excel(Color color, int size) {
-        return cached("excel", color, size, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 2, y + 2, s - 4, s - 4, 2, 2);
-            g.drawLine(x + 2, y + 6, x + s - 2, y + 6);
-            g.drawLine(x + 6, y + 2, x + 6, y + s - 2);
+        return grid16("excel", color, size, (g, col) -> {
+            Rectangle2D box = new Rectangle2D.Double(2, 2, 12, 12);
+            wash(g, box);
+            g.draw(box);
+            line(g, 2, 6, 14, 6);
+            line(g, 2, 10, 14, 10);
+            line(g, 6.5, 2, 6.5, 14);
         });
     }
 
-    public static Icon document(Color color) {
-        return document(color, 14);
-    }
+    public static Icon document(Color color) { return document(color, 14); }
 
     public static Icon document(Color color, int size) {
-        return cached("doc", color, size, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 2, y + 1, s - 5, s - 2, 2, 2);
-            int right = x + s - 5;
-            g.drawLine(x + 4, y + Math.max(4, s / 3), right, y + Math.max(4, s / 3));
-            g.drawLine(x + 4, y + Math.max(6, (s * 7) / 12), right, y + Math.max(6, (s * 7) / 12));
-            if (s >= 13) {
-                g.drawLine(x + 4, y + s - 3, right - 1, y + s - 3);
-            }
+        return grid16("doc", color, size, (g, col) -> {
+            Path2D p = poly(true, 3, 1.8, 10, 1.8, 13, 4.8, 13, 14.2, 3, 14.2);
+            wash(g, p);
+            g.draw(p);
+            g.draw(poly(false, 10, 1.8, 10, 4.8, 13, 4.8));
+            line(g, 5.2, 8, 10.8, 8);
+            line(g, 5.2, 11, 9.5, 11);
         });
     }
 
-    public static Icon save(Color color) {
-        return cached("save", color, 14, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 2, y + 2, s - 4, s - 4, 2, 2);
-            g.drawRect(x + 4, y + 2, s - 8, 4);
-            g.drawRect(x + 4, y + 8, s - 8, 4);
+    public static Icon save(Color color) { return save(color, 14); }
+
+    public static Icon save(Color color, int size) {
+        return grid16("save", color, size, (g, col) -> {
+            Path2D p = poly(true, 2.2, 2.2, 11.2, 2.2, 13.8, 4.8, 13.8, 13.8, 2.2, 13.8);
+            wash(g, p);
+            g.draw(p);
+            rect(g, 4.8, 2.2, 5.2, 3.8);
+            rect(g, 4.5, 9, 7, 4.8);
         });
     }
 
-    public static Icon window(Color color) {
-        return window(color, 14);
-    }
+    public static Icon window(Color color) { return window(color, 14); }
 
     public static Icon window(Color color, int size) {
-        return cached("window", color, size, (c, g, x, y, s, col) -> {
-            g.drawRoundRect(x + 2, y + 4, s - 6, s - 6, 2, 2);
-            g.drawLine(x + 5, y + 2, x + s - 2, y + 2);
-            g.drawLine(x + s - 2, y + 2, x + s - 2, y + s - 5);
+        return grid16("window", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 4.2, 9.8, 9.6);
+            wash(g, r);
+            g.draw(r);
+            line(g, 2, 6.8, 11.8, 6.8);
+            g.draw(poly(false, 5, 2.2, 14, 2.2, 14, 10.5));
         });
     }
 
-    public static Icon pin(Color color) {
-        return pin(color, 14);
-    }
+    public static Icon pin(Color color) { return pin(color, 14); }
 
     public static Icon pin(Color color, int size) {
-        return cached("pin", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 4, y + 2, x + s - 4, y + 2);
-            g.drawLine(x + 5, y + 2, x + 4, y + 7);
-            g.drawLine(x + s - 5, y + 2, x + s - 4, y + 7);
-            g.drawLine(x + 3, y + 7, x + s - 3, y + 7);
-            g.drawLine(x + s / 2, y + 7, x + s / 2, y + s - 1);
+        return grid16("pin", color, size, (g, col) -> {
+            Path2D head = poly(true, 4.5, 2.2, 11.5, 2.2, 10.5, 7, 12.5, 9, 3.5, 9, 5.5, 7);
+            wash(g, head);
+            g.draw(head);
+            line(g, 8, 9, 8, 14.2);
         });
     }
 
-    public static Icon gear(Color color) {
-        return gear(color, 14);
-    }
+    public static Icon gear(Color color) { return gear(color, 14); }
 
     public static Icon gear(Color color, int size) {
-        return cached("gear", color, size, (c, g, x, y, s, col) -> {
-            int cx = x + s / 2;
-            int cy = y + s / 2;
-            g.drawOval(cx - 3, cy - 3, 6, 6);
-            g.drawOval(cx - 1, cy - 1, 2, 2);
+        return grid16("gear", color, size, (g, col) -> {
+            Ellipse2D ring = new Ellipse2D.Double(4.2, 4.2, 7.6, 7.6);
+            wash(g, ring);
+            g.draw(ring);
+            oval(g, 6.5, 6.5, 3, 3);
             for (int i = 0; i < 8; i++) {
                 double a = i * Math.PI / 4.0;
-                int x1 = cx + (int) Math.round(Math.cos(a) * 3.8);
-                int y1 = cy + (int) Math.round(Math.sin(a) * 3.8);
-                int x2 = cx + (int) Math.round(Math.cos(a) * 5.6);
-                int y2 = cy + (int) Math.round(Math.sin(a) * 5.6);
-                g.drawLine(x1, y1, x2, y2);
+                line(g, 8 + Math.cos(a) * 4.2, 8 + Math.sin(a) * 4.2,
+                        8 + Math.cos(a) * 6.2, 8 + Math.sin(a) * 6.2);
             }
         });
     }
 
-    public static Icon refresh(Color color) {
-        return refresh(color, 14);
-    }
+    public static Icon refresh(Color color) { return refresh(color, 14); }
 
     public static Icon refresh(Color color, int size) {
-        return cached("refresh", color, size, (c, g, x, y, s, col) -> {
-            g.draw(new Arc2D.Float(x + 2, y + 2, s - 4, s - 4, 30, 290, Arc2D.OPEN));
-            g.fillPolygon(new int[] {x + s - 4, x + s - 1, x + s - 5}, new int[] {y + 2, y + 5, y + 6}, 3);
+        return grid16("refresh", color, size, (g, col) -> {
+            g.draw(new Arc2D.Double(2.5, 2.5, 11, 11, 35, 285, Arc2D.OPEN));
+            g.draw(poly(false, 10.5, 2.2, 13.5, 4.2, 11, 6.6));
         });
     }
 
-    public static Icon plus(Color color) {
-        return plus(color, 14);
-    }
+    public static Icon plus(Color color) { return plus(color, 14); }
 
     public static Icon plus(Color color, int size) {
-        return cached("plus", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int m = s / 2;
-            g.drawLine(x + m, y + 3, x + m, y + s - 3);
-            g.drawLine(x + 3, y + m, x + s - 3, y + m);
+        return grid16("plus", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            line(g, 8, 2.8, 8, 13.2);
+            line(g, 2.8, 8, 13.2, 8);
         });
     }
 
-    public static Icon minus(Color color) {
-        return minus(color, 14);
-    }
+    public static Icon minus(Color color) { return minus(color, 14); }
 
     public static Icon minus(Color color, int size) {
-        return cached("minus", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int m = s / 2;
-            g.drawLine(x + 3, y + m, x + s - 3, y + m);
+        return grid16("minus", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            line(g, 2.8, 8, 13.2, 8);
         });
     }
 
-    public static Icon search(Color color) {
-        return search(color, 14);
-    }
+    public static Icon search(Color color) { return search(color, 14); }
 
     public static Icon search(Color color, int size) {
-        return cached("search", color, size, (c, g, x, y, s, col) -> {
-            int r = s - 6;
-            g.drawOval(x + 2, y + 2, r, r);
-            g.setStroke(STROKE_16);
-            g.drawLine(x + r, y + r, x + s - 2, y + s - 2);
+        return grid16("search", color, size, (g, col) -> {
+            Ellipse2D lens = new Ellipse2D.Double(2.3, 2.3, 8.6, 8.6);
+            wash(g, lens);
+            g.draw(lens);
+            g.setStroke(STROKE_BOLD);
+            line(g, 9.8, 9.8, 13.7, 13.7);
         });
     }
 
-    public static Icon target(Color color) {
-        return cached("target", color, 14, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 2, y + 2, s - 4, s - 4);
-            g.drawOval(x + 5, y + 5, s - 10, s - 10);
-            g.fillOval(x + 6, y + 6, 2, 2);
+    public static Icon target(Color color) { return target(color, 14); }
+
+    public static Icon target(Color color, int size) {
+        return grid16("target", color, size, (g, col) -> {
+            oval(g, 2.2, 2.2, 11.6, 11.6);
+            oval(g, 5.2, 5.2, 5.6, 5.6);
+            fillRect(g, 7.1, 7.1, 1.8, 1.8);
         });
     }
 
-    public static Icon sliders(Color color) {
-        return cached("sliders", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 2, y + 4, x + s - 2, y + 4);
-            g.drawLine(x + 2, y + 10, x + s - 2, y + 10);
-            g.fillOval(x + 4, y + 2, 4, 4);
-            g.fillOval(x + 7, y + 8, 4, 4);
+    public static Icon sliders(Color color) { return sliders(color, 14); }
+
+    public static Icon sliders(Color color, int size) {
+        return grid16("sliders", color, size, (g, col) -> {
+            line(g, 2, 4.5, 14, 4.5);
+            line(g, 2, 11.5, 14, 11.5);
+            fillRect(g, 4.5, 2.5, 3, 4);
+            fillRect(g, 8.8, 9.5, 3, 4);
         });
     }
 
-    public static Icon edit(Color color) {
-        return edit(color, 14);
-    }
+    public static Icon edit(Color color) { return edit(color, 14); }
 
     public static Icon edit(Color color, int size) {
-        return cached("edit", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 3, y + s - 3, x + s - 3, y + 3);
-            g.drawLine(x + 2, y + s - 2, x + 5, y + s - 3);
-            g.drawLine(x + s - 4, y + 2, x + s - 2, y + 4);
+        return grid16("edit", color, size, (g, col) -> {
+            Path2D p = poly(true, 2.5, 13.5, 3.2, 9.8, 10.6, 2.4, 13.6, 5.4, 6.2, 12.8);
+            wash(g, p);
+            g.draw(p);
+            line(g, 8.8, 4.2, 11.8, 7.2);
         });
     }
 
-    public static Icon branch(Color color) {
-        return branch(color, 14);
-    }
+    public static Icon branch(Color color) { return branch(color, 14); }
 
     public static Icon branch(Color color, int size) {
-        return cached("branch", color, size, (c, g, x, y, s, col) -> {
-            int lx = x + Math.max(3, s / 4);
-            int rx = x + s - Math.max(4, s / 3);
-            int midY = y + s / 2;
-            g.drawLine(lx, y + 3, lx, y + s - 3);
-            g.drawLine(lx, midY, rx, midY);
-            g.drawLine(rx, midY, rx, y + 4);
-            g.fillOval(lx - 2, y + 1, 4, 4);
-            g.fillOval(lx - 2, y + s - 5, 4, 4);
-            g.fillOval(rx - 2, y + 1, 4, 4);
+        return grid16("branch", color, size, (g, col) -> {
+            rect(g, 2.5, 2, 3.4, 3.4);
+            rect(g, 2.5, 10.6, 3.4, 3.4);
+            rect(g, 10.1, 2, 3.4, 3.4);
+            line(g, 4.2, 5.4, 4.2, 10.6);
+            g.draw(poly(false, 4.2, 8.2, 11.8, 8.2, 11.8, 5.4));
         });
     }
 
-    public static Icon arrowUp(Color color) {
-        return cached("up", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + s / 2, y + 3, x + s / 2, y + s - 3);
-            g.drawLine(x + s / 2 - 3, y + 6, x + s / 2, y + 3);
-            g.drawLine(x + s / 2 + 3, y + 6, x + s / 2, y + 3);
+    public static Icon arrowUp(Color color) { return arrowUp(color, 14); }
+
+    public static Icon arrowUp(Color color, int size) {
+        return grid16("arrowUp", color, size, (g, col) -> {
+            line(g, 8, 13.2, 8, 2.8);
+            g.draw(poly(false, 4.2, 6.5, 8, 2.8, 11.8, 6.5));
         });
     }
 
-    public static Icon arrowDown(Color color) {
-        return cached("down", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + s / 2, y + 3, x + s / 2, y + s - 3);
-            g.drawLine(x + s / 2 - 3, y + s - 6, x + s / 2, y + s - 3);
-            g.drawLine(x + s / 2 + 3, y + s - 6, x + s / 2, y + s - 3);
+    public static Icon arrowDown(Color color) { return arrowDown(color, 14); }
+
+    public static Icon arrowDown(Color color, int size) {
+        return grid16("arrowDown", color, size, (g, col) -> {
+            line(g, 8, 2.8, 8, 13.2);
+            g.draw(poly(false, 4.2, 9.5, 8, 13.2, 11.8, 9.5));
         });
     }
 
-    public static Icon arrowRight(Color color) {
-        return cached("right", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 3, y + s / 2, x + s - 3, y + s / 2);
-            g.drawLine(x + s - 6, y + s / 2 - 3, x + s - 3, y + s / 2);
-            g.drawLine(x + s - 6, y + s / 2 + 3, x + s - 3, y + s / 2);
+    public static Icon arrowRight(Color color) { return arrowRight(color, 14); }
+
+    public static Icon arrowRight(Color color, int size) {
+        return grid16("arrowRight", color, size, (g, col) -> {
+            line(g, 2.5, 8, 13.2, 8);
+            g.draw(poly(false, 9.5, 4.2, 13.2, 8, 9.5, 11.8));
         });
     }
 
-    public static Icon compass(Color color) {
-        return cached("compass", color, 14, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 2, y + 2, s - 4, s - 4);
-            g.drawLine(x + 5, y + s - 5, x + s - 5, y + 5);
-            g.fillOval(x + 6, y + 6, 2, 2);
+    public static Icon compass(Color color) { return compass(color, 14); }
+
+    public static Icon compass(Color color, int size) {
+        return grid16("compass", color, size, (g, col) -> {
+            oval(g, 2, 2, 12, 12);
+            Path2D needle = poly(true, 10.8, 5.2, 9.2, 9.2, 5.2, 10.8, 6.8, 6.8);
+            wash(g, needle);
+            g.draw(needle);
         });
     }
 
-    public static Icon clock(Color color) {
-        return clock(color, 14);
-    }
+    public static Icon clock(Color color) { return clock(color, 14); }
 
     public static Icon clock(Color color, int size) {
-        return cached("clock", color, size, (c, g, x, y, s, col) -> {
-            int p = s >= 14 ? 2 : 1;
-            g.drawOval(x + p, y + p, s - p * 2 - (s < 14 ? 1 : 0), s - p * 2 - (s < 14 ? 1 : 0));
-            g.drawLine(x + s / 2, y + Math.max(3, s / 4), x + s / 2, y + s / 2);
-            g.drawLine(x + s / 2, y + s / 2, x + s - Math.max(3, s / 4), y + s / 2);
+        return grid16("clock", color, size, (g, col) -> {
+            Ellipse2D face = new Ellipse2D.Double(2, 2, 12, 12);
+            wash(g, face);
+            g.draw(face);
+            g.draw(poly(false, 8, 4.6, 8, 8.2, 10.8, 9.8));
         });
     }
 
-    public static Icon bolt(Color color) {
-        return bolt(color, 14);
-    }
+    public static Icon bolt(Color color) { return bolt(color, 14); }
 
     public static Icon bolt(Color color, int size) {
-        return cached("bolt", color, size, (c, g, x, y, s, col) -> {
-            int[] xs = {x + (s * 8) / 14, x + (s * 3) / 14, x + (s * 7) / 14, x + (s * 6) / 14, x + (s * 11) / 14, x + (s * 7) / 14};
-            int[] ys = {y + 1, y + (s * 8) / 14, y + (s * 8) / 14, y + s - 1, y + (s * 6) / 14, y + (s * 6) / 14};
-            g.drawPolygon(xs, ys, 6);
+        return grid16("bolt", color, size, (g, col) -> {
+            Path2D p = poly(true, 9, 1.8, 3.2, 8.8, 7.6, 8.8, 6.8, 14.2, 12.8, 7.2, 8.4, 7.2);
+            wash(g, p);
+            g.draw(p);
         });
     }
 
-    public static Icon globe(Color color) {
-        return cached("globe", color, 14, (c, g, x, y, s, col) -> {
-            g.drawOval(x + 2, y + 2, s - 4, s - 4);
-            g.drawOval(x + 5, y + 2, s - 10, s - 4);
-            g.drawLine(x + 2, y + s / 2, x + s - 2, y + s / 2);
+    public static Icon globe(Color color) { return globe(color, 14); }
+
+    public static Icon globe(Color color, int size) {
+        return grid16("globe", color, size, (g, col) -> {
+            Ellipse2D c = new Ellipse2D.Double(2, 2, 12, 12);
+            wash(g, c);
+            g.draw(c);
+            oval(g, 5.2, 2, 5.6, 12);
+            line(g, 2.2, 8, 13.8, 8);
         });
     }
 
-    public static Icon clean(Color color) {
-        return cached("clean", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 3, y + 4, x + s - 3, y + 4);
-            g.drawLine(x + 2, y + 7, x + s - 2, y + 7);
-            g.drawLine(x + 4, y + 10, x + s - 4, y + 10);
+    public static Icon clean(Color color) { return clean(color, 14); }
+
+    public static Icon clean(Color color, int size) {
+        return grid16("clean", color, size, (g, col) -> {
+            line(g, 9.5, 2.2, 6.5, 7);
+            Path2D broom = poly(true, 3.5, 7, 10.5, 7, 13, 13.5, 2, 13.5);
+            wash(g, broom);
+            g.draw(broom);
+            line(g, 6, 10.5, 5.5, 13.5);
+            line(g, 9, 10.5, 9.5, 13.5);
         });
     }
 
-    public static Icon chevronDown(Color color) {
-        return chevronDown(color, 12);
-    }
+    public static Icon chevronDown(Color color) { return chevronDown(color, 12); }
 
     public static Icon chevronDown(Color color, int size) {
-        return cached("chevD", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int midX = x + s / 2;
-            int topY = y + s / 3;
-            int botY = y + (s * 2) / 3;
-            g.drawLine(x + 2, topY, midX, botY);
-            g.drawLine(midX, botY, x + s - 2, topY);
+        return grid16("chevDown", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            g.draw(poly(false, 3.5, 6, 8, 10.5, 12.5, 6));
         });
     }
 
-    public static Icon chevronRight(Color color) {
-        return chevronRight(color, 12);
-    }
+    public static Icon chevronRight(Color color) { return chevronRight(color, 12); }
 
     public static Icon chevronRight(Color color, int size) {
-        return cached("chevR", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int midY = y + s / 2;
-            int leftX = x + s / 3;
-            int rightX = x + (s * 2) / 3;
-            g.drawLine(leftX, y + 2, rightX, midY);
-            g.drawLine(rightX, midY, leftX, y + s - 2);
+        return grid16("chevRight", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            g.draw(poly(false, 6, 3.5, 10.5, 8, 6, 12.5));
         });
     }
 
     public static Icon chevronLeft(Color color, int size) {
-        return cached("chevL", color, size, (c, g, x, y, s, col) -> {
-            g.setStroke(STROKE_16);
-            int midY = y + s / 2;
-            int rightX = x + (s * 2) / 3;
-            int leftX = x + s / 3;
-            g.drawLine(rightX, y + 2, leftX, midY);
-            g.drawLine(leftX, midY, rightX, y + s - 2);
+        return grid16("chevLeft", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            g.draw(poly(false, 10, 3.5, 5.5, 8, 10, 12.5));
         });
     }
 
-    public static Icon codeBraces(Color color) {
-        return cached("braces", color, 14, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 5, y + 3, x + 3, y + 4);
-            g.drawLine(x + 3, y + 4, x + 3, y + s / 2 - 1);
-            g.drawLine(x + 3, y + s / 2 - 1, x + 2, y + s / 2);
-            g.drawLine(x + 2, y + s / 2, x + 3, y + s / 2 + 1);
-            g.drawLine(x + 3, y + s / 2 + 1, x + 3, y + s - 4);
-            g.drawLine(x + 3, y + s - 4, x + 5, y + s - 3);
-            g.drawLine(x + s - 5, y + 3, x + s - 3, y + 4);
-            g.drawLine(x + s - 3, y + 4, x + s - 3, y + s / 2 - 1);
-            g.drawLine(x + s - 3, y + s / 2 - 1, x + s - 2, y + s / 2);
-            g.drawLine(x + s - 2, y + s / 2, x + s - 3, y + s / 2 + 1);
-            g.drawLine(x + s - 3, y + s / 2 + 1, x + s - 3, y + s - 4);
-            g.drawLine(x + s - 3, y + s - 4, x + s - 5, y + s - 3);
+    public static Icon codeBraces(Color color) { return codeBraces(color, 14); }
+
+    public static Icon codeBraces(Color color, int size) {
+        return grid16("codeBraces", color, size, (g, col) -> {
+            g.draw(poly(false, 6, 2.5, 4.2, 2.5, 4.2, 6.8, 2.5, 8, 4.2, 9.2, 4.2, 13.5, 6, 13.5));
+            g.draw(poly(false, 10, 2.5, 11.8, 2.5, 11.8, 6.8, 13.5, 8, 11.8, 9.2, 11.8, 13.5, 10, 13.5));
         });
     }
 
-    public static Icon link(Color color, int size) {
-        return cached("link", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 1, y + s / 2 - 2, s / 2, 5);
-            g.drawRect(x + s / 2 - 1, y + s / 2 - 3, s / 2, 5);
-        });
-    }
-
-    public static Icon buttonNode(Color color, int size) {
-        return cached("btnNode", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 1, y + 3, s - 3, s - 6);
-            g.fillRect(x + 4, y + s / 2 - 1, s - 8, 2);
-        });
-    }
-
-    public static Icon iconNode(Color color, int size) {
-        return cached("iconNode", color, size, (c, g, x, y, s, col) -> {
-            int m = s / 2;
-            int[] xs = {x + m, x + s - 2, x + m, x + 2};
-            int[] ys = {y + 2, y + m, y + s - 2, y + m};
-            g.drawPolygon(xs, ys, 4);
-            g.fillRect(x + m - 1, y + m - 1, 2, 2);
-        });
-    }
-
-    public static Icon tabNode(Color color, int size) {
-        return cached("tabNode", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 1, y + 4, s - 3, s - 6);
-            g.fillRect(x + 1, y + 2, (s - 2) / 2, 3);
-        });
-    }
-
-    public static Icon modalNode(Color color, int size) {
-        return cached("modalNode", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 1, y + 2, s - 3, s - 4);
-            g.drawLine(x + 1, y + 5, x + s - 2, y + 5);
-            g.fillRect(x + s - 4, y + 3, 2, 1);
-        });
-    }
-
-    public static Icon formNode(Color color, int size) {
-        return cached("formNode", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 2, y + 2, s - 4, 3);
-            g.drawRect(x + 2, y + 7, s - 4, 3);
-            g.fillRect(x + s - 5, y + s - 3, 3, 2);
-        });
-    }
-
-    /** Crisp stacked-bars cluster glyph (distinct from folder icon). */
     public static Icon cluster(Color color, int size) {
-        return cached("cluster", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 2, y + 2, x + 2, y + s - 2);
-            g.drawLine(x + 2, y + 2, x + 4, y + 2);
-            g.drawLine(x + 2, y + s - 2, x + 4, y + s - 2);
-            g.fillRect(x + 5, y + 3, s - 7, 2);
-            g.fillRect(x + 5, y + s / 2 - 1, s - 7, 2);
-            g.fillRect(x + 5, y + s - 5, s - 9, 2);
+        return grid16("cluster", color, size, (g, col) -> {
+            Stroke prev = g.getStroke();
+            g.setStroke(STROKE_DASH);
+            rect(g, 1.8, 1.8, 12.4, 12.4);
+            g.setStroke(prev);
+            Rectangle2D a = new Rectangle2D.Double(4, 4, 3.3, 3.3);
+            Rectangle2D b = new Rectangle2D.Double(8.7, 4, 3.3, 3.3);
+            Rectangle2D c = new Rectangle2D.Double(4, 8.7, 8, 3.3);
+            wash(g, a);
+            wash(g, b);
+            wash(g, c);
+            g.draw(a);
+            g.draw(b);
+            g.draw(c);
         });
     }
 
-    /** Focus / isolate square crosshair glyph. */
     public static Icon focus(Color color, int size) {
-        return cached("focus", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 2, y + 2, s - 5, s - 5);
-            int m = s / 2;
-            g.fillRect(x + m - 1, y + m - 1, 3, 3);
-            g.drawLine(x + m, y + 0, x + m, y + 2);
-            g.drawLine(x + m, y + s - 3, x + m, y + s - 1);
-            g.drawLine(x + 0, y + m, x + 2, y + m);
-            g.drawLine(x + s - 3, y + m, x + s - 1, y + m);
+        return grid16("focus", color, size, (g, col) -> {
+            g.draw(poly(false, 2.2, 5.5, 2.2, 2.2, 5.5, 2.2));
+            g.draw(poly(false, 10.5, 2.2, 13.8, 2.2, 13.8, 5.5));
+            g.draw(poly(false, 13.8, 10.5, 13.8, 13.8, 10.5, 13.8));
+            g.draw(poly(false, 5.5, 13.8, 2.2, 13.8, 2.2, 10.5));
+            fillRect(g, 6.5, 6.5, 3, 3);
         });
     }
 
     public static Icon tag(Color color, int size) {
-        return cached("tag", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + 2, y + 3);
-            p.lineTo(x + s - 5, y + 3);
-            p.lineTo(x + s - 2, y + s / 2.0);
-            p.lineTo(x + s - 5, y + s - 3);
-            p.lineTo(x + 2, y + s - 3);
-            p.closePath();
+        return grid16("tag", color, size, (g, col) -> {
+            Path2D p = poly(true, 2.2, 2.2, 8.2, 2.2, 13.8, 7.8, 7.8, 13.8, 2.2, 8.2);
+            wash(g, p);
             g.draw(p);
-            g.fillRect(x + 4, y + s / 2 - 1, 2, 2);
+            fillRect(g, 4.6, 4.6, 1.8, 1.8);
         });
     }
 
     public static Icon star(Color color, int size) {
-        return cached("star", color, size, (c, g, x, y, s, col) -> {
-            double cx = x + s / 2.0;
-            double cy = y + s / 2.0;
-            double outer = s * 0.44;
-            double inner = s * 0.20;
-            Path2D p = new Path2D.Float();
+        return grid16("star", color, size, (g, col) -> {
+            Path2D p = new Path2D.Double();
             for (int i = 0; i < 10; i++) {
-                double r = (i % 2 == 0) ? outer : inner;
                 double a = -Math.PI / 2.0 + i * Math.PI / 5.0;
-                double px = cx + Math.cos(a) * r;
-                double py = cy + Math.sin(a) * r;
-                if (i == 0) p.moveTo(px, py); else p.lineTo(px, py);
+                double r = (i % 2 == 0) ? 6.2 : 2.8;
+                double px = 8 + Math.cos(a) * r;
+                double py = 8.2 + Math.sin(a) * r;
+                if (i == 0) {
+                    p.moveTo(px, py);
+                } else {
+                    p.lineTo(px, py);
+                }
             }
             p.closePath();
-            g.fill(p);
-        });
-    }
-
-    public static Icon bell(Color color, int size) {
-        return cached("bell", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 3, y + 3, s - 6, s - 7);
-            g.drawLine(x + 2, y + s - 4, x + s - 2, y + s - 4);
-            g.fillRect(x + s / 2 - 1, y + s - 2, 2, 2);
-        });
-    }
-
-    public static Icon cart(Color color, int size) {
-        return cached("cart", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 1, y + 3, x + 3, y + 3);
-            g.drawRect(x + 3, y + 4, s - 5, s - 8);
-            g.fillRect(x + 4, y + s - 3, 2, 2);
-            g.fillRect(x + s - 4, y + s - 3, 2, 2);
-        });
-    }
-
-    public static Icon lock(Color color, int size) {
-        return cached("lock", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 3, y + 6, s - 6, s - 8);
-            g.drawRect(x + 4, y + 2, s - 8, 4);
-        });
-    }
-
-    public static Icon key(Color color, int size) {
-        return cached("key", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 2, y + s / 2 - 2, 4, 4);
-            g.drawLine(x + 6, y + s / 2, x + s - 2, y + s / 2);
-            g.drawLine(x + s - 4, y + s / 2, x + s - 4, y + s / 2 + 2);
-            g.drawLine(x + s - 2, y + s / 2, x + s - 2, y + s / 2 + 2);
-        });
-    }
-
-    public static Icon database(Color color, int size) {
-        return cached("db", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 2, y + 2, s - 4, 3);
-            g.drawRect(x + 2, y + 5, s - 4, 3);
-            g.drawRect(x + 2, y + 8, s - 4, 3);
-        });
-    }
-
-    public static Icon shield(Color color, int size) {
-        return cached("shield", color, size, (c, g, x, y, s, col) -> {
-            Path2D p = new Path2D.Float();
-            p.moveTo(x + s / 2.0, y + 2);
-            p.lineTo(x + s - 2, y + 4);
-            p.lineTo(x + s - 3, y + s - 5);
-            p.lineTo(x + s / 2.0, y + s - 2);
-            p.lineTo(x + 3, y + s - 5);
-            p.lineTo(x + 2, y + 4);
-            p.closePath();
+            wash(g, p);
             g.draw(p);
         });
     }
 
-    public static Icon terminal(Color color, int size) {
-        return cached("term", color, size, (c, g, x, y, s, col) -> {
-            g.drawRect(x + 1, y + 2, s - 3, s - 4);
-            g.drawLine(x + 3, y + 5, x + 5, y + 7);
-            g.drawLine(x + 5, y + 7, x + 3, y + 9);
-            g.drawLine(x + 7, y + 9, x + s - 4, y + 9);
-        });
-    }
-
     public static Icon compare(Color color, int size) {
-        return cached("cmp", color, size, (c, g, x, y, s, col) -> {
-            g.drawLine(x + 2, y + 5, x + s - 2, y + 5);
-            g.drawLine(x + s - 5, y + 3, x + s - 2, y + 5);
-            g.drawLine(x + s - 5, y + 7, x + s - 2, y + 5);
-            g.drawLine(x + 2, y + s - 5, x + s - 2, y + s - 5);
-            g.drawLine(x + 5, y + s - 7, x + 2, y + s - 5);
-            g.drawLine(x + 5, y + s - 3, x + 2, y + s - 5);
+        return grid16("cmp", color, size, (g, col) -> {
+            line(g, 2.5, 5.2, 13.5, 5.2);
+            g.draw(poly(false, 10.2, 2.6, 13.5, 5.2, 10.2, 7.8));
+            line(g, 2.5, 10.8, 13.5, 10.8);
+            g.draw(poly(false, 5.8, 8.2, 2.5, 10.8, 5.8, 13.4));
         });
     }
 
-    /** Maps a semantic colorKey string ("info", "accent", "warn", "purple", "teal", "bad", "ok", "muted") to a Theme.Token. */
+    // ------------------------------------------------------------------ V2.1 Action Workbench & Display Icons
+    public static Icon workbench(Color color, int size) {
+        return grid16("workbench", color, size, (g, col) -> {
+            Rectangle2D box = new Rectangle2D.Double(1.8, 2.2, 12.4, 11.6);
+            wash(g, box);
+            g.draw(box);
+            line(g, 1.8, 5.4, 14.2, 5.4);
+            line(g, 6.2, 5.4, 6.2, 13.8);
+            Path2D bolt = poly(false, 10.8, 7, 8.6, 9.8, 10.6, 9.8, 9.2, 12.4);
+            g.draw(bolt);
+        });
+    }
+
+    public static Icon strategyShield(Color color, int size) {
+        return grid16("stratShield", color, size, (g, col) -> {
+            Path2D p = poly(true, 8, 1.8, 13.8, 4.2, 13, 10.4, 8, 14.2, 3, 10.4, 2.2, 4.2);
+            wash(g, p);
+            g.draw(p);
+            line(g, 6, 8, 10, 8);
+        });
+    }
+
+    public static Icon strategySnapshot(Color color, int size) {
+        return grid16("stratSnap", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 3, 12, 10);
+            wash(g, r);
+            g.draw(r);
+            g.draw(poly(false, 5, 8.2, 7.2, 10.4, 11.2, 5.8));
+        });
+    }
+
+    public static Icon strategySwap(Color color, int size) {
+        return grid16("stratSwap", color, size, (g, col) -> {
+            Rectangle2D a = new Rectangle2D.Double(1.8, 2.2, 5.2, 5.2);
+            Rectangle2D b = new Rectangle2D.Double(9, 8.6, 5.2, 5.2);
+            wash(g, a);
+            wash(g, b);
+            g.draw(a);
+            g.draw(b);
+            g.draw(poly(false, 8.8, 4.2, 12.2, 4.2, 12.2, 7));
+            g.draw(poly(false, 7.2, 11.8, 3.8, 11.8, 3.8, 9));
+        });
+    }
+
+    public static Icon strategyChain(Color color, int size) {
+        return grid16("stratChain", color, size, (g, col) -> {
+            Rectangle2D left = new Rectangle2D.Double(1.6, 5, 4.4, 6);
+            Rectangle2D right = new Rectangle2D.Double(10, 5, 4.4, 6);
+            wash(g, left);
+            wash(g, right);
+            g.draw(left);
+            g.draw(right);
+            line(g, 6, 8, 10, 8);
+            g.draw(poly(false, 8.2, 6, 10, 8, 8.2, 10));
+        });
+    }
+
+    public static Icon idPool(Color color, int size) {
+        return grid16("idPool", color, size, (g, col) -> {
+            Rectangle2D top = new Rectangle2D.Double(2, 2.2, 12, 3.4);
+            Rectangle2D mid = new Rectangle2D.Double(2, 6.3, 12, 3.4);
+            Rectangle2D bot = new Rectangle2D.Double(2, 10.4, 12, 3.4);
+            wash(g, top);
+            g.draw(top);
+            g.draw(mid);
+            g.draw(bot);
+            fillRect(g, 11, 3.3, 1.4, 1.4);
+            fillRect(g, 11, 7.4, 1.4, 1.4);
+            fillRect(g, 11, 11.5, 1.4, 1.4);
+        });
+    }
+
+    public static Icon displayMode(Color color, int size) {
+        return grid16("displayMode", color, size, (g, col) -> {
+            Rectangle2D box = new Rectangle2D.Double(1.8, 2.5, 12.4, 11);
+            wash(g, box);
+            g.draw(box);
+            line(g, 5.8, 2.5, 5.8, 13.5);
+            line(g, 7.8, 6, 12.2, 6);
+            line(g, 7.8, 9.8, 11.2, 9.8);
+            fillRect(g, 3.2, 5.2, 1.4, 1.4);
+            fillRect(g, 3.2, 9, 1.4, 1.4);
+        });
+    }
+
+    public static Icon fontGlyph(Color color, int size) {
+        return grid16("fontGlyph", color, size, (g, col) -> {
+            g.draw(poly(false, 2.5, 13, 6.2, 3, 9.8, 13));
+            line(g, 3.8, 9.8, 8.6, 9.8);
+            line(g, 11.5, 6.5, 14, 6.5);
+            line(g, 12.7, 6.5, 12.7, 13);
+        });
+    }
+
+    public static Icon palette(Color color, int size) {
+        return grid16("palette", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2, 12, 12);
+            wash(g, r);
+            g.draw(r);
+            fillRect(g, 4.2, 4.2, 2.6, 2.6);
+            fillRect(g, 9.2, 4.2, 2.6, 2.6);
+            fillRect(g, 4.2, 9.2, 2.6, 2.6);
+            rect(g, 9.2, 9.2, 2.6, 2.6);
+        });
+    }
+
+    public static Icon playTest(Color color, int size) {
+        return grid16("playTest", color, size, (g, col) -> {
+            rect(g, 2, 2, 12, 12);
+            Path2D tri = poly(true, 6.2, 4.8, 11.4, 8, 6.2, 11.2);
+            wash(g, tri);
+            g.draw(tri);
+        });
+    }
+
+    // ------------------------------------------------------------------ 42 Node Vector Icons
+    public static Icon link(Color color, int size) {
+        return grid16("link", color, size, (g, col) -> {
+            rect(g, 1.8, 5.5, 5.4, 5);
+            rect(g, 8.8, 5.5, 5.4, 5);
+            line(g, 5.5, 8, 10.5, 8);
+        });
+    }
+
+    public static Icon buttonNode(Color color, int size) {
+        return grid16("btnNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 4.2, 12.4, 7.6);
+            wash(g, r);
+            g.draw(r);
+            line(g, 4.8, 8, 11.2, 8);
+        });
+    }
+
+    public static Icon iconNode(Color color, int size) {
+        return grid16("icNode", color, size, (g, col) -> {
+            Path2D d = poly(true, 8, 2, 14, 8, 8, 14, 2, 8);
+            wash(g, d);
+            g.draw(d);
+            fillRect(g, 7, 7, 2, 2);
+        });
+    }
+
+    public static Icon tabNode(Color color, int size) {
+        return grid16("tabNode", color, size, (g, col) -> {
+            Path2D tab = poly(true, 2, 3, 7.2, 3, 8.4, 5.5, 14, 5.5, 14, 13, 2, 13);
+            wash(g, tab);
+            g.draw(tab);
+            line(g, 2, 5.8, 14, 5.8);
+        });
+    }
+
+    public static Icon modalNode(Color color, int size) {
+        return grid16("modalNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2.4, 12, 11.2);
+            wash(g, r);
+            g.draw(r);
+            line(g, 2, 5.6, 14, 5.6);
+            fillRect(g, 11.2, 3.6, 1.4, 1.2);
+            line(g, 4.2, 8.8, 11.8, 8.8);
+            line(g, 4.2, 11.2, 9.2, 11.2);
+        });
+    }
+
+    public static Icon formNode(Color color, int size) {
+        return grid16("formNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2, 12, 12);
+            wash(g, r);
+            g.draw(r);
+            rect(g, 4.2, 4.2, 7.6, 2.4);
+            rect(g, 4.2, 8.2, 7.6, 2.4);
+            line(g, 7.5, 12.2, 11.8, 12.2);
+        });
+    }
+
+    public static Icon bell(Color color, int size) {
+        return grid16("bell", color, size, (g, col) -> {
+            Path2D b = poly(true, 3, 11.2, 4.2, 5.5, 6.2, 3, 9.8, 3, 11.8, 5.5, 13, 11.2);
+            wash(g, b);
+            g.draw(b);
+            line(g, 2, 11.2, 14, 11.2);
+            line(g, 6.8, 13.4, 9.2, 13.4);
+        });
+    }
+
+    public static Icon cart(Color color, int size) {
+        return grid16("cart", color, size, (g, col) -> {
+            g.draw(poly(false, 1.8, 3, 4, 3, 5.4, 10.5, 12.6, 10.5, 14, 5, 4.6, 5));
+            fillRect(g, 5.6, 12.4, 2, 2);
+            fillRect(g, 10.8, 12.4, 2, 2);
+        });
+    }
+
+    public static Icon lock(Color color, int size) {
+        return grid16("lock", color, size, (g, col) -> {
+            Rectangle2D body = new Rectangle2D.Double(3, 7, 10, 7);
+            wash(g, body);
+            g.draw(body);
+            g.draw(poly(false, 5, 7, 5, 3.8, 6.5, 2.2, 9.5, 2.2, 11, 3.8, 11, 7));
+            fillRect(g, 7.2, 9.5, 1.6, 2.4);
+        });
+    }
+
+    public static Icon key(Color color, int size) {
+        return grid16("key", color, size, (g, col) -> {
+            Rectangle2D head = new Rectangle2D.Double(2, 5.5, 5, 5);
+            wash(g, head);
+            g.draw(head);
+            line(g, 7, 8, 14, 8);
+            line(g, 11.2, 8, 11.2, 10.8);
+            line(g, 13.5, 8, 13.5, 10.2);
+        });
+    }
+
+    public static Icon database(Color color, int size) {
+        return grid16("db", color, size, (g, col) -> {
+            Rectangle2D r1 = new Rectangle2D.Double(2.5, 2.2, 11, 3.6);
+            Rectangle2D r2 = new Rectangle2D.Double(2.5, 6.2, 11, 3.6);
+            Rectangle2D r3 = new Rectangle2D.Double(2.5, 10.2, 11, 3.6);
+            wash(g, r1);
+            g.draw(r1);
+            g.draw(r2);
+            g.draw(r3);
+        });
+    }
+
+    public static Icon shield(Color color, int size) {
+        return grid16("shield", color, size, (g, col) -> {
+            Path2D p = poly(true, 8, 1.8, 13.8, 4, 13, 10.2, 8, 14.2, 3, 10.2, 2.2, 4);
+            wash(g, p);
+            g.draw(p);
+            g.draw(poly(false, 5.6, 8.2, 7.4, 10, 10.8, 6.2));
+        });
+    }
+
+    public static Icon terminal(Color color, int size) {
+        return grid16("term", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 2.5, 12.4, 11);
+            wash(g, r);
+            g.draw(r);
+            g.draw(poly(false, 4.2, 6, 6.8, 8.2, 4.2, 10.4));
+            line(g, 8.2, 10.4, 11.8, 10.4);
+        });
+    }
+
+    public static Icon sidebar(Color color, int size) {
+        return grid16("sidebar", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 2.2, 12, 11.6);
+            wash(g, r);
+            g.draw(r);
+            line(g, 6.2, 2.2, 6.2, 13.8);
+            line(g, 3.6, 5, 4.8, 5);
+            line(g, 3.6, 7.8, 4.8, 7.8);
+        });
+    }
+
+    public static Icon menu(Color color, int size) {
+        return grid16("menu", color, size, (g, col) -> {
+            g.setStroke(STROKE_BOLD);
+            line(g, 2.5, 4, 13.5, 4);
+            line(g, 2.5, 8, 13.5, 8);
+            line(g, 2.5, 12, 10.5, 12);
+        });
+    }
+
+    public static Icon home(Color color, int size) {
+        return grid16("home", color, size, (g, col) -> {
+            Path2D p = poly(true, 2, 7.6, 8, 2.2, 14, 7.6, 12.5, 7.6, 12.5, 13.8, 3.5, 13.8, 3.5, 7.6);
+            wash(g, p);
+            g.draw(p);
+            rect(g, 6.6, 9.6, 2.8, 4.2);
+        });
+    }
+
+    public static Icon layers(Color color, int size) {
+        return grid16("layers", color, size, (g, col) -> {
+            Path2D top = poly(true, 8, 2.2, 14, 5.6, 8, 9, 2, 5.6);
+            wash(g, top);
+            g.draw(top);
+            g.draw(poly(false, 2, 8.8, 8, 12.2, 14, 8.8));
+            g.draw(poly(false, 2, 11.6, 8, 14.4, 14, 11.6));
+        });
+    }
+
+    public static Icon sitemap(Color color, int size) {
+        return grid16("sitemap", color, size, (g, col) -> {
+            Rectangle2D top = new Rectangle2D.Double(6, 2, 4, 3.2);
+            wash(g, top);
+            g.draw(top);
+            rect(g, 2, 10.8, 3.4, 3);
+            rect(g, 6.3, 10.8, 3.4, 3);
+            rect(g, 10.6, 10.8, 3.4, 3);
+            line(g, 8, 5.2, 8, 10.8);
+            line(g, 3.7, 8, 12.3, 8);
+            line(g, 3.7, 8, 3.7, 10.8);
+            line(g, 12.3, 8, 12.3, 10.8);
+        });
+    }
+
+    public static Icon inputNode(Color color, int size) {
+        return grid16("inputNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 4.2, 12.4, 7.6);
+            wash(g, r);
+            g.draw(r);
+            line(g, 5, 6, 5, 10);
+        });
+    }
+
+    public static Icon dropdownNode(Color color, int size) {
+        return grid16("dropNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 3.5, 12.4, 9);
+            wash(g, r);
+            g.draw(r);
+            line(g, 9.6, 3.5, 9.6, 12.5);
+            g.draw(poly(false, 10.8, 7.2, 12, 8.8, 13.2, 7.2));
+            line(g, 3.8, 8, 7.8, 8);
+        });
+    }
+
+    public static Icon toggleNode(Color color, int size) {
+        return grid16("toggleNode", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 4.8, 12.4, 6.4);
+            wash(g, r);
+            g.draw(r);
+            fillRect(g, 9.2, 6.2, 3.6, 3.6);
+        });
+    }
+
+    public static Icon creditCard(Color color, int size) {
+        return grid16("card", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 3.4, 12.4, 9.2);
+            wash(g, r);
+            g.draw(r);
+            line(g, 1.8, 6.5, 14.2, 6.5);
+            line(g, 4, 10, 7.4, 10);
+        });
+    }
+
+    public static Icon receipt(Color color, int size) {
+        return grid16("receipt", color, size, (g, col) -> {
+            Path2D p = poly(true, 3, 2, 13, 2, 13, 14, 10.8, 12.4, 8, 14, 5.2, 12.4, 3, 14);
+            wash(g, p);
+            g.draw(p);
+            line(g, 5.2, 5.5, 10.8, 5.5);
+            line(g, 5.2, 8.5, 9.2, 8.5);
+        });
+    }
+
+    public static Icon mail(Color color, int size) {
+        return grid16("mail", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(1.8, 3.2, 12.4, 9.6);
+            wash(g, r);
+            g.draw(r);
+            g.draw(poly(false, 2.2, 3.8, 8, 8.6, 13.8, 3.8));
+        });
+    }
+
+    public static Icon chat(Color color, int size) {
+        return grid16("chat", color, size, (g, col) -> {
+            Path2D p = poly(true, 2, 2.5, 14, 2.5, 14, 11.2, 6.8, 11.2, 3.2, 14, 3.2, 11.2, 2, 11.2);
+            wash(g, p);
+            g.draw(p);
+            line(g, 4.6, 5.8, 11.4, 5.8);
+            line(g, 4.6, 8.4, 9.2, 8.4);
+        });
+    }
+
+    public static Icon calendar(Color color, int size) {
+        return grid16("calendar", color, size, (g, col) -> {
+            Rectangle2D r = new Rectangle2D.Double(2, 3.5, 12, 10.5);
+            wash(g, r);
+            g.draw(r);
+            line(g, 2, 6.8, 14, 6.8);
+            line(g, 5.2, 1.8, 5.2, 4.5);
+            line(g, 10.8, 1.8, 10.8, 4.5);
+            fillRect(g, 4.5, 9, 2, 2);
+            fillRect(g, 8.5, 9, 2, 2);
+        });
+    }
+
+    public static Icon chart(Color color, int size) {
+        return grid16("chart", color, size, (g, col) -> {
+            line(g, 2, 13.8, 14, 13.8);
+            Rectangle2D b1 = new Rectangle2D.Double(3, 8.5, 2.4, 5.3);
+            Rectangle2D b2 = new Rectangle2D.Double(6.8, 5, 2.4, 8.8);
+            Rectangle2D b3 = new Rectangle2D.Double(10.6, 2.5, 2.4, 11.3);
+            wash(g, b1);
+            wash(g, b2);
+            wash(g, b3);
+            g.draw(b1);
+            g.draw(b2);
+            g.draw(b3);
+        });
+    }
+
+    public static Icon server(Color color, int size) {
+        return grid16("server", color, size, (g, col) -> {
+            Rectangle2D top = new Rectangle2D.Double(2, 2.4, 12, 4.8);
+            Rectangle2D bot = new Rectangle2D.Double(2, 8.8, 12, 4.8);
+            wash(g, top);
+            wash(g, bot);
+            g.draw(top);
+            g.draw(bot);
+            fillRect(g, 4, 4.2, 1.5, 1.4);
+            fillRect(g, 4, 10.6, 1.5, 1.4);
+            line(g, 7.5, 4.8, 12, 4.8);
+            line(g, 7.5, 11.2, 12, 11.2);
+        });
+    }
+
+    public static Icon webhook(Color color, int size) {
+        return grid16("webhook", color, size, (g, col) -> {
+            oval(g, 6, 2, 4, 4);
+            oval(g, 2, 10, 4, 4);
+            oval(g, 10, 10, 4, 4);
+            line(g, 7.2, 5.8, 4.6, 10.2);
+            line(g, 8.8, 5.8, 11.4, 10.2);
+            line(g, 6, 12, 10, 12);
+        });
+    }
+
+    public static Icon flag(Color color, int size) {
+        return grid16("flag", color, size, (g, col) -> {
+            line(g, 3.2, 2, 3.2, 14.2);
+            Path2D f = poly(true, 3.2, 2.4, 13.4, 2.4, 11.2, 5.8, 13.4, 9.2, 3.2, 9.2);
+            wash(g, f);
+            g.draw(f);
+        });
+    }
+
+    // ------------------------------------------------------------------ NodeType resolution & custom icons
     public static Theme.Token tokenForKey(Theme t, String colorKey) {
-        if (colorKey == null) {
+        return t.tokenForColorKey(colorKey, null);
+    }
+
+    public static Theme.Token tokenForNodeType(Theme t, NodeTypeCatalog.NodeType nt) {
+        if (nt == null) {
             return t.info;
         }
-        return switch (colorKey.toLowerCase(java.util.Locale.ROOT)) {
-            case "accent" -> t.accent;
-            case "warn", "warning" -> t.warning;
-            case "purple", "dup" -> t.dup;
-            case "teal" -> t.teal;
-            case "bad", "danger" -> t.danger;
-            case "ok", "success" -> t.success;
-            case "muted", "neutral" -> t.neutral;
-            default -> t.info;
-        };
+        return t.tokenForColorKey(nt.colorKey(), nt.customHex());
     }
 
-    /** Resolves a NodeType's icon (custom image, monogram badge, or crisp vector icon). */
-    public static Icon nodeIcon(themythofcrawl.model.NodeTypeCatalog.NodeType nt, Theme t, int size) {
+    /** Resolves a NodeType's icon (embedded data-URI or file image, monogram 3 styles, or 42 vector icons). */
+    public static Icon nodeIcon(NodeTypeCatalog.NodeType nt, Theme t, int size) {
         if (nt == null) {
             return folder(t.info.text(), size);
         }
-        Color col = tokenForKey(t, nt.colorKey()).text();
+        Theme.Token tok = tokenForNodeType(t, nt);
         if ("image".equals(nt.iconKind()) && nt.imagePath() != null && !nt.imagePath().isBlank()) {
             Icon img = imageIcon(nt.imagePath(), size);
             if (img != null) {
@@ -1042,54 +1371,117 @@ public final class Icons {
             }
         }
         if ("monogram".equals(nt.iconKind()) && nt.monogram() != null && !nt.monogram().isBlank()) {
-            return monogramIcon(nt.monogram(), tokenForKey(t, nt.colorKey()), size);
+            return monogramIcon(nt.monogram(), tok, nt.monogramStyle(), size);
         }
-        return vectorIcon(nt.iconKind(), col, size);
+        Icon vec = vectorIcon(nt.iconKind(), tok.text(), nt.boxed() ? Math.max(10, size - 4) : size);
+        if (nt.boxed()) {
+            return boxedIcon(vec, tok, size);
+        }
+        return vec;
     }
 
     public static Icon vectorIcon(String kind, Color color, int size) {
         if (kind == null) {
             return folder(color, size);
         }
-        return switch (kind.toLowerCase(java.util.Locale.ROOT)) {
+        return switch (kind.toLowerCase(Locale.ROOT)) {
+            case "folder-open" -> folderOpen(color, size);
+            case "page" -> document(color, size);
+            case "tab" -> tabNode(color, size);
+            case "sidebar" -> sidebar(color, size);
+            case "menu" -> menu(color, size);
             case "link" -> link(color, size);
+            case "home" -> home(color, size);
+            case "layers" -> layers(color, size);
+            case "sitemap" -> sitemap(color, size);
             case "button" -> buttonNode(color, size);
             case "icon" -> iconNode(color, size);
-            case "tab" -> tabNode(color, size);
             case "modal" -> modalNode(color, size);
             case "form" -> formNode(color, size);
-            case "star" -> star(color, size);
-            case "bell" -> bell(color, size);
+            case "input" -> inputNode(color, size);
+            case "search" -> search(color, size);
+            case "dropdown" -> dropdownNode(color, size);
+            case "toggle" -> toggleNode(color, size);
+            case "upload" -> export(color, size);
+            case "download" -> download(color, size);
+            case "user" -> role(color, size);
+            case "users" -> users(color, size);
             case "cart" -> cart(color, size);
+            case "credit-card" -> creditCard(color, size);
+            case "receipt" -> receipt(color, size);
+            case "bell" -> bell(color, size);
+            case "mail" -> mail(color, size);
+            case "chat" -> chat(color, size);
+            case "calendar" -> calendar(color, size);
+            case "chart" -> chart(color, size);
+            case "api" -> api(color, size);
+            case "database" -> database(color, size);
+            case "server" -> server(color, size);
+            case "terminal" -> terminal(color, size);
+            case "code" -> codeBraces(color, size);
+            case "webhook" -> webhook(color, size);
             case "lock" -> lock(color, size);
             case "key" -> key(color, size);
-            case "globe" -> globe(color);
-            case "database" -> database(color, size);
             case "shield" -> shield(color, size);
+            case "star" -> star(color, size);
+            case "flag" -> flag(color, size);
             case "tag" -> tag(color, size);
-            case "terminal" -> terminal(color, size);
+            case "globe" -> globe(color, size);
             case "cluster" -> cluster(color, size);
             case "focus" -> focus(color, size);
             default -> folder(color, size);
         };
     }
 
-    private static synchronized Icon monogramIcon(String letters, Theme.Token tok, int size) {
-        String key = "mono|" + letters + "|" + size + "|" + tok.text().getRGB() + "|" + tok.fillStrong().getRGB();
+    private static Icon boxedIcon(Icon inner, Theme.Token tok, int size) {
+        return new Drawn(size, size) {
+            @Override
+            void draw(Component c, Graphics2D g, int x, int y) {
+                g.setColor(tok.fill());
+                g.fillRect(x, y, size - 1, size - 1);
+                g.setColor(tok.border());
+                g.drawRect(x, y, size - 1, size - 1);
+                int ix = x + (size - inner.getIconWidth()) / 2;
+                int iy = y + (size - inner.getIconHeight()) / 2;
+                inner.paintIcon(c, g, ix, iy);
+            }
+        };
+    }
+
+    public static synchronized Icon monogramIcon(String letters, Theme.Token tok, String style, int size) {
+        String st = style == null ? "soft" : style.trim().toLowerCase(Locale.ROOT);
+        String key = "mono2|" + letters + "|" + st + "|" + size + "|" + tok.text().getRGB() + "|" + tok.solidFill().getRGB();
         Icon have = CACHE.get(key);
         if (have != null) {
             return have;
         }
+        if (CACHE.size() > MAX_CACHE) {
+            CACHE.clear();
+        }
         Icon made = new Drawn(size, size) {
             @Override
             void draw(Component c, Graphics2D g, int x, int y) {
-                g.setColor(tok.fillStrong());
-                g.fillRect(x, y, size - 1, size - 1);
-                g.setColor(tok.border());
-                g.drawRect(x, y, size - 1, size - 1);
-                g.setColor(tok.text());
-                g.setFont(Theme.current().smallBoldFont.deriveFont(Math.max(8f, size - 4.5f)));
-                java.awt.FontMetrics fm = g.getFontMetrics();
+                FontManager.applyTextHints(g);
+                if ("solid".equals(st)) {
+                    g.setColor(tok.solidFill());
+                    g.fillRect(x, y, size, size);
+                    g.setColor(tok.onSolid());
+                } else if ("outline".equals(st)) {
+                    g.setColor(tok.border());
+                    g.drawRect(x, y, size - 1, size - 1);
+                    g.setColor(tok.text());
+                } else {
+                    g.setColor(tok.fillStrong());
+                    g.fillRect(x, y, size - 1, size - 1);
+                    g.setColor(tok.border());
+                    g.drawRect(x, y, size - 1, size - 1);
+                    g.setColor(tok.text());
+                }
+                float fsz = letters.length() >= 3 ? Math.max(7.5f, size * 0.42f)
+                        : letters.length() == 2 ? Math.max(8f, size * 0.50f) : Math.max(9f, size * 0.62f);
+                Font f = Theme.current().boldFont.deriveFont(fsz);
+                g.setFont(f);
+                FontMetrics fm = g.getFontMetrics();
                 int tw = fm.stringWidth(letters);
                 g.drawString(letters, x + Math.max(1, (size - tw) / 2), y + (size - fm.getHeight()) / 2 + fm.getAscent());
             }
@@ -1098,23 +1490,68 @@ public final class Icons {
         return made;
     }
 
-    private static synchronized Icon imageIcon(String path, int size) {
-        String key = "img|" + path + "|" + size;
+    /** Encodes a user-selected image file into a self-contained 48x48 PNG data URI so workspace icons never break. */
+    public static String encodeImageDataUri(File file) {
+        if (file == null || !file.isFile()) {
+            return "";
+        }
+        try {
+            BufferedImage raw = ImageIO.read(file);
+            if (raw == null) {
+                return "";
+            }
+            int target = 48;
+            BufferedImage scaled = new BufferedImage(target, target, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = scaled.createGraphics();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.drawImage(raw, 0, 0, target, target, null);
+            } finally {
+                g2.dispose();
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(scaled, "png", baos);
+            return "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    public static synchronized Icon imageIcon(String pathOrDataUri, int size) {
+        if (pathOrDataUri == null || pathOrDataUri.isBlank()) {
+            return null;
+        }
+        String key = "img2|" + pathOrDataUri.hashCode() + "|" + pathOrDataUri.length() + "|" + size;
         Icon have = CACHE.get(key);
         if (have != null) {
             return have;
         }
         try {
-            java.io.File f = new java.io.File(path);
-            if (!f.isFile()) {
-                return null;
+            BufferedImage raw;
+            if (pathOrDataUri.startsWith("data:image/")) {
+                int comma = pathOrDataUri.indexOf(',');
+                if (comma < 0) {
+                    return null;
+                }
+                byte[] bytes = Base64.getDecoder().decode(pathOrDataUri.substring(comma + 1));
+                raw = ImageIO.read(new ByteArrayInputStream(bytes));
+            } else {
+                File f = new File(pathOrDataUri);
+                if (!f.isFile()) {
+                    return null;
+                }
+                raw = ImageIO.read(f);
             }
-            java.awt.image.BufferedImage raw = javax.imageio.ImageIO.read(f);
             if (raw == null) {
                 return null;
             }
-            java.awt.Image scaled = raw.getScaledInstance(size, size, java.awt.Image.SCALE_SMOOTH);
-            Icon made = new javax.swing.ImageIcon(scaled);
+            Image scaled = raw.getScaledInstance(size, size, Image.SCALE_SMOOTH);
+            Icon made = new ImageIcon(scaled);
+            if (CACHE.size() > MAX_CACHE) {
+                CACHE.clear();
+            }
             CACHE.put(key, made);
             return made;
         } catch (Exception ignored) {
@@ -1176,8 +1613,51 @@ public final class Icons {
     public static Icon tag(Theme t) { return tag(t.warning.text(), 14); }
     public static Icon star(Theme t) { return star(t.accent.text(), 14); }
     public static Icon compare(Theme t) { return compare(t.info.text(), 14); }
+    public static Icon originCrown(Theme t) { return originCrown(t.info.text(), 14); }
+    public static Icon lineageGraph(Theme t) { return lineageGraph(t.dup.text(), 14); }
+    public static Icon workbench(Theme t) { return workbench(t.accent.text(), 14); }
+    public static Icon displayMode(Theme t) { return displayMode(t.fg, 14); }
+    public static Icon idPool(Theme t) { return idPool(t.success.text(), 14); }
+    public static Icon palette(Theme t) { return palette(t.accent.text(), 14); }
+    public static Icon upload(Color c) { return upload(c, 14); }
+    public static Icon upload(Color c, int size) { return vectorIcon("upload", c, size); }
+    public static Icon upload(Theme t) { return upload(t.fg, 14); }
+    public static Icon download(Theme t) { return download(t.fg, 14); }
+    public static Icon strategyShield(Theme t) { return strategyShield(t.warning.text(), 14); }
+    public static Icon strategySnapshot(Theme t) { return strategySnapshot(t.info.text(), 14); }
+    public static Icon strategySwap(Theme t) { return strategySwap(t.success.text(), 14); }
+    public static Icon strategyChain(Theme t) { return strategyChain(t.accent.text(), 14); }
+    public static Icon playTest(Theme t) { return playTest(t.accent.text(), 14); }
 
-    /** Paints two icons side-by-side (e.g. gear + dropdown chevron or folder + toggle arrow). */
+    public static Icon boxedVectorIcon(String kind, Theme.Token tok, int size) {
+        Icon inner = vectorIcon(kind, tok.text(), Math.max(10, size - 4));
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setColor(tok.fill());
+                    g2.fillRect(x, y, size - 1, size - 1);
+                    g2.setColor(tok.border());
+                    g2.drawRect(x, y, size - 1, size - 1);
+                    inner.paintIcon(c, g2, x + (size - inner.getIconWidth()) / 2, y + (size - inner.getIconHeight()) / 2);
+                } finally {
+                    g2.dispose();
+                }
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
     public static Icon pair(Icon left, Icon right, int gap) {
         if (left == null) {
             return right;
@@ -1210,7 +1690,6 @@ public final class Icons {
         return pair(left, chevronDown(chevronColor, 10), 2);
     }
 
-    /** Semantic state glyph paired with {@link AuditLevel} so status is distinguishable without colour alone. */
     public static Icon forAudit(AuditLevel lvl, Color color) {
         if (lvl == null) {
             return dot(color, false);
@@ -1226,12 +1705,10 @@ public final class Icons {
         };
     }
 
-    /** Picks a crisp Java2D icon for legacy emoji prefixes produced by placement / model strings. */
     public static Icon forLeadingSymbol(String text, Theme theme) {
         return forLeadingSymbol(text, theme, null);
     }
 
-    /** Picks a crisp Java2D icon for legacy emoji prefixes, optionally forcing {@code overrideColor} (e.g. on selection). */
     public static Icon forLeadingSymbol(String text, Theme theme, Color overrideColor) {
         if (text == null || text.isEmpty()) {
             return null;
@@ -1282,10 +1759,12 @@ public final class Icons {
         if (text.startsWith("\uD83D\uDCCB")) {
             return copy(ov != null ? ov : theme.muted);
         }
+        if (text.startsWith("\u2605")) {
+            return originCrown(ov != null ? ov : theme.info.text(), 12);
+        }
         return null;
     }
 
-    /** Strips leading emoji/symbol prefix so cells show our drawn Java2D icon cleanly without OS box glyphs. */
     public static String stripLeadingSymbol(String s) {
         if (s == null || s.isEmpty()) {
             return "";
@@ -1302,7 +1781,6 @@ public final class Icons {
         return stripInlineSymbols(t);
     }
 
-    /** Strips any inline emoji glyphs (e.g. from placement text) before plain-text rendering. */
     public static String stripInlineSymbols(String s) {
         if (s == null || s.isEmpty()) {
             return "";
@@ -1339,7 +1817,7 @@ public final class Icons {
         "\uD83D\uDCCB ", "\uD83C\uDF9B ", "\u2699 ", "\uD83D\uDDD7 ", "\uD83D\uDCCC ", "\uD83D\uDCCA ",
         "\uD83D\uDCC4 ", "\uD83D\uDCBE ", "\uD83D\uDD04 ", "\uD83E\uDDF9 ", "\uD83C\uDF3F ", "\uD83C\uDF33 ",
         "\uD83C\uDF10 ", "\u26A1 ", "\u279C ", "\u2B06 ", "\u2B07 ", "\uD83D\uDD58 ", "\uFF0B ",
-        "\uD83D\uDEE0 ", "\u21BA ", "\u22EF ", "\u25A0 ", "\u21BB ", "\uD83C\uDF89 "};
+        "\uD83D\uDEE0 ", "\u21BA ", "\u22EF ", "\u25A0 ", "\u21BB ", "\uD83C\uDF89 ", "\u2605 "};
 
     private static final String[] INLINE_REMOVE = {"\u29C9 ", "\u29C9", "\u23F3 ", "\u23F3", "\uD83D\uDC7B ", "\uD83D\uDC7B", "\uD83D\uDE48 ",
         "\uD83D\uDE48", "\u2714 ", "\u2714", "\u2705 ", "\u2705", "\u21A9 ", "\u21A9", "\u21B6 ", "\u21B6",
@@ -1348,5 +1826,5 @@ public final class Icons {
         "\uD83D\uDD0D ", "\uD83D\uDD0D", "\uD83D\uDC41 ", "\uD83D\uDC41", "\uD83D\uDDD1 ", "\uD83D\uDDD1",
         "\u2716 ", "\u2716", "\uD83D\uDCCB ", "\uD83D\uDCCB", "\uD83E\uDDED ", "\uD83E\uDDED", "\uD83C\uDF3F ",
         "\uD83C\uDF3F", "\uD83D\uDCCC ", "\uD83D\uDCCC", "\uD83C\uDF10 ", "\uD83C\uDF10", "\u2B1C ", "\u2B1C",
-        "\u267B ", "\u267B", "\u270F ", "\u270F", "\u2795 ", "\u2795"};
+        "\u267B ", "\u267B", "\u270F ", "\u270F", "\u2795 ", "\u2795", "\u2605 ", "\u2605"};
 }

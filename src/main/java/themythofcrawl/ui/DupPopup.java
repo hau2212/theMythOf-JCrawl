@@ -14,7 +14,6 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextArea;
 
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Text;
@@ -22,12 +21,13 @@ import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ApiTagCatalog;
 import themythofcrawl.place.Decisions;
 import themythofcrawl.ui.kit.Card;
+import themythofcrawl.ui.kit.StructuredAdviceCard;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Quick-view popup for every copy (#1 GỐC ... #N) of a duplicated API, displaying SmartAdvice
- * and one-click actions plus full {@link LineageDialog} trigger.
+ * Quick-view popup v2 for every copy (#1 Bản Gốc ... #N) of a duplicated API:
+ * zero text overlap, separated Status &amp; Tag columns, StructuredAdviceCard, and one-click actions.
  */
 final class DupPopup {
     private DupPopup() {
@@ -38,28 +38,25 @@ final class DupPopup {
         copies.sort(Comparator.comparingInt(ApiGroup::dupNo));
         ApiGroup origin = ui.engine.originOf(g.bookKey());
 
-        RowsModel<ApiGroup> model = new RowsModel<>(List.of("Bản", "Vai trò", "API", "Vị trí (Đường dẫn)", "Trạng thái", "STT / Excel"));
+        RowsModel<ApiGroup> model = new RowsModel<>(List.of("Bản", "Vai trò", "Mã API", "Vị trí trong cây", "Trạng thái", "Nhãn", "STT"));
         List<Decisions.Row<ApiGroup>> rows = new ArrayList<>();
         for (ApiGroup c : copies) {
             boolean isOrig = origin != null && c.gid() == origin.gid();
-            String role = isOrig ? "GỐC ĐỊNH HÌNH" : "Trùng #" + c.dupNo();
-            String state = c.hidden() ? "Đang ẩn" : c.dupPending() ? "Chờ quyết định" : "Đang hiện";
-            if (c.hasTag(ApiTagCatalog.TAG_REFRESH)) {
-                state += " [REFRESH]";
-            } else if (c.suspectedRefresh()) {
-                state += " [? Refresh]";
-            }
+            String role = isOrig ? "Bản Gốc (#1)" : "Bản trùng";
+            String state = Decisions.copyStateShort(c);
+            String tag = Decisions.copyTagLabel(c);
             String stt = c.target() != null ? "Excel #" + c.target().sttText()
-                    : (c.copyStt() != null ? "STT " + c.copyStt() : "");
-            AuditLevel lvl = isOrig ? AuditLevel.OK : (c.hidden() ? AuditLevel.PENDING : AuditLevel.INFO);
+                    : (c.copyStt() != null ? "STT " + c.copyStt() : "—");
+            AuditLevel lvl = isOrig ? AuditLevel.OK : Decisions.copyStateLevel(c);
             rows.add(new Decisions.Row<>(c, lvl, List.of("#" + c.dupNo(), role,
-                    Text.groupId(c.gid()), c.branch(), state, stt)));
+                    Text.apiLabel(c.gid()), c.branch(), state, tag, stt)));
         }
         model.set(rows);
         JTable t = new ThemedTable(model);
         Ui.style(t);
-        Ui.widths(t, 44, 118, 56, 250, 128, 76);
-        AuditRenderer r = new AuditRenderer(model, null, 4, null, 0, 1);
+        t.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        Ui.widths(t, 56, 112, 74, 220, 112, 98, 76);
+        AuditRenderer r = new AuditRenderer(model, null, 4, null, 0, 1).numberCols(0);
         for (int i = 0; i < t.getColumnCount(); i++) {
             t.getColumnModel().getColumn(i).setCellRenderer(r);
         }
@@ -68,20 +65,17 @@ final class DupPopup {
             t.setRowSelectionInterval(mine, mine);
         }
         JScrollPane sp = new JScrollPane(t);
-        sp.setPreferredSize(new Dimension(690, Math.min(72 + 26 * Math.max(1, rows.size()), 220)));
+        sp.setPreferredSize(new Dimension(760, Math.min(54 + Theme.ROW_TABLE * Math.max(1, rows.size()), 210)));
 
-        Decisions.SmartAdvice adv = Decisions.advise(ui.engine, g);
-        JTextArea adviceBox = new JTextArea(adv.headline() + "\n" + adv.explanation());
-        adviceBox.setEditable(false);
-        adviceBox.setLineWrap(true);
-        adviceBox.setWrapStyleWord(true);
-        adviceBox.setOpaque(true);
-        adviceBox.setBackground(Theme.current().surfaceAlt);
-        adviceBox.setForeground(Theme.current().fg);
-        adviceBox.setFont(Theme.current().smallFont);
-        adviceBox.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Theme.current().border, 1),
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)));
+        StructuredAdviceCard adviceCard = new StructuredAdviceCard();
+        adviceCard.setAdvice(Decisions.advise(ui.engine, g));
+        t.getSelectionModel().addListSelectionListener(ev -> {
+            if (!ev.getValueIsAdjusting()) {
+                int sel = t.getSelectedRow();
+                ApiGroup target = sel >= 0 ? model.payload(sel) : g;
+                adviceCard.setAdvice(Decisions.advise(ui.engine, target));
+            }
+        });
 
         JPopupMenu pop = new JPopupMenu();
         java.util.function.Consumer<String> act = kind -> {
@@ -93,12 +87,12 @@ final class DupPopup {
                 case "open" -> ui.jumpToGroup(target);
                 case "keepOriginOnly" -> {
                     int n = ui.engine.keepOnlyOriginAndHideOthers(g.bookKey());
-                    ui.flash("Đã giữ API GỐC #1 và ẩn " + n + " bản trùng");
+                    ui.flash("Đã giữ Bản Gốc (#1) và ẩn " + n + " bản trùng");
                     ui.tick(true);
                 }
                 case "promote" -> {
                     if (ui.engine.promoteToOrigin(target)) {
-                        ui.flash("Đã đặt " + Text.groupId(target.gid()) + " làm API GỐC #1");
+                        ui.flash("Đã đặt " + Text.apiLabel(target.gid()) + " làm Bản Gốc (#1)");
                         ui.tick(true);
                     }
                 }
@@ -110,14 +104,10 @@ final class DupPopup {
                     ui.engine.hide(List.of(target), "");
                     ui.tick(true);
                 }
-                case "show" -> {
-                    ui.engine.show(List.of(target));
-                    ui.tick(true);
-                }
                 case "refresh" -> {
                     boolean next = !target.hasTag(ApiTagCatalog.TAG_REFRESH);
                     ui.engine.toggleEndpointTag(g.bookKey(), ApiTagCatalog.TAG_REFRESH, next);
-                    ui.flash(next ? "Đã gắn tag [REFRESH]" : "Đã gỡ tag [REFRESH]");
+                    ui.flash(next ? "Đã gắn nhãn Tự tải lại" : "Đã gỡ nhãn Tự tải lại");
                     ui.tick(true);
                 }
                 case "delete" -> {
@@ -130,26 +120,27 @@ final class DupPopup {
             }
         };
 
-        String sub = copies.size() + " bản · Gốc #1 tại " + (origin != null ? origin.branch() : "(đã xóa)");
+        String sub = copies.size() + " lần xuất hiện · Bản Gốc (#1) tại " + (origin != null ? origin.branch() : "đã xóa");
         Card card = new Card(g.endpoint(), sub,
-                new JLabel(Icons.themed(theme -> Icons.dup(theme.dup.text()))), theme -> theme.dup, true);
+                new JLabel(Icons.themed(theme -> Icons.lineageGraph(theme.dup.text(), 14))), theme -> theme.dup, true);
         card.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         btns.setOpaque(false);
-        btns.add(Ui.accent("Lineage đầy đủ...", theme -> Icons.sliders(theme.accent.onSolid()), theme -> theme.accent,
-                () -> act.accept("lineage")));
-        btns.add(Ui.button("Chỉ giữ GỐC & Ẩn #2+", theme -> Icons.check(theme.success.text()), () -> act.accept("keepOriginOnly")));
-        btns.add(Ui.button("Đặt làm GỐC", Icons::star, () -> act.accept("promote")));
-        btns.add(Ui.button("Tag REFRESH", Icons::tag, () -> act.accept("refresh")));
-        btns.add(Ui.button("Mở", theme -> Icons.search(theme.info.text()), () -> act.accept("open")));
+        btns.add(Ui.accent("Chỉ giữ Bản Gốc (#1) & Ẩn lặp",
+                theme -> Icons.originCrown(theme.accent.onSolid(), 14), theme -> theme.accent,
+                () -> act.accept("keepOriginOnly")));
+        btns.add(Ui.button("Mở bảng đầy đủ...", Icons::lineageGraph, () -> act.accept("lineage")));
+        btns.add(Ui.button("Đặt làm Bản Gốc", Icons::star, () -> act.accept("promote")));
+        btns.add(Ui.button("Nhãn Tự tải lại", Icons::refresh, () -> act.accept("refresh")));
+        btns.add(Ui.button("Mở API", theme -> Icons.search(theme.info.text()), () -> act.accept("open")));
         btns.add(Ui.button("Ẩn", theme -> Icons.hide(theme.muted), () -> act.accept("hide")));
         btns.add(Ui.button("Xóa", theme -> Icons.trash(theme.danger.text()), () -> act.accept("delete")));
 
-        JPanel inner = new JPanel(new BorderLayout(0, Theme.SPACE_1));
+        JPanel inner = new JPanel(new BorderLayout(0, Theme.SPACE_2));
         inner.setOpaque(false);
-        inner.add(sp, BorderLayout.NORTH);
-        inner.add(adviceBox, BorderLayout.CENTER);
+        inner.add(adviceCard, BorderLayout.NORTH);
+        inner.add(sp, BorderLayout.CENTER);
         inner.add(btns, BorderLayout.SOUTH);
         card.setBody(inner);
 

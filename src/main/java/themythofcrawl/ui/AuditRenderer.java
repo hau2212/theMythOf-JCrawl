@@ -449,21 +449,24 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
         }
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            themythofcrawl.ui.theme.FontManager.applyTextHints(g2);
 
             g2.setColor(cellBg != null ? cellBg : th.surface);
             g2.fillRect(0, 0, w, h);
 
             int stripeW = Math.max(3, th.scaled(3));
-            int padX = th.scaled(6);
+            int padX = th.scaled(7);
             if (firstViewCol && branchColor != null) {
                 g2.setColor(branchColor);
                 g2.fillRect(0, 0, stripeW, h);
             }
 
             int x = firstViewCol ? (branchColor != null ? stripeW : 0) + padX : padX;
-            if (firstViewCol && (activeKind != ColKind.COPY || w >= th.scaled(34))) {
+            boolean showLeadingDot = firstViewCol
+                    && activeKind != ColKind.NUMBER
+                    && activeKind != ColKind.METHOD_PILL
+                    && ((activeKind != ColKind.COPY && w >= th.scaled(68)) || (activeKind == ColKind.COPY && w >= th.scaled(34)));
+            if (showLeadingDot) {
                 int dotD = Math.max(6, th.scaled(7));
                 if (timelineRail) {
                     int railX = x + dotD / 2;
@@ -472,7 +475,7 @@ public class AuditRenderer extends JComponent implements TableCellRenderer, Them
                 }
                 g2.setColor(dotColor != null ? dotColor : th.dotNone);
                 g2.fillRect(x, (h - dotD) / 2, dotD, dotD);
-                x += dotD + th.scaled(5);
+                x += dotD + th.scaled(6);
             }
 
             int maxRight = w - padX;

@@ -246,7 +246,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setCellWidth(84);
+        dest.setCellWidth(74);
         dest.setCellHeight(24);
         dest.setIconResolver(segPath -> Icons.nodeIcon(engine.nodeTypeOf(segPath), Theme.current(), 12));
         dest.onSegmentClick(seg -> {
@@ -280,28 +280,88 @@ public final class MainPanel {
         excelChip.onClick(() -> tabs.setSelectedComponent(excel.panel));
 
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
-        spotlightBtn.setToolTipText("Tìm kiếm toàn cục API (#, path), Nhánh, Role (Ctrl+K)");
         spotlightBtn.setMargin(new Insets(0, 0, 0, 0));
         spotlightBtn.setPreferredSize(new Dimension(h24, h24));
         spotlightBtn.addActionListener(e -> spotlight.open());
+        themythofcrawl.ui.kit.RichHoverCard.install(spotlightBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Tìm kiếm toàn cục (Spotlight)",
+                "Nhảy nhanh tới bất kỳ API (#, method, path), Nhánh hoặc Role nào trong toàn bộ workspace.",
+                "Ctrl+K",
+                t -> Icons.search(t.info.text()),
+                t -> t.info,
+                null));
+
+        JButton workbenchBtn = new JButton();
+        workbenchBtn.setIcon(Icons.themed(t -> Icons.workbench(t.accent.text(), 14)));
+        workbenchBtn.setMargin(new Insets(0, 0, 0, 0));
+        workbenchBtn.setPreferredSize(new Dimension(h24, h24));
+        workbenchBtn.addActionListener(e -> ActionWorkbenchDialog.show(root, engine,
+                api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
+                    syncHeader();
+                    if (settings != null) settings.load();
+                }));
+        themythofcrawl.ui.kit.RichHoverCard.install(workbenchBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Action Workbench (Bảo vệ Action API)",
+                "Mở giao diện trực quan 4 tab: Chiến lược xử lý, Kho ID Sống, Chuỗi Tạo Mới -> Hành Động và Khóa 200 OK.",
+                null,
+                t -> Icons.workbench(t.accent.text(), 14),
+                t -> t.accent,
+                () -> "Đang dùng: " + engine.config().actionMode.label));
+
+        JButton displayModeBtn = new JButton();
+        displayModeBtn.setIcon(Icons.themed(Icons::displayMode));
+        displayModeBtn.setMargin(new Insets(0, 0, 0, 0));
+        displayModeBtn.setPreferredSize(new Dimension(h24, h24));
+        displayModeBtn.addActionListener(e -> {
+            UiDisplayMode next = UiDisplayMode.cycle();
+            UiPrefs.setDisplayMode(uiPrefs, next);
+            if (settings != null) settings.load();
+            flash("Chế độ nút công cụ: " + next.label);
+        });
+        themythofcrawl.ui.kit.RichHoverCard.install(displayModeBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Đổi chế độ hiển thị nút (3 trạng thái)",
+                "Chuyển nhanh giữa: Chỉ Icon (+ Thẻ mô tả khi rê chuột), Icon + Chữ (mặc định), hoặc Chỉ Chữ (tối giản).",
+                null,
+                t -> Icons.displayMode(t.info.text(), 14),
+                t -> t.info,
+                () -> "Hiện tại: " + UiDisplayMode.current().label));
 
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
-        options.setToolTipText("Tùy chọn bắt, tự gửi, giữ chỗ, loại node, tag & trợ giúp...");
         options.setMargin(new Insets(0, 4, 0, 4));
         options.setPreferredSize(new Dimension(Theme.current().scaled(32), h24));
         options.addActionListener(e -> optionsMenu());
+        themythofcrawl.ui.kit.RichHoverCard.install(options, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Tùy chọn nhanh & Danh mục",
+                "Bật/tắt nhanh bộ lọc bắt, giữ chỗ, quản lý Loại Node & Icon, quản lý API Tag [REFRESH] và trợ giúp.",
+                null,
+                t -> Icons.gear(t.fg),
+                t -> t.neutral,
+                null));
 
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
         detach.setMargin(new Insets(0, 0, 0, 0));
         detach.setPreferredSize(new Dimension(h24, h24));
-        detach.setToolTipText("Tách extension ra cửa sổ riêng");
         detach.addActionListener(e -> toggleDetach());
+        themythofcrawl.ui.kit.RichHoverCard.install(detach, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Tách cửa sổ riêng",
+                "Mở toàn bộ theMythOf-JCrawl ra cửa sổ độc lập để xem toàn màn hình hoặc kéo sang màn hình thứ hai.",
+                null,
+                t -> Icons.window(t.fg),
+                t -> t.neutral,
+                () -> window != null ? "Đang mở ở cửa sổ riêng" : "Đang gắn trong tab Burp"));
 
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
         workspace.setMargin(new Insets(0, 4, 0, 4));
-        workspace.setPreferredSize(new Dimension(Theme.current().scaled(76), h24));
+        workspace.setPreferredSize(new Dimension(Theme.current().scaled(68), h24));
         workspace.addActionListener(e -> workspaceMenu());
+        themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Workspace (Phiên làm việc)",
+                "Tạo mới, chuyển đổi hoặc mở thư mục lưu dữ liệu crawl & roles của dự án hiện tại.",
+                null,
+                t -> Icons.folder(t.info.text()),
+                t -> t.info,
+                () -> "Đang mở: " + engine.workspaceName()));
 
         JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
         leftZone.setOpaque(false);
@@ -326,7 +386,7 @@ public final class MainPanel {
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
 
-        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, options, detach, workspace);
+        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, workbenchBtn, displayModeBtn, options, detach, workspace);
         ((java.awt.FlowLayout) actions.getLayout()).setHgap(2);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
         JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));

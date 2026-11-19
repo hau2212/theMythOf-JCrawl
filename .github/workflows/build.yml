@@ -32,57 +32,64 @@ jobs:
         with:
           name: theMythOf-JCrawl-jar
           path: build/libs/theMythOf-JCrawl.jar
-      - name: Publish the "V_2.0_beta" prerelease (keeping V_1.0 and previous releases intact)
+      - name: Publish the "V_2.1_beta" prerelease (keeping V_2.0_beta, V_1.0 and previous releases intact)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_2.0_beta.jar
+          cp build/libs/theMythOf-JCrawl.jar build/libs/theMythOf-JCrawl_V_2.1_beta.jar
           cat <<'EOF' > /tmp/release_notes.md
-          ## theMythOf-JCrawl `V_2.0_beta` (Prerelease)
+          ## theMythOf-JCrawl `V_2.1_beta` (Prerelease)
 
-          > Bản beta phát hành song song từ commit `${GITHUB_SHA::7}` (giữ nguyên toàn bộ các bản phát hành cũ `V_1.0` và bản tiêu chuẩn). Tương thích ngược 100% với workspace `V_1.0`.
+          > Bản beta phát hành song song từ commit `${GITHUB_SHA::7}` (giữ nguyên toàn bộ các bản phát hành trước đó: `V_2.0_beta`, `V_1.0`, và `v2.0.0`). Tương thích ngược 100% với toàn bộ workspace cũ.
 
-          ### 7 Nâng cấp chính trong `V_2.0_beta`
+          ### 6 Trụ cột nâng cấp trong `V_2.1_beta`
 
-          1. **Thanh Header & Đích (`Breadcrumb`) kiến trúc vuông / chữ nhật đồng kích cỡ (`24px`, `arc = 0`)**:
-             - Toàn bộ ô điều khiển, pill trạng thái, và các ô cấp trong `Đích` đồng bộ chiều cao `24px`, viền `1px`, không bo tròn.
-             - Hiển thị icon theo Loại phần tử (`NodeType`), đường gạch chân nhấn mạnh cho nhánh đang chọn, nút `«` xem cấp cha, `v` mở menu, `+` thêm nhanh mục con.
-          2. **Chế độ Tập trung (`Focus Mode`) cho nhánh / đường dẫn**:
-             - Nút `Tập trung` trên `ApiTab` và menu chuột phải vào nhánh giúp cô lập cây & bảng chỉ hiển thị API thuộc đường dẫn đó.
-             - Thanh banner ghim sắc cạnh `26px` cho phép chuyển nhanh giữa **`Chỉ nhánh này`** và **`Kèm nhánh con`** hoặc **`Thoát`**.
-          3. **Nhóm trực quan (`GroupCluster` — Cụm hiển thị)**:
-             - Gom các API liên quan thành Cụm trong cùng một nhánh để mở/thu gọn dễ nhìn (dùng icon cụm riêng, nhãn `[CỤM]`, viền đứt nét — hoàn toàn tách biệt với Sub-folder).
-             - **Đảm bảo bất biến**: không làm thay đổi `ApiGroup.branch()`, Copy STT+Path, vị trí xuất Excel hay `PlacementBook`.
-          4. **Phân loại phần tử UI cho Sub-node (`NodeTypeCatalog`) + CRUD & Custom Icon**:
-             - 7 loại dựng sẵn: `Thư mục`, `Đường Link`, `Button`, `Icon`, `Tab`, `Modal / Popup`, `Form`.
-             - Hỗ trợ **Thêm / Sửa / Xóa** loại phần tử tùy ý, tùy chỉnh icon (Vector dựng sẵn / Chữ viết tắt Monogram / Ảnh tùy chọn).
-          5. **Thiết kế lại Tab `Roles` tối giản (vuông/chữ nhật) + 4 Tính năng nâng cao**:
-             - Thay thế hoàn toàn nút gạt bo tròn bằng ô trạng thái vuông `[BẬT]` / `[TẮT]` (`SquareStatusRenderer`) và chip rule góc vuông.
-             - Huy hiệu phân tầng `Role.Tier` (`[ADM]`, `[MGR]`, `[STF]`, `[USR]`, `[GST]`, `[CUS]`), dải tóm tắt 3 ô chữ nhật đồng kích cỡ.
-             - **4 tính năng nâng cao**: Đếm ngược hạn JWT live, Trích Token/Cookie tự động từ API đã bắt, Ping kiểm tra Session sống/chết hàng loạt (`[200 LIVE]`/`[401 DEAD]`), So sánh Diff Rules giữa 2 Role.
-          6. **Quản lý chuỗi API Gốc & Trùng lặp (`LineageDialog` + `SmartAdvice`)**:
-             - Phân biệt rạch ròi `#1 API GỐC ĐỊNH HÌNH` (ghim đầu bảng, hoặc Ghost nếu gốc đã xóa) và các bản trùng `#2..#N`.
-             - Đầy đủ CRUD: Sửa đường dẫn, Sửa STT, Đặt bản khác làm GỐC `#1`, Chỉ giữ GỐC `#1` & Ẩn `#2+`, Đưa bản trùng về nhánh Gốc, Hiện/Ẩn/Xóa.
-             - Diễn giải bằng lời nói tự nhiên + **Khuyến nghị hành động** 1-click trong `LineageDialog`, `DupPopup`, và `AuditTab`.
-          7. **Hệ thống API Tag & Tag `[REFRESH]` cho API GET tự tải lại sau hành động**:
-             - Danh mục Tag dựng sẵn (`REFRESH`, `INIT`, `POLLING`, `ACTION-CORE`) + CRUD Tag tùy biến (`TagManagerDialog`).
-             - Tự động phát hiện API `GET` xuất hiện ngay sau `POST/PUT/PATCH/DELETE` (`[? Refresh]`) và hỗ trợ 4 chính sách **M1–M4** (`TAG_ONLY`, `AUTO_SKIP_DUP`, `AUTO_CLUSTER`, `AUTO_HIDE`).
+          1. **Phông chữ hiện đại tối ưu tiếng Việt (nhúng sẵn offline trong JAR)**:
+             - Tích hợp bộ phông chữ mã nguồn mở SIL OFL **Be Vietnam Pro** (mặc định, tối ưu dấu tiếng Việt sắc nét), **IBM Plex Sans**, và **JetBrains Mono** (cho URL, JSON, HTTP Request/Response).
+             - Hỗ trợ chuyển đổi trực tiếp phông UI, phông Mono và tỷ lệ chữ (`90%`, `100%`, `110%`, `115%`, `120%`) ngay trong tab **Cấu hình** mà không cần khởi động lại Burp.
+             - Tự động khử răng cưa LCD/Fractional Metrics, tăng chiều cao hàng bảng (`26px`) và cây (`24px`), giữ cỡ chữ nhỏ `>= 11.5pt` để dễ đọc lâu dài.
 
-          Tải file `theMythOf-JCrawl_V_2.0_beta.jar` rồi nạp vào Burp (`Extensions > Installed > Add > Java`).
+          2. **Bộ 42 Icon Vector sắc nét + 3 Chế độ Hiển thị & Thẻ mô tả khi rê chuột (`RichHoverCard`)**:
+             - Thiết kế lại toàn bộ icon vector `16×16` theo phong cách kiến trúc vuông/chữ nhật đồng nhất, chia thành 6 nhóm nghiệp vụ (`Cấu trúc`, `Tương tác UI`, `Nghiệp vụ`, `Hệ thống & API`, `Bảo mật`, v.v.).
+             - **3 Chế độ Hiển thị thanh công cụ** (chuyển đổi ngay trên Header hoặc tab Cấu hình):
+               1. **Chỉ Icon (Tối giản)** — ẩn nhãn chữ để tối đa không gian làm việc, kèm **Thẻ mô tả trực quan (`RichHoverCard`)** tự động bật khi rê chuột (hiển thị icon, tên chức năng, mô tả tiếng Việt dễ hiểu, phím tắt và trạng thái hiện tại).
+               2. **Icon + Chữ** (Mặc định) — hiển thị đầy đủ cả biểu tượng và nhãn.
+               3. **Chỉ Chữ** — giao diện thuần văn bản tối giản không dùng icon.
+
+          3. **Thiết kế lại UI/UX chức năng Trùng lặp & Giữ chỗ (hết đè chữ, tiếng Việt tự nhiên)**:
+             - Toàn bộ bảng trong tab **Audit** (`Cần xử lý`, `Giữ chỗ`, `API trùng & ẩn`, `Nhật ký`), `LineageDialog`, và `DupPopup` dùng `AUTO_RESIZE_OFF` với bề rộng cột chuẩn hóa, tách riêng cột **Trạng thái** và cột **Nhãn (`Tag`)** — triệt tiêu hoàn toàn lỗi đè chữ và cắt chữ.
+             - Rút gọn bảng **Giữ chỗ** còn 7 cột cốt lõi dễ quét mắt; thay khung chữ thô bằng thẻ phân tích có cấu trúc (`StructuredAdviceCard`) diễn giải nguồn gốc bằng tiếng Việt tự nhiên, không dùng ký tự rác.
+
+          4. **Trình tạo Mục con & Bộ chọn Icon Tùy biến (`IconPickerPanel v2`)**:
+             - Hộp thoại thêm/sửa mục con (`NodeEditorDialog`) tích hợp sẵn bộ chọn **42 icon vector** có ô tìm kiếm & lọc theo 6 nhóm ngay trong form, xem trước trực tiếp dạng Cây & đường dẫn `Đích`.
+             - Hỗ trợ **13 màu chuẩn + mã màu Hex `#RRGGBB` tùy ý**, tùy chọn **đặt trong khung vuông viền sắc nét**, **3 kiểu chữ viết tắt Monogram** (`Nền nhẹ`, `Nền đậm`, `Viền vuông`), và **tải ảnh PNG/JPG/GIF tự động nhúng Base64** (không lo mất ảnh khi chuyển máy).
+             - Trình quản lý Loại mục con (`NodeTypeManagerDialog`) hỗ trợ **Nhân bản (Clone)**, **Sắp xếp thứ tự**, và **Xuất / Nhập gói JSON**.
+
+          5. **Action Workbench v2 — Làm chủ Action API trực quan 4 Tab**:
+             - Thay thế hoàn toàn menu chuột phải 18 mục `PP1..PP4` khó nhớ bằng **menu gọn 5 mục** và cửa sổ trực quan **Action Workbench** (mở từ Header, `ApiTab`, tab `Cấu hình`, hoặc chuột phải API):
+               - **Tab 1 — Chiến lược xử lý**: 4 thẻ vuông trực quan 2×2 (*Giữ ở Proxy*, *Khóa 200 OK*, *Kho ID Sống*, *Chuỗi Tạo Mới -> Hành Động*) kèm nút 1-click *Tự động thông minh* và chuyển phạm vi *Riêng API này / Toàn cục*.
+               - **Tab 2 — Kho ID Sống (Live Pool)**: quản lý bảng ID sống/đã dùng, nạp hàng loạt, tự quét từ API GET, khôi phục ID đã tiêu thụ, Xuất/Nhập CSV.
+               - **Tab 3 — Chuỗi Tạo Mới -> Hành Động**: tự động gợi ý `JSONPath` / `header:Location` từ Response thật, kiểm tra trích xuất trực tiếp, xem trước Diff **Dry-Run** các vị trí sẽ thay ID (URL Path / Query / Body / Header), và nút **Chạy thử 1 lượt**.
+               - **Tab 4 — Khóa 200 OK & Gửi lại**: so sánh trực quan 3 lựa chọn khi gửi lại API đã xóa (Giữ 200 OK gốc / Đổi ID mới đẩy thật / Gửi cưỡng bức chịu rủi ro 400/404).
+
+          6. **Kiểm thử tự động & Xác minh giao diện Sáng / Tối**:
+             - 81/81 test tự động (gồm `V21BetaTest`, `ThemeContrastTest`, `V2BetaFeaturesTest`, `ThemedComponentTest`, `CoreTest`, `EngineTest`) đều đạt 100%, xác minh cả 2 giao diện Light/Dark và cả 3 Chế độ Hiển thị.
+
+          Tải file `theMythOf-JCrawl_V_2.1_beta.jar` rồi nạp vào Burp (`Extensions > Installed > Add > Java`).
           EOF
           sed -i "s/\${GITHUB_SHA::7}/${GITHUB_SHA:0:7}/g" /tmp/release_notes.md
-          git tag -f V_2.0_beta "$GITHUB_SHA"
-          git push -f origin refs/tags/V_2.0_beta
-          if gh release view V_2.0_beta > /dev/null 2>&1; then
-            gh release upload V_2.0_beta build/libs/theMythOf-JCrawl_V_2.0_beta.jar --clobber
-            gh release edit V_2.0_beta \
-              --title "theMythOf-JCrawl V_2.0_beta — Giao diện Vuông đồng bộ, Tập trung, Cụm hiển thị, Loại Node, Roles tối giản, Lineage & Tag REFRESH" \
+          git tag -f V_2.1_beta "$GITHUB_SHA"
+          git push -f origin refs/tags/V_2.1_beta
+          if gh release view V_2.1_beta > /dev/null 2>&1; then
+            gh release upload V_2.1_beta build/libs/theMythOf-JCrawl_V_2.1_beta.jar --clobber
+            gh release edit V_2.1_beta \
+              --title "theMythOf-JCrawl V_2.1_beta — Phông tiếng Việt, 42 Icon + 3 Chế độ Hiển thị, Trùng lặp v2, Icon Picker Custom & Action Workbench 4 Tab" \
               --notes-file /tmp/release_notes.md \
               --prerelease
           else
-            gh release create V_2.0_beta build/libs/theMythOf-JCrawl_V_2.0_beta.jar \
-              --title "theMythOf-JCrawl V_2.0_beta — Giao diện Vuông đồng bộ, Tập trung, Cụm hiển thị, Loại Node, Roles tối giản, Lineage & Tag REFRESH" \
+            gh release create V_2.1_beta build/libs/theMythOf-JCrawl_V_2.1_beta.jar \
+              --title "theMythOf-JCrawl V_2.1_beta — Phông tiếng Việt, 42 Icon + 3 Chế độ Hiển thị, Trùng lặp v2, Icon Picker Custom & Action Workbench 4 Tab" \
               --notes-file /tmp/release_notes.md \
               --prerelease --target "$GITHUB_SHA"
           fi

@@ -103,7 +103,7 @@ final class SettingsTab {
     private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả API gốc (áp profile API gốc) cùng các role");
     private final JComboBox<String> actionModeBox = new JComboBox<>();
     private final JComboBox<String> lock2xxStrategyBox = new JComboBox<>();
-    private final JCheckBox holdActionProxyChk = new JCheckBox("PP1: Bật Chặn tại Proxy cho mọi Action API khi Crawl (Giữ nguyên ID trên Server)");
+    private final JCheckBox holdActionProxyChk = new JCheckBox("Bật Chặn tại Proxy cho mọi Action API khi Crawl (Giữ nguyên ID trên Server)");
     private final JCheckBox number = new JCheckBox("Thêm số thứ tự role vào tên tab (01_, 02_ ...) nếu tên chưa có");
     private final JCheckBox branchInTab = new JCheckBox("Gắn mã Nhánh vào tên tab: [F01-G01:POST /v1/...] thay vì [G01:POST /v1/...]");
     private final JTextField pathLen = new JTextField(6);
@@ -123,7 +123,10 @@ final class SettingsTab {
     private final JLabel diagColors = new JLabel(" ");
     private final JLabel diagScale = new JLabel(" ");
     private final JLabel diagCopyNote = Ui.muted(" ");
-    private final JComboBox<String> fontScaleBox = new JComboBox<>(new String[] {"90%", "100%", "115%"});
+    private final JComboBox<String> uiFontBox = new JComboBox<>();
+    private final JComboBox<String> monoFontBox = new JComboBox<>();
+    private final JComboBox<String> displayModeBox = new JComboBox<>();
+    private final JComboBox<String> fontScaleBox = new JComboBox<>(new String[] {"90%", "100%", "110%", "115%", "120%"});
     private final JCheckBox animationsBox = new JCheckBox("Hiệu ứng trượt toast & mở thẻ nhẹ (<= 150 ms)", true);
     private final JLabel saved = Ui.muted(" ");
 
@@ -148,6 +151,15 @@ final class SettingsTab {
         for (Config.CopyFallback f : Config.CopyFallback.values()) {
             copyFallback.addItem(f.label);
         }
+        for (themythofcrawl.ui.theme.FontManager.UiFontChoice uf : themythofcrawl.ui.theme.FontManager.UiFontChoice.values()) {
+            uiFontBox.addItem(uf.label);
+        }
+        for (themythofcrawl.ui.theme.FontManager.MonoFontChoice mf : themythofcrawl.ui.theme.FontManager.MonoFontChoice.values()) {
+            monoFontBox.addItem(mf.label);
+        }
+        for (UiDisplayMode dm : UiDisplayMode.values()) {
+            displayModeBox.addItem(dm.label);
+        }
 
         staticExt.putClientProperty("JTextField.placeholderText", "css,js,png,jpg,svg,woff...");
         regex.putClientProperty("JTextField.placeholderText", "^/api/.*");
@@ -171,15 +183,23 @@ final class SettingsTab {
                 pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
                         Ui.muted("Danh mục Tag & hành vi M1–M4 cho API GET tự tải lại"))));
         sections.add(section("3.  Gửi request, Bảo vệ Action API & chống lỗi 429", t -> t.success,
-                "Hàng đợi theo host chống 429/503; tích hợp 4 Phương pháp bảo vệ & tự phục hồi ID cho Action API (POST/PUT/PATCH/DELETE).",
+                "Hàng đợi theo host chống 429/503; quản lý trực quan 4 chiến lược bảo vệ & tự phục hồi ID cho Action API (POST/PUT/PATCH/DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
                 field("Dao động (%):", jitter, Ui.muted("nghỉ = khoảng nghỉ +/- %")),
                 field("Song song mỗi host:", concurrency, Ui.muted("1 = tuần tự")),
                 field("Tự gửi lại 429/503:", retries, null), field("Tổng luồng gửi:", threads, null),
                 row(sendOriginal),
-                field("Chế độ Action API:", actionModeBox, null),
-                field("Khi gửi lại ở PP2 (Khóa 2xx):", lock2xxStrategyBox, null),
-                row(holdActionProxyChk)));
+                field("Chiến lược Action mặc định:", actionModeBox, null),
+                field("Khi gửi lại ở Khóa 200 OK:", lock2xxStrategyBox, null),
+                row(holdActionProxyChk),
+                pair(Ui.accent("Mở Action Workbench (4 tab trực quan)...",
+                        t -> Icons.workbench(t.accent.onSolid(), 14), t -> t.accent,
+                        () -> ActionWorkbenchDialog.show(panel, engine, ui.api != null ? ui.api.currentGroup() : null,
+                                null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
+                                    load();
+                                    ui.syncHeader();
+                                })),
+                        Ui.muted("Cấu hình trực quan Chiến lược, Kho ID Sống, Chuỗi Tạo Mới & Khóa 200 OK"))));
         sections.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
                 "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} [id] (id) <id> :id * là giá trị bất kỳ.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
@@ -205,10 +225,16 @@ final class SettingsTab {
                         ui.flash("Đã copy đường dẫn workspace");
                     }
                 }), workspaceInfo)));
-        fontScaleBox.setToolTipText("Đổi cỡ chữ toàn bộ giao diện theMythOf-JCrawl (90% / 100% / 115%)");
+        uiFontBox.setToolTipText("Chọn phông chữ giao diện hỗ trợ dấu tiếng Việt rõ nét (nhúng sẵn offline trong JAR)");
+        monoFontBox.setToolTipText("Chọn phông chữ đơn cách cho đường dẫn URL, JSON và HTTP Request/Response");
+        displayModeBox.setToolTipText("Chuyển đổi 3 chế độ thanh công cụ: Chỉ Icon (+ Thẻ mô tả khi rê chuột), Icon + Chữ, hoặc Chỉ Chữ");
+        fontScaleBox.setToolTipText("Đổi cỡ chữ toàn bộ giao diện theMythOf-JCrawl (90% / 100% / 110% / 115% / 120%)");
         animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
-        sections.add(section("8.  Giới thiệu & chẩn đoán", t -> t.info,
-                "Phiên bản, Look & Feel của Burp, cỡ chữ, hiệu ứng nhẹ, màu nền / accent và scale.",
+        sections.add(section("8.  Giao diện, Font chữ & Chẩn đoán", t -> t.info,
+                "Tùy chỉnh phông chữ tiếng Việt, chế độ hiển thị nút 3 trạng thái, cỡ chữ, hiệu ứng nhẹ và thông tin chẩn đoán.",
+                field("Chế độ nút công cụ:", displayModeBox, Ui.muted("3 trạng thái · đổi ngay")),
+                field("Font giao diện:", uiFontBox, Ui.muted("Be Vietnam Pro / IBM Plex")),
+                field("Font URL & Mã (Mono):", monoFontBox, Ui.muted("JetBrains Mono")),
                 field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("áp dụng ngay")),
                 row(animationsBox),
                 field("Phiên bản:", diagVersion, null),
@@ -224,20 +250,24 @@ final class SettingsTab {
         JPanel topBar = new JPanel(new BorderLayout(Theme.SPACE_2, 0));
         topBar.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_1, Theme.SPACE_2));
         topBar.add(search, BorderLayout.CENTER);
-        JPanel rightBtns = Ui.flow(FlowLayout.RIGHT,
-                Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, this::apply),
-                Ui.button("Khôi phục mặc định", t -> Icons.undo(t.fg), () -> {
-                    if (ui.confirmDialog("Đưa mọi tùy chọn về mặc định?")) {
-                        Config d = new Config();
-                        d.copyCounter = engine.config().copyCounter;
-                        engine.applyConfig(d.normalized());
-                        UiPrefs.setAnimationsEnabled(ui.uiPrefs, true);
-                        UiPrefs.setFontScalePercent(ui.uiPrefs, 100);
-                        load();
-                        ui.syncHeader();
-                    }
-                }),
-                saved);
+        JPanel rightBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        rightBtns.setOpaque(false);
+        rightBtns.add(Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, this::apply));
+        rightBtns.add(Ui.button("Khôi phục mặc định", t -> Icons.undo(t.fg), () -> {
+            if (ui.confirmDialog("Đưa mọi tùy chọn về mặc định?")) {
+                Config d = new Config();
+                d.copyCounter = engine.config().copyCounter;
+                engine.applyConfig(d.normalized());
+                UiPrefs.setAnimationsEnabled(ui.uiPrefs, true);
+                UiPrefs.setFontScalePercent(ui.uiPrefs, 100);
+                UiPrefs.setUiFontChoice(ui.uiPrefs, themythofcrawl.ui.theme.FontManager.UiFontChoice.BE_VIETNAM_PRO);
+                UiPrefs.setMonoFontChoice(ui.uiPrefs, themythofcrawl.ui.theme.FontManager.MonoFontChoice.JETBRAINS_MONO);
+                UiPrefs.setDisplayMode(ui.uiPrefs, UiDisplayMode.ICON_AND_TEXT);
+                load();
+                ui.syncHeader();
+            }
+        }));
+        rightBtns.add(saved);
         topBar.add(rightBtns, BorderLayout.EAST);
 
         content.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
@@ -288,6 +318,42 @@ final class SettingsTab {
                 ui.syncHeader();
                 relayoutSections();
                 saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+            }
+        });
+        uiFontBox.addActionListener(e -> {
+            if (!loading) {
+                int idx = uiFontBox.getSelectedIndex();
+                var choices = themythofcrawl.ui.theme.FontManager.UiFontChoice.values();
+                if (idx >= 0 && idx < choices.length) {
+                    UiPrefs.setUiFontChoice(ui.uiPrefs, choices[idx]);
+                    refreshDiagnostics();
+                    ui.syncHeader();
+                    relayoutSections();
+                    saved.setText("Đã đổi font giao diện lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                }
+            }
+        });
+        monoFontBox.addActionListener(e -> {
+            if (!loading) {
+                int idx = monoFontBox.getSelectedIndex();
+                var choices = themythofcrawl.ui.theme.FontManager.MonoFontChoice.values();
+                if (idx >= 0 && idx < choices.length) {
+                    UiPrefs.setMonoFontChoice(ui.uiPrefs, choices[idx]);
+                    refreshDiagnostics();
+                    ui.syncHeader();
+                    saved.setText("Đã đổi font Monospace lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                }
+            }
+        });
+        displayModeBox.addActionListener(e -> {
+            if (!loading) {
+                int idx = displayModeBox.getSelectedIndex();
+                UiDisplayMode[] modes = UiDisplayMode.values();
+                if (idx >= 0 && idx < modes.length) {
+                    UiPrefs.setDisplayMode(ui.uiPrefs, modes[idx]);
+                    ui.syncHeader();
+                    saved.setText("Chế độ nút: " + modes[idx].label);
+                }
             }
         });
         for (JComboBox<?> c : new JComboBox<?>[] {refreshPolicyBox, profile, actionModeBox, lock2xxStrategyBox, queryMode, copyFallback}) {
@@ -454,6 +520,9 @@ final class SettingsTab {
             validateRegexOutline();
             animationsBox.setSelected(UiPrefs.animationsEnabled(ui.uiPrefs));
             fontScaleBox.setSelectedItem(UiPrefs.fontScalePercent(ui.uiPrefs) + "%");
+            uiFontBox.setSelectedIndex(UiPrefs.uiFontChoice(ui.uiPrefs).ordinal());
+            monoFontBox.setSelectedIndex(UiPrefs.monoFontChoice(ui.uiPrefs).ordinal());
+            displayModeBox.setSelectedIndex(UiPrefs.displayMode(ui.uiPrefs).ordinal());
             refreshDiagnostics();
         } finally {
             loading = false;
@@ -566,6 +635,18 @@ final class SettingsTab {
 
     JComboBox<String> fontScaleBox() {
         return fontScaleBox;
+    }
+
+    JComboBox<String> uiFontBox() {
+        return uiFontBox;
+    }
+
+    JComboBox<String> monoFontBox() {
+        return monoFontBox;
+    }
+
+    JComboBox<String> displayModeBox() {
+        return displayModeBox;
     }
 
     JCheckBox animationsCheckBox() {
