@@ -122,6 +122,7 @@ final class ApiTab {
     private JPanel heldStrip;
     private JLabel heldStripLabel;
     private ProxyInterceptQueue.PendingRequest shownHeld;
+    private int lastKnownHeldCount;
     private JButton compactSummaryBtn;
     private JLabel compactMiniStats;
     private boolean treeStale = true;
@@ -1063,6 +1064,41 @@ final class ApiTab {
                     showResponse(keep);
                 }
             }
+        }
+    }
+
+    /**
+     * Real-time push callback fired directly on the EDT whenever {@link ProxyInterceptQueue} changes.
+     * Rebuilds the visible API-tab tree and clears stale held preview bars immediately without waiting for timer tick.
+     */
+    void onProxyQueueChanged(boolean activeTab) {
+        List<ProxyInterceptQueue.PendingRequest> pending = engine.proxyQueue().pending();
+        int curCount = pending.size();
+        boolean grew = curCount > lastKnownHeldCount;
+        lastKnownHeldCount = curCount;
+
+        if (shownHeld != null) {
+            long id = shownHeld.id();
+            boolean stillPending = pending.stream().anyMatch(p -> p.id() == id);
+            if (!stillPending) {
+                showHeldRequest(null);
+            }
+        }
+
+        treeStale = true;
+        branchStale = true;
+        if (tree.tree.isShowing() || activeTab) {
+            treeStale = false;
+            tree.rebuild(engine.config().showGhosts);
+            if (grew && shownHeld == null && !pending.isEmpty()) {
+                tree.revealHeldNode(pending.get(pending.size() - 1).id());
+            }
+            tree.tree.revalidate();
+            tree.tree.repaint();
+        }
+        if (branchTable.isShowing()) {
+            branchStale = false;
+            branchModel.reload();
         }
     }
 

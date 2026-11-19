@@ -76,6 +76,7 @@ final class TreeTab {
     private RoleResult shown;
     private PendingRequest shownHeld;
     private Object shownState;
+    private int lastKnownHeldCount;
 
     TreeTab(MainPanel ui) {
         this.ui = ui;
@@ -526,7 +527,7 @@ final class TreeTab {
         return sb.toString();
     }
 
-    private void syncHeaderBreadcrumb() {
+    void syncHeaderBreadcrumb() {
         String path = currentBreadcrumbPath();
         headerBreadcrumb.setPath(path);
         int held = engine.proxyQueue().pendingCount();
@@ -579,6 +580,47 @@ final class TreeTab {
         if (shownHeld == null && shownGroup != null && gs.contains(shownGroup) && shown != null
                 && !(shown.state() + "/" + shown.responseBlob()).equals(shownState)) {
             showEntry(shownGroup, shown);
+        }
+    }
+
+    /**
+     * Real-time push callback fired directly on the EDT whenever {@link ProxyInterceptQueue} changes
+     * (new request intercepted, resolved externally, or released). Rebuilds the visible Tree immediately
+     * without waiting for timer polling or tab switching.
+     */
+    void onProxyQueueChanged(boolean activeTab) {
+        List<PendingRequest> pending = engine.proxyQueue().pending();
+        int curCount = pending.size();
+        boolean grew = curCount > lastKnownHeldCount;
+        lastKnownHeldCount = curCount;
+
+        // If currently displayed held request was resolved externally (e.g. from ProxyInterceptDialog), clear it live
+        if (shownHeld != null) {
+            long id = shownHeld.id();
+            boolean stillPending = pending.stream().anyMatch(p -> p.id() == id);
+            if (!stillPending) {
+                shownHeld = null;
+                inlineCardLayout.show(inlineActionBar, CARD_API);
+                if (shownGroup != null && shown != null) {
+                    showEntry(shownGroup, shown);
+                } else {
+                    reqLabel.setText(" Request — chọn 1 API / Role hoặc mục [CHỜ DUYỆT] trong cây");
+                    respLabel.setText(" Response");
+                    syncQuickButtons();
+                }
+            }
+        }
+
+        stale = true;
+        if (tree.tree.isShowing() || activeTab || window != null) {
+            stale = false;
+            tree.rebuild(engine.config().showGhosts);
+            if (grew && shownHeld == null && !pending.isEmpty()) {
+                tree.revealHeldNode(pending.get(pending.size() - 1).id());
+            }
+            syncHeaderBreadcrumb();
+            tree.tree.revalidate();
+            tree.tree.repaint();
         }
     }
 
@@ -645,6 +687,14 @@ final class TreeTab {
 
     Breadcrumb headerBreadcrumb() {
         return headerBreadcrumb;
+    }
+
+    String headerMetaText() {
+        return headerMeta.getText();
+    }
+
+    PendingRequest shownHeld() {
+        return shownHeld;
     }
 
     JFrame detachedWindow() {

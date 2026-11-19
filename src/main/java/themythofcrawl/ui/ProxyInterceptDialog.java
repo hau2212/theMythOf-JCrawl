@@ -98,6 +98,26 @@ public final class ProxyInterceptDialog {
     private ProxyInterceptDialog() {
     }
 
+    /** Refreshes the floating window in real time if it is currently open (without stealing focus). */
+    public static void refreshIfOpen(MainPanel ui) {
+        FloatingRef ref = activeFloating;
+        if (ref == null) {
+            return;
+        }
+        MainPanel prevUi = ref.ownerUi().get();
+        JDialog prevDlg = ref.dialog().get();
+        if ((ui == null || prevUi == ui) && prevDlg != null && prevDlg.isDisplayable() && prevDlg.isVisible()) {
+            Runnable r = ref.refresh();
+            if (r != null) {
+                if (SwingUtilities.isEventDispatchThread()) {
+                    r.run();
+                } else {
+                    SwingUtilities.invokeLater(r);
+                }
+            }
+        }
+    }
+
     /** Opens (or raises &amp; refreshes) the floating, draggable, resizable Live Proxy Intercept window. */
     public static void showFloating(MainPanel ui) {
         if (ui == null) {
@@ -744,9 +764,13 @@ public final class ProxyInterceptDialog {
 
         Runnable queueListener = () -> SwingUtilities.invokeLater(refresh);
         queue.addListener(queueListener);
+        ae.policyLedger().addListener(queueListener);
 
         refresh.run();
-        return new View(root, queueTable, requestEditor, pinBtn, refresh, () -> queue.removeListener(queueListener));
+        return new View(root, queueTable, requestEditor, pinBtn, refresh, () -> {
+            queue.removeListener(queueListener);
+            ae.policyLedger().removeListener(queueListener);
+        });
     }
 
     private static final class QueueCellRenderer extends DefaultTableCellRenderer {

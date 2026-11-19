@@ -85,31 +85,21 @@ jobs:
           cat <<EOF > /tmp/release_notes.md
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
-          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_3.4_beta\`, \`V_2.4_beta\`, \`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo quy ước trong \`VERSIONING.md\`: cập nhật nâng cấp UX/UI, điều phối Cây & Action Workbench từ nền \`V_3.4_beta\` tăng MINOR -> **\`V_3.5_beta\`**.
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_3.5_beta\`, \`V_3.4_beta\`, \`V_2.4_beta\`, \`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Theo quy ước trong \`VERSIONING.md\`: bản cập nhật đồng bộ real-time & điều khiển Method trên Top Bar từ nền \`V_3.5_beta\` tăng MINOR -> **\`V_3.6_beta\`**.
 
-          ### 6 Điểm Nâng cấp Chính trong \`${TAG}\`
+          ### Điểm Nâng cấp Chính trong \`${TAG}\`
 
-          1. **Thanh Header Trên cùng 1 Hàng Chuẩn + Hiển thị & Bật/Tắt Action Ngay Lập Tức**:
-             - Sửa triệt để lỗi rớt dòng/chồng nút trên Top Bar; gom cụm điều khiển gọn trong 1 hàng duy nhất.
-             - Hiển thị rõ trạng thái Action đang chạy ngay trên Header (\`Action: Nguyên bản\` / \`Chờ duyệt\` / \`Giữ Proxy\` / \`Sổ cái (N luật)\`) kèm công tắc gạt **\`ModernToggleSwitch\`** bật/tắt 1-click và menu chọn nhanh 6 chế độ.
+          1. **Đồng bộ Real-Time Tức thì trên Cây (\`TreeTab\`), Tab \`API\`, Top Bar & Hàng chờ Proxy**:
+             - Đẩy sự kiện trực tiếp lên EDT ngay khi \`ProxyInterceptQueue\` nhận hoặc xử lý request (\`enqueue\` / \`resolve\` / \`releaseAll\`) — **không cần chuyển tab hay di chuyển chỗ khác** mới thấy node \`[CHỜ DUYỆT · CHƯA GỬI]\`.
+             - Khi request bị chặn được xử lý (Gửi Server / Lưu nháp / Drop) từ bất kỳ đâu (Cây, Tab API, cửa sổ Hàng chờ chi tiết hoặc hết giờ), mọi khung đang mở tự đồng bộ và dọn dẹp tức thì.
+             - Tự động đánh dấu cập nhật Cây (\`TreeTab\`) ngay khi trạng thái API thay đổi (\`dirty\` -> \`200 OK\`) và tự đồng bộ \`Top Bar\` + \`ProxyInterceptDialog\` theo thời gian thực khi \`Sổ cái Luật (CRUD)\` thay đổi.
 
-          2. **Thao tác Nhanh Trực tiếp Trên Cây (Tree-First Intercept & Sửa nhanh Raw HTTP)**:
-             - Request đang bị giữ tại Proxy xuất hiện **ngay trong Nhánh Đích của Cây** với nhãn \`[CHỜ DUYỆT · CHƯA GỬI]\` và bộ đếm chờ duyệt trên thư mục (mặc định không tự bật popup choán màn hình).
-             - Khi chọn node trên cây, chỉnh sửa Raw HTTP trực tiếp ngay trong tab \`Request\` kèm thanh thao tác nhanh: **\`Gửi lên Server\`**, **\`Lưu nháp (Không gửi)\`**, **\`Drop\`**, **\`Format JSON\`**, **\`Lưu sửa\`**, và nút **\`Mở cửa sổ chi tiết\`** chỉ khi cần.
+          2. **Tự động Mở rộng & Cuộn tới Nhánh đang có Request bị Chặn**:
+             - Kể cả khi bạn đang thu gọn nhánh đích hoặc cuộn xuống cuối danh sách hàng trăm API, ngay khi có request mới bị chặn vào nhánh đó, Cây tự động mở nhánh (và cụm API trực tiếp) rồi cuộn node \`[CHỜ DUYỆT · CHƯA GỬI]\` vào tầm nhìn mà không làm mất phần bạn đang chỉnh sửa.
 
-          3. **Cửa sổ Hàng đợi Proxy Chi tiết (\`ProxyInterceptDialog\`) Đồng bộ & Hiển thị Đầy đủ Ngữ cảnh**:
-             - Bảng 8 cột mới bổ sung **\`Nhánh đích\`**, **\`Host\`**, **\`Trạng thái\`**, bộ lọc nhanh theo Nhánh / Host / Tìm kiếm, dải chọn Method dạng chip (\`MethodChipBar\`) và công tắc \`ModernToggleSwitch\` đồng bộ giao diện Light/Dark của Burp Suite.
-
-          4. **Thiết kế lại Toàn bộ Giao diện \`RolesTab\` Đồng bộ Hệ thống**:
-             - Thay toàn bộ công tắc cũ trong bảng và khung chỉnh sửa bằng **\`ModernToggleSwitch\`** bo tròn sắc nét, chip phân tầng Tier & Rule hiện đại và hệ nút bấm \`Ui.solidPrimary\` / \`Ui.dangerBtn\` / \`Ui.secondaryBtn\` chuẩn tương phản.
-
-          5. **Action Workbench Gọn 5 Tab + Sửa Dứt điểm Lỗi Khó Tìm Nút Lưu (CRUD Form)**:
-             - Rút gọn từ 6 tab dàn trải thành **5 tab trực quan**: \`1. Chiến lược & Bật/Tắt\`, \`2. Sổ cái Luật (CRUD)\`, \`3. Bộ Dò & Căn chỉnh\`, \`4. Kho ID · Chuỗi · Khóa 200\` (sub-tabs), \`5. Hướng dẫn & Ví dụ\`.
-             - Form CRUD mới hiển thị theo ngữ cảnh (Progressive Disclosure), nút chính đặc màu **\`Lưu chính sách mới (Ctrl+S)\` / \`Lưu thay đổi\`** luôn ghim nổi bật dưới chân form, tự đặt tên khi để trống và báo xác nhận màu xanh sau khi lưu.
-
-          6. **Tích hợp Sổ tay Hướng dẫn Kiến trúc Action & 5 Kịch bản Áp dụng 1-Click**:
-             - Sơ đồ kiến trúc 2 tầng (Tầng Proxy trước khi lên Server vs Tầng Replay khi chạy Role), bảng so sánh 6 chế độ và 5 tình huống thực chiến có nút **\`Áp dụng ngay\`** 1 chạm (0% HTML, tương thích hoàn toàn Burp Light & Dark).
+          3. **Hiển thị rõ & Bật/Tắt nhanh Method \`GET\` / \`Tất cả\` ngay trên Menu Top Bar**:
+             - Menu \`Chặn duyệt\` trên Top Bar hiển thị trực tiếp danh sách Method đang chặn (mặc định \`POST, PUT, PATCH, DELETE\`), kèm nút 1-click: **\`Chặn cả GET (tải trang / API đọc)\`**, **\`Chỉ chặn Action (POST, PUT, PATCH, DELETE)\`** và **\`Chặn TẤT CẢ Method\`**.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

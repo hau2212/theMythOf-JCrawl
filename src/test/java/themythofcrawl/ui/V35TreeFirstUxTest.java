@@ -129,18 +129,21 @@ final class V35TreeFirstUxTest {
     }
 
     @Test
-    void versionMetadataIsV35Beta() throws Exception {
+    void versionMetadataIsConsistent() throws Exception {
         Properties props = new Properties();
         try (InputStream in = Files.newInputStream(Path.of("version.properties"))) {
             props.load(in);
         }
-        assertEquals("3", props.getProperty("major"));
-        assertEquals("5", props.getProperty("minor"));
-        assertEquals("V_3.5_beta", props.getProperty("releaseTag"));
-        assertEquals("3.5-beta", props.getProperty("versionName"));
-        assertEquals("theMythOf-JCrawl_V_3.5_beta.jar", props.getProperty("jarName"));
-        assertEquals("3.5-beta", Extension.VERSION);
-        assertEquals("3.5-beta", Diagnostics.VERSION);
+        String major = props.getProperty("major");
+        String minor = props.getProperty("minor");
+        String channel = props.getProperty("channel");
+        String expectedVer = major + "." + minor + "-" + channel;
+        String expectedTag = "V_" + major + "." + minor + "_" + channel;
+        assertEquals(expectedTag, props.getProperty("releaseTag"));
+        assertEquals(expectedVer, props.getProperty("versionName"));
+        assertEquals("theMythOf-JCrawl_" + expectedTag + ".jar", props.getProperty("jarName"));
+        assertEquals(expectedVer, Extension.VERSION);
+        assertEquals(expectedVer, Diagnostics.VERSION);
 
         String wf = Files.readString(Path.of(".github/workflows/build.yml"), StandardCharsets.UTF_8);
         assertTrue(wf.contains("IMMUTABLE GUARD"), "CI workflow must preserve immutable release guard");

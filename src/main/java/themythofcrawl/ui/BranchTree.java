@@ -389,6 +389,7 @@ public final class BranchTree {
             }
         }
         List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> heldPending = engine.proxyQueue().pending();
+        Set<String> heldFolderKeys = new HashSet<>();
         for (themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr : heldPending) {
             String bPath = Hierarchy.normalize(pr.branchName());
             if (!matchesFocus(bPath)) {
@@ -396,7 +397,9 @@ public final class BranchTree {
             }
             List<String> parts = Hierarchy.split(bPath);
             for (int i = 1; i <= parts.size(); i++) {
-                pend.merge(Hierarchy.key(parts.subList(0, i)), 1, Integer::sum);
+                String k = Hierarchy.key(parts.subList(0, i));
+                pend.merge(k, 1, Integer::sum);
+                heldFolderKeys.add("F" + k);
             }
         }
         Map<String, List<PlacementBook.Record>> ghosts = new LinkedHashMap<>();
@@ -431,8 +434,8 @@ public final class BranchTree {
         List<Node> expand = new ArrayList<>();
         Map<Node, Boolean> reachable = new HashMap<>();
         reachable.put(root, true);
-        Consumer<String> ensure = path -> ensureFolder(root, Hierarchy.split(path), nodes, counts, pend, ghostCount, reachable,
-                expand);
+        Consumer<String> ensure = path -> ensureFolder(root, Hierarchy.split(path), nodes, counts, pend, ghostCount,
+                heldFolderKeys, reachable, expand);
         Set<String> paths = new LinkedHashSet<>();
         if (focusPath == null) {
             for (Branch b : branches) {
@@ -505,7 +508,7 @@ public final class BranchTree {
             nodes.put(gn.key, gn);
             ghostRows.put(folder, gn);
         });
-        layoutFolders(nodes, ownApis, ghostRows, reachable, expand);
+        layoutFolders(nodes, ownApis, ghostRows, heldFolderKeys, reachable, expand);
         restoring = true;
         try {
             model.setRoot(root);
@@ -527,9 +530,41 @@ public final class BranchTree {
         }
     }
 
+    /** Expands ancestors and scrolls the live {@code HELD_PENDING} node into view without stealing focus. */
+    public boolean revealHeldNode(long heldId) {
+        if (!(model.getRoot() instanceof Node root)) {
+            return false;
+        }
+        Node found = findByKey(root, "H" + heldId);
+        if (found == null) {
+            return false;
+        }
+        TreePath path = new TreePath(found.getPath());
+        if (path.getParentPath() != null) {
+            tree.expandPath(path.getParentPath());
+        }
+        tree.scrollPathToVisible(path);
+        return true;
+    }
+
+    private static Node findByKey(Node parent, Object key) {
+        if (key.equals(parent.key)) {
+            return parent;
+        }
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            if (parent.getChildAt(i) instanceof Node ch) {
+                Node hit = findByKey(ch, key);
+                if (hit != null) {
+                    return hit;
+                }
+            }
+        }
+        return null;
+    }
+
     private Node ensureFolder(Node root, List<String> parts, Map<Object, Node> nodes, Map<String, int[]> counts,
-                              Map<String, Integer> pend, Map<String, Integer> ghostCount, Map<Node, Boolean> reachable,
-                              List<Node> expand) {
+                              Map<String, Integer> pend, Map<String, Integer> ghostCount, Set<String> heldFolderKeys,
+                              Map<Node, Boolean> reachable, List<Node> expand) {
         Node parent = root;
         for (int i = 0; i < parts.size(); i++) {
             String k = Hierarchy.key(parts.subList(0, i + 1));
@@ -547,8 +582,12 @@ public final class BranchTree {
                         name + " · " + c[0] + " API · " + v.summary(), v.level(), "F" + k, i + 1, meta);
                 nodes.put(n.key, n);
                 parent.add(n);
+                boolean hasHeld = heldFolderKeys.contains(n.key);
+                if (hasHeld) {
+                    collapsed.remove(n.key);
+                }
                 boolean visible = Boolean.TRUE.equals(reachable.get(parent))
-                        && (focusPath != null || !collapsed.contains(n.key));
+                        && (focusPath != null || hasHeld || !collapsed.contains(n.key));
                 reachable.put(n, visible);
                 if (visible) {
                     expand.add(n);
@@ -569,7 +608,7 @@ public final class BranchTree {
      * collapsible {@link Node.Kind#APIS} bucket when the folder also has sub-folders — then ghosts, then sub-folders.
      */
     private void layoutFolders(Map<Object, Node> nodes, Map<Node, List<Node>> ownApis, Map<Node, Node> ghostRows,
-                               Map<Node, Boolean> reachable, List<Node> expand) {
+                               Set<String> heldFolderKeys, Map<Node, Boolean> reachable, List<Node> expand) {
         List<Node> folders = new ArrayList<>();
         for (Node n : nodes.values()) {
             if (n.kind == Node.Kind.FOLDER) {
@@ -591,7 +630,11 @@ public final class BranchTree {
                 Node bucket = apisBucket(folder, apis);
                 nodes.put(bucket.key, bucket);
                 folder.add(bucket);
-                apisOpen = folderOpen && !collapsed.contains(bucket.key);
+                boolean hasDirectHeld = apis.stream().anyMatch(x -> x.kind == Node.Kind.HELD_PENDING);
+                if (hasDirectHeld) {
+                    collapsed.remove(bucket.key);
+                }
+                apisOpen = folderOpen && (hasDirectHeld || !collapsed.contains(bucket.key));
                 reachable.put(bucket, apisOpen);
                 if (apisOpen) {
                     expand.add(bucket);
@@ -644,11 +687,13 @@ public final class BranchTree {
                 if (n.payload instanceof ApiGroup g && clusteredGids.contains(g.gid())) {
                     continue;
                 }
-                if (apisOpen && expanded.contains(n.key)) {
-                    fillGroup(n, nodes);
-                    expand.add(n);
-                } else {
-                    n.lazy();
+                if (n.kind == Node.Kind.GROUP) {
+                    if (apisOpen && expanded.contains(n.key)) {
+                        fillGroup(n, nodes);
+                        expand.add(n);
+                    } else {
+                        n.lazy();
+                    }
                 }
                 apiParent.add(n);
             }
@@ -688,15 +733,20 @@ public final class BranchTree {
     private static Node apisBucket(Node folder, List<Node> apis) {
         List<ApiGroup> gs = new ArrayList<>(apis.size());
         int pending = 0;
+        int held = 0;
         for (Node n : apis) {
-            ApiGroup g = (ApiGroup) n.payload;
-            gs.add(g);
-            if (g.pending()) {
+            if (n.payload instanceof ApiGroup g) {
+                gs.add(g);
+                if (g.pending()) {
+                    pending++;
+                }
+            } else if (n.kind == Node.Kind.HELD_PENDING) {
+                held++;
                 pending++;
             }
         }
         Audit.Verdict v = Audit.branch(gs);
-        String count = gs.size() + " API";
+        String count = gs.size() + " API" + (held > 0 ? " · " + held + " chờ duyệt" : "");
         Node.FolderMeta meta = new Node.FolderMeta("API của nhánh", null, count, v.summary(),
                 pending > 0 ? String.valueOf(pending) : null, null);
         return new Node(Node.Kind.APIS, folder.payload, "API của nhánh · " + count + " · " + v.summary(), v.level(),

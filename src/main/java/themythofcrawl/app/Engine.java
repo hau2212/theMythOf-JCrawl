@@ -321,6 +321,47 @@ public final class Engine {
         log("Chế độ Action toàn cục -> " + target.shortTitle(), null);
     }
 
+    /** Human-readable summary of HTTP methods currently intercepted by quick Mode #5. */
+    public String interceptMethodsSummary() {
+        Set<String> ms = actionEngine.getInterceptWaitMethods();
+        if (ms.isEmpty() || ms.size() >= ActionInterceptRule.ALL_METHODS.size()) {
+            return "Tất cả Method (kể cả GET)";
+        }
+        if (ms.equals(ActionEngine.ACTION_METHODS)) {
+            return "POST, PUT, PATCH, DELETE (không chặn GET)";
+        }
+        List<String> ordered = new ArrayList<>();
+        for (String m : ActionInterceptRule.ALL_METHODS) {
+            if (ms.contains(m)) {
+                ordered.add(m);
+            }
+        }
+        return String.join(", ", ordered);
+    }
+
+    /** Toggles GET interception from Top Bar; turning GET ON also enables Mode #5 immediately. */
+    public void toggleInterceptGetFromHeader(boolean includeGet) {
+        actionEngine.toggleInterceptWaitMethod("GET", includeGet);
+        if (includeGet && !actionEngine.isInterceptWaitEnabled()) {
+            applyQuickActionMode(ActionEngine.ActionMode.INTERCEPT_WAIT);
+        } else {
+            changes.status();
+        }
+        log("Chặn chờ duyệt: " + (includeGet ? "ĐÃ BẬT chặn cả GET" : "Đã bỏ chặn GET")
+                + " (" + interceptMethodsSummary() + ").", null);
+    }
+
+    /** Sets the quick Mode #5 HTTP methods from Top Bar and activates Mode #5 when requested. */
+    public void setInterceptMethodsFromHeader(Collection<String> methods, boolean activateWait) {
+        actionEngine.setInterceptWaitMethods(methods);
+        if (activateWait) {
+            applyQuickActionMode(ActionEngine.ActionMode.INTERCEPT_WAIT);
+        } else {
+            changes.status();
+        }
+        log("Chặn chờ duyệt -> Method: " + interceptMethodsSummary(), null);
+    }
+
     private void syncActionEngine(Config c) {
         actionEngine.setHoldAllActionAtProxy(c.holdActionAtProxy || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY);
         actionEngine.setDefaultLock2xxStrategy(c.lock2xxStrategy);

@@ -123,6 +123,7 @@ public final class MainPanel {
     private final JButton topChromeToggleBtn = new JButton();
     private final JButton compactControlsBtn = new JButton();
     private Runnable proxyQueueListener;
+    private Runnable policyLedgerListener;
     private JPanel headerRow1;
     private JPanel headerDrawerRow;
     private JPanel headerLeftZone;
@@ -231,6 +232,11 @@ public final class MainPanel {
         }
         proxyQueueListener = () -> javax.swing.SwingUtilities.invokeLater(() -> {
             syncProxyInterceptButton();
+            boolean treeActive = tabs.getSelectedComponent() == treeTab.panel;
+            boolean apiActive = tabs.getSelectedComponent() == api.panel;
+            treeTab.onProxyQueueChanged(treeActive);
+            api.onProxyQueueChanged(apiActive);
+            ProxyInterceptDialog.refreshIfOpen(this);
             if (engine.proxyQueue().pendingCount() > 0
                     && engine.proxyQueue().isAutoOpenWindow()
                     && !java.awt.GraphicsEnvironment.isHeadless()) {
@@ -238,6 +244,14 @@ public final class MainPanel {
             }
         });
         engine.proxyQueue().addListener(proxyQueueListener);
+
+        policyLedgerListener = () -> javax.swing.SwingUtilities.invokeLater(() -> {
+            syncProxyInterceptButton();
+            treeTab.syncHeaderBreadcrumb();
+            ProxyInterceptDialog.refreshIfOpen(this);
+        });
+        engine.actionEngine().policyLedger().addListener(policyLedgerListener);
+
         syncHeader();
         api.reloadAll();
         timer = new Timer(TICK_MS, e -> tick(false));
@@ -258,6 +272,10 @@ public final class MainPanel {
         if (proxyQueueListener != null) {
             engine.proxyQueue().removeListener(proxyQueueListener);
             proxyQueueListener = null;
+        }
+        if (policyLedgerListener != null) {
+            engine.actionEngine().policyLedger().removeListener(policyLedgerListener);
+            policyLedgerListener = null;
         }
         ProxyInterceptDialog.closeFor(this);
         synchronized (BY_ENGINE) {
@@ -796,12 +814,13 @@ public final class MainPanel {
         int activePolicies = engine.actionEngine().policyLedger().activeCount();
 
         m.add(Ui.item("Chế độ Action hiện tại: " + engine.quickActionStatusLabel(), false, () -> { }));
+        m.add(Ui.item("Method chặn nhanh: " + engine.interceptMethodsSummary(), false, () -> { }));
         m.addSeparator();
 
         Runnable afterMode = () -> {
             syncHeader();
             if (settings != null) settings.load();
-            flash("Action -> " + engine.quickActionStatusLabel());
+            flash("Action -> " + engine.quickActionStatusLabel() + " (" + engine.interceptMethodsSummary() + ")");
         };
 
         m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Nhả)",
@@ -836,11 +855,29 @@ public final class MainPanel {
                 }));
 
         m.addSeparator();
+        boolean getOn = engine.actionEngine().getInterceptWaitMethods().contains("GET");
+        m.add(Ui.item((getOn ? "[Đang bật] " : "") + "Chặn cả GET (tải trang / API đọc)",
+                t -> Icons.check(getOn ? t.danger.text() : t.muted, 13), () -> {
+                    engine.toggleInterceptGetFromHeader(!getOn);
+                    afterMode.run();
+                }));
+        m.add(Ui.item("Chỉ chặn Action (POST, PUT, PATCH, DELETE)",
+                t -> Icons.sliders(t.warning.text(), 13), () -> {
+                    engine.setInterceptMethodsFromHeader(ActionEngine.ACTION_METHODS, true);
+                    afterMode.run();
+                }));
+        m.add(Ui.item("Chặn TẤT CẢ Method (GET, POST, PUT, PATCH, DELETE...)",
+                t -> Icons.strategyShield(t.danger.text(), 13), () -> {
+                    engine.setInterceptMethodsFromHeader(themythofcrawl.model.ActionInterceptRule.ALL_METHODS, true);
+                    afterMode.run();
+                }));
+
+        m.addSeparator();
         String curBranch = engine.activeBranch().name();
         m.add(Ui.item("+ Chặn chờ duyệt riêng nhánh '" + Hierarchy.leaf(curBranch) + "'",
                 t -> Icons.branch(t.danger.text()), () -> {
                     engine.actionEngine().policyLedger().upsert(themythofcrawl.model.ActionPolicy.quickBranchWait(
-                            curBranch, List.of("POST", "PUT", "PATCH", "DELETE"), "Top Bar"));
+                            curBranch, new ArrayList<>(engine.actionEngine().getInterceptWaitMethods()), "Top Bar"));
                     engine.saveActionPolicies();
                     afterMode.run();
                 }));
@@ -924,6 +961,10 @@ public final class MainPanel {
         captureToggle.setSelectedIndex(c.captureEnabled ? 1 : 0);
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         syncProxyInterceptButton();
+        if (treeTab != null) {
+            treeTab.syncHeaderBreadcrumb();
+        }
+        ProxyInterceptDialog.refreshIfOpen(this);
 
         Branch b = engine.activeBranch();
         String name = b.name();
@@ -1333,6 +1374,7 @@ public final class MainPanel {
             log.stale = true;
         }
         if (!b.dirty().isEmpty()) {
+            treeTab.stale = true;
             treeTab.dirty(b.dirty());
             excel.stale |= b.dirty().stream().anyMatch(g -> g.target() != null);
             audit.stale = true;
