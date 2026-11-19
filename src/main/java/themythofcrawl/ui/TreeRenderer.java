@@ -294,6 +294,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             case ROOT -> x = layoutRoot(n, th, nl, x, gap);
             case APIS -> x = layoutApis(n, th, nl, x, gap);
             case CLUSTER -> x = layoutCluster(n, th, nl, x, gap);
+            case HELD_PENDING -> x = layoutHeldPending(n, th, nl, x, gap);
             case LOGSYS -> x = layoutLogSys(n, th, nl, x, gap);
             case GROUP -> x = layoutGroup(n, th, nl, x, gap);
             case LOGAPI -> x = layoutLogApi(n, th, nl, x, gap);
@@ -512,6 +513,36 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.edge = th.grid;
         x = addLeadIcon(nl, Icons.dot(th.dotNone, true), x, gap);
         x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
+        return x;
+    }
+
+    /** Live Proxy-held request displayed directly inside its target Branch on the Tree (not yet sent to Server). */
+    private int layoutHeldPending(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        if (!(n.payload instanceof themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr)) {
+            x = addLeadIcon(nl, Icons.strategyShield(th.danger.text(), 13), x, gap);
+            return addPrimary(nl, n.label, th.boldFont, th.danger.text(), x, th.scaled(4));
+        }
+        nl.fill = th.danger.fill();
+        nl.edge = th.danger.border();
+        nl.dashedEdge = true;
+
+        x = addLeadIcon(nl, Icons.strategyShield(th.danger.text(), 13), x, th.scaled(4));
+        x = addChip(th, nl, "CHỜ DUYỆT · CHƯA GỬI", th.smallBoldFont,
+                th.danger.solidFill(), th.danger.border(), th.danger.onSolid(), null, true, x, gap);
+        Theme.Token mt = th.method(pr.method());
+        x = addChip(th, nl, pr.method(), th.smallBoldFont, mt.fill(), mt.border(), mt.text(), null, true, x, gap);
+
+        String shortP = Text.shortPath(pr.path(), 48);
+        if (!shortP.isEmpty()) {
+            nl.monoPathX = x;
+            nl.monoFont = th.monoBoldFont;
+            nl.monoPath = shortP.toCharArray();
+            nl.monoPathLen = nl.monoPath.length;
+            x += getFontMetrics(th.monoBoldFont).charsWidth(nl.monoPath, 0, nl.monoPathLen) + gap;
+        }
+        String host = pr.service() != null ? pr.service().hostLabel() : "";
+        String meta = (host.isEmpty() ? "" : host + " · ") + pr.timeHms();
+        x = addTail(nl, th, meta, x, gap);
         return x;
     }
 

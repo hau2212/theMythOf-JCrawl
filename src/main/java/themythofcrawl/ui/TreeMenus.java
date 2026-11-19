@@ -101,17 +101,50 @@ final class TreeMenus {
                                 engine.toggleBranchInterceptWait(prefix, next);
                                 ui.syncHeader();
                                 ui.flash(next
-                                        ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — bấm nút trên UI sẽ đợi bạn duyệt!"
+                                        ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [CHỜ DUYỆT]!"
                                         : "Đã TẮT Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
-                                if (next) {
-                                    ProxyInterceptDialog.showFloating(ui);
-                                }
                             }));
                     m.add(Ui.item("Sổ cái & Luật Chính sách cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (CRUD)...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),
                             () -> ui.deleteBranchDialog(prefix)));
+                }
+            }
+            case HELD_PENDING -> {
+                var pr = BranchTree.heldOf(n);
+                if (pr != null) {
+                    m.add(Ui.item("Gửi lên Server ngay (Forward)", t -> Icons.send(t.accent.text(), 13), () -> {
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest());
+                        ui.syncHeader();
+                        ui.flash("Đã gửi lên Server: " + pr.method() + " " + Text.shortPath(pr.path(), 40));
+                    }));
+                    m.add(Ui.item("Lưu nháp vào Cây & Giữ (Không đẩy Server)", t -> Icons.strategyShield(t.warning.text(), 13), () -> {
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.HOLD_AND_SPOOF, pr.originalRequest());
+                        ui.syncHeader();
+                        ui.flash("Đã lưu nháp vào Cây (không gửi lên Server): " + pr.method() + " " + Text.shortPath(pr.path(), 40));
+                    }));
+                    m.add(Ui.item("Hủy bỏ (Drop — không gửi)", t -> Icons.stop(t.danger.text(), 13), () -> {
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.DROP, null);
+                        ui.syncHeader();
+                        ui.flash("Đã hủy bỏ (Drop): " + pr.method() + " " + Text.shortPath(pr.path(), 40));
+                    }));
+                    m.addSeparator();
+                    m.add(Ui.item("+ Cho qua luôn Endpoint này (ALLOW ưu tiên đầu) & Gửi", t -> Icons.check(t.success.text(), 13), () -> {
+                        String host = pr.service() != null ? pr.service().host() : "";
+                        engine.actionEngine().policyLedger().createAtTop(
+                                themythofcrawl.model.ActionPolicy.quickAllowPath(host, pr.path(), List.of(pr.method()), "Cây chính"));
+                        engine.saveActionPolicies();
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest());
+                        ui.syncHeader();
+                        ui.flash("Đã thêm ngoại lệ ALLOW & gửi lên Server!");
+                    }));
+                    m.add(Ui.item("Mở Hàng chờ Chặn chi tiết...", Icons::strategyShield,
+                            () -> ProxyInterceptDialog.showFloating(ui)));
                 }
             }
             case APIS -> {

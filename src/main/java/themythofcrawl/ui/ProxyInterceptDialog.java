@@ -1,6 +1,7 @@
 package themythofcrawl.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Insets;
@@ -28,6 +29,7 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -39,7 +41,9 @@ import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 import themythofcrawl.app.Engine;
@@ -51,24 +55,27 @@ import themythofcrawl.core.ProxyInterceptQueue.ResolutionKind;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ActionInterceptRule;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.ui.kit.MethodChipBar;
+import themythofcrawl.ui.kit.ModernToggleSwitch;
 import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SearchField;
 import themythofcrawl.ui.kit.SectionHeader;
-import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.WrappedText;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Floating, draggable, resizable Live Proxy Intercept Queue (Mode #5 — Chặn chờ duyệt trực tiếp).
+ * Floating, draggable, resizable Detailed Proxy Intercept Queue (Mode #5 — Chặn chờ duyệt trực tiếp).
  * <p>
- * Whenever a browser request matches the user's chosen scope (any Branch/Path, any specific API,
- * Global Method matrix, or a proactive {@link ActionInterceptRule} with {@code INTERCEPT_WAIT}),
- * it pauses here on the Proxy worker thread so the user can inspect/edit the raw HTTP message
- * and click {@code Gửi lên Server (Forward)}, {@code Lưu vào bảng &amp; Giữ}, or {@code Hủy bỏ (Drop)}.
+ * In V_3.5_beta, requests held by Proxy Intercept also appear live right inside their target Branch
+ * on the main Tree ({@code [CHỜ DUYỆT · CHƯA GỬI]}). This detailed window is opened on demand when
+ * the user wants full filtering by Branch/Host, batch Forward/Drop, or side-by-side raw editing.
  */
 public final class ProxyInterceptDialog {
     private static final Pattern CONTENT_LENGTH_HEADER =
             Pattern.compile("(?im)^Content-Length\\s*:\\s*\\d+\\r?$");
+    private static final String FILTER_ALL_BRANCHES = "Mọi nhánh";
+    private static final String FILTER_ALL_HOSTS = "Mọi Host";
 
     private static FloatingRef activeFloating;
 
@@ -110,7 +117,7 @@ public final class ProxyInterceptDialog {
 
         Prefs prefs = UiPrefs.resolve(null, ui.engine);
         Window owner = SwingUtilities.getWindowAncestor(ui.root());
-        JDialog dlg = new JDialog(owner, "Hàng chờ Chặn Proxy trực tiếp — " + Text.EXT_NAME,
+        JDialog dlg = new JDialog(owner, "Hàng chờ Chặn Proxy chi tiết — " + Text.EXT_NAME,
                 JDialog.ModalityType.MODELESS);
         dlg.setResizable(true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -159,8 +166,8 @@ public final class ProxyInterceptDialog {
         });
 
         Dimension pref = UiPrefs.interceptSize(prefs);
-        dlg.setMinimumSize(new Dimension(860, 520));
-        dlg.setSize(pref);
+        dlg.setMinimumSize(new Dimension(920, 560));
+        dlg.setSize(new Dimension(Math.max(pref.width, 1020), Math.max(pref.height, 620)));
         dlg.setLocationRelativeTo(owner);
         Theme.track(dlg);
 
@@ -200,10 +207,10 @@ public final class ProxyInterceptDialog {
         // ------------------------------------------------------------------
         Pill liveStatusPill = new Pill("Đang tắt", t -> t.neutral, t -> Icons.strategyShield(t.muted, 12));
 
-        JToggleButton pinBtn = new JToggleButton("Ghim");
+        JToggleButton pinBtn = new JToggleButton("Ghim nổi");
         pinBtn.setIcon(Icons.themed(t -> Icons.pin(t.muted, 12)));
         pinBtn.setFocusPainted(false);
-        pinBtn.setMargin(new Insets(2, 8, 2, 8));
+        pinBtn.setMargin(new Insets(3, 10, 3, 10));
         pinBtn.setFont(t0.smallBoldFont);
         pinBtn.setToolTipText("Ghim cửa sổ nổi phía trên Burp Suite để vừa thao tác trình duyệt vừa bấm Gửi");
         pinBtn.addActionListener(e -> {
@@ -217,8 +224,8 @@ public final class ProxyInterceptDialog {
         });
 
         SectionHeader headerInner = new SectionHeader(
-                "Hàng chờ Chặn Proxy trực tiếp",
-                "Chặn đứng request khi bấm nút trên trình duyệt và đợi bạn bấm Gửi lên Server, Lưu giữ trong bảng hoặc Hủy bỏ.",
+                "Hàng chờ Chặn Proxy chi tiết",
+                "Xem đầy đủ Nhánh đích, Host, Method và chỉnh Raw HTTP trước khi bấm Gửi lên Server. (Mọi request chờ cũng hiện trực tiếp trên Cây!)",
                 Ui.flow(FlowLayout.RIGHT, liveStatusPill, pinBtn),
                 null);
         JPanel header = new JPanel(new BorderLayout());
@@ -228,7 +235,7 @@ public final class ProxyInterceptDialog {
         header.add(headerInner, BorderLayout.CENTER);
 
         // ------------------------------------------------------------------
-        // 2. QUICK-SCOPE CONTROL BAR (Master Switch + Method Matrix + Pin Path/API)
+        // 2. QUICK-SCOPE CONTROL BAR (ModernToggleSwitch + MethodChipBar + Pin Path/API)
         // ------------------------------------------------------------------
         JPanel controlsCard = new JPanel();
         controlsCard.setLayout(new BoxLayout(controlsCard, BoxLayout.Y_AXIS));
@@ -240,47 +247,34 @@ public final class ProxyInterceptDialog {
 
         final boolean[] syncingUi = {false};
 
-        SegmentedToggle masterToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("TẮT", "Cho request qua bình thường", t -> t.slate, null, false),
-                new SegmentedToggle.Option("BẬT CHẶN", "Chặn đứng request khớp phạm vi & đợi thao tác", t -> t.danger, null, false));
-        masterToggle.setFixedHeight(26);
-        masterToggle.setSelectedIndex(ae.isInterceptWaitEnabled() ? 1 : 0);
+        ModernToggleSwitch masterSwitch = new ModernToggleSwitch(ae.isInterceptWaitEnabled(), true)
+                .labels("ĐANG CHẶN", "Đang tắt");
+        masterSwitch.setToolTipText("Bật hoặc tắt Chặn chờ duyệt (Mode #5 — giữ request lại đợi thao tác)");
 
-        JCheckBox allScopeChk = new JCheckBox("Toàn bộ (mọi nhánh)", ae.isInterceptWaitAllScope());
+        JCheckBox allScopeChk = new JCheckBox("Toàn bộ nhánh", ae.isInterceptWaitAllScope());
         allScopeChk.setOpaque(false);
         allScopeChk.setToolTipText("Chặn tất cả request khớp các HTTP Method bên cạnh trên mọi đường dẫn / nhánh");
 
-        Map<String, JToggleButton> methodBtns = new LinkedHashMap<>();
-        JPanel methodRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
-        methodRow.setOpaque(false);
-        Set<String> initMethods = ae.getInterceptWaitMethods();
-        for (String m : ActionInterceptRule.ALL_METHODS) {
-            JToggleButton tb = new JToggleButton(m, initMethods.contains(m));
-            tb.setFocusPainted(false);
-            tb.setFont(t0.smallFont);
-            tb.setMargin(new Insets(1, 5, 1, 5));
-            tb.setPreferredSize(new Dimension(m.length() >= 7 ? 62 : (m.length() >= 5 ? 52 : 42), 24));
-            styleMethodChip(tb);
-            methodBtns.put(m, tb);
-            methodRow.add(tb);
-        }
+        MethodChipBar methodBar = new MethodChipBar(ae.getInterceptWaitMethods(), true);
 
-        JCheckBox autoOpenChk = new JCheckBox("Tự mở khi có request chặn", queue.isAutoOpenWindow());
+        JCheckBox autoOpenChk = new JCheckBox("Tự mở cửa sổ khi có chặn", queue.isAutoOpenWindow());
         autoOpenChk.setOpaque(false);
+        autoOpenChk.setFont(t0.smallFont);
+        autoOpenChk.setToolTipText("Mặc định tắt — mọi request chờ duyệt đã hiện ngay trên Cây. Tích chọn nếu muốn tự bật cửa sổ chi tiết khi có chặn mới.");
         autoOpenChk.addActionListener(e -> queue.setAutoOpenWindow(autoOpenChk.isSelected()));
 
         JPanel row1 = new JPanel(new BorderLayout(8, 0));
         row1.setOpaque(false);
-        row1.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Trạng thái:"), masterToggle, allScopeChk, methodRow), BorderLayout.WEST);
+        row1.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Chặn Proxy:"), masterSwitch, allScopeChk, methodBar), BorderLayout.WEST);
         row1.add(autoOpenChk, BorderLayout.EAST);
 
         // Row 2: Quick Pin buttons + Open Rules + Active Pinned Chips
         JPanel pinnedChipsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         pinnedChipsRow.setOpaque(false);
 
-        JButton pinBranchBtn = Ui.button("+ Chặn nhánh hiện tại", t -> Icons.branch(t.accent.text()), null);
-        JButton pinApiBtn = Ui.button("+ Chặn API đang chọn", t -> Icons.api(t.warning.text()), null);
-        JButton rulesBtn = Ui.button("Luật Chặn nâng cao...", t -> Icons.sliders(t.fg), null);
+        JButton pinBranchBtn = Ui.secondaryBtn("+ Chặn nhánh hiện tại", t -> Icons.branch(t.accent.text()), null);
+        JButton pinApiBtn = Ui.secondaryBtn("+ Chặn API đang chọn", t -> Icons.api(t.warning.text()), null);
+        JButton rulesBtn = Ui.secondaryBtn("Sổ cái luật (CRUD)...", t -> Icons.sliders(t.fg), null);
 
         JPanel row2 = new JPanel(new BorderLayout(8, 0));
         row2.setOpaque(false);
@@ -298,10 +292,29 @@ public final class ProxyInterceptDialog {
         root.add(topWrap, BorderLayout.NORTH);
 
         // ------------------------------------------------------------------
-        // 3. CENTER SPLIT: PENDING QUEUE TABLE (LEFT) + EDITABLE RAW HTTP (RIGHT)
+        // 3. CENTER SPLIT: FILTERABLE 8-COL QUEUE TABLE (LEFT) + EDITABLE RAW HTTP (RIGHT)
         // ------------------------------------------------------------------
+        JComboBox<String> branchFilter = new JComboBox<>(new String[]{FILTER_ALL_BRANCHES});
+        branchFilter.setPreferredSize(new Dimension(170, 26));
+        branchFilter.setToolTipText("Lọc request đang chờ theo Nhánh đích trên Cây");
+
+        JComboBox<String> hostFilter = new JComboBox<>(new String[]{FILTER_ALL_HOSTS});
+        hostFilter.setPreferredSize(new Dimension(150, 26));
+        hostFilter.setToolTipText("Lọc request đang chờ theo Host đích");
+
+        SearchField filterSearch = new SearchField("Tìm path, method, lý do...", 14);
+
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        filterBar.setOpaque(true);
+        filterBar.setBackground(t0.surfaceAlt);
+        filterBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, t0.border));
+        filterBar.add(Ui.muted("Lọc:"));
+        filterBar.add(branchFilter);
+        filterBar.add(hostFilter);
+        filterBar.add(filterSearch);
+
         DefaultTableModel tm = new DefaultTableModel(
-                new Object[]{"#", "Method", "Đường dẫn", "Lý do chặn", "Lúc"}, 0) {
+                new Object[]{"#", "Trạng thái", "Nhánh đích", "Host", "Method", "Đường dẫn", "Lý do chặn", "Lúc"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -310,18 +323,15 @@ public final class ProxyInterceptDialog {
         ThemedTable queueTable = new ThemedTable(tm);
         Ui.style(queueTable);
         queueTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        queueTable.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+        queueTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         queueTable.setRowHeight(Theme.current().scaled(28));
-        queueTable.getColumnModel().getColumn(0).setPreferredWidth(36);
-        queueTable.getColumnModel().getColumn(0).setMaxWidth(48);
-        queueTable.getColumnModel().getColumn(1).setPreferredWidth(68);
-        queueTable.getColumnModel().getColumn(1).setMinWidth(64);
-        queueTable.getColumnModel().getColumn(1).setMaxWidth(80);
-        queueTable.getColumnModel().getColumn(2).setPreferredWidth(175);
-        queueTable.getColumnModel().getColumn(3).setPreferredWidth(135);
-        queueTable.getColumnModel().getColumn(4).setPreferredWidth(78);
-        queueTable.getColumnModel().getColumn(4).setMinWidth(74);
-        queueTable.getColumnModel().getColumn(4).setMaxWidth(88);
+        int[] widths = {40, 86, 150, 130, 68, 195, 165, 72};
+        for (int i = 0; i < widths.length; i++) {
+            queueTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+            queueTable.getColumnModel().getColumn(i).setCellRenderer(new QueueCellRenderer(i));
+        }
+        queueTable.getColumnModel().getColumn(0).setMaxWidth(52);
+        queueTable.getColumnModel().getColumn(4).setMinWidth(60);
 
         JPanel emptyHintBar = new JPanel(new BorderLayout());
         emptyHintBar.setOpaque(true);
@@ -330,8 +340,8 @@ public final class ProxyInterceptDialog {
                 BorderFactory.createMatteBorder(1, 0, 0, 0, t0.info.border()),
                 BorderFactory.createEmptyBorder(6, 10, 6, 10)));
         WrappedText emptyHintText = WrappedText.body(
-                "Chưa có request nào đang đợi. Bật công tắc BẬT CHẶN ở trên (hoặc ghim nhánh/API cần chặn), sau đó bấm nút trên trình duyệt (VD: Save) — request sẽ dừng ngay tại đây đợi bạn bấm Gửi lên Server.",
-                420);
+                "Chưa có request nào đang đợi. Bật công tắc ĐANG CHẶN ở trên (hoặc ghim nhánh/API cần chặn), sau đó thao tác trên trình duyệt (VD: bấm Save) — request sẽ dừng ngay trên Cây và tại bảng này đợi bạn bấm Gửi lên Server.",
+                460);
         emptyHintBar.add(emptyHintText, BorderLayout.CENTER);
 
         JPanel leftPanel = new JPanel(new BorderLayout());
@@ -341,13 +351,16 @@ public final class ProxyInterceptDialog {
         JScrollPane tableScroll = new JScrollPane(queueTable);
         tableScroll.setColumnHeaderView(queueTable.getTableHeader());
         tableScroll.setBorder(BorderFactory.createEmptyBorder());
+        leftPanel.add(filterBar, BorderLayout.NORTH);
         leftPanel.add(tableScroll, BorderLayout.CENTER);
         leftPanel.add(emptyHintBar, BorderLayout.SOUTH);
 
         // Right: editable raw HTTP request viewer
         JLabel reqMetaLbl = Ui.bold("Chưa chọn request nào trong hàng chờ");
         JLabel reqSubLbl = Ui.muted("Chọn 1 dòng bên trái để xem hoặc chỉnh sửa header/body trước khi bấm Gửi lên Server.");
-        JButton resetRawBtn = Ui.button("Khôi phục gốc", Icons::undo, null);
+        JButton fmtJsonBtn = Ui.secondaryBtn("Format JSON", Icons::codeBraces, null);
+        fmtJsonBtn.setEnabled(false);
+        JButton resetRawBtn = Ui.secondaryBtn("Khôi phục gốc", Icons::undo, null);
         resetRawBtn.setEnabled(false);
 
         JPanel rightMeta = new JPanel(new BorderLayout(8, 2));
@@ -361,7 +374,7 @@ public final class ProxyInterceptDialog {
         metaTexts.add(reqMetaLbl, BorderLayout.NORTH);
         metaTexts.add(reqSubLbl, BorderLayout.SOUTH);
         rightMeta.add(metaTexts, BorderLayout.CENTER);
-        rightMeta.add(resetRawBtn, BorderLayout.EAST);
+        rightMeta.add(Ui.flow(FlowLayout.RIGHT, fmtJsonBtn, resetRawBtn), BorderLayout.EAST);
 
         JTextArea requestEditor = new JTextArea();
         requestEditor.setFont(t0.monoFont);
@@ -383,28 +396,28 @@ public final class ProxyInterceptDialog {
         rightPanel.add(editorScroll, BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightPanel);
-        split.setResizeWeight(0.48);
-        split.setDividerLocation(495);
+        split.setResizeWeight(0.54);
+        split.setDividerLocation(560);
         split.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
         root.add(split, BorderLayout.CENTER);
 
         // ------------------------------------------------------------------
-        // 4. BOTTOM ACTION BAR
+        // 4. BOTTOM ACTION BAR (Unified Burp-LAF-proof buttons)
         // ------------------------------------------------------------------
         final List<PendingRequest> displayed = new ArrayList<>();
         final long[] selectedId = {-1L};
         final Map<Long, String> draftEdits = new LinkedHashMap<>();
 
-        JButton forwardBtn = Ui.accent("Gửi lên Server (Forward)",
-                t -> Icons.send(t.accent.onSolid()), t -> t.accent, null);
-        JButton holdSaveBtn = Ui.button("Lưu vào bảng & Giữ (Không đẩy Server)",
-                t -> Icons.strategyShield(t.warning.text(), 14), null);
-        JButton dropBtn = Ui.button("Hủy bỏ (Drop)",
+        JButton forwardBtn = Ui.solidPrimary("Gửi lên Server (Forward)",
+                t -> Icons.send(t.accent.onSolid()), null);
+        JButton holdSaveBtn = Ui.tonalBtn("Lưu nháp vào Cây & Giữ",
+                t -> Icons.strategyShield(t.warning.text(), 14), t -> t.warning, null);
+        JButton dropBtn = Ui.dangerBtn("Hủy bỏ (Drop)",
                 t -> Icons.stop(t.danger.text()), null);
 
-        JButton forwardAllBtn = Ui.button("Gửi tất cả", t -> Icons.sendAll(t.success.text()), null);
-        JButton dropAllBtn = Ui.button("Hủy tất cả", t -> Icons.trash(t.danger.text()), null);
-        JButton closeBtn = Ui.button("Đóng", onClose != null ? onClose : () -> { });
+        JButton forwardAllBtn = Ui.secondaryBtn("Gửi tất cả", t -> Icons.sendAll(t.success.text()), null);
+        JButton dropAllBtn = Ui.dangerBtn("Hủy tất cả", t -> Icons.trash(t.danger.text()), null);
+        JButton closeBtn = Ui.secondaryBtn("Đóng", null, onClose != null ? onClose : () -> { });
 
         JPanel bottomBar = new JPanel(new BorderLayout(8, 0));
         bottomBar.setOpaque(false);
@@ -424,6 +437,7 @@ public final class ProxyInterceptDialog {
                 reqSubLbl.setText("Chọn 1 dòng bên trái để xem hoặc chỉnh sửa header/body trước khi bấm Gửi lên Server.");
                 requestEditor.setText("");
                 requestEditor.setEditable(false);
+                fmtJsonBtn.setEnabled(false);
                 resetRawBtn.setEnabled(false);
                 forwardBtn.setEnabled(false);
                 holdSaveBtn.setEnabled(false);
@@ -441,14 +455,16 @@ public final class ProxyInterceptDialog {
             requestEditor.setEditable(true);
             String hostLbl = pr.service() != null ? pr.service().protocol() + "://" + pr.service().hostLabel() : "";
             reqMetaLbl.setText("#" + pr.id() + "  " + pr.method() + " " + pr.path());
-            reqSubLbl.setText(hostLbl + "  ·  Nhánh đích: " + pr.branchName() + "  ·  " + pr.reason());
+            reqSubLbl.setText("Nhánh đích: " + pr.branchName()
+                    + (hostLbl.isEmpty() ? "" : "  ·  " + hostLbl)
+                    + "  ·  " + pr.reason());
+            fmtJsonBtn.setEnabled(true);
             resetRawBtn.setEnabled(true);
             forwardBtn.setEnabled(true);
             holdSaveBtn.setEnabled(true);
             dropBtn.setEnabled(true);
         };
 
-        // Keep live edits per pending item ID so switching rows doesn't lose user tweaks
         requestEditor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             private void saveDraft() {
                 if (selectedId[0] > 0 && requestEditor.isEditable()) {
@@ -465,15 +481,11 @@ public final class ProxyInterceptDialog {
             syncingUi[0] = true;
             try {
                 boolean on = ae.isInterceptWaitEnabled();
-                masterToggle.setSelectedIndex(on ? 1 : 0);
+                masterSwitch.setOn(on, false);
                 allScopeChk.setSelected(ae.isInterceptWaitAllScope());
                 autoOpenChk.setSelected(queue.isAutoOpenWindow());
 
-                Set<String> curMethods = ae.getInterceptWaitMethods();
-                for (Map.Entry<String, JToggleButton> e : methodBtns.entrySet()) {
-                    e.getValue().setSelected(curMethods.contains(e.getKey()));
-                    styleMethodChip(e.getValue());
-                }
+                methodBar.setSelectedMethods(ae.getInterceptWaitMethods());
 
                 // Refresh pinned branches & APIs chips
                 pinnedChipsRow.removeAll();
@@ -497,7 +509,7 @@ public final class ProxyInterceptDialog {
                 if (ae.getInterceptWaitBranches().isEmpty() && ae.getInterceptWaitEndpoints().isEmpty()) {
                     pinnedChipsRow.add(Ui.muted(ae.isInterceptWaitAllScope()
                             ? "Đang áp dụng: Toàn bộ nhánh theo các Method đã chọn"
-                            : "Chưa ghim nhánh/API nào — hãy bấm '+ Chặn nhánh hiện tại' hoặc tick 'Toàn bộ'"));
+                            : "Chưa ghim nhánh/API nào — bấm '+ Chặn nhánh hiện tại' hoặc tick 'Toàn bộ nhánh'"));
                 }
                 pinnedChipsRow.revalidate();
                 pinnedChipsRow.repaint();
@@ -508,19 +520,66 @@ public final class ProxyInterceptDialog {
                         ? "Ghim chặn chờ duyệt cho " + curApi.method() + " " + ActionEngine.normalizePathTemplate(curApi.path())
                         : "Chọn 1 API trong bảng để ghim chặn chờ duyệt riêng cho API đó");
 
-                // Refresh queue table
-                List<PendingRequest> snap = queue.pending();
+                // Sync Branch & Host filter dropdown options without losing selection
+                String prevBranchSel = branchFilter.getSelectedItem() instanceof String s ? s : FILTER_ALL_BRANCHES;
+                branchFilter.removeAllItems();
+                branchFilter.addItem(FILTER_ALL_BRANCHES);
+                for (String b : queue.pendingBranches()) {
+                    branchFilter.addItem(b);
+                }
+                branchFilter.setSelectedItem(prevBranchSel);
+                if (branchFilter.getSelectedIndex() < 0) {
+                    branchFilter.setSelectedIndex(0);
+                }
+
+                String prevHostSel = hostFilter.getSelectedItem() instanceof String s ? s : FILTER_ALL_HOSTS;
+                hostFilter.removeAllItems();
+                hostFilter.addItem(FILTER_ALL_HOSTS);
+                for (String h : queue.pendingHosts()) {
+                    hostFilter.addItem(h);
+                }
+                hostFilter.setSelectedItem(prevHostSel);
+                if (hostFilter.getSelectedIndex() < 0) {
+                    hostFilter.setSelectedIndex(0);
+                }
+
+                // Refresh filtered queue table
+                List<PendingRequest> allPending = queue.pending();
+                String bSel = branchFilter.getSelectedItem() instanceof String s ? s : FILTER_ALL_BRANCHES;
+                String hSel = hostFilter.getSelectedItem() instanceof String s ? s : FILTER_ALL_HOSTS;
+                String qText = filterSearch.getText().trim().toLowerCase(Locale.ROOT);
+
                 long prevId = selectedId[0];
                 displayed.clear();
-                displayed.addAll(snap);
-                draftEdits.keySet().removeIf(id -> snap.stream().noneMatch(p -> p.id() == id));
+                for (PendingRequest pr : allPending) {
+                    if (!FILTER_ALL_BRANCHES.equals(bSel) && !bSel.equalsIgnoreCase(pr.branchName())) {
+                        continue;
+                    }
+                    String host = pr.service() != null ? pr.service().hostLabel() : "";
+                    if (!FILTER_ALL_HOSTS.equals(hSel) && !hSel.equalsIgnoreCase(host)) {
+                        continue;
+                    }
+                    if (!qText.isEmpty()) {
+                        String hay = (pr.method() + " " + pr.path() + " " + pr.branchName() + " " + host + " " + pr.reason())
+                                .toLowerCase(Locale.ROOT);
+                        if (!hay.contains(qText)) {
+                            continue;
+                        }
+                    }
+                    displayed.add(pr);
+                }
+                draftEdits.keySet().removeIf(id -> allPending.stream().noneMatch(p -> p.id() == id));
 
                 tm.setRowCount(0);
                 int selRow = -1;
                 for (int i = 0; i < displayed.size(); i++) {
                     PendingRequest pr = displayed.get(i);
+                    String host = pr.service() != null ? pr.service().hostLabel() : "-";
                     tm.addRow(new Object[]{
                             "#" + pr.id(),
+                            "CHỜ DUYỆT",
+                            pr.branchName(),
+                            host,
                             pr.method(),
                             pr.path(),
                             pr.reason(),
@@ -539,12 +598,12 @@ public final class ProxyInterceptDialog {
                     queueTable.clearSelection();
                 }
 
-                int count = displayed.size();
-                emptyHintBar.setVisible(count == 0);
-                forwardAllBtn.setEnabled(count > 0);
-                dropAllBtn.setEnabled(count > 0);
-                if (count > 0) {
-                    liveStatusPill.setText("Đang chờ duyệt: " + count);
+                int totalPending = allPending.size();
+                emptyHintBar.setVisible(totalPending == 0);
+                forwardAllBtn.setEnabled(totalPending > 0);
+                dropAllBtn.setEnabled(totalPending > 0);
+                if (totalPending > 0) {
+                    liveStatusPill.setText("Đang chờ duyệt: " + totalPending);
                     liveStatusPill.setToken(t -> t.danger);
                     liveStatusPill.setIcon(t -> Icons.strategyShield(t.danger.text(), 12));
                 } else if (on) {
@@ -563,17 +622,27 @@ public final class ProxyInterceptDialog {
         };
         refreshHolder[0] = refresh;
 
+        branchFilter.addActionListener(e -> {
+            if (!syncingUi[0]) refresh.run();
+        });
+        hostFilter.addActionListener(e -> {
+            if (!syncingUi[0]) refresh.run();
+        });
+        filterSearch.onChange(s -> {
+            if (!syncingUi[0]) refresh.run();
+        });
+
         queueTable.getSelectionModel().addListSelectionListener(ev -> {
             if (!ev.getValueIsAdjusting() && !syncingUi[0]) {
                 syncSelectionEditor.run();
             }
         });
 
-        masterToggle.onChange(idx -> {
+        masterSwitch.onChange(on -> {
             if (syncingUi[0]) {
                 return;
             }
-            engine.setInterceptWaitEnabled(idx == 1);
+            engine.setInterceptWaitEnabled(on);
             refresh.run();
             if (ui != null) ui.syncHeader();
         });
@@ -587,18 +656,15 @@ public final class ProxyInterceptDialog {
             if (ui != null) ui.syncHeader();
         });
 
-        for (Map.Entry<String, JToggleButton> e : methodBtns.entrySet()) {
-            String method = e.getKey();
-            JToggleButton tb = e.getValue();
-            tb.addActionListener(ev -> {
-                if (syncingUi[0]) {
-                    return;
-                }
-                ae.toggleInterceptWaitMethod(method, tb.isSelected());
-                styleMethodChip(tb);
-                if (ui != null) ui.syncHeader();
-            });
-        }
+        methodBar.onChange(selMethods -> {
+            if (syncingUi[0]) {
+                return;
+            }
+            for (String m : ActionInterceptRule.ALL_METHODS) {
+                ae.toggleInterceptWaitMethod(m, selMethods.contains(m));
+            }
+            if (ui != null) ui.syncHeader();
+        });
 
         pinBranchBtn.addActionListener(e -> {
             String curBranch = engine.activeBranch().name();
@@ -626,10 +692,18 @@ public final class ProxyInterceptDialog {
 
         rulesBtn.addActionListener(e -> {
             ApiGroup curApi = (ui != null && ui.api != null) ? ui.api.currentGroup() : null;
-            ActionWorkbenchDialog.show(root, engine, curApi, null, ActionWorkbenchDialog.TAB_INTERCEPT_RULES, () -> {
+            ActionWorkbenchDialog.show(root, engine, curApi, null, ActionWorkbenchDialog.TAB_LEDGER, () -> {
                 refresh.run();
                 if (ui != null) ui.syncHeader();
             });
+        });
+
+        fmtJsonBtn.addActionListener(e -> {
+            String formatted = RequestComposerDialog.formatJsonBodyInRawHttp(requestEditor.getText());
+            if (formatted != null) {
+                requestEditor.setText(formatted);
+                requestEditor.setCaretPosition(0);
+            }
         });
 
         resetRawBtn.addActionListener(e -> {
@@ -642,16 +716,12 @@ public final class ProxyInterceptDialog {
             }
         });
 
-        Runnable resolveSelectedForward = () -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.FORWARD, ui, refresh);
-        Runnable resolveSelectedHold = () -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.HOLD_AND_SPOOF, ui, refresh);
-        Runnable resolveSelectedDrop = () -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.DROP, ui, refresh);
-
-        forwardBtn.addActionListener(e -> resolveSelectedForward.run());
-        holdSaveBtn.addActionListener(e -> resolveSelectedHold.run());
-        dropBtn.addActionListener(e -> resolveSelectedDrop.run());
+        forwardBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.FORWARD, ui, refresh));
+        holdSaveBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.HOLD_AND_SPOOF, ui, refresh));
+        dropBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.DROP, ui, refresh));
 
         forwardAllBtn.addActionListener(e -> {
             int n = queue.releaseAll(ResolutionKind.FORWARD);
@@ -677,6 +747,61 @@ public final class ProxyInterceptDialog {
 
         refresh.run();
         return new View(root, queueTable, requestEditor, pinBtn, refresh, () -> queue.removeListener(queueListener));
+    }
+
+    private static final class QueueCellRenderer extends DefaultTableCellRenderer {
+        private final int colIndex;
+
+        QueueCellRenderer(int colIndex) {
+            this.colIndex = colIndex;
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int row, int col) {
+            JLabel l = (JLabel) super.getTableCellRendererComponent(t, value, sel, focus, row, col);
+            Theme th = Theme.of(t.getBackground(), t.getForeground());
+            String s = value == null ? "" : value.toString();
+            l.setHorizontalAlignment(colIndex == 0 || colIndex == 1 || colIndex == 4 || colIndex == 7
+                    ? SwingConstants.CENTER : SwingConstants.LEFT);
+            l.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
+            if (sel) {
+                l.setBackground(th.selectionBg);
+                l.setForeground(th.selectionFg);
+                l.setFont(colIndex == 1 || colIndex == 2 || colIndex == 4 ? th.smallBoldFont : th.smallFont);
+                return l;
+            }
+            l.setBackground(th.zebra[row & 1]);
+            switch (colIndex) {
+                case 0, 7 -> {
+                    l.setFont(th.monoSmallFont);
+                    l.setForeground(th.muted);
+                }
+                case 1 -> {
+                    l.setFont(th.smallBoldFont);
+                    l.setBackground(th.danger.fill());
+                    l.setForeground(th.danger.text());
+                }
+                case 2 -> {
+                    l.setFont(th.smallBoldFont);
+                    l.setForeground(th.accent.text());
+                }
+                case 4 -> {
+                    Theme.Token mTok = th.method(s);
+                    l.setFont(th.smallBoldFont);
+                    l.setBackground(mTok.fill());
+                    l.setForeground(mTok.text());
+                }
+                case 5 -> {
+                    l.setFont(th.monoSmallFont);
+                    l.setForeground(th.fg);
+                }
+                default -> {
+                    l.setFont(th.smallFont);
+                    l.setForeground(th.fg);
+                }
+            }
+            return l;
+        }
     }
 
     private static void resolveSelected(
@@ -735,16 +860,6 @@ public final class ProxyInterceptDialog {
         System.arraycopy(headBytes, 0, out, 0, headBytes.length);
         System.arraycopy(bodyBytes, 0, out, headBytes.length, bodyBytes.length);
         return out;
-    }
-
-    private static void styleMethodChip(JToggleButton tb) {
-        Theme t = Theme.current();
-        boolean sel = tb.isSelected();
-        Theme.Token tok = ActionEngine.isActionMethod(tb.getText()) ? t.danger : t.info;
-        tb.setOpaque(true);
-        tb.setBackground(sel ? tok.fill() : t.surface);
-        tb.setForeground(sel ? tok.text() : t.muted);
-        tb.setBorder(BorderFactory.createLineBorder(sel ? tok.border() : t.border));
     }
 
     private static JPanel makeRemovableChip(String text, java.util.function.Function<Theme, Theme.Token> tokenFn, Runnable onRemove) {

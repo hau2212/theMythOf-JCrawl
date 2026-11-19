@@ -49,6 +49,7 @@ import javax.swing.text.JTextComponent;
 import themythofcrawl.app.Changes;
 import themythofcrawl.app.Engine;
 import themythofcrawl.app.Prefs;
+import themythofcrawl.core.ActionEngine;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Config;
 import themythofcrawl.core.Hierarchy;
@@ -64,6 +65,7 @@ import themythofcrawl.send.SendDispatcher;
 import themythofcrawl.store.FileStorage;
 import themythofcrawl.store.Workspaces;
 import themythofcrawl.ui.kit.Breadcrumb;
+import themythofcrawl.ui.kit.ModernToggleSwitch;
 import themythofcrawl.ui.kit.Pill;
 import themythofcrawl.ui.kit.SearchField;
 import themythofcrawl.ui.kit.SegmentedToggle;
@@ -72,8 +74,8 @@ import themythofcrawl.ui.kit.ToolbarGroup;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * The extension's tab: 2-row compact header (&le; 64 px) + ToastPane overlay + the tabs.
- * A single Swing timer drains the engine's changes every 200 ms.
+ * The extension's tab: crisp single-row adaptive header with Live Action Status & Quick Toggle +
+ * ToastPane overlay + the tabs. A single Swing timer drains the engine's changes every 200 ms.
  */
 public final class MainPanel {
     public static final int TICK_MS = 200;
@@ -112,7 +114,9 @@ public final class MainPanel {
     }
 
     private final JButton spotlightBtn = new JButton();
-    private final JButton proxyInterceptBtn = new JButton();
+    private final JButton actionStatusBtn = new JButton();
+    private final ModernToggleSwitch actionQuickSwitch = new ModernToggleSwitch(false, true);
+    private JPanel actionControlBar;
     private final JButton options = new JButton();
     private final JButton detach = new JButton();
     private final JButton workspace = new JButton();
@@ -124,8 +128,10 @@ public final class MainPanel {
     private JPanel headerLeftZone;
     private JPanel headerRightFull;
     private JPanel headerRightCompact;
+    private JPanel rightWrapper;
     private boolean userTopCompact;
     private boolean effectiveHeaderCompact;
+    private boolean syncingActionSwitch;
     private int lastChromeWidth = 1280;
 
     private final Pill rolesChip = new Pill("Roles 0/0", t -> t.neutral, t -> Icons.role(t.muted, 12));
@@ -299,7 +305,7 @@ public final class MainPanel {
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
 
-        queue.setPadding(2, 6, 2, 6);
+        queue.setPadding(2, 3, 2, 3);
         queue.setFixedHeight(24);
         queue.onClick(() -> {
             if (queue.isEnabled()) {
@@ -308,7 +314,7 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setCellWidth(54);
+        dest.setCellWidth(36);
         dest.setCellHeight(24);
         dest.setIconResolver(segPath -> Icons.nodeIcon(engine.nodeTypeOf(segPath), Theme.current(), 12));
         dest.onSegmentClick(seg -> {
@@ -321,11 +327,11 @@ public final class MainPanel {
         dest.onDropdown(this::destinationMenu);
         dest.onQuickAdd(() -> addSubfolder(engine.activeBranch().name()));
 
-        todo.setPadding(2, 5, 2, 5);
+        todo.setPadding(2, 3, 2, 3);
         todo.setFixedHeight(24);
         todo.onClick(this::todoMenu);
 
-        status.setPadding(2, 5, 2, 5);
+        status.setPadding(2, 3, 2, 3);
         status.setFixedHeight(24);
         status.onClick(this::statusMenu);
 
@@ -353,56 +359,72 @@ public final class MainPanel {
                 t -> t.info,
                 null));
 
-        proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 14)));
-        proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
-        proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
-        proxyInterceptBtn.addActionListener(e -> ProxyInterceptDialog.showFloating(this));
-        themythofcrawl.ui.kit.RichHoverCard.install(proxyInterceptBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)",
-                "Bật chặn request ngay tại Proxy theo Toàn bộ / Nhánh / API / Method hoặc Sổ cái CRUD. Khi bấm nút trên trình duyệt (VD: Save), request dừng lại chờ bạn xem/sửa và bấm Gửi lên Server.",
+        actionStatusBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 12)));
+        actionStatusBtn.setHorizontalTextPosition(SwingConstants.TRAILING);
+        actionStatusBtn.setIconTextGap(2);
+        actionStatusBtn.setFocusPainted(false);
+        actionStatusBtn.setBorderPainted(false);
+        actionStatusBtn.setContentAreaFilled(false);
+        actionStatusBtn.setMargin(new Insets(0, 2, 0, 1));
+        actionStatusBtn.setFont(Theme.current().smallBoldFont);
+        actionStatusBtn.addActionListener(e -> showActionQuickMenu());
+        themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
+                "Trạng thái Action trực tiếp (Bấm để chọn chế độ)",
+                "Hiển thị chính xác tính năng Action đang bật (Nguyên bản / Chặn chờ duyệt / Giữ Proxy / Khóa 200 / Kho ID / Tạo->Xóa). Bấm để đổi chế độ nhanh, mở Hàng chờ chi tiết hoặc xem Hướng dẫn & Ví dụ.",
                 null,
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
-                    boolean on = engine.actionEngine().isInterceptWaitEnabled()
-                            || engine.actionEngine().policyLedger().activeBlockingCount() > 0;
-                    return Icons.strategyShield(n > 0 ? t.danger.text() : (on ? t.success.text() : t.muted), 14);
+                    boolean on = engine.isAnyActionControlActive();
+                    return Icons.strategyShield(n > 0 ? t.danger.text() : (on ? t.warning.text() : t.muted), 14);
                 },
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
-                    boolean on = engine.actionEngine().isInterceptWaitEnabled()
-                            || engine.actionEngine().policyLedger().activeBlockingCount() > 0;
-                    return n > 0 ? t.danger : (on ? t.success : t.neutral);
+                    boolean on = engine.isAnyActionControlActive();
+                    return n > 0 ? t.danger : (on ? t.warning : t.neutral);
                 },
-                () -> {
-                    int n = engine.proxyQueue().pendingCount();
-                    if (n > 0) {
-                        return "Đang chặn chờ duyệt: " + n + " request — bấm để Gửi lên Server";
-                    }
-                    return engine.actionEngine().policyLedger().activeSummaryText();
-                }));
+                () -> engine.quickActionStatusLabel() + " · " + engine.actionEngine().policyLedger().activeSummaryText()));
 
-        JButton workbenchBtn = new JButton();
-        workbenchBtn.setIcon(Icons.themed(t -> Icons.workbench(t.accent.text(), 14)));
-        workbenchBtn.setMargin(new Insets(0, 0, 0, 0));
-        workbenchBtn.setPreferredSize(new Dimension(h24, h24));
-        workbenchBtn.addActionListener(e -> ActionWorkbenchDialog.show(root, engine,
-                api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
-                    syncHeader();
-                    if (settings != null) settings.load();
-                }));
-        themythofcrawl.ui.kit.RichHoverCard.install(workbenchBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Action Workbench, Sổ cái CRUD & Dò Giao thức",
-                "Mở giao diện 6 tab: Chiến lược (bật/tắt hoàn tác về Nguyên bản), Sổ cái Chính sách CRUD, Kho ID Sống, Chuỗi Tạo Mới, Khóa 200 OK và Dò Giao thức Action / Mô phỏng.",
-                null,
-                t -> Icons.workbench(t.accent.text(), 14),
-                t -> t.accent,
-                () -> "Mặc định: " + engine.config().actionMode.shortTitle() + " · "
-                        + engine.actionEngine().policyLedger().activeSummaryText()));
+        actionQuickSwitch.onToken(t -> engine.proxyQueue().pendingCount() > 0 ? t.danger : t.accent);
+        actionQuickSwitch.setToolTipText("Bật / Tắt nhanh tính năng Action ngay trên thanh trên cùng (Tắt = nhả sạch về Nguyên bản)");
+        actionQuickSwitch.onChange(on -> {
+            if (syncingActionSwitch) {
+                return;
+            }
+            engine.toggleQuickActionFromHeader(on);
+            syncHeader();
+            if (settings != null) {
+                settings.load();
+            }
+            flash(on ? "Đã BẬT Action: " + engine.quickActionStatusLabel()
+                    : "Đã TẮT Action — trở về Nguyên bản (Không can thiệp)");
+        });
+
+        actionControlBar = new JPanel() {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                if (MainPanel.this.engine != null) {
+                    syncProxyInterceptButton();
+                }
+            }
+        };
+        actionControlBar.setLayout(new BoxLayout(actionControlBar, BoxLayout.X_AXIS));
+        actionControlBar.setOpaque(true);
+        actionControlBar.setPreferredSize(null);
+        actionControlBar.setMinimumSize(new Dimension(Theme.current().scaled(104), h24));
+        actionControlBar.setMaximumSize(new Dimension(Theme.current().scaled(160), h24));
+        actionStatusBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+        actionQuickSwitch.setAlignmentY(Component.CENTER_ALIGNMENT);
+        actionControlBar.add(actionStatusBtn);
+        actionControlBar.add(Box.createHorizontalStrut(1));
+        actionControlBar.add(actionQuickSwitch);
+        actionControlBar.add(Box.createHorizontalStrut(2));
 
         JButton displayModeBtn = new JButton();
         displayModeBtn.setIcon(Icons.themed(Icons::displayMode));
         displayModeBtn.setMargin(new Insets(0, 0, 0, 0));
         displayModeBtn.setPreferredSize(new Dimension(h24, h24));
+        displayModeBtn.setMaximumSize(new Dimension(h24, h24));
         displayModeBtn.addActionListener(e -> {
             UiDisplayMode next = UiDisplayMode.cycle();
             UiPrefs.setDisplayMode(uiPrefs, next);
@@ -418,8 +440,9 @@ public final class MainPanel {
                 () -> "Hiện tại: " + UiDisplayMode.current().label));
 
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
-        options.setMargin(new Insets(0, 2, 0, 2));
-        options.setPreferredSize(new Dimension(Theme.current().scaled(28), h24));
+        options.setMargin(new Insets(0, 1, 0, 1));
+        options.setPreferredSize(new Dimension(Theme.current().scaled(26), h24));
+        options.setMaximumSize(new Dimension(Theme.current().scaled(26), h24));
         options.addActionListener(e -> optionsMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(options, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tùy chọn nhanh & Danh mục",
@@ -432,6 +455,7 @@ public final class MainPanel {
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
         detach.setMargin(new Insets(0, 0, 0, 0));
         detach.setPreferredSize(new Dimension(h24, h24));
+        detach.setMaximumSize(new Dimension(h24, h24));
         detach.addActionListener(e -> toggleDetach());
         themythofcrawl.ui.kit.RichHoverCard.install(detach, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tách cửa sổ riêng",
@@ -443,8 +467,9 @@ public final class MainPanel {
 
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
-        workspace.setMargin(new Insets(0, 3, 0, 3));
-        workspace.setPreferredSize(new Dimension(Theme.current().scaled(54), h24));
+        workspace.setMargin(new Insets(0, 1, 0, 1));
+        workspace.setPreferredSize(new Dimension(Theme.current().scaled(42), h24));
+        workspace.setMaximumSize(new Dimension(Theme.current().scaled(54), h24));
         workspace.addActionListener(e -> workspaceMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Workspace (Phiên làm việc)",
@@ -456,6 +481,7 @@ public final class MainPanel {
 
         topChromeToggleBtn.setMargin(new Insets(0, 0, 0, 0));
         topChromeToggleBtn.setPreferredSize(new Dimension(h24, h24));
+        topChromeToggleBtn.setMaximumSize(new Dimension(h24, h24));
         topChromeToggleBtn.addActionListener(e -> setTopCompact(!effectiveHeaderCompact));
         themythofcrawl.ui.kit.RichHoverCard.install(topChromeToggleBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Thu gọn / Mở rộng thanh công cụ phía trên",
@@ -468,40 +494,49 @@ public final class MainPanel {
         compactControlsBtn.setText("Điều khiển");
         compactControlsBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.sliders(t.fg), t.fg)));
         compactControlsBtn.setHorizontalTextPosition(SwingConstants.LEADING);
-        compactControlsBtn.setMargin(new Insets(0, 6, 0, 6));
-        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(112), h24));
+        compactControlsBtn.setMargin(new Insets(0, 5, 0, 5));
+        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(96), h24));
+        compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(104), h24));
         compactControlsBtn.setToolTipText("Mở menu điều khiển nhanh (Trạng thái, Action Workbench, Tùy chọn, Workspace...)");
         compactControlsBtn.addActionListener(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight()));
 
-        headerLeftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        // Strict single-row horizontal BoxLayout — NEVER wraps onto 2-3 broken lines on Burp!
+        headerLeftZone = new JPanel();
+        headerLeftZone.setLayout(new BoxLayout(headerLeftZone, BoxLayout.X_AXIS));
         headerLeftZone.setOpaque(false);
+        captureToggle.setAlignmentY(Component.CENTER_ALIGNMENT);
+        sendModeToggle.setAlignmentY(Component.CENTER_ALIGNMENT);
+        queue.setAlignmentY(Component.CENTER_ALIGNMENT);
         headerLeftZone.add(captureToggle);
+        headerLeftZone.add(Box.createHorizontalStrut(2));
         headerLeftZone.add(sendModeToggle);
+        headerLeftZone.add(Box.createHorizontalStrut(2));
         headerLeftZone.add(queue);
 
-        // Crisp 24px height-matched vertically centered Dich prefix aligned with Doi: 0 and Breadcrumb
-        JLabel destLabel = new JLabel("Đích", Icons.themed(t -> Icons.arrowRight(t.critical.text(), 12)), SwingConstants.CENTER) {
+        // Crisp 24px height-matched vertically centered Dich prefix aligned with Doi and Breadcrumb
+        JLabel destLabel = new JLabel("Đích", SwingConstants.CENTER) {
             @Override
             public void updateUI() {
                 super.updateUI();
                 Theme t = Theme.current();
                 setFont(t.smallBoldFont);
-                setForeground(t.fg);
-                setBackground(t.surfaceAlt);
+                setForeground(t.accent.text());
+                setBackground(t.accent.fill());
                 setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(t.border),
+                        BorderFactory.createLineBorder(t.accent.border()),
                         BorderFactory.createEmptyBorder(0, 4, 0, 4)));
             }
         };
         destLabel.setOpaque(true);
-        destLabel.setIconTextGap(3);
         destLabel.setFont(Theme.current().smallBoldFont);
+        destLabel.setForeground(Theme.current().accent.text());
+        destLabel.setBackground(Theme.current().accent.fill());
         destLabel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Theme.current().border),
+                BorderFactory.createLineBorder(Theme.current().accent.border()),
                 BorderFactory.createEmptyBorder(0, 4, 0, 4)));
-        destLabel.setPreferredSize(new Dimension(destLabel.getPreferredSize().width + 2, h24));
+        destLabel.setPreferredSize(new Dimension(destLabel.getPreferredSize().width, h24));
         destLabel.setMinimumSize(new Dimension(destLabel.getPreferredSize().width, h24));
-        destLabel.setMaximumSize(new Dimension(destLabel.getPreferredSize().width + 8, h24));
+        destLabel.setMaximumSize(new Dimension(destLabel.getPreferredSize().width + 4, h24));
         destLabel.setAlignmentY(Component.CENTER_ALIGNMENT);
 
         JSeparator destSep = vSep();
@@ -509,37 +544,66 @@ public final class MainPanel {
         JPanel destPrefix = new JPanel();
         destPrefix.setLayout(new BoxLayout(destPrefix, BoxLayout.X_AXIS));
         destPrefix.setOpaque(false);
-        destPrefix.setPreferredSize(new Dimension(destLabel.getPreferredSize().width + 8, h24));
+        destPrefix.setPreferredSize(new Dimension(destLabel.getPreferredSize().width + 5, h24));
         destPrefix.add(destSep);
-        destPrefix.add(Box.createHorizontalStrut(3));
+        destPrefix.add(Box.createHorizontalStrut(2));
         destPrefix.add(destLabel);
-        destPrefix.add(Box.createHorizontalStrut(3));
+        destPrefix.add(Box.createHorizontalStrut(2));
 
         JPanel centerZone = new JPanel(new BorderLayout(0, 0));
         centerZone.setOpaque(false);
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
 
-        ToolbarGroup actions = new ToolbarGroup(spotlightBtn, proxyInterceptBtn, workbenchBtn, displayModeBtn, options, detach, workspace);
-        ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
-        ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
+        spotlightBtn.setMaximumSize(new Dimension(h24, h24));
+        status.setAlignmentY(Component.CENTER_ALIGNMENT);
+        todo.setAlignmentY(Component.CENTER_ALIGNMENT);
+        spotlightBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+        displayModeBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+        options.setAlignmentY(Component.CENTER_ALIGNMENT);
+        detach.setAlignmentY(Component.CENTER_ALIGNMENT);
+        workspace.setAlignmentY(Component.CENTER_ALIGNMENT);
 
-        headerRightFull = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        headerRightFull = new JPanel();
+        headerRightFull.setLayout(new BoxLayout(headerRightFull, BoxLayout.X_AXIS));
         headerRightFull.setOpaque(false);
         headerRightFull.add(status);
+        headerRightFull.add(Box.createHorizontalStrut(2));
         headerRightFull.add(todo);
-        headerRightFull.add(vSep());
-        headerRightFull.add(actions);
+        headerRightFull.add(Box.createHorizontalStrut(2));
+        JSeparator rSep = vSep();
+        rSep.setAlignmentY(Component.CENTER_ALIGNMENT);
+        headerRightFull.add(rSep);
+        headerRightFull.add(Box.createHorizontalStrut(2));
+        headerRightFull.add(spotlightBtn);
+        headerRightFull.add(Box.createHorizontalStrut(1));
+        headerRightFull.add(displayModeBtn);
+        headerRightFull.add(Box.createHorizontalStrut(1));
+        headerRightFull.add(options);
+        headerRightFull.add(Box.createHorizontalStrut(1));
+        headerRightFull.add(detach);
+        headerRightFull.add(Box.createHorizontalStrut(1));
+        headerRightFull.add(workspace);
 
-        headerRightCompact = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        headerRightCompact = new JPanel();
+        headerRightCompact.setLayout(new BoxLayout(headerRightCompact, BoxLayout.X_AXIS));
         headerRightCompact.setOpaque(false);
+        compactControlsBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
         headerRightCompact.add(compactControlsBtn);
         headerRightCompact.setVisible(false);
 
-        JPanel rightWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 1, 0));
+        rightWrapper = new JPanel();
+        rightWrapper.setLayout(new BoxLayout(rightWrapper, BoxLayout.X_AXIS));
         rightWrapper.setOpaque(false);
+        actionControlBar.setAlignmentY(Component.CENTER_ALIGNMENT);
+        headerRightFull.setAlignmentY(Component.CENTER_ALIGNMENT);
+        headerRightCompact.setAlignmentY(Component.CENTER_ALIGNMENT);
+        topChromeToggleBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+        rightWrapper.add(actionControlBar);
+        rightWrapper.add(Box.createHorizontalStrut(3));
         rightWrapper.add(headerRightFull);
         rightWrapper.add(headerRightCompact);
+        rightWrapper.add(Box.createHorizontalStrut(2));
         rightWrapper.add(topChromeToggleBtn);
 
         headerRow1 = new JPanel(new BorderLayout(2, 0));
@@ -559,12 +623,12 @@ public final class MainPanel {
                 Theme t = Theme.current();
                 setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 0, 1, 0, t.border),
-                        BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+                        BorderFactory.createEmptyBorder(3, 4, 3, 4)));
             }
         };
         top.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.current().border),
-                BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+                BorderFactory.createEmptyBorder(3, 4, 3, 4)));
         top.add(headerRow1, BorderLayout.NORTH);
         top.add(headerDrawerRow, BorderLayout.SOUTH);
         return top;
@@ -624,7 +688,7 @@ public final class MainPanel {
 
     void setTopCompact(boolean compact) {
         int w = root.getWidth() > 0 ? root.getWidth() : lastChromeWidth;
-        if (w < 1040) {
+        if (w < 1140) {
             this.narrowExpanded = !compact;
         } else {
             this.userTopCompact = compact;
@@ -638,27 +702,27 @@ public final class MainPanel {
             lastChromeWidth = width;
         }
         int w = width > 0 ? width : lastChromeWidth;
-        boolean narrow = w < 1040;
+        boolean narrow = w < 1140;
         boolean compact = narrow ? !narrowExpanded : userTopCompact;
         effectiveHeaderCompact = compact;
 
         if (headerRightFull != null && headerRightCompact != null) {
             if (!narrow && !userTopCompact) {
-                // Full wide mode: everything on 1 crisp row
+                // Full wide mode: single guaranteed horizontal row (zero wrapping)
                 headerDrawerRow.setVisible(false);
                 if (queue.getParent() != headerLeftZone) {
                     headerLeftZone.add(queue);
                 }
                 if (headerRightFull.getParent() == headerDrawerRow) {
                     headerDrawerRow.remove(headerRightFull);
-                    ((JPanel) headerRow1.getComponent(2)).add(headerRightFull, 0);
+                    rightWrapper.add(headerRightFull, 2);
                 }
                 headerRightFull.setVisible(true);
                 headerRightCompact.setVisible(false);
                 dest.setMaxSegments(2);
-                dest.setCellWidth(54);
+                dest.setCellWidth(36);
             } else if (narrow && narrowExpanded) {
-                // Split-screen explicitly expanded by user: cleanly show drawer row 2 (zero collision!)
+                // Split-screen explicitly expanded: cleanly show drawer row 2 (zero collision!)
                 headerRightCompact.setVisible(false);
                 headerRightFull.setVisible(true);
                 if (queue.getParent() == headerLeftZone) {
@@ -674,9 +738,9 @@ public final class MainPanel {
                 }
                 headerDrawerRow.setVisible(true);
                 dest.setMaxSegments(1);
-                dest.setCellWidth(Math.max(58, Math.min(82, (w - 300) / 2)));
+                dest.setCellWidth(Math.max(48, Math.min(72, (w - 360) / 2)));
             } else {
-                // Collapsed compact mode (split-screen default OR user collapsed in normal mode): crisp 1-row bar + Dropdown
+                // Collapsed compact mode (split-screen default OR user collapsed): crisp 1-row bar keeping Action unit visible!
                 headerDrawerRow.setVisible(false);
                 if (queue.getParent() != headerLeftZone && !narrow) {
                     headerLeftZone.add(queue);
@@ -686,7 +750,7 @@ public final class MainPanel {
                 headerRightFull.setVisible(false);
                 headerRightCompact.setVisible(true);
                 dest.setMaxSegments(narrow ? 1 : 2);
-                dest.setCellWidth(narrow ? 64 : 74);
+                dest.setCellWidth(narrow ? 54 : 68);
             }
             topChromeToggleBtn.setIcon(Icons.themed(t -> effectiveHeaderCompact
                     ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12)));
@@ -722,48 +786,136 @@ public final class MainPanel {
         }
     }
 
+    /** Opens the Top-Bar Quick Action Mode Switcher menu (6 modes + Queue + Workbench + Integrated Guide). */
+    private void showActionQuickMenu() {
+        JPopupMenu m = new JPopupMenu();
+        ActionEngine.ActionMode cur = engine.config().actionMode != null
+                ? engine.config().actionMode : ActionEngine.ActionMode.NONE;
+        boolean waitOn = engine.actionEngine().isInterceptWaitEnabled();
+        int pending = engine.proxyQueue().pendingCount();
+        int activePolicies = engine.actionEngine().policyLedger().activeCount();
+
+        m.add(Ui.item("Chế độ Action hiện tại: " + engine.quickActionStatusLabel(), false, () -> { }));
+        m.addSeparator();
+
+        Runnable afterMode = () -> {
+            syncHeader();
+            if (settings != null) settings.load();
+            flash("Action -> " + engine.quickActionStatusLabel());
+        };
+
+        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Nhả)",
+                t -> Icons.undo(t.success.text(), 13), () -> {
+                    engine.toggleQuickActionFromHeader(false);
+                    afterMode.run();
+                }));
+        m.add(Ui.item((waitOn ? "[Đang bật] " : "") + "5. Chặn chờ duyệt tại Proxy (Hiện ngay trên Cây)",
+                t -> Icons.strategyShield(t.danger.text(), 13), () -> {
+                    engine.applyQuickActionMode(ActionEngine.ActionMode.INTERCEPT_WAIT);
+                    afterMode.run();
+                }));
+        m.add(Ui.item((cur == ActionEngine.ActionMode.HOLD_AT_PROXY ? "[Đang bật] " : "") + "1. Giữ ở Proxy (200 ảo — không xóa Server)",
+                t -> Icons.strategyShield(t.warning.text(), 13), () -> {
+                    engine.applyQuickActionMode(ActionEngine.ActionMode.HOLD_AT_PROXY);
+                    afterMode.run();
+                }));
+        m.add(Ui.item((cur == ActionEngine.ActionMode.LOCK_2XX ? "[Đang bật] " : "") + "2. Khóa kết quả 200 OK (Snapshot)",
+                t -> Icons.lock(t.info.text(), 13), () -> {
+                    engine.applyQuickActionMode(ActionEngine.ActionMode.LOCK_2XX);
+                    afterMode.run();
+                }));
+        m.add(Ui.item((cur == ActionEngine.ActionMode.LIVE_ID_POOL ? "[Đang bật] " : "") + "3. Tự đổi từ Kho ID Sống",
+                t -> Icons.idPool(t.success.text(), 13), () -> {
+                    engine.applyQuickActionMode(ActionEngine.ActionMode.LIVE_ID_POOL);
+                    afterMode.run();
+                }));
+        m.add(Ui.item((cur == ActionEngine.ActionMode.PRODUCER_RECREATE ? "[Đang bật] " : "") + "4. Chuỗi Tạo Mới -> Hành Động",
+                t -> Icons.strategyChain(t.accent.text(), 13), () -> {
+                    engine.applyQuickActionMode(ActionEngine.ActionMode.PRODUCER_RECREATE);
+                    afterMode.run();
+                }));
+
+        m.addSeparator();
+        String curBranch = engine.activeBranch().name();
+        m.add(Ui.item("+ Chặn chờ duyệt riêng nhánh '" + Hierarchy.leaf(curBranch) + "'",
+                t -> Icons.branch(t.danger.text()), () -> {
+                    engine.actionEngine().policyLedger().upsert(themythofcrawl.model.ActionPolicy.quickBranchWait(
+                            curBranch, List.of("POST", "PUT", "PATCH", "DELETE"), "Top Bar"));
+                    engine.saveActionPolicies();
+                    afterMode.run();
+                }));
+        m.add(Ui.item("Mở Hàng chờ Chặn chi tiết" + (pending > 0 ? " (" + pending + " đang đợi)" : "") + "...",
+                t -> Icons.strategyShield(pending > 0 ? t.danger.text() : t.fg, 13),
+                () -> ProxyInterceptDialog.showFloating(this)));
+        m.add(Ui.item("Mở Action Workbench & Sổ cái Luật" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
+                t -> Icons.workbench(t.accent.text(), 13),
+                () -> ActionWorkbenchDialog.show(root, engine,
+                        api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
+                            syncHeader();
+                            if (settings != null) settings.load();
+                        })));
+        m.add(Ui.item("Hướng dẫn & Ví dụ thực chiến Action...",
+                t -> Icons.info(t.info.text(), 13),
+                () -> ActionWorkbenchDialog.show(root, engine,
+                        api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_GUIDE, () -> {
+                            syncHeader();
+                            if (settings != null) settings.load();
+                        })));
+
+        m.show(actionControlBar, 0, actionControlBar.getHeight());
+    }
+
     void syncProxyInterceptButton() {
+        if (actionControlBar == null) {
+            return;
+        }
         Theme th = Theme.current();
         int h24 = th.scaled(24);
         int pending = engine.proxyQueue().pendingCount();
-        boolean armedWait = engine.actionEngine().isInterceptWaitEnabled();
-        int ledgerBlocking = engine.actionEngine().policyLedger().activeBlockingCount();
+        boolean active = engine.isAnyActionControlActive();
+        String label = engine.quickActionStatusLabel();
+
+        actionStatusBtn.setText(label);
+        actionStatusBtn.setFont(th.smallBoldFont);
+
         if (pending > 0) {
-            proxyInterceptBtn.setText(Integer.toString(pending));
-            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.onSolid(), 13)));
-            proxyInterceptBtn.setOpaque(true);
-            proxyInterceptBtn.setBackground(th.danger.solidFill());
-            proxyInterceptBtn.setForeground(th.danger.onSolid());
-            proxyInterceptBtn.setFont(th.smallBoldFont);
-            proxyInterceptBtn.setMargin(new Insets(0, 3, 0, 3));
-            proxyInterceptBtn.setPreferredSize(new Dimension(th.scaled(36), h24));
-        } else if (armedWait) {
-            proxyInterceptBtn.setText("");
-            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 14)));
-            proxyInterceptBtn.setOpaque(true);
-            proxyInterceptBtn.setBackground(th.danger.fill());
-            proxyInterceptBtn.setForeground(th.danger.text());
-            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
-            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
-        } else if (ledgerBlocking > 0) {
-            proxyInterceptBtn.setText("");
-            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.warning.text(), 14)));
-            proxyInterceptBtn.setOpaque(true);
-            proxyInterceptBtn.setBackground(th.warning.fill());
-            proxyInterceptBtn.setForeground(th.warning.text());
-            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
-            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+            actionControlBar.setBackground(th.danger.fill());
+            actionControlBar.setBorder(BorderFactory.createLineBorder(th.danger.border()));
+            actionStatusBtn.setForeground(th.danger.text());
+            actionStatusBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 12)));
+        } else if (active) {
+            actionControlBar.setBackground(th.warning.fill());
+            actionControlBar.setBorder(BorderFactory.createLineBorder(th.warning.border()));
+            actionStatusBtn.setForeground(th.warning.text());
+            actionStatusBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.warning.text(), 12)));
         } else {
-            proxyInterceptBtn.setText("");
-            proxyInterceptBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 14)));
-            proxyInterceptBtn.setOpaque(false);
-            proxyInterceptBtn.setBackground(null);
-            proxyInterceptBtn.setForeground(th.fg);
-            proxyInterceptBtn.setMargin(new Insets(0, 0, 0, 0));
-            proxyInterceptBtn.setPreferredSize(new Dimension(h24, h24));
+            actionControlBar.setBackground(th.surfaceAlt);
+            actionControlBar.setBorder(BorderFactory.createLineBorder(th.border));
+            actionStatusBtn.setForeground(th.fg);
+            actionStatusBtn.setIcon(Icons.themed(t -> Icons.strategyShield(t.muted, 12)));
         }
-        proxyInterceptBtn.revalidate();
-        proxyInterceptBtn.repaint();
+
+        syncingActionSwitch = true;
+        try {
+            actionQuickSwitch.setSelected(active);
+            actionQuickSwitch.onToken(t -> pending > 0 ? t.danger : (active ? t.warning : t.accent));
+        } finally {
+            syncingActionSwitch = false;
+        }
+
+        // Compute exact compact natural width so text never clips AND header stays <= 1100px
+        actionStatusBtn.setPreferredSize(null);
+        Dimension btnPref = actionStatusBtn.getPreferredSize();
+        int btnW = Math.max(th.scaled(70), Math.min(th.scaled(124), btnPref.width + th.scaled(2)));
+        actionStatusBtn.setPreferredSize(new Dimension(btnW, h24 - 2));
+        actionStatusBtn.setMaximumSize(new Dimension(btnW, h24 - 2));
+        Dimension swPref = actionQuickSwitch.getPreferredSize();
+        int totalW = btnW + swPref.width + th.scaled(6);
+        actionControlBar.setPreferredSize(new Dimension(totalW, h24));
+        actionControlBar.setMinimumSize(new Dimension(totalW, h24));
+        actionControlBar.setMaximumSize(new Dimension(totalW, h24));
+        actionControlBar.revalidate();
+        actionControlBar.repaint();
     }
 
     void syncHeader() {
@@ -783,7 +935,7 @@ public final class MainPanel {
         }
 
         Engine.Stats st = engine.stats();
-        todo.setText("Xử lý: " + st.pending() + (st.dupWaiting() > 0 ? " (#" + st.dupWaiting() + ")" : ""));
+        todo.setText("Chờ:" + st.pending() + (st.dupWaiting() > 0 ? "(#" + st.dupWaiting() + ")" : ""));
         todo.setActive(st.pending() > 0);
         todo.setTrailingDot(st.dupWaiting() > 0 ? t -> t.dup.base() : null);
         todo.setToolTipText(st.pending() > 0
@@ -797,8 +949,8 @@ public final class MainPanel {
         } else if (waiting == 0) {
             queuePeak = 0;
         }
-        queue.setText(q.waitSeconds() > 0.5 ? String.format("Đợi: %d (%.0fs)", waiting, q.waitSeconds())
-                : "Đợi: " + waiting);
+        queue.setText(q.waitSeconds() > 0.5 ? String.format("Đợi:%d(%.0fs)", waiting, q.waitSeconds())
+                : "Đợi:" + waiting);
         queue.setEnabled(waiting > 0);
         queue.setActive(waiting > 0);
         queue.setToken(waiting > 0 ? (q.waitSeconds() > 0.5 ? t -> t.critical : t -> t.info) : t -> t.neutral);
@@ -815,12 +967,12 @@ public final class MainPanel {
 
         String diag = Diagnostics.summary();
         String wsName = engine.workspaceName();
-        workspace.setText(wsName.length() <= 12 ? wsName : wsName.substring(0, 10) + "...");
+        workspace.setText(wsName.length() <= 8 ? wsName : wsName.substring(0, 7) + "..");
         workspace.setToolTipText(diag + " | Workspace: " + engine.workspaceLocation());
 
         rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
-        status.setText("API " + st.apis() + " · " + st.branches() + "N · "
+        status.setText("API " + st.apis() + "·" + st.branches() + "N·"
                 + engine.roles().enabledCount() + "/" + engine.roles().count() + "R");
         status.setToolTipText(st.apis() + " API · " + st.branches() + " nhánh · "
                 + engine.roles().enabledCount() + "/" + engine.roles().count()

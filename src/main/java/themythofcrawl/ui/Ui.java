@@ -226,35 +226,121 @@ public final class Ui {
         return b;
     }
 
-    /** High-contrast primary semantic button (tinted accent fill + accent border + bold accent text). */
+    /**
+     * High-contrast solid primary CTA button (Burp-LAF-proof: rich solid fill + crisp onSolid text,
+     * never looks faded/disabled under Burp Windows FlatLaf).
+     */
+    public static JButton solidPrimary(String text, Function<Theme, Icon> iconFn) {
+        return styledSemanticButton(text, iconFn, t -> t.accent, true);
+    }
+
+    public static JButton solidPrimary(String text, Function<Theme, Icon> iconFn, Runnable action) {
+        JButton b = solidPrimary(text, iconFn);
+        if (action != null) {
+            b.addActionListener(e -> action.run());
+        }
+        return b;
+    }
+
+    /** Solid/tonal danger button for destructive actions (Drop, Delete, Reset All). */
+    public static JButton dangerBtn(String text, Function<Theme, Icon> iconFn) {
+        return styledSemanticButton(text, iconFn, t -> t.danger, false);
+    }
+
+    public static JButton dangerBtn(String text, Function<Theme, Icon> iconFn, Runnable action) {
+        JButton b = dangerBtn(text, iconFn);
+        if (action != null) {
+            b.addActionListener(e -> action.run());
+        }
+        return b;
+    }
+
+    /** Subtle tinted tonal button for secondary semantic actions (Save Draft, Allow, Format). */
+    public static JButton tonalBtn(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenFn) {
+        return styledSemanticButton(text, iconFn, tokenFn != null ? tokenFn : t -> t.info, false);
+    }
+
+    public static JButton tonalBtn(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenFn, Runnable action) {
+        JButton b = tonalBtn(text, iconFn, tokenFn);
+        if (action != null) {
+            b.addActionListener(e -> action.run());
+        }
+        return b;
+    }
+
+    /** High-contrast primary semantic button (upgraded in V_3.5_beta to solid accent so it is unmistakable on Burp LAF). */
     public static JButton primaryBtn(String text, Function<Theme, Icon> iconFn) {
+        return solidPrimary(text, iconFn);
+    }
+
+    /** Standard secondary outline button (caller attaches ActionListener). */
+    public static JButton secondaryBtn(String text, Function<Theme, Icon> iconFn) {
         JButton b = new JButton(text) {
             @Override
             public void updateUI() {
                 super.updateUI();
                 Theme t = Theme.current();
-                Color bg = t.accent.fill();
-                Color fg = t.accent.text();
-                Color bd = t.accent.border();
-                setBackground(bg);
-                setForeground(fg);
-                setFont(t.boldFont);
+                setBackground(t.surface);
+                setForeground(t.fg);
+                setFont(t.baseFont);
+                setFocusPainted(false);
                 putClientProperty("FlatLaf.style", String.format(
-                        "background: #%02X%02X%02X; foreground: #%02X%02X%02X; borderColor: #%02X%02X%02X; font: bold",
-                        bg.getRed(), bg.getGreen(), bg.getBlue(),
-                        fg.getRed(), fg.getGreen(), fg.getBlue(),
-                        bd.getRed(), bd.getGreen(), bd.getBlue()));
+                        "background: #%02X%02X%02X; foreground: #%02X%02X%02X; borderColor: #%02X%02X%02X; hoverBackground: #%02X%02X%02X",
+                        t.surface.getRed(), t.surface.getGreen(), t.surface.getBlue(),
+                        t.fg.getRed(), t.fg.getGreen(), t.fg.getBlue(),
+                        t.border.getRed(), t.border.getGreen(), t.border.getBlue(),
+                        t.hover.getRed(), t.hover.getGreen(), t.hover.getBlue()));
             }
         };
         if (iconFn != null) {
-            bindDisplayMode(b, text, iconFn, false, null, null, t -> t.accent, null);
+            b.setIcon(Icons.themed(iconFn));
+        }
+        b.setMargin(new Insets(3, 10, 3, 10));
+        return b;
+    }
+
+    public static JButton secondaryBtn(String text, Function<Theme, Icon> iconFn, Runnable action) {
+        JButton b = secondaryBtn(text, iconFn);
+        if (action != null) {
+            b.addActionListener(e -> action.run());
         }
         return b;
     }
 
-    /** Standard secondary button (caller attaches ActionListener). */
-    public static JButton secondaryBtn(String text, Function<Theme, Icon> iconFn) {
-        return button(text, iconFn, () -> { });
+    private static JButton styledSemanticButton(
+            String text,
+            Function<Theme, Icon> iconFn,
+            Function<Theme, Theme.Token> tokenSupplier,
+            boolean solid) {
+        Function<Theme, Theme.Token> fn = tokenSupplier != null ? tokenSupplier : t -> t.accent;
+        JButton b = new JButton(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                Theme.Token tok = fn.apply(t);
+                Color bg = solid ? tok.solidFill() : tok.fill();
+                Color fg = solid ? tok.onSolid() : tok.text();
+                Color bd = tok.border();
+                Color hoverBg = solid ? tok.base() : tok.fillStrong();
+                setBackground(bg);
+                setForeground(fg);
+                setFont(solid ? t.boldFont : t.mediumFont);
+                setFocusPainted(false);
+                putClientProperty("FlatLaf.style", String.format(
+                        "background: #%02X%02X%02X; foreground: #%02X%02X%02X; borderColor: #%02X%02X%02X; hoverBackground: #%02X%02X%02X; font: %s",
+                        bg.getRed(), bg.getGreen(), bg.getBlue(),
+                        fg.getRed(), fg.getGreen(), fg.getBlue(),
+                        bd.getRed(), bd.getGreen(), bd.getBlue(),
+                        hoverBg.getRed(), hoverBg.getGreen(), hoverBg.getBlue(),
+                        solid ? "bold" : "medium"));
+            }
+        };
+        if (iconFn != null) {
+            b.setIcon(Icons.themed(iconFn));
+        }
+        b.setMargin(new Insets(3, 10, 3, 10));
+        return b;
     }
 
     /** Bold section heading label styled with the active Theme. */

@@ -85,30 +85,31 @@ jobs:
           cat <<EOF > /tmp/release_notes.md
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
-          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.4_beta\`, \`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo quy ước trong \`VERSIONING.md\`: nâng cấp kiến trúc lõi từ nền \`V_2.4_beta\` tăng MAJOR và giữ nhánh phụ \`4\` -> **\`V_3.4_beta\`**.
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_3.4_beta\`, \`V_2.4_beta\`, \`V_2.3_beta\`, \`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Theo quy ước trong \`VERSIONING.md\`: cập nhật nâng cấp UX/UI, điều phối Cây & Action Workbench từ nền \`V_3.4_beta\` tăng MINOR -> **\`V_3.5_beta\`**.
 
-          ### 4 Trụ cột Kiến trúc Mới trong \`${TAG}\`
+          ### 6 Điểm Nâng cấp Chính trong \`${TAG}\`
 
-          1. **Chế độ \`0. Nguyên bản (ActionMode.NONE)\` & Nhả 100% — Hết cảnh "chọn rồi không nhả được"**:
-             - Chế độ mặc định khi mở Extension là **Nguyên bản (Không can thiệp)**: request đi thẳng lên Server (xóa 1 lần trả \`200\`, bấm lại trả \`400/404\` trung thực).
-             - Thẻ chiến lược hỗ trợ **bấm lại để Tắt/Nhả**; dọn cờ Proxy nguyên tử khi chuyển chế độ; bổ sung nút **\`Nhả API này về Nguyên bản\`** và **\`Nhả toàn bộ về Nguyên bản (Reset All)\`**.
+          1. **Thanh Header Trên cùng 1 Hàng Chuẩn + Hiển thị & Bật/Tắt Action Ngay Lập Tức**:
+             - Sửa triệt để lỗi rớt dòng/chồng nút trên Top Bar; gom cụm điều khiển gọn trong 1 hàng duy nhất.
+             - Hiển thị rõ trạng thái Action đang chạy ngay trên Header (\`Action: Nguyên bản\` / \`Chờ duyệt\` / \`Giữ Proxy\` / \`Sổ cái (N luật)\`) kèm công tắc gạt **\`ModernToggleSwitch\`** bật/tắt 1-click và menu chọn nhanh 6 chế độ.
 
-          2. **Sổ cái Chính sách Hợp nhất (\`ActionPolicyLedger\`) với Kiến trúc CRUD Đầy đủ & Mở rộng**:
-             - Gom toàn bộ cấu hình Action (Toàn cục / Nhóm Method / 1..N Nhánh cây / Đường dẫn Exact-Prefix-Wildcard-Template-Regex / API cụ thể) vào một Sổ cái duy nhất có đầy đủ dấu thời gian kiểm toán (**Tạo lúc**, **Sửa lúc**, **Khớp cuối**, **Số lần khớp**, **Nguồn tạo**).
-             - **Create**: Form đầy đủ, Quick-create 1-click, Nhân bản (\`Duplicate\`), Bộ mẫu nhanh (\`Presets\`), Import JSON.
-             - **Read**: Tìm kiếm & lọc đa chiều, **Bảng Giải thích Chuỗi luật đang tác động** cho API đang chọn (chỉ rõ luật nào thắng / bị ghi đè), thanh tổng quan phạm vi trên Header, Export JSON.
-             - **Update**: Công tắc \`BẬT/TẮT\` inline 1-click, sửa trực tiếp, đổi thứ tự ưu tiên \`Lên/Xuống/Lên đầu\`, cập nhật hàng loạt (\`Bulk Toggle\`).
-             - **Delete & Recovery**: Xóa đơn/hàng loạt, Nhả theo phạm vi, Reset All, kèm **Thùng rác Hoàn tác (Undo Trash 50 mục)** khôi phục ngay chỉ bằng 1 chạm.
+          2. **Thao tác Nhanh Trực tiếp Trên Cây (Tree-First Intercept & Sửa nhanh Raw HTTP)**:
+             - Request đang bị giữ tại Proxy xuất hiện **ngay trong Nhánh Đích của Cây** với nhãn \`[CHỜ DUYỆT · CHƯA GỬI]\` và bộ đếm chờ duyệt trên thư mục (mặc định không tự bật popup choán màn hình).
+             - Khi chọn node trên cây, chỉnh sửa Raw HTTP trực tiếp ngay trong tab \`Request\` kèm thanh thao tác nhanh: **\`Gửi lên Server\`**, **\`Lưu nháp (Không gửi)\`**, **\`Drop\`**, **\`Format JSON\`**, **\`Lưu sửa\`**, và nút **\`Mở cửa sổ chi tiết\`** chỉ khi cần.
 
-          3. **Bộ Dò & Căn chỉnh Giao thức Action (\`ActionGateAuditLog\` + \`Batch Pre-flight Simulator\`)**:
-             - Ghi nhận **mọi request giao thức Action** đi qua Proxy (cả **Đã Chặn** lẫn **Đã Cho Qua**) kèm chính sách thắng và nút căn chỉnh 1 chạm: **\`+ Chặn chờ duyệt\`**, **\`+ Giữ Proxy\`**, **\`+ Cho qua luôn (ALLOW)\`**.
-             - **Bộ Dò Hàng Loạt Trước Khi Chạy**: mô phỏng toàn bộ API đã bắt (hoặc 1 Nhánh) qua Sổ cái Chính sách mà không gửi gói tin thật, hiển thị thống kê & cho phép căn chỉnh trực tiếp.
+          3. **Cửa sổ Hàng đợi Proxy Chi tiết (\`ProxyInterceptDialog\`) Đồng bộ & Hiển thị Đầy đủ Ngữ cảnh**:
+             - Bảng 8 cột mới bổ sung **\`Nhánh đích\`**, **\`Host\`**, **\`Trạng thái\`**, bộ lọc nhanh theo Nhánh / Host / Tìm kiếm, dải chọn Method dạng chip (\`MethodChipBar\`) và công tắc \`ModernToggleSwitch\` đồng bộ giao diện Light/Dark của Burp Suite.
 
-          4. **Trình Sửa & Gửi lại Request Trực tiếp (\`RequestComposerDialog\`) cho bất kỳ API nào**:
-             - Cửa sổ nổi modeless (kéo thả & co giãn tự do, ghim nổi, \`Ctrl+Enter\` gửi ngay, \`JetBrains Mono\`, 0% HTML).
-             - Chỉnh sửa Raw HTTP request, \`Protocol / Host / Port\`, \`Format JSON\`, tự tính \`Content-Length\`, chọn gửi bằng **Raw vừa sửa / API gốc / 1..N Roles**, chọn chế độ Action riêng cho lần gửi đó (\`Nguyên bản\` / \`Đổi ID sống\` / \`Chạy Producer\`), xem Response trực tiếp + Lịch sử phiên gửi.
-             - Đầy đủ CRUD lưu trữ: **Gửi thử (Ad-hoc)**, **Lưu đè vào API này (Update)**, **Lưu thành API mới trong nhánh (Create/Clone)**, **Đẩy sang Burp Repeater**, **Khôi phục gốc**.
+          4. **Thiết kế lại Toàn bộ Giao diện \`RolesTab\` Đồng bộ Hệ thống**:
+             - Thay toàn bộ công tắc cũ trong bảng và khung chỉnh sửa bằng **\`ModernToggleSwitch\`** bo tròn sắc nét, chip phân tầng Tier & Rule hiện đại và hệ nút bấm \`Ui.solidPrimary\` / \`Ui.dangerBtn\` / \`Ui.secondaryBtn\` chuẩn tương phản.
+
+          5. **Action Workbench Gọn 5 Tab + Sửa Dứt điểm Lỗi Khó Tìm Nút Lưu (CRUD Form)**:
+             - Rút gọn từ 6 tab dàn trải thành **5 tab trực quan**: \`1. Chiến lược & Bật/Tắt\`, \`2. Sổ cái Luật (CRUD)\`, \`3. Bộ Dò & Căn chỉnh\`, \`4. Kho ID · Chuỗi · Khóa 200\` (sub-tabs), \`5. Hướng dẫn & Ví dụ\`.
+             - Form CRUD mới hiển thị theo ngữ cảnh (Progressive Disclosure), nút chính đặc màu **\`Lưu chính sách mới (Ctrl+S)\` / \`Lưu thay đổi\`** luôn ghim nổi bật dưới chân form, tự đặt tên khi để trống và báo xác nhận màu xanh sau khi lưu.
+
+          6. **Tích hợp Sổ tay Hướng dẫn Kiến trúc Action & 5 Kịch bản Áp dụng 1-Click**:
+             - Sơ đồ kiến trúc 2 tầng (Tầng Proxy trước khi lên Server vs Tầng Replay khi chạy Role), bảng so sánh 6 chế độ và 5 tình huống thực chiến có nút **\`Áp dụng ngay\`** 1 chạm (0% HTML, tương thích hoàn toàn Burp Light & Dark).
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

@@ -70,7 +70,7 @@ public final class ActionEngine {
         }
     }
 
-    private static final Set<String> ACTION_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
+    public static final Set<String> ACTION_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     private static final Pattern ACTION_PATH_HINT = Pattern.compile(
             "(?i)/(delete|remove|destroy|cancel|revoke|archive|close|approve|reject|update|edit|create|add|submit|confirm|pay|checkout)(/|$|\\?)");

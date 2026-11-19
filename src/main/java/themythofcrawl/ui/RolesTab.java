@@ -72,19 +72,18 @@ import themythofcrawl.model.RoleScopes;
 import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
 import themythofcrawl.ui.kit.Card;
+import themythofcrawl.ui.kit.ModernToggleSwitch;
 import themythofcrawl.ui.kit.Pill;
-import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.ThemedTree;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * 'Roles' tab — Kiến trúc vuông/chữ nhật tối giản (arc=0):
- * - Dải tóm tắt 3 ô chữ nhật đồng kích cỡ ([Tổng] [Đang bật] [Hết hạn / Lỗi])
- * - Cột trạng thái ô vuông [BẬT] / [TẮT] (thay thế hoàn toàn nút gạt bo tròn)
- * - Huy hiệu phân tầng Role.Tier ([ADM]/[MGR]/[STF]/[USR]/[GST]/[CUS])
- * - 4 tính năng nâng cao: Đếm ngược hạn JWT live, Trích Token/Cookie từ API đã bắt,
- *   Ping kiểm tra Session sống/chết, So sánh 2 Role (Diff Rules).
+ * 'Roles' tab — Modern minimalist design synchronized across Light & Dark themes:
+ * - Clean vector ModernToggleSwitch in both table status column and right-hand Profile Editor
+ * - 3 balanced summary cards ([Tổng] [Đang bật] [Hết hạn / Lỗi])
+ * - Tier badges ([ADM]/[MGR]/[STF]/[USR]/[GST]/[CUS]) & live JWT TTL / Session Ping chips
+ * - Unified Burp-LAF-proof buttons (Solid Primary / Danger / Secondary)
  */
 final class RolesTab {
     private static final Pattern EXP_PATTERN = Pattern.compile("\"exp\"\\s*:\\s*(\\d{9,13})");
@@ -118,9 +117,8 @@ final class RolesTab {
     private final JTextField name = new JTextField(16);
     private final JComboBox<Role.Tier> tierBox = new JComboBox<>(Role.Tier.values());
     private boolean enabledState = true;
-    private final SegmentedToggle enabledToggle = new SegmentedToggle(
-            new SegmentedToggle.Option("BẬT", "Role đang bật — sẽ chạy khi gửi kiểm thử", t -> t.success, null, false),
-            new SegmentedToggle.Option("TẮT", "Role đang tắt — bỏ qua khi gửi kiểm thử", t -> t.slate, null, false));
+    private final ModernToggleSwitch enabledToggle = new ModernToggleSwitch(true, false)
+            .labels("Bật", "Tắt");
     private final RuleModel rules = new RuleModel();
     private final ThemedTable rulesTable = new ThemedTable(rules) {
         @Override
@@ -191,15 +189,15 @@ final class RolesTab {
                 "Quản lý Role, Ping Session, So sánh 2 Role, Bật/Tắt phạm vi, Import/Export",
                 () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
         moreRef[0] = more;
-        JButton pingBtn = Ui.button("Ping", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
+        JButton pingBtn = Ui.secondaryBtn("Ping", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
         pingBtn.setToolTipText("Ping kiểm tra Session còn sống (200 LIVE) hay hết hạn (401 DEAD) trên tất cả Role đang bật");
-        JButton diffBtn = Ui.button("So sánh", Icons::compare, this::compareRolesDialog);
+        JButton diffBtn = Ui.secondaryBtn("So sánh", Icons::compare, this::compareRolesDialog);
         diffBtn.setToolTipText("So sánh trực tiếp bảng Header/Cookie giữa 2 Role bất kỳ");
 
         JPanel topLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         topLeft.setOpaque(false);
-        topLeft.add(Ui.accent("Thêm Role", t -> Icons.plus(t.accent.onSolid()), t -> t.accent, this::addRole));
-        topLeft.add(Ui.button("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles));
+        topLeft.add(Ui.solidPrimary("Thêm Role", t -> Icons.plus(t.accent.onSolid()), this::addRole));
+        topLeft.add(Ui.dangerBtn("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles));
         topLeft.add(profileBadge);
 
         JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
@@ -259,11 +257,10 @@ final class RolesTab {
             }
         });
 
-        enabledToggle.setFixedHeight(24);
-        enabledToggle.setSelectedIndex(0);
-        enabledToggle.setToolTipText("Chọn BẬT hoặc TẮT Role này");
-        enabledToggle.onChange(idx -> {
-            enabledState = (idx == 0);
+        enabledToggle.setOn(true, false);
+        enabledToggle.setToolTipText("Bật hoặc tắt Role này khi chạy kiểm thử phân quyền");
+        enabledToggle.onChange(on -> {
+            enabledState = on;
             markDirty();
         });
 
@@ -323,7 +320,7 @@ final class RolesTab {
 
         hc.gridx = 5;
         hc.insets = new java.awt.Insets(0, 0, 0, 0);
-        headCard.add(Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save), hc);
+        headCard.add(Ui.solidPrimary("Lưu Profile", t -> Icons.save(t.accent.onSolid()), this::save), hc);
 
         // Streamlined 3-group Rules Action Bar (no clutter)
         JButton[] quickRef = new JButton[1];
@@ -343,15 +340,15 @@ final class RolesTab {
 
         JPanel toolsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         toolsLeft.setOpaque(false);
-        toolsLeft.add(Ui.button("Thêm Rule", t -> Icons.plus(t.fg),
+        toolsLeft.add(Ui.secondaryBtn("Thêm Rule", t -> Icons.plus(t.fg),
                 () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
         toolsLeft.add(quickTemplatesBtn);
 
         JPanel toolsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
         toolsRight.setOpaque(false);
-        toolsRight.add(Ui.button("Lên", Icons::arrowUp, () -> moveRule(-1)));
-        toolsRight.add(Ui.button("Xuống", Icons::arrowDown, () -> moveRule(1)));
-        toolsRight.add(Ui.button("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
+        toolsRight.add(Ui.secondaryBtn("Lên", Icons::arrowUp, () -> moveRule(-1)));
+        toolsRight.add(Ui.secondaryBtn("Xuống", Icons::arrowDown, () -> moveRule(1)));
+        toolsRight.add(Ui.dangerBtn("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
 
         JPanel tools = new JPanel(new BorderLayout(4, 0));
         tools.setOpaque(false);
@@ -488,7 +485,7 @@ final class RolesTab {
     private void setEnabledState(boolean on) {
         this.enabledState = on;
         if (enabledToggle != null) {
-            enabledToggle.setSelectedIndex(on ? 0 : 1);
+            enabledToggle.setOn(on, false);
         }
     }
 
@@ -1614,8 +1611,8 @@ final class RolesTab {
     }
 
     /**
-     * Minimalist architectural 2-cell segmented switch plate (arc = 0, 1px hairline border):
-     * renders {@code [ BẬT | TẮT ]} with crisp emerald active left half or calm slate active right half,
+     * Sleek vector pill toggle switch renderer for the Roles status column:
+     * paints a crisp {@link ModernToggleSwitch} track + thumb + subtle "Bật" / "Tắt" label,
      * harmonizing cleanly with both Light/Dark themes and row selection highlights.
      */
     static final class SquareStatusRenderer extends JComponent implements TableCellRenderer, ThemedTree.ExtensionRenderer {
@@ -1650,53 +1647,27 @@ final class RolesTab {
             int h = getHeight();
             Graphics2D g2 = (Graphics2D) g.create();
             try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 g2.setColor(selected ? th.selectionBg : th.zebra[row & 1]);
                 g2.fillRect(0, 0, w, h);
 
-                int bw = Math.min(w - th.scaled(10), th.scaled(78));
-                int bh = Math.min(h - th.scaled(12), th.scaled(22));
-                int bx = (w - bw) / 2;
-                int by = (h - bh) / 2;
-                int half = bw / 2;
-                int rightW = bw - half;
-
-                // Recessed neutral track (blends harmoniously even inside selected rows)
-                g2.setColor(selected ? th.surface : th.surfaceAlt);
-                g2.fillRect(bx, by, bw, bh);
-
-                // Active half fill
-                if (on) {
-                    g2.setColor(th.success.solidFill());
-                    g2.fillRect(bx, by, half, bh);
-                } else {
-                    g2.setColor(th.slate.fillStrong());
-                    g2.fillRect(bx + half, by, rightW, bh);
-                    // Crisp 2px architectural bottom bar on active OFF half
-                    g2.setColor(th.slate.text());
-                    g2.fillRect(bx + half, by + bh - 2, rightW, 2);
-                }
-
-                // Hairline outer frame & crisp center divider (arc = 0)
-                g2.setColor(on ? th.success.border() : th.border);
-                g2.drawRect(bx, by, bw - 1, bh - 1);
-                g2.setColor(th.border);
-                g2.drawLine(bx + half, by + 1, bx + half, by + bh - 2);
-
-                // Crisp centered labels for both halves
+                int sw = th.scaled(32);
+                int sh = th.scaled(18);
+                int gap = th.scaled(6);
+                String lbl = on ? "Bật" : "Tắt";
                 g2.setFont(th.smallBoldFont);
                 FontMetrics fm = g2.getFontMetrics();
-                int ty = by + (bh - fm.getHeight()) / 2 + fm.getAscent();
+                int lw = fm.stringWidth(lbl);
+                int totalW = sw + gap + lw;
+                int sx = Math.max(th.scaled(6), (w - totalW) / 2);
+                int sy = (h - sh) / 2;
 
-                String onTxt = "BẬT";
-                int onTx = bx + (half - fm.stringWidth(onTxt)) / 2;
-                g2.setColor(on ? th.success.onSolid() : th.muted);
-                g2.drawString(onTxt, onTx, ty);
+                ModernToggleSwitch.paintSwitch(g2, th, sx, sy, sw, sh, on, false, false, true);
 
-                String offTxt = "TẮT";
-                int offTx = bx + half + (rightW - fm.stringWidth(offTxt)) / 2;
-                g2.setColor(on ? th.muted : th.slate.text());
-                g2.drawString(offTxt, offTx, ty);
+                g2.setColor(selected ? th.selectionFg : (on ? th.success.text() : th.muted));
+                int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
+                g2.drawString(lbl, sx + sw + gap, ty);
             } finally {
                 g2.dispose();
             }
@@ -1705,8 +1676,7 @@ final class RolesTab {
 
     /**
      * Matching table cell editor for {@link SquareStatusRenderer}: renders the exact same
-     * 2-cell {@code [ BẬT | TẮT ]} plate and toggles immediately on click without ever flashing
-     * a native Swing {@code JCheckBox}.
+     * vector pill switch and toggles immediately on single click.
      */
     private static final class SquareStatusEditor extends AbstractCellEditor implements TableCellEditor {
         private final SquareStatusRenderer view = new SquareStatusRenderer();
@@ -1721,10 +1691,7 @@ final class RolesTab {
                         cancelCellEditing();
                         return;
                     }
-                    int mid = view.getWidth() / 2;
-                    boolean clickedLeft = e.getX() < mid;
-                    // Clicking inactive half selects it; clicking active half also toggles cleanly
-                    value = (clickedLeft != value) ? clickedLeft : !value;
+                    value = !value;
                     view.configure(Theme.current(), value, true, view.row);
                     view.repaint();
                     stopCellEditing();
@@ -1778,19 +1745,21 @@ final class RolesTab {
             int h = getHeight();
             Graphics2D g2 = (Graphics2D) g.create();
             try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 g2.setColor(selected ? th.selectionBg : th.zebra[Math.max(0, modelRow) & 1]);
                 g2.fillRect(0, 0, w, h);
 
                 int pad = th.scaled(6);
                 Theme.Token tierTok = tierToken(th, tier);
-                int bw = th.scaled(32);
-                int bh = th.scaled(18);
+                int bw = th.scaled(34);
+                int bh = th.scaled(19);
                 int by = (h - bh) / 2;
+                int arc = th.scaled(4);
                 g2.setColor(roleEnabled ? tierTok.fill() : th.surfaceAlt);
-                g2.fillRect(pad, by, bw - 1, bh - 1);
+                g2.fillRoundRect(pad, by, bw - 1, bh - 1, arc, arc);
                 g2.setColor(roleEnabled ? tierTok.border() : th.border);
-                g2.drawRect(pad, by, bw - 1, bh - 1);
+                g2.drawRoundRect(pad, by, bw - 1, bh - 1, arc, arc);
 
                 g2.setFont(th.smallBoldFont);
                 FontMetrics bfm = g2.getFontMetrics();
@@ -1798,7 +1767,7 @@ final class RolesTab {
                 g2.setColor(roleEnabled ? tierTok.text() : th.muted);
                 g2.drawString(tier.badge, pad + (bw - btw) / 2, by + (bh - bfm.getHeight()) / 2 + bfm.getAscent());
 
-                int tx = pad + bw + th.scaled(6);
+                int tx = pad + bw + th.scaled(7);
                 g2.setFont(roleEnabled ? th.boldFont : th.baseFont);
                 FontMetrics fm = g2.getFontMetrics();
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
@@ -1854,6 +1823,7 @@ final class RolesTab {
             int h = getHeight();
             Graphics2D g2 = (Graphics2D) g.create();
             try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 g2.setColor(selected ? th.selectionBg : th.zebra[Math.max(0, modelRow) & 1]);
                 g2.fillRect(0, 0, w, h);
@@ -1861,9 +1831,9 @@ final class RolesTab {
                 int x = th.scaled(6);
                 g2.setFont(th.smallBoldFont);
                 FontMetrics fm = g2.getFontMetrics();
-                int ip = th.scaled(5);
+                int ip = th.scaled(6);
                 int gap = th.scaled(4);
-                int pillH = Math.min(h - th.scaled(8), th.scaled(20));
+                int pillH = Math.min(h - th.scaled(10), th.scaled(20));
                 int pillY = (h - pillH) / 2;
                 int maxRight = w - th.scaled(6);
 
@@ -1891,7 +1861,7 @@ final class RolesTab {
                     }
                 }
 
-                // 3) Rule chips (strictly sharp rectangular, arc = 0)
+                // 3) Rule chips (sleek 4px rounded hairline badges)
                 if (ruleList.isEmpty()) {
                     g2.setFont(th.italicFont);
                     FontMetrics ifm = g2.getFontMetrics();
@@ -1930,20 +1900,22 @@ final class RolesTab {
         }
 
         private void drawSharpTextChip(Graphics2D g2, Theme.Token tok, int x, int y, int w, int h, FontMetrics fm, String text) {
+            int arc = 6;
             g2.setColor(tok.fill());
-            g2.fillRect(x, y, w - 1, h - 1);
+            g2.fillRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.border());
-            g2.drawRect(x, y, w - 1, h - 1);
+            g2.drawRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.text());
             int ty = y + (h - fm.getHeight()) / 2 + fm.getAscent();
             g2.drawString(text, x + (w - fm.stringWidth(text)) / 2, ty);
         }
 
         private void drawChip(Graphics2D g2, Theme.Token tok, int x, int y, int w, int h, FontMetrics fm, int len) {
+            int arc = 6;
             g2.setColor(tok.fill());
-            g2.fillRect(x, y, w - 1, h - 1);
+            g2.fillRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.border());
-            g2.drawRect(x, y, w - 1, h - 1);
+            g2.drawRoundRect(x, y, w - 1, h - 1, arc, arc);
             g2.setColor(tok.text());
             int ty = y + (h - fm.getHeight()) / 2 + fm.getAscent();
             g2.drawChars(buf, 0, len, x + (w - fm.charsWidth(buf, 0, len)) / 2, ty);

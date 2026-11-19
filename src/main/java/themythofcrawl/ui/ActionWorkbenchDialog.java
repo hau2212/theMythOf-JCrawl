@@ -7,10 +7,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.awt.GridLayout;
-import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -19,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,12 +35,10 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.JToggleButton;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
@@ -60,10 +54,10 @@ import themythofcrawl.core.ActionEngine.SuggestedPath;
 import themythofcrawl.core.ActionEngine.SwapPreview;
 import themythofcrawl.core.Config;
 import themythofcrawl.core.Text;
-import themythofcrawl.model.ActionInterceptRule;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.Blob;
 import themythofcrawl.model.RoleResult;
+import themythofcrawl.ui.kit.ModernToggleSwitch;
 import themythofcrawl.ui.kit.Pill;
 import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ThemedTable;
@@ -71,23 +65,27 @@ import themythofcrawl.ui.theme.FontManager;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Visual Action API Workbench v2.2 with 5 clear tabs:
+ * Streamlined Action API Workbench (V_3.5_beta) with 5 crystal-clear tabs:
  * <ol>
- *   <li>Chiến lược xử lý (4 sharp cards + Smart Auto + Proxy Hold toggles)</li>
- *   <li>Luật Chặn Proxy (Pre-crawl Branch/Path + HTTP Method matrix rules + Live Dry-Run Tester)</li>
- *   <li>Kho ID Sống (Live ID Pool table, 1-click swap &amp; send, bulk paste, CSV import/export)</li>
- *   <li>Chuỗi Tạo Mới -&gt; Hành Động (Producer Chain Builder with auto-suggested JSONPath &amp; live request diff)</li>
- *   <li>Khóa 200 OK &amp; So sánh Gửi lại (side-by-side 200 OK snapshot vs latest response + 3 clear buttons)</li>
+ *   <li>Chiến lược &amp; Nhả (Quick Strategy Cards + Mode #5 Live Intercept + 0. Reset)</li>
+ *   <li>Luật &amp; Phạm vi (CRUD) (Progressive Context-Aware Form + Unmistakable Save + Undo Trash)</li>
+ *   <li>Dò &amp; Căn chỉnh Proxy (Live Gate Probe + Batch Pre-flight Simulator)</li>
+ *   <li>Nâng cao (3 sub-tabs: Kho ID Sống · Chuỗi Tạo Mới -&gt; Hành Động · Khóa 200 OK)</li>
+ *   <li>Hướng dẫn &amp; Ví dụ (2-Stage Architecture Diagram + 6-Mode Guide + 5 1-Click Playbooks)</li>
  * </ol>
  */
 public final class ActionWorkbenchDialog {
     public static final int TAB_STRATEGY = 0;
     public static final int TAB_LEDGER = 1;
     public static final int TAB_INTERCEPT_RULES = TAB_LEDGER;
-    public static final int TAB_POOL = 2;
-    public static final int TAB_CHAIN = 3;
-    public static final int TAB_LOCK200 = 4;
-    public static final int TAB_PROTOCOL_AUDIT = 5;
+    public static final int TAB_PROTOCOL_AUDIT = 2;
+    public static final int TAB_ADVANCED = 3;
+    public static final int TAB_GUIDE = 4;
+
+    /** Legacy direct-open indices routed automatically to Tab 4 (Nâng cao) + the matching sub-tab. */
+    public static final int TAB_POOL = 100;
+    public static final int TAB_CHAIN = 101;
+    public static final int TAB_LOCK200 = 102;
 
     private ActionWorkbenchDialog() {
     }
@@ -108,8 +106,8 @@ public final class ActionWorkbenchDialog {
         String title = focusGroup != null
                 ? "Action Workbench — " + Text.apiLabel(focusGroup.gid()) + " " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 44)
                 : (prefillBranch != null && !prefillBranch.isBlank()
-                        ? "Action Workbench — Sổ cái & Luật Chặn cho " + prefillBranch
-                        : "Action Workbench — Trung tâm Kiểm soát Action & Dò Giao thức");
+                        ? "Action Workbench — Luật & Phạm vi cho " + prefillBranch
+                        : "Action Workbench — Trung tâm Kiểm soát Action");
         JDialog dlg = new JDialog(owner, title, JDialog.ModalityType.APPLICATION_MODAL);
 
         JPanel content = buildWorkbenchPanel(dlg, engine, focusGroup, explicitTargets, prefillBranch, initialTab, () -> {
@@ -122,12 +120,12 @@ public final class ActionWorkbenchDialog {
         dlg.add(content, BorderLayout.CENTER);
         Theme.track(dlg);
         dlg.setMinimumSize(new Dimension(960, 620));
-        dlg.setSize(new Dimension(1120, 720));
+        dlg.setSize(new Dimension(1120, 730));
         dlg.setLocationRelativeTo(owner);
         dlg.setVisible(true);
     }
 
-    /** Builds the full 6-tab Workbench panel (also reusable for headless tests &amp; previews). */
+    /** Builds the streamlined 5-tab Workbench panel (also reusable for headless tests &amp; previews). */
     public static JPanel buildWorkbenchPanel(Component dialogParent, Engine engine, ApiGroup focusGroup,
                                              Collection<RoleResult> explicitTargets, int initialTab,
                                              Runnable onAfterAction, Runnable onClose) {
@@ -148,8 +146,8 @@ public final class ActionWorkbenchDialog {
         JPanel topWrap = new JPanel(new BorderLayout());
         String headTitle = focusGroup != null
                 ? "Action Workbench — " + Text.apiLabel(focusGroup.gid()) + " [" + focusGroup.method() + " " + focusGroup.path() + "]"
-                : "Action Workbench — Trung tâm Kiểm soát Chính sách & Dò Giao thức Action";
-        String headSub = "Kiểm soát mọi ngữ cảnh (Toàn cục / Nhánh / Path / API / Method), nhả về Nguyên bản tức thì, dò giao thức Proxy và sửa/gửi lại Request.";
+                : "Action Workbench — Trung tâm Kiểm soát Chính sách Action";
+        String headSub = "Chặng 1: Cổng Proxy (Chặn chờ duyệt / Giữ 200 ảo / Cho qua)  ·  Chặng 2: Replay (Kho ID / Tạo->Xóa / Khóa 200). Xem Tab 5 nếu cần ví dụ nhanh!";
         topWrap.add(Ui.dialogHeader(headTitle, headSub), BorderLayout.NORTH);
 
         JPanel statusStrip = new JPanel(new BorderLayout(8, 0));
@@ -171,8 +169,15 @@ public final class ActionWorkbenchDialog {
             pillsLeft.add(pill);
         }
 
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.putClientProperty("JTabbedPane.tabType", "card");
+        tabs.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
+
         JPanel quickRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         quickRight.setOpaque(false);
+        JButton openGuideBtn = Ui.secondaryBtn("Hướng dẫn & Ví dụ", t -> Icons.info(t.info.text()));
+        openGuideBtn.addActionListener(e -> tabs.setSelectedIndex(TAB_GUIDE));
+        quickRight.add(openGuideBtn);
         if (focusGroup != null) {
             JButton openComposerBtn = Ui.secondaryBtn("Sửa & Gửi lại...", t -> Icons.edit(t.accent.text()));
             openComposerBtn.addActionListener(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null));
@@ -237,27 +242,42 @@ public final class ActionWorkbenchDialog {
             poolCountPill.setText("Kho ID: " + alive + " sống · " + ae.getConsumedIds().size() + " hết");
         };
 
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.putClientProperty("JTabbedPane.tabType", "card");
-        tabs.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
+        // Tab 4 inner sub-tabs (Kho ID · Chuỗi Tạo->Xóa · Khóa 200)
+        JTabbedPane advancedTabs = new JTabbedPane();
+        advancedTabs.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, 0, 0, 0));
+        advancedTabs.addTab("Kho ID Sống", buildPoolTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
+        advancedTabs.addTab("Chuỗi Tạo Mới -> Hành Động", buildChainTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
+        advancedTabs.addTab("Khóa 200 OK & So sánh", buildLock200Tab(engine, focusGroup, targets, refreshBanner, onAfterAction));
 
         tabs.addTab("1. Chiến lược & Nhả", buildStrategyTab(dialogParent, engine, focusGroup, refreshBanner, onAfterAction));
-        tabs.addTab("2. Sổ cái & Luật (CRUD)", ActionLedgerTabBuilder.build(dialogParent, engine, focusGroup, prefillBranch, refreshBanner, onAfterAction));
-        tabs.addTab("3. Kho ID Sống", buildPoolTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
-        tabs.addTab("4. Chuỗi Tạo Mới -> Hành Động", buildChainTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
-        tabs.addTab("5. Khóa 200 OK & Gửi lại", buildLock200Tab(engine, focusGroup, targets, refreshBanner, onAfterAction));
-        tabs.addTab("6. Dò & Căn chỉnh Giao thức", ActionProtocolAuditTabBuilder.build(dialogParent, engine, refreshBanner, onAfterAction));
+        tabs.addTab("2. Luật & Phạm vi (CRUD)", ActionLedgerTabBuilder.build(dialogParent, engine, focusGroup, prefillBranch, refreshBanner, onAfterAction));
+        tabs.addTab("3. Dò & Căn chỉnh Proxy", ActionProtocolAuditTabBuilder.build(dialogParent, engine, refreshBanner, onAfterAction));
+        tabs.addTab("4. Nâng cao (Kho ID · Tạo->Xóa · Khóa 200)", advancedTabs);
+        tabs.addTab("5. Hướng dẫn & Ví dụ", ActionGuideTabBuilder.build(engine, focusGroup, refreshBanner, onAfterAction, idx -> {
+            if (idx >= 0 && idx < tabs.getTabCount()) {
+                tabs.setSelectedIndex(idx);
+            }
+        }));
 
-        if (initialTab >= 0 && initialTab < tabs.getTabCount()) {
+        if (initialTab == TAB_POOL) {
+            tabs.setSelectedIndex(TAB_ADVANCED);
+            advancedTabs.setSelectedIndex(0);
+        } else if (initialTab == TAB_CHAIN) {
+            tabs.setSelectedIndex(TAB_ADVANCED);
+            advancedTabs.setSelectedIndex(1);
+        } else if (initialTab == TAB_LOCK200) {
+            tabs.setSelectedIndex(TAB_ADVANCED);
+            advancedTabs.setSelectedIndex(2);
+        } else if (initialTab >= 0 && initialTab < tabs.getTabCount()) {
             tabs.setSelectedIndex(initialTab);
         }
         root.add(tabs, BorderLayout.CENTER);
 
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_1, Theme.SPACE_3, 0, Theme.SPACE_3));
-        footer.add(Ui.muted("Mọi chính sách CRUD, thao tác Nhả về Nguyên bản và Bộ Dò giao thức được đồng bộ & áp dụng tức thì."), BorderLayout.WEST);
+        footer.add(Ui.muted("Mọi chính sách CRUD, công tắc Action và kịch bản mẫu đều lưu & áp dụng tức thì."), BorderLayout.WEST);
         if (onClose != null) {
-            footer.add(Ui.button("Đóng", onClose), BorderLayout.EAST);
+            footer.add(Ui.secondaryBtn("Đóng", null, onClose), BorderLayout.EAST);
         }
         root.add(footer, BorderLayout.SOUTH);
 
@@ -334,17 +354,15 @@ public final class ActionWorkbenchDialog {
         liveWaitBanner.add(waitTextCol, BorderLayout.CENTER);
 
         final boolean[] syncingBanner = {false};
-        SegmentedToggle waitMasterToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("TẮT", "Tắt chặn chờ duyệt trực tiếp", t -> t.slate, null, false),
-                new SegmentedToggle.Option("BẬT CHẶN", "Bật chặn đứng request tại Proxy và đợi thao tác", t -> t.danger, null, false));
-        waitMasterToggle.setFixedHeight(26);
-        waitMasterToggle.setSelectedIndex(engine.actionEngine().isInterceptWaitEnabled() ? 1 : 0);
+        ModernToggleSwitch waitMasterSwitch = new ModernToggleSwitch(engine.actionEngine().isInterceptWaitEnabled(), true)
+                .labels("ĐANG CHẶN", "Đang tắt");
+        waitMasterSwitch.setToolTipText("Bật hoặc tắt Chặn chờ duyệt trực tiếp (request sẽ dừng ngay trên Cây đợi bạn bấm Gửi)");
 
-        JButton openWaitQueueBtn = Ui.accent("Mở Hàng chờ Chặn...",
-                t -> Icons.send(t.danger.onSolid(), 13), t -> t.danger, () -> MainPanel.openInterceptQueue(engine));
-        JPanel waitRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JButton openWaitQueueBtn = Ui.secondaryBtn("Mở Hàng chờ chi tiết...",
+                t -> Icons.sliders(t.fg), () -> MainPanel.openInterceptQueue(engine));
+        JPanel waitRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         waitRight.setOpaque(false);
-        waitRight.add(waitMasterToggle);
+        waitRight.add(waitMasterSwitch);
         waitRight.add(openWaitQueueBtn);
         liveWaitBanner.add(waitRight, BorderLayout.EAST);
 
@@ -380,7 +398,7 @@ public final class ActionWorkbenchDialog {
             }
             syncingBanner[0] = true;
             try {
-                waitMasterToggle.setSelectedIndex(engine.actionEngine().isInterceptWaitEnabled() ? 1 : 0);
+                waitMasterSwitch.setOn(engine.actionEngine().isInterceptWaitEnabled(), false);
             } finally {
                 syncingBanner[0] = false;
             }
@@ -420,13 +438,13 @@ public final class ActionWorkbenchDialog {
             }
         });
 
-        waitMasterToggle.onChange(idx -> {
+        waitMasterSwitch.onChange(on -> {
             if (syncingBanner[0]) {
                 return;
             }
-            engine.setInterceptWaitEnabled(idx == 1);
+            engine.setInterceptWaitEnabled(on);
             if (perApiScope[0] && focusGroup != null) {
-                engine.toggleEndpointInterceptWait(focusGroup, idx == 1);
+                engine.toggleEndpointInterceptWait(focusGroup, on);
             }
             refreshCards.run();
             refreshBanner.run();
@@ -696,7 +714,7 @@ public final class ActionWorkbenchDialog {
         JTextField bulkRes = new JTextField(defaultRes, 10);
         JTextField bulkIds = new JTextField(24);
         bulkIds.putClientProperty("JTextField.placeholderText", "VD: 101, 102, 103, uuid-...");
-        JButton addBulkBtn = Ui.button("Nạp nhanh vào Kho", Icons::plus, () -> {
+        JButton addBulkBtn = Ui.solidPrimary("+ Thêm & Lưu vào Kho", t -> Icons.plus(t.accent.onSolid()), () -> {
             String r = bulkRes.getText().trim().isEmpty() ? defaultRes : bulkRes.getText().trim();
             int n = engine.actionEngine().addBulkLiveIds(r, bulkIds.getText());
             if (n > 0) {
@@ -886,7 +904,7 @@ public final class ActionWorkbenchDialog {
 
         p.add(new JScrollPane(steps), BorderLayout.CENTER);
 
-        JButton saveLinkBtn = Ui.button("Lưu liên kết Chuỗi", Icons::save, () -> {
+        JButton saveLinkBtn = Ui.solidPrimary("Lưu liên kết Chuỗi", t -> Icons.save(t.accent.onSolid()), () -> {
             ApiGroup prod = selectedProducer.get();
             if (focusGroup == null || prod == null) {
                 return;
@@ -900,8 +918,8 @@ public final class ActionWorkbenchDialog {
         });
         saveLinkBtn.setEnabled(focusGroup != null && !producers.isEmpty());
 
-        JButton runOnceBtn = Ui.accent("Chạy thử 1 lượt (Tạo mới -> Đổi ID -> Gửi)",
-                t -> Icons.playTest(t.accent.onSolid(), 14), t -> t.accent, () -> {
+        JButton runOnceBtn = Ui.solidPrimary("Chạy thử 1 lượt (Tạo mới -> Đổi ID -> Gửi)",
+                t -> Icons.playTest(t.accent.onSolid(), 14), () -> {
                     ApiGroup prod = selectedProducer.get();
                     if (focusGroup == null) {
                         return;
@@ -923,7 +941,7 @@ public final class ActionWorkbenchDialog {
     }
 
     // =========================================================================
-    // TAB 4: LOCK 200 OK & SIDE-BY-SIDE COMPARISON
+    // SUB-TAB: LOCK 200 OK & SIDE-BY-SIDE COMPARISON
     // =========================================================================
     private static JPanel buildLock200Tab(Engine engine, ApiGroup focusGroup,
                                           Collection<RoleResult> targets, Runnable refreshBanner, Runnable onAfterAction) {
@@ -1001,8 +1019,8 @@ public final class ActionWorkbenchDialog {
         });
         keep200Btn.setEnabled(hasSnap);
 
-        JButton swapSendBtn = Ui.accent("2. Đổi ID sống mới & Đẩy thật lên Server",
-                t -> Icons.strategySwap(t.accent.onSolid(), 14), t -> t.accent, () -> {
+        JButton swapSendBtn = Ui.solidPrimary("2. Đổi ID sống mới & Đẩy thật lên Server",
+                t -> Icons.strategySwap(t.accent.onSolid(), 14), () -> {
                     if (focusGroup == null) return;
                     if (!engine.sendWithNextLiveId(focusGroup, targets)) {
                         engine.sendWithProducer(focusGroup, null, targets);
@@ -1013,7 +1031,7 @@ public final class ActionWorkbenchDialog {
                 });
         swapSendBtn.setEnabled(focusGroup != null);
 
-        JButton forceBtn = Ui.button("3. Đẩy nguyên bản (Chấp nhận rủi ro 4xx)", t -> Icons.warn(t.warning.text()), () -> {
+        JButton forceBtn = Ui.dangerBtn("3. Đẩy nguyên bản (Chấp nhận rủi ro 4xx)", t -> Icons.warn(t.danger.text()), () -> {
             if (focusGroup == null) return;
             engine.forceRawReplay(focusGroup, targets);
             refreshCompare.run();
@@ -1054,468 +1072,7 @@ public final class ActionWorkbenchDialog {
         return box;
     }
 
-    private static String shortModeName(ActionMode m) {
-        if (m == null) {
-            return "Nguyên bản (Không can thiệp)";
-        }
-        return switch (m) {
-            case NONE -> "Nguyên bản (Không can thiệp)";
-            case AUTO_SMART -> "Tự động thông minh (Kết hợp cả 4)";
-            case HOLD_AT_PROXY -> "Giữ ở Proxy";
-            case LOCK_2XX -> "Khóa 200 OK (Snapshot)";
-            case LIVE_ID_POOL -> "Kho ID Sống";
-            case PRODUCER_RECREATE -> "Chuỗi Tạo Mới -> Hành Động";
-            case INTERCEPT_WAIT -> "Chặn chờ duyệt trực tiếp (Đợi bấm Gửi)";
-        };
-    }
-
     /** Sharp rectangular clickable strategy card for the 2x2 Strategy Grid. */
-    // =========================================================================
-    // TAB 2: PROACTIVE PROXY REQUEST INTERCEPTION RULES (PRE-CRAWL)
-    // =========================================================================
-    private static JPanel buildInterceptRulesTab(Component dialogParent, Engine engine, ApiGroup focusGroup,
-                                                 String prefillBranch, Runnable refreshBanner, Runnable onAfterAction) {
-        JPanel p = new JPanel(new BorderLayout(0, Theme.SPACE_2));
-        p.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
-
-        // Top info + priority action bar
-        JPanel topBar = new JPanel(new BorderLayout(8, 0));
-        topBar.setOpaque(false);
-        JLabel hint = Ui.muted("Cấu hình chặn chủ động ngay tại Proxy TRƯỚC khi request tới Server (ưu tiên từ trên xuống, luật Cho qua sẽ vượt qua luật Chặn phía dưới).");
-        topBar.add(hint, BorderLayout.NORTH);
-
-        DefaultTableModel model = new DefaultTableModel(
-                new Object[]{"#", "Trạng thái", "Hành động", "Method", "Phạm vi Nhánh / Path", "Khớp"}, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
-        };
-        ThemedTable ruleTable = new ThemedTable(model);
-        ruleTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        ruleTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        ruleTable.setRowHeight(Theme.current().scaled(30));
-        ruleTable.getColumnModel().getColumn(0).setPreferredWidth(30);
-        ruleTable.getColumnModel().getColumn(1).setPreferredWidth(72);
-        ruleTable.getColumnModel().getColumn(2).setPreferredWidth(128);
-        ruleTable.getColumnModel().getColumn(3).setPreferredWidth(124);
-        ruleTable.getColumnModel().getColumn(4).setPreferredWidth(250);
-        ruleTable.getColumnModel().getColumn(5).setPreferredWidth(48);
-
-        final List<ActionInterceptRule> displayed = new ArrayList<>();
-        final String[] editingId = {null};
-
-        // Editor fields
-        JTextField nameField = new JTextField("", 18);
-        nameField.setToolTipText("Tên gợi nhớ (để trống sẽ tự đặt theo Method + Path)");
-
-        JComboBox<ActionInterceptRule.Effect> effectBox = new JComboBox<>(ActionInterceptRule.Effect.values());
-        effectBox.setRenderer((list, value, index, isSelected, cellHasFocus) -> {
-            JLabel l = new JLabel(value == null ? "" : value.label);
-            l.setOpaque(true);
-            Theme t = Theme.current();
-            l.setBackground(isSelected ? t.selectionBg : t.surface);
-            l.setForeground(isSelected ? t.selectionFg : t.fg);
-            l.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
-            return l;
-        });
-
-        JComboBox<Integer> statusBox = new JComboBox<>(new Integer[]{200, 201, 204, 202});
-        statusBox.setEditable(true);
-        statusBox.setPreferredSize(new Dimension(74, 26));
-
-        String initialBranch = (prefillBranch != null && !prefillBranch.isBlank())
-                ? prefillBranch
-                : (focusGroup != null ? focusGroup.branch() : engine.activeBranch().name());
-        JTextField branchField = new JTextField(initialBranch == null ? "" : initialBranch, 16);
-        JCheckBox subBranchesChk = new JCheckBox("Gồm nhánh con", true);
-        subBranchesChk.setOpaque(false);
-        JButton curBranchBtn = Ui.button("Đích hiện tại", () -> branchField.setText(engine.activeBranch().name()));
-        JButton anyBranchBtn = Ui.button("Mọi nhánh", () -> branchField.setText(""));
-
-        JTextField hostField = new JTextField(focusGroup != null ? focusGroup.host() : "", 14);
-        hostField.setToolTipText("Để trống hoặc * để áp dụng cho mọi Host");
-
-        JComboBox<ActionInterceptRule.PathMatchType> matchTypeBox = new JComboBox<>(ActionInterceptRule.PathMatchType.values());
-        matchTypeBox.setRenderer((list, value, index, isSelected, cellHasFocus) -> {
-            JLabel l = new JLabel(value == null ? "" : value.label);
-            l.setOpaque(true);
-            Theme t = Theme.current();
-            l.setBackground(isSelected ? t.selectionBg : t.surface);
-            l.setForeground(isSelected ? t.selectionFg : t.fg);
-            l.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
-            return l;
-        });
-
-        JTextField pathField = new JTextField(focusGroup != null ? ActionEngine.normalizePathTemplate(focusGroup.path()) : "/api/*", 18);
-        JTextField spoofBodyField = new JTextField(ActionInterceptRule.DEFAULT_SPOOF_BODY, 20);
-
-        Map<String, JToggleButton> methodButtons = new LinkedHashMap<>();
-        JPanel methodRow1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
-        methodRow1.setOpaque(false);
-        Set<String> defaultSelectedMethods = Set.of("POST", "PUT", "PATCH", "DELETE");
-        for (String m : ActionInterceptRule.ALL_METHODS) {
-            JToggleButton tb = new JToggleButton(m, defaultSelectedMethods.contains(m));
-            tb.setFocusPainted(false);
-            tb.setFont(Theme.current().smallFont);
-            tb.setMargin(new Insets(1, 4, 1, 4));
-            tb.setPreferredSize(new Dimension(m.length() >= 7 ? 62 : (m.length() >= 5 ? 52 : 42), 24));
-            tb.addItemListener(ev -> styleMethodToggle(tb));
-            styleMethodToggle(tb);
-            methodButtons.put(m, tb);
-            methodRow1.add(tb);
-        }
-        JPanel methodRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        methodRow2.setOpaque(false);
-        JButton presetActionBtn = Ui.button("Chỉ Action (POST/PUT/PATCH/DELETE)", () -> {
-            for (Map.Entry<String, JToggleButton> e : methodButtons.entrySet()) {
-                e.getValue().setSelected(ActionEngine.isActionMethod(e.getKey()));
-            }
-        });
-        JButton presetAllBtn = Ui.button("Tất cả", () -> {
-            for (JToggleButton b : methodButtons.values()) {
-                b.setSelected(true);
-            }
-        });
-        methodRow2.add(presetActionBtn);
-        methodRow2.add(presetAllBtn);
-
-        JPanel methodStrip = new JPanel(new BorderLayout(0, 4));
-        methodStrip.setOpaque(false);
-        methodStrip.add(methodRow1, BorderLayout.NORTH);
-        methodStrip.add(methodRow2, BorderLayout.SOUTH);
-
-        JLabel editorModeLbl = Ui.bold("Tạo luật chặn mới");
-
-        Runnable resetEditor = () -> {
-            editingId[0] = null;
-            editorModeLbl.setText("Tạo luật chặn mới");
-            nameField.setText("");
-            effectBox.setSelectedItem(ActionInterceptRule.Effect.BLOCK_SPOOF);
-            statusBox.setSelectedItem(200);
-            branchField.setText(initialBranch == null ? "" : initialBranch);
-            subBranchesChk.setSelected(true);
-            hostField.setText(focusGroup != null ? focusGroup.host() : "");
-            matchTypeBox.setSelectedItem(focusGroup != null ? ActionInterceptRule.PathMatchType.TEMPLATE : ActionInterceptRule.PathMatchType.WILDCARD);
-            pathField.setText(focusGroup != null ? ActionEngine.normalizePathTemplate(focusGroup.path()) : "/api/*");
-            spoofBodyField.setText(ActionInterceptRule.DEFAULT_SPOOF_BODY);
-            for (Map.Entry<String, JToggleButton> e : methodButtons.entrySet()) {
-                e.getValue().setSelected(ActionEngine.isActionMethod(e.getKey()));
-            }
-        };
-
-        Runnable loadRuleToEditor = () -> {
-            int row = ruleTable.getSelectedRow();
-            if (row < 0 || row >= displayed.size()) {
-                return;
-            }
-            ActionInterceptRule r = displayed.get(row);
-            editingId[0] = r.id();
-            editorModeLbl.setText("Đang sửa luật #" + (row + 1) + " — " + r.name());
-            nameField.setText(r.rawName());
-            effectBox.setSelectedItem(r.effect());
-            statusBox.setSelectedItem(r.spoofStatus());
-            branchField.setText(r.branchScope());
-            subBranchesChk.setSelected(r.includeSubBranches());
-            hostField.setText(r.hostPattern());
-            matchTypeBox.setSelectedItem(r.pathMatchType());
-            pathField.setText(r.pathPattern());
-            spoofBodyField.setText(r.spoofBody());
-            Set<String> ms = r.methods();
-            boolean all = ms.isEmpty();
-            for (Map.Entry<String, JToggleButton> e : methodButtons.entrySet()) {
-                e.getValue().setSelected(all || ms.contains(e.getKey()));
-            }
-        };
-
-        Runnable refreshRulesTable = () -> {
-            int prevSel = ruleTable.getSelectedRow();
-            displayed.clear();
-            displayed.addAll(engine.actionEngine().interceptRules());
-            model.setRowCount(0);
-            for (int i = 0; i < displayed.size(); i++) {
-                ActionInterceptRule r = displayed.get(i);
-                String scope = (r.branchScope().isEmpty() ? "[Mọi nhánh]" : "[" + r.branchScope() + "]")
-                        + " " + (r.pathPattern().isEmpty() ? "*" : r.pathPattern());
-                model.addRow(new Object[]{
-                        i + 1,
-                        r.enabled() ? "BẬT" : "TẮT",
-                        r.effect().label,
-                        r.methodsLabel(),
-                        scope,
-                        r.hitCount()
-                });
-            }
-            if (prevSel >= 0 && prevSel < displayed.size()) {
-                ruleTable.setRowSelectionInterval(prevSel, prevSel);
-            }
-            refreshBanner.run();
-        };
-
-        // Live Dry-Run Tester strip
-        JComboBox<String> testMethodBox = new JComboBox<>(ActionInterceptRule.ALL_METHODS.toArray(new String[0]));
-        testMethodBox.setSelectedItem(focusGroup != null ? focusGroup.method() : "DELETE");
-        JTextField testBranchField = new JTextField(initialBranch == null ? engine.activeBranch().name() : initialBranch, 14);
-        JTextField testPathField = new JTextField(focusGroup != null ? focusGroup.path() : "/api/orders/78", 18);
-        Pill testResultPill = new Pill("Nhập Method + Path để kiểm thử", t -> t.neutral, t -> Icons.playTest(t.muted, 12));
-
-        Runnable runDryTest = () -> {
-            String tm = String.valueOf(testMethodBox.getSelectedItem());
-            String tb = testBranchField.getText().trim();
-            String tp = testPathField.getText().trim();
-            String th = focusGroup != null ? focusGroup.host() : "";
-            ActionEngine.InterceptDecision dec = engine.actionEngine().evaluateInterceptRules(tb, th, tm, tp);
-            if (!dec.matched()) {
-                testResultPill.setText("CHO ĐI QUA BÌNH THƯỜNG (Không khớp luật nào)");
-                testResultPill.setToken(t -> t.neutral);
-                testResultPill.setIcon(t -> Icons.check(t.muted));
-            } else if (dec.effect() == ActionInterceptRule.Effect.ALLOW) {
-                testResultPill.setText("CHO QUA (Ngoại lệ #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
-                testResultPill.setToken(t -> t.success);
-                testResultPill.setIcon(t -> Icons.check(t.success.text()));
-            } else if (dec.effect() == ActionInterceptRule.Effect.INTERCEPT_WAIT) {
-                testResultPill.setText("CHẶN CHỜ DUYỆT — Đợi bạn bấm Gửi (Luật #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
-                testResultPill.setToken(t -> t.danger);
-                testResultPill.setIcon(t -> Icons.strategyShield(t.danger.text(), 12));
-            } else if (dec.effect() == ActionInterceptRule.Effect.BLOCK_DROP) {
-                testResultPill.setText("CHẶN & DROP (Luật #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
-                testResultPill.setToken(t -> t.danger);
-                testResultPill.setIcon(t -> Icons.strategyShield(t.danger.text(), 12));
-            } else {
-                testResultPill.setText("CHẶN & GIẢ LẬP HTTP " + dec.rule().spoofStatus() + " (Luật #" + (dec.ruleIndex() + 1) + ": " + dec.rule().name() + ")");
-                testResultPill.setToken(t -> t.warning);
-                testResultPill.setIcon(t -> Icons.strategyShield(t.warning.text(), 12));
-            }
-        };
-
-        // Action toolbar above table
-        JPanel tableBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        tableBtns.setOpaque(false);
-        tableBtns.add(Ui.accent("Luật mới", t -> Icons.plus(t.accent.onSolid()), t -> t.accent, () -> {
-            ruleTable.clearSelection();
-            resetEditor.run();
-            nameField.requestFocusInWindow();
-        }));
-        tableBtns.add(Ui.button("Bật / Tắt", Icons::sliders, () -> {
-            int row = ruleTable.getSelectedRow();
-            if (row >= 0 && row < displayed.size()) {
-                engine.actionEngine().toggleInterceptRule(displayed.get(row).id());
-                engine.saveInterceptRules();
-                refreshRulesTable.run();
-                runDryTest.run();
-                if (onAfterAction != null) onAfterAction.run();
-            }
-        }));
-        tableBtns.add(Ui.button("Lên", Icons::arrowUp, () -> {
-            int row = ruleTable.getSelectedRow();
-            if (row > 0 && row < displayed.size()) {
-                String id = displayed.get(row).id();
-                if (engine.actionEngine().moveInterceptRule(id, -1)) {
-                    engine.saveInterceptRules();
-                    refreshRulesTable.run();
-                    ruleTable.setRowSelectionInterval(row - 1, row - 1);
-                    runDryTest.run();
-                }
-            }
-        }));
-        tableBtns.add(Ui.button("Xuống", Icons::arrowDown, () -> {
-            int row = ruleTable.getSelectedRow();
-            if (row >= 0 && row < displayed.size() - 1) {
-                String id = displayed.get(row).id();
-                if (engine.actionEngine().moveInterceptRule(id, 1)) {
-                    engine.saveInterceptRules();
-                    refreshRulesTable.run();
-                    ruleTable.setRowSelectionInterval(row + 1, row + 1);
-                    runDryTest.run();
-                }
-            }
-        }));
-        tableBtns.add(Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> {
-            int row = ruleTable.getSelectedRow();
-            if (row >= 0 && row < displayed.size()) {
-                engine.actionEngine().removeInterceptRule(displayed.get(row).id());
-                engine.saveInterceptRules();
-                resetEditor.run();
-                refreshRulesTable.run();
-                runDryTest.run();
-                if (onAfterAction != null) onAfterAction.run();
-            }
-        }));
-        topBar.add(tableBtns, BorderLayout.SOUTH);
-        p.add(topBar, BorderLayout.NORTH);
-
-        ruleTable.getSelectionModel().addListSelectionListener(ev -> {
-            if (!ev.getValueIsAdjusting()) {
-                loadRuleToEditor.run();
-            }
-        });
-
-        // Right panel: Clean Rule Editor
-        JPanel editorCard = new JPanel(new BorderLayout(0, 8));
-        editorCard.setOpaque(true);
-        editorCard.setBackground(Theme.current().surface);
-        editorCard.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Theme.current().border),
-                BorderFactory.createEmptyBorder(10, 12, 10, 12)));
-
-        JPanel edHead = new JPanel(new BorderLayout());
-        edHead.setOpaque(false);
-        edHead.add(editorModeLbl, BorderLayout.WEST);
-        editorCard.add(edHead, BorderLayout.NORTH);
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setOpaque(false);
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(4, 4, 4, 4);
-        gc.anchor = GridBagConstraints.WEST;
-        int row = 0;
-
-        addFormRow(form, gc, row++, "Tên luật:", nameField);
-
-        JPanel effectRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        effectRow.setOpaque(false);
-        effectRow.add(effectBox);
-        effectRow.add(Ui.muted("HTTP:"));
-        effectRow.add(statusBox);
-        addFormRow(form, gc, row++, "Hành động:", effectRow);
-
-        JPanel branchRow = new JPanel(new BorderLayout(4, 0));
-        branchRow.setOpaque(false);
-        branchRow.add(branchField, BorderLayout.CENTER);
-        JPanel branchBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        branchBtns.setOpaque(false);
-        branchBtns.add(curBranchBtn);
-        branchBtns.add(anyBranchBtn);
-        branchRow.add(branchBtns, BorderLayout.EAST);
-        addFormRow(form, gc, row++, "Nhánh áp dụng:", branchRow);
-
-        JPanel scopeOpts = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        scopeOpts.setOpaque(false);
-        scopeOpts.add(subBranchesChk);
-        scopeOpts.add(Ui.muted("Host:"));
-        scopeOpts.add(hostField);
-        addFormRow(form, gc, row++, "Tùy chọn phạm vi:", scopeOpts);
-
-        JPanel pathRow = new JPanel(new BorderLayout(6, 0));
-        pathRow.setOpaque(false);
-        pathRow.add(matchTypeBox, BorderLayout.WEST);
-        pathRow.add(pathField, BorderLayout.CENTER);
-        addFormRow(form, gc, row++, "Khớp đường dẫn:", pathRow);
-
-        addFormRow(form, gc, row++, "Method áp dụng:", methodStrip);
-        addFormRow(form, gc, row++, "JSON giả lập:", spoofBodyField);
-
-        JScrollPane formScroll = new JScrollPane(form);
-        formScroll.setBorder(BorderFactory.createEmptyBorder());
-        formScroll.getViewport().setOpaque(false);
-        formScroll.setOpaque(false);
-        editorCard.add(formScroll, BorderLayout.CENTER);
-
-        JPanel saveBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        saveBar.setOpaque(false);
-        saveBar.add(Ui.button("Đặt lại", resetEditor));
-        saveBar.add(Ui.accent("Lưu Luật Chặn Proxy", t -> Icons.save(t.accent.onSolid()), t -> t.accent, () -> {
-            Set<String> chosenMethods = new LinkedHashSet<>();
-            for (Map.Entry<String, JToggleButton> e : methodButtons.entrySet()) {
-                if (e.getValue().isSelected()) {
-                    chosenMethods.add(e.getKey());
-                }
-            }
-            if (chosenMethods.isEmpty()) {
-                JOptionPane.showMessageDialog(dialogParent,
-                        "Vui lòng chọn ít nhất 1 HTTP Method (hoặc bấm nút Tất cả).",
-                        "Thiếu Method", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            int code = 200;
-            try {
-                code = Integer.parseInt(String.valueOf(statusBox.getSelectedItem()).trim());
-            } catch (RuntimeException ignored) {
-                code = 200;
-            }
-            ActionInterceptRule.Effect eff = (ActionInterceptRule.Effect) effectBox.getSelectedItem();
-            ActionInterceptRule.PathMatchType mt = (ActionInterceptRule.PathMatchType) matchTypeBox.getSelectedItem();
-            ActionInterceptRule rule = new ActionInterceptRule(
-                    editingId[0],
-                    nameField.getText().trim(),
-                    true,
-                    eff,
-                    branchField.getText().trim(),
-                    subBranchesChk.isSelected(),
-                    hostField.getText().trim(),
-                    mt,
-                    pathField.getText().trim(),
-                    chosenMethods,
-                    code,
-                    spoofBodyField.getText().trim());
-            engine.actionEngine().upsertInterceptRule(rule);
-            engine.saveInterceptRules();
-            editingId[0] = rule.id();
-            refreshRulesTable.run();
-            runDryTest.run();
-            if (onAfterAction != null) onAfterAction.run();
-        }));
-        editorCard.add(saveBar, BorderLayout.SOUTH);
-
-        JScrollPane tableScroll = new JScrollPane(ruleTable);
-        tableScroll.setPreferredSize(new Dimension(440, 260));
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tableScroll, editorCard);
-        split.setResizeWeight(0.43);
-        split.setDividerLocation(440);
-        split.setBorder(BorderFactory.createEmptyBorder());
-        p.add(split, BorderLayout.CENTER);
-
-        // Bottom Dry-Run Tester Panel (2 crisp non-overlapping rows: inputs top, verdict bottom)
-        JPanel dryCard = new JPanel(new BorderLayout(0, 6));
-        dryCard.setOpaque(true);
-        dryCard.setBackground(Theme.current().surfaceAlt);
-        dryCard.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Theme.current().border),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
-        JPanel dryInputs = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        dryInputs.setOpaque(false);
-        dryInputs.add(Ui.bold("Kiểm thử nhanh:"));
-        dryInputs.add(testMethodBox);
-        dryInputs.add(testPathField);
-        dryInputs.add(Ui.muted("Nhánh:"));
-        dryInputs.add(testBranchField);
-        dryInputs.add(Ui.button("Thử khớp luật", Icons::playTest, runDryTest));
-
-        JPanel dryResultRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        dryResultRow.setOpaque(false);
-        dryResultRow.add(Ui.muted("Kết quả đánh giá:"));
-        dryResultRow.add(testResultPill);
-
-        dryCard.add(dryInputs, BorderLayout.NORTH);
-        dryCard.add(dryResultRow, BorderLayout.SOUTH);
-        p.add(dryCard, BorderLayout.SOUTH);
-
-        resetEditor.run();
-        refreshRulesTable.run();
-        runDryTest.run();
-        return p;
-    }
-
-    private static void addFormRow(JPanel form, GridBagConstraints gc, int row, String label, Component comp) {
-        gc.gridy = row;
-        gc.gridx = 0;
-        gc.weightx = 0;
-        gc.fill = GridBagConstraints.NONE;
-        JLabel l = Ui.muted(label);
-        l.setPreferredSize(new Dimension(112, 24));
-        form.add(l, gc);
-        gc.gridx = 1;
-        gc.weightx = 1.0;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        form.add(comp, gc);
-    }
-
-    private static void styleMethodToggle(JToggleButton tb) {
-        Theme t = Theme.current();
-        boolean sel = tb.isSelected();
-        Theme.Token tok = ActionEngine.isActionMethod(tb.getText()) ? t.warning : t.info;
-        tb.setOpaque(true);
-        tb.setBackground(sel ? tok.fill() : t.surface);
-        tb.setForeground(sel ? tok.text() : t.muted);
-        tb.setBorder(BorderFactory.createLineBorder(sel ? tok.border() : t.border));
-    }
 
     private static final class StrategyCard extends JPanel {
         final ActionMode mode;

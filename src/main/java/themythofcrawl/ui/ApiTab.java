@@ -41,6 +41,7 @@ import themythofcrawl.app.Engine;
 import themythofcrawl.core.Audit;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Hierarchy;
+import themythofcrawl.core.ProxyInterceptQueue;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.ApiTagCatalog;
@@ -118,6 +119,9 @@ final class ApiTab {
     private JPanel inspectorHostBar;
     private JPanel compactInspectorBar;
     private JPanel fullInspectorBar;
+    private JPanel heldStrip;
+    private JLabel heldStripLabel;
+    private ProxyInterceptQueue.PendingRequest shownHeld;
     private JButton compactSummaryBtn;
     private JLabel compactMiniStats;
     private boolean treeStale = true;
@@ -449,16 +453,36 @@ final class ApiTab {
         inspectorHostBar = new JPanel(new BorderLayout(0, 0));
         inspectorHostBar.setOpaque(false);
 
+        heldStrip = buildHeldStrip();
+
+        JButton inlineSaveEditBtn = Ui.secondaryBtn("Lưu sửa", Icons::save, this::saveInlineRequestEdit);
+        inlineSaveEditBtn.setToolTipText("Lưu nội dung Request vừa chỉnh sửa vào Role đang chọn (không gửi ngay)");
+        JButton inlineFmtJsonBtn = Ui.secondaryBtn("Format JSON", Icons::codeBraces, this::formatInlineRequestJson);
+        inlineFmtJsonBtn.setToolTipText("Định dạng lại phần thân JSON trong khung Request cho dễ đọc");
+        JPanel reqHeaderBar = new JPanel(new BorderLayout(6, 0));
+        reqHeaderBar.setOpaque(false);
+        reqHeaderBar.setBorder(BorderFactory.createEmptyBorder(1, 2, 1, 2));
+        reqHeaderBar.add(reqHeader, BorderLayout.CENTER);
+        JPanel reqQuickRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
+        reqQuickRight.setOpaque(false);
+        reqQuickRight.add(inlineSaveEditBtn);
+        reqQuickRight.add(inlineFmtJsonBtn);
+        reqHeaderBar.add(reqQuickRight, BorderLayout.EAST);
+
         JPanel reqPanel = new JPanel(new BorderLayout());
-        reqPanel.add(reqHeader, BorderLayout.NORTH);
+        reqPanel.add(reqHeaderBar, BorderLayout.NORTH);
         reqPanel.add(reqViewer.component(), BorderLayout.CENTER);
         JPanel respPanel = new JPanel(new BorderLayout());
         respPanel.add(respHeader, BorderLayout.NORTH);
         respPanel.add(respViewer.component(), BorderLayout.CENTER);
         JSplitPane viewers = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, reqPanel, respPanel);
         viewers.setResizeWeight(0.5);
+        JPanel repeaterTop = new JPanel(new BorderLayout(0, 0));
+        repeaterTop.setOpaque(false);
+        repeaterTop.add(heldStrip, BorderLayout.NORTH);
+        repeaterTop.add(inspectorHostBar, BorderLayout.SOUTH);
         JPanel repeater = new JPanel(new BorderLayout(0, 0));
-        repeater.add(inspectorHostBar, BorderLayout.NORTH);
+        repeater.add(repeaterTop, BorderLayout.NORTH);
         repeater.add(viewers, BorderLayout.CENTER);
 
         // Apply saved (default collapsed) inspector state
@@ -470,6 +494,143 @@ final class ApiTab {
         JSplitPane master = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, detail);
         master.setResizeWeight(0.38);
         panel.add(master, BorderLayout.CENTER);
+    }
+
+    private JPanel buildHeldStrip() {
+        heldStripLabel = new JLabel("CHỜ DUYỆT");
+        heldStripLabel.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 13)));
+        heldStripLabel.setIconTextGap(6);
+
+        JButton fwdBtn = Ui.solidPrimary("Gửi lên Server", t -> Icons.send(t.accent.onSolid()),
+                () -> resolveShownHeld(ProxyInterceptQueue.ResolutionKind.FORWARD));
+        JButton draftBtn = Ui.tonalBtn("Lưu nháp", t -> Icons.strategyShield(t.warning.text(), 13), t -> t.warning,
+                () -> resolveShownHeld(ProxyInterceptQueue.ResolutionKind.HOLD_AND_SPOOF));
+        JButton dropBtn = Ui.dangerBtn("Hủy (Drop)", t -> Icons.stop(t.danger.text()),
+                () -> resolveShownHeld(ProxyInterceptQueue.ResolutionKind.DROP));
+        JButton fmtBtn = Ui.secondaryBtn("Format JSON", Icons::codeBraces, this::formatInlineRequestJson);
+        JButton queueBtn = Ui.secondaryBtn("Hàng chờ chi tiết...", Icons::sliders, () -> ProxyInterceptDialog.showFloating(ui));
+
+        JPanel strip = new JPanel(new BorderLayout(8, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.danger.fill());
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(1, 0, 1, 0, t.danger.border()),
+                        BorderFactory.createEmptyBorder(3, 8, 3, 6)));
+                if (heldStripLabel != null) {
+                    heldStripLabel.setFont(t.smallBoldFont);
+                    heldStripLabel.setForeground(t.danger.text());
+                }
+            }
+        };
+        strip.setOpaque(true);
+        strip.setBackground(Theme.current().danger.fill());
+        strip.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 1, 0, Theme.current().danger.border()),
+                BorderFactory.createEmptyBorder(3, 8, 3, 6)));
+        heldStripLabel.setFont(Theme.current().smallBoldFont);
+        heldStripLabel.setForeground(Theme.current().danger.text());
+        heldStripLabel.setMinimumSize(new Dimension(0, 18));
+        strip.add(heldStripLabel, BorderLayout.CENTER);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        actions.setOpaque(false);
+        actions.add(fwdBtn);
+        actions.add(draftBtn);
+        actions.add(dropBtn);
+        actions.add(fmtBtn);
+        actions.add(queueBtn);
+        strip.add(actions, BorderLayout.EAST);
+        strip.setVisible(false);
+        return strip;
+    }
+
+    private void showHeldRequest(ProxyInterceptQueue.PendingRequest pr) {
+        shownHeld = pr;
+        if (pr == null) {
+            if (heldStrip != null) {
+                heldStrip.setVisible(false);
+            }
+            return;
+        }
+        String host = pr.service() != null ? pr.service().hostLabel() : "";
+        heldStripLabel.setText("[CHỜ DUYỆT · CHƯA GỬI] #" + pr.id() + "  " + pr.method() + " "
+                + Text.shortPath(pr.path(), 42)
+                + (host.isEmpty() ? "" : "  (" + host + ")")
+                + "  ·  Nhánh: " + pr.branchName());
+        heldStripLabel.setToolTipText(pr.reason());
+        heldStrip.setVisible(true);
+        reqHeader.setText(" Request [CHỜ DUYỆT #" + pr.id() + "] — Sửa trực tiếp rồi bấm Gửi lên Server");
+        respHeader.setText(" Response · CHƯA GỬI LÊN SERVER");
+        reqViewer.show(pr.service(), pr.originalRequest());
+        respViewer.show(pr.service(), TreeTab.heldPreviewBytes(pr));
+        panel.revalidate();
+        panel.repaint();
+    }
+
+    private void resolveShownHeld(ProxyInterceptQueue.ResolutionKind kind) {
+        ProxyInterceptQueue.PendingRequest pr = shownHeld;
+        if (pr == null) {
+            return;
+        }
+        byte[] payload = pr.originalRequest();
+        byte[] edited = reqViewer.edited();
+        if (edited != null && edited.length > 0) {
+            payload = ProxyInterceptDialog.normalizeRawHttpRequest(
+                    new String(edited, java.nio.charset.StandardCharsets.ISO_8859_1));
+        }
+        shownHeld = null;
+        heldStrip.setVisible(false);
+        engine.proxyQueue().resolve(pr.id(), kind, payload);
+        ui.syncHeader();
+        String msg = switch (kind) {
+            case FORWARD -> "Đã gửi request #" + pr.id() + " (" + pr.method() + " " + pr.path() + ") lên Server.";
+            case HOLD_AND_SPOOF -> "Đã lưu nháp request #" + pr.id() + " vào cây (không đẩy Server).";
+            case DROP -> "Đã hủy (Drop) request #" + pr.id() + ".";
+            default -> "Đã xử lý request #" + pr.id() + ".";
+        };
+        ui.flash(msg);
+    }
+
+    private void saveInlineRequestEdit() {
+        if (shownHeld != null) {
+            ui.flash("Request đang ở trạng thái CHỜ DUYỆT — hãy bấm 'Gửi lên Server' hoặc 'Lưu nháp'.");
+            return;
+        }
+        ApiGroup g = currentGroup();
+        RoleResult r = selectedResult();
+        if (g == null || r == null) {
+            ui.info("Chọn một API / Role trước khi lưu chỉnh sửa.");
+            return;
+        }
+        byte[] edited = reqViewer.edited();
+        if (edited == null || edited.length == 0) {
+            ui.info("Khung Request đang trống.");
+            return;
+        }
+        byte[] wire = ProxyInterceptDialog.normalizeRawHttpRequest(
+                new String(edited, java.nio.charset.StandardCharsets.ISO_8859_1));
+        engine.setCustomRequest(g, r, wire);
+        reqViewer.show(g.service(), wire);
+        ui.flash("Đã lưu chỉnh sửa Request cho " + Text.groupId(g.gid()) + " · " + r.roleName());
+    }
+
+    private void formatInlineRequestJson() {
+        byte[] cur = reqViewer.edited();
+        if (cur == null || cur.length == 0) {
+            return;
+        }
+        String raw = new String(cur, java.nio.charset.StandardCharsets.ISO_8859_1);
+        String formatted = RequestComposerDialog.formatJsonBodyInRawHttp(raw);
+        if (formatted != null) {
+            byte[] out = ProxyInterceptDialog.normalizeRawHttpRequest(formatted);
+            var svc = shownHeld != null ? shownHeld.service() : (currentGroup() != null ? currentGroup().service() : null);
+            reqViewer.show(svc, out);
+            ui.flash("Đã format JSON trong khung Request.");
+        } else {
+            ui.flash("Request này không có body JSON hợp lệ để format.");
+        }
     }
 
     private JButton findSendBranch;
@@ -576,18 +737,18 @@ final class ApiTab {
         m.add(Ui.item("Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)...",
                 t -> Icons.strategyShield(engine.proxyQueue().pendingCount() > 0 ? t.danger.text() : t.accent.text(), 14),
                 () -> ProxyInterceptDialog.showFloating(ui)));
-        m.add(Ui.item("Action Workbench (6 tab: Chiến lược, Sổ cái, Dò Giao thức)...", Icons::workbench,
+        m.add(Ui.item("Action Workbench (5 tab: Chiến lược, Luật CRUD, Dò Proxy, Hướng dẫn)...", Icons::workbench,
                 () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                     resultModel.refresh();
                     refreshBar();
                 })));
-        m.add(Ui.item("Sổ cái Chính sách CRUD...", Icons::sliders,
+        m.add(Ui.item("Luật & Phạm vi (CRUD)...", Icons::sliders,
                 () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_LEDGER, () -> {
                     resultModel.refresh();
                     refreshBar();
                 })));
-        m.add(Ui.item("Dò Giao thức Action & Mô phỏng hàng loạt...", Icons::playTest,
-                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_PROTOCOL_AUDIT, () -> {
+        m.add(Ui.item("Hướng dẫn Action & Ví dụ nhanh...", Icons::info,
+                () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_GUIDE, () -> {
                     resultModel.refresh();
                     refreshBar();
                 })));
@@ -1349,12 +1510,14 @@ final class ApiTab {
         }
         switch (n.kind) {
             case ROOT -> {
+                showHeldRequest(null);
                 findSendBranch.setText("Gửi Tất cả (" + engine.groups().size() + " API)");
                 if (focusPath == null && viewMode.getSelectedIndex() == 1) {
                     groupModel.setBranchFilter(null);
                 }
             }
             case FOLDER -> {
+                showHeldRequest(null);
                 String p = (String) n.payload;
                 findSendBranch.setText("Gửi \"" + Text.shortPath("/" + Hierarchy.leaf(p), 19).substring(1) + "\" ("
                         + engine.groupsUnder(p).size() + " API)");
@@ -1364,12 +1527,21 @@ final class ApiTab {
                 }
             }
             case CLUSTER -> {
+                showHeldRequest(null);
                 GroupCluster cl = (GroupCluster) n.payload;
                 int sz = tree.selectedGroups().size();
                 findSendBranch.setText("Gửi Cụm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
                 findSendBranch.setToolTipText("Cụm hiển thị trực quan: " + cl.name() + " (không đổi đường dẫn API)");
             }
+            case HELD_PENDING -> {
+                ProxyInterceptQueue.PendingRequest pr = BranchTree.heldOf(n);
+                if (pr != null) {
+                    showHeldRequest(pr);
+                    ui.useSource(tree);
+                }
+            }
             default -> {
+                showHeldRequest(null);
                 ApiGroup g = BranchTree.groupOf(n);
                 if (g != null) {
                     findSendBranch.setText("Gửi API #" + g.gid());
@@ -1412,6 +1584,7 @@ final class ApiTab {
 
     // =================================================================== viewers + grouped repeater
     private void showResult(RoleResult r) {
+        showHeldRequest(null);
         ApiGroup g = currentGroup();
         if (g == null || r == null) {
             reqHeader.setText(" Request");
@@ -1788,9 +1961,9 @@ final class ApiTab {
                         boolean next = !bw;
                         engine.toggleBranchInterceptWait(curBranchForWait, next);
                         ui.syncHeader();
-                        if (next) {
-                            ProxyInterceptDialog.showFloating(ui);
-                        }
+                        ui.flash(next
+                                ? "Đã bật Chặn chờ duyệt cho nhánh " + Hierarchy.leaf(curBranchForWait) + " — request sẽ hiện ngay trên Cây!"
+                                : "Đã tắt Chặn chờ duyệt cho nhánh " + Hierarchy.leaf(curBranchForWait));
                     }));
         }
         m.add(Ui.item("Quản lý các cấp & Loại Sub-folder...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));

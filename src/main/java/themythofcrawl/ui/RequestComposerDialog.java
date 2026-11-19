@@ -544,7 +544,7 @@ public final class RequestComposerDialog {
 
         JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         leftActions.setOpaque(false);
-        JButton sendBtn = Ui.primaryBtn("Gửi ngay (Ctrl+Enter)", t -> Icons.send(t.accent.text()));
+        JButton sendBtn = Ui.solidPrimary("Gửi ngay (Ctrl+Enter)", t -> Icons.send(t.accent.onSolid()), null);
         JButton saveOverwriteBtn = Ui.secondaryBtn("Lưu đè vào API này", t -> Icons.check(t.success.text()));
         JButton cloneApiBtn = Ui.secondaryBtn("Lưu thành API mới trong nhánh", t -> Icons.plus(t.accent.text()));
         JButton repeaterBtn = Ui.secondaryBtn("Đẩy sang Repeater", t -> Icons.repeater(t.fg));
@@ -734,6 +734,29 @@ public final class RequestComposerDialog {
             return head + pretty;
         } catch (RuntimeException ignored) {
             return new String(raw, StandardCharsets.UTF_8);
+        }
+    }
+
+    /** Formats a raw HTTP string's JSON body; returns null if there is no valid JSON body. */
+    public static String formatJsonBodyInRawHttp(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        byte[] bytes = raw.getBytes(StandardCharsets.UTF_8);
+        int sep = HttpBytes.bodyOffset(bytes);
+        if (sep < 0 || sep >= bytes.length) {
+            return null;
+        }
+        String head = new String(bytes, 0, sep, StandardCharsets.ISO_8859_1);
+        String body = new String(bytes, sep, bytes.length - sep, StandardCharsets.UTF_8).trim();
+        if (body.isEmpty() || !(body.startsWith("{") || body.startsWith("["))) {
+            return null;
+        }
+        try {
+            Object parsed = Json.parse(body);
+            return head + Json.pretty(parsed);
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 

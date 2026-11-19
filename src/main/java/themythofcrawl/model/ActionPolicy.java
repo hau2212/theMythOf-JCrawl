@@ -324,6 +324,67 @@ public final class ActionPolicy {
                 now, now, "Nhân bản", 0L, "", 0);
     }
 
+    public static ActionPolicy quickBranchWait(String branchPath, Collection<String> methods, String createdFrom) {
+        long now = System.currentTimeMillis();
+        String normBranch = Hierarchy.normalize(Text.nz(branchPath));
+        Collection<String> ms = (methods == null || methods.isEmpty()) ? ActionEngine.ACTION_METHODS : methods;
+        return new ActionPolicy(
+                null,
+                "Chặn chờ duyệt nhánh " + (normBranch.isEmpty() ? "(Mọi nhánh)" : normBranch),
+                "Tạo nhanh từ thao tác 1-click",
+                true,
+                15,
+                normBranch.isEmpty() ? ScopeType.GLOBAL : ScopeType.BRANCH,
+                normBranch.isEmpty() ? List.of() : List.of(normBranch),
+                true,
+                "",
+                PathMatchType.WILDCARD,
+                "*",
+                null,
+                ms,
+                Stage.PROXY_GATE,
+                ProxyEffect.INTERCEPT_WAIT,
+                ActionEngine.ActionMode.NONE,
+                200,
+                DEFAULT_SPOOF_BODY,
+                null,
+                "",
+                now, now,
+                createdFrom,
+                0L, "", 0);
+    }
+
+    public static ActionPolicy quickAllowPath(String hostPattern, String path, Collection<String> methods, String createdFrom) {
+        long now = System.currentTimeMillis();
+        String cleanPath = Text.stripQuery(Text.nz(path));
+        String tpl = ActionEngine.normalizePathTemplate(cleanPath);
+        Collection<String> ms = (methods == null || methods.isEmpty()) ? List.of() : methods;
+        return new ActionPolicy(
+                null,
+                "Cho qua luôn " + (ms.isEmpty() ? "ALL" : String.join("/", ms)) + " " + tpl,
+                "Ngoại lệ ALLOW tạo nhanh",
+                true,
+                5,
+                ScopeType.PATH_PATTERN,
+                List.of(),
+                true,
+                Text.nz(hostPattern).trim(),
+                PathMatchType.TEMPLATE,
+                tpl,
+                null,
+                ms,
+                Stage.PROXY_GATE,
+                ProxyEffect.ALLOW_EXPLICIT,
+                ActionEngine.ActionMode.NONE,
+                200,
+                DEFAULT_SPOOF_BODY,
+                null,
+                "",
+                now, now,
+                createdFrom,
+                0L, "", 0);
+    }
+
     public static ActionPolicy fromLegacyRule(ActionInterceptRule rule, int priority) {
         if (rule == null) {
             return null;

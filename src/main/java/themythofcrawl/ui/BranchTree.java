@@ -388,6 +388,17 @@ public final class BranchTree {
                 }
             }
         }
+        List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> heldPending = engine.proxyQueue().pending();
+        for (themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr : heldPending) {
+            String bPath = Hierarchy.normalize(pr.branchName());
+            if (!matchesFocus(bPath)) {
+                continue;
+            }
+            List<String> parts = Hierarchy.split(bPath);
+            for (int i = 1; i <= parts.size(); i++) {
+                pend.merge(Hierarchy.key(parts.subList(0, i)), 1, Integer::sum);
+            }
+        }
         Map<String, List<PlacementBook.Record>> ghosts = new LinkedHashMap<>();
         Map<String, Integer> ghostCount = new HashMap<>();
         if (showGhosts) {
@@ -401,16 +412,17 @@ public final class BranchTree {
                 }
             }
         }
+        String heldNote = heldPending.isEmpty() ? "" : " · " + heldPending.size() + " chờ duyệt";
         Node.FolderMeta rootMeta = focusPath == null
                 ? new Node.FolderMeta("Tất cả Group & API", null,
-                        branches.size() + " Nhánh · " + groups.size() + " API", null, null, null)
+                        branches.size() + " Nhánh · " + groups.size() + " API" + heldNote, null, null, null)
                 : new Node.FolderMeta("Tập trung: " + focusPath, null,
-                        groups.size() + " API" + (focusRecursive ? " (kèm nhánh con)" : " (chỉ nhánh này)"),
+                        groups.size() + " API" + heldNote + (focusRecursive ? " (kèm nhánh con)" : " (chỉ nhánh này)"),
                         null, null, null);
         Node root = new Node(Node.Kind.ROOT, focusPath == null ? "" : focusPath,
                 focusPath == null
-                        ? "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API)"
-                        : "Tập trung: " + focusPath + " (" + groups.size() + " API)",
+                        ? "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API" + heldNote + ")"
+                        : "Tập trung: " + focusPath + " (" + groups.size() + " API" + heldNote + ")",
                 AuditLevel.NONE, "ROOT", 0, rootMeta);
         Map<Object, Node> nodes = new HashMap<>();
         nodes.put(root.key, root);
@@ -429,6 +441,9 @@ public final class BranchTree {
             for (ApiGroup g : groups) {
                 paths.add(Hierarchy.normalize(g.branch()));
             }
+            for (themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr : heldPending) {
+                paths.add(Hierarchy.normalize(pr.branchName()));
+            }
         } else {
             paths.add(focusPath);
             if (focusRecursive) {
@@ -441,13 +456,35 @@ public final class BranchTree {
                 for (ApiGroup g : groups) {
                     paths.add(Hierarchy.normalize(g.branch()));
                 }
+                for (themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr : heldPending) {
+                    String bn = Hierarchy.normalize(pr.branchName());
+                    if (matchesFocus(bn)) {
+                        paths.add(bn);
+                    }
+                }
             }
         }
         paths.forEach(ensure);
-        // A folder's own APIs and its ghost row are collected first, then attached by layoutFolders():
-        // APIs (and Visual Clusters) on top, ghost row next, sub-folders at the bottom.
+        // A folder's own live HELD_PENDING items come FIRST, then regular APIs (and Visual Clusters), then ghosts, then sub-folders.
         Map<Node, List<Node>> ownApis = new LinkedHashMap<>();
         Map<Node, Node> ghostRows = new HashMap<>();
+        for (themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr : heldPending) {
+            String bPath = Hierarchy.normalize(pr.branchName());
+            if (!matchesFocus(bPath)) {
+                continue;
+            }
+            Node leaf = nodes.get("F" + Hierarchy.key(bPath));
+            if (leaf == null) {
+                continue;
+            }
+            String hostLbl = pr.service() != null ? pr.service().hostLabel() : "";
+            Node hn = new Node(Node.Kind.HELD_PENDING, pr,
+                    "[CHỜ DUYỆT] " + pr.method() + " " + Text.shortPath(pr.path(), 48)
+                            + (hostLbl.isEmpty() ? "" : " · " + hostLbl),
+                    AuditLevel.WARN, "H" + pr.id(), 0);
+            nodes.put(hn.key, hn);
+            ownApis.computeIfAbsent(leaf, k -> new ArrayList<>()).add(hn);
+        }
         for (ApiGroup g : groups) {
             Node leaf = nodes.get("F" + Hierarchy.key(g.branch()));
             if (leaf == null) {
@@ -748,6 +785,13 @@ public final class BranchTree {
     }
 
     /** The API of a GROUP / ORIG / ROLE / PLACE row. */
+    public static themythofcrawl.core.ProxyInterceptQueue.PendingRequest heldOf(Node n) {
+        if (n == null || n.kind != Node.Kind.HELD_PENDING) {
+            return null;
+        }
+        return n.payload instanceof themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr ? pr : null;
+    }
+
     public static ApiGroup groupOf(Node n) {
         if (n == null) {
             return null;

@@ -209,7 +209,116 @@ public final class Engine {
                     return new SendDispatcher.Pacing(c.sendDelayMs, c.sendJitterPct, c.hostConcurrency, c.maxRetries);
                 }, line -> log(line, null), System::currentTimeMillis, Math::random);
         branches.add(new Branch(1, Hierarchy.DEFAULT_PATH, null));
+        proxyQueue.addListener(changes::structure);
         scheduler.scheduleWithFixedDelay(this::flushQuietly, 2, 2, TimeUnit.SECONDS);
+    }
+
+    private volatile ActionEngine.ActionMode lastActiveQuickMode = ActionEngine.ActionMode.INTERCEPT_WAIT;
+
+    /** True when any global Action mode, Proxy Intercept Wait, Proxy Hold, or Ledger policy is active. */
+    public boolean isAnyActionControlActive() {
+        Config c = config;
+        if (c.actionMode != null && c.actionMode != ActionEngine.ActionMode.NONE) {
+            return true;
+        }
+        if (c.holdActionAtProxy || actionEngine.isHoldAllActionAtProxy() || actionEngine.isInterceptWaitEnabled()) {
+            return true;
+        }
+        return actionEngine.policyLedger().activeCount() > 0
+                || actionEngine.activeBlockRuleCount() > 0
+                || proxyQueue.pendingCount() > 0;
+    }
+
+    /** Short human-readable label for the Top Bar live Action indicator pill. */
+    public String quickActionStatusLabel() {
+        int pending = proxyQueue.pendingCount();
+        if (pending > 0) {
+            return "Chặn (" + pending + ")";
+        }
+        Config c = config;
+        int ledgerActive = actionEngine.policyLedger().activeCount();
+        if (actionEngine.isInterceptWaitEnabled()) {
+            return ledgerActive > 0 ? "Chặn · " + ledgerActive : "Chặn duyệt";
+        }
+        if (c.actionMode != null && c.actionMode != ActionEngine.ActionMode.NONE) {
+            String shortName = switch (c.actionMode) {
+                case AUTO_SMART -> "Tự động";
+                case HOLD_AT_PROXY -> "Giữ Proxy";
+                case LOCK_2XX -> "Khóa 200";
+                case LIVE_ID_POOL -> "Kho ID";
+                case PRODUCER_RECREATE -> "Tạo->Xóa";
+                case INTERCEPT_WAIT -> "Chặn duyệt";
+                case NONE -> "Tắt";
+            };
+            return ledgerActive > 0 ? shortName + " · " + ledgerActive : shortName;
+        }
+        if (c.holdActionAtProxy || actionEngine.isHoldAllActionAtProxy()) {
+            return "Giữ Proxy";
+        }
+        if (ledgerActive > 0) {
+            int blocking = actionEngine.policyLedger().activeBlockingCount();
+            return blocking > 0 ? "Chặn (" + blocking + ")" : "Action (" + ledgerActive + ")";
+        }
+        return "Action: Tắt";
+    }
+
+    /** One-click ON/OFF toggle from the Top Header Bar. */
+    public void toggleQuickActionFromHeader(boolean turnOn) {
+        if (!turnOn) {
+            if (config.actionMode != null && config.actionMode != ActionEngine.ActionMode.NONE) {
+                lastActiveQuickMode = config.actionMode;
+            } else if (actionEngine.isInterceptWaitEnabled()) {
+                lastActiveQuickMode = ActionEngine.ActionMode.INTERCEPT_WAIT;
+            } else if (config.holdActionAtProxy || actionEngine.isHoldAllActionAtProxy()) {
+                lastActiveQuickMode = ActionEngine.ActionMode.HOLD_AT_PROXY;
+            }
+            // Disable active blocking policies (reversible) & reset global flags cleanly to NONE
+            List<String> enabledIds = new ArrayList<>();
+            for (ActionPolicy p : actionEngine.policyLedger().all()) {
+                if (p.enabled()) {
+                    enabledIds.add(p.id());
+                }
+            }
+            if (!enabledIds.isEmpty()) {
+                actionEngine.policyLedger().bulkSetEnabled(enabledIds, false);
+                saveActionPolicies();
+            }
+            Config next = config.copy();
+            next.actionMode = ActionEngine.ActionMode.NONE;
+            next.holdActionAtProxy = false;
+            applyConfig(next);
+            actionEngine.setInterceptWaitEnabled(false);
+            actionEngine.clearAllProxyControls();
+            changes.structure();
+            log("Top Bar: Đã TẮT Action -> trở về Nguyên bản (Không can thiệp).", null);
+            return;
+        }
+        ActionEngine.ActionMode target = lastActiveQuickMode != null && lastActiveQuickMode != ActionEngine.ActionMode.NONE
+                ? lastActiveQuickMode : ActionEngine.ActionMode.INTERCEPT_WAIT;
+        applyQuickActionMode(target);
+    }
+
+    /** Quickly activates a specific global Action mode from Top Bar or Tree menus with atomic cleanup. */
+    public void applyQuickActionMode(ActionEngine.ActionMode mode) {
+        ActionEngine.ActionMode target = mode == null ? ActionEngine.ActionMode.NONE : mode;
+        if (target != ActionEngine.ActionMode.NONE) {
+            lastActiveQuickMode = target;
+        }
+        Config next = config.copy();
+        next.actionMode = target;
+        next.holdActionAtProxy = (target == ActionEngine.ActionMode.HOLD_AT_PROXY);
+        applyConfig(next);
+        if (target == ActionEngine.ActionMode.INTERCEPT_WAIT) {
+            actionEngine.setInterceptWaitEnabled(true);
+            actionEngine.setInterceptWaitAllScope(true);
+        } else if (target == ActionEngine.ActionMode.NONE) {
+            actionEngine.setInterceptWaitEnabled(false);
+            actionEngine.clearAllProxyControls();
+        } else {
+            actionEngine.setInterceptWaitEnabled(false);
+        }
+        changes.structure();
+        log("Chế độ Action toàn cục -> " + target.shortTitle(), null);
     }
 
     private void syncActionEngine(Config c) {

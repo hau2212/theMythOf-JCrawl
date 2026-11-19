@@ -147,7 +147,7 @@ final class ActionProtocolAuditTabBuilder {
         liveCalibrateBar.setOpaque(true);
         liveCalibrateBar.setBackground(th.surfaceAlt);
         liveCalibrateBar.setBorder(BorderFactory.createLineBorder(th.border));
-        JButton calWaitBtn = Ui.primaryBtn("+ Chặn chờ duyệt (Đợi tôi bấm Gửi)", t -> Icons.strategyShield(t.accent.text(), 13));
+        JButton calWaitBtn = Ui.solidPrimary("+ Chặn chờ duyệt (Đợi tôi bấm Gửi)", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
         JButton calHoldBtn = Ui.secondaryBtn("+ Giữ ở Proxy (200 ảo)", t -> Icons.strategyShield(t.warning.text(), 13));
         JButton calAllowBtn = Ui.secondaryBtn("+ Cho qua luôn (ALLOW ưu tiên đầu)", t -> Icons.check(t.success.text()));
         JButton openQueueBtn = Ui.secondaryBtn("Mở Hàng chờ Chặn", t -> Icons.strategyShield(t.danger.text(), 13));
@@ -250,7 +250,7 @@ final class ActionProtocolAuditTabBuilder {
         }
         JCheckBox simActionOnlyChk = new JCheckBox("Chỉ lọc Action API (POST/PUT/PATCH/DELETE)", true);
         simActionOnlyChk.setOpaque(false);
-        JButton runSimBtn = Ui.primaryBtn("Chạy Dò ngay (Không gửi mạng)", t -> Icons.playTest(t.accent.text(), 14));
+        JButton runSimBtn = Ui.solidPrimary("Chạy Dò ngay (Không gửi mạng)", t -> Icons.playTest(t.accent.onSolid(), 14), null);
         simControls.add(Ui.bold("Phạm vi dò:"));
         simControls.add(simBranchCombo);
         simControls.add(simActionOnlyChk);
@@ -293,7 +293,7 @@ final class ActionProtocolAuditTabBuilder {
         simFoot.setOpaque(true);
         simFoot.setBackground(th.surfaceAlt);
         simFoot.setBorder(BorderFactory.createLineBorder(th.border));
-        JButton simSetWaitBtn = Ui.primaryBtn("Chuyển -> Chặn chờ duyệt", t -> Icons.strategyShield(t.accent.text(), 13));
+        JButton simSetWaitBtn = Ui.solidPrimary("Chuyển -> Chặn chờ duyệt", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
         JButton simSetHoldBtn = Ui.secondaryBtn("Chuyển -> Giữ Proxy", t -> Icons.strategyShield(t.warning.text(), 13));
         JButton simSetAllowBtn = Ui.secondaryBtn("Chuyển -> Cho qua (ALLOW)", t -> Icons.check(t.success.text()));
         JButton simReleaseBtn = Ui.secondaryBtn("Nhả về Nguyên bản", t -> Icons.undo(t.fg));

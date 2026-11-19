@@ -105,7 +105,8 @@ public final class ProxyInterceptQueue {
     private final AtomicLong seq = new AtomicLong(1);
     private final CopyOnWriteArrayList<PendingRequest> items = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
-    private volatile boolean autoOpenWindow = true;
+    /** Tree-First default: held requests appear live inside their target Branch on the Tree without hijacking focus. */
+    private volatile boolean autoOpenWindow = false;
 
     public boolean isAutoOpenWindow() {
         return autoOpenWindow;
@@ -231,5 +232,41 @@ public final class ProxyInterceptQueue {
             }
         }
         return null;
+    }
+
+    /** Returns all currently held requests targeting the exact normalized branch path. */
+    public List<PendingRequest> pendingForBranch(String branchPath) {
+        String norm = Hierarchy.normalize(branchPath);
+        List<PendingRequest> out = new ArrayList<>();
+        for (PendingRequest item : items) {
+            if (Hierarchy.normalize(item.branchName()).equalsIgnoreCase(norm)) {
+                out.add(item);
+            }
+        }
+        return out;
+    }
+
+    /** Returns all distinct hosts among currently pending held requests. */
+    public List<String> pendingHosts() {
+        java.util.LinkedHashSet<String> hosts = new java.util.LinkedHashSet<>();
+        for (PendingRequest item : items) {
+            String h = item.service() != null ? item.service().hostLabel() : "";
+            if (!h.isBlank()) {
+                hosts.add(h);
+            }
+        }
+        return new ArrayList<>(hosts);
+    }
+
+    /** Returns all distinct normalized branch paths among currently pending held requests. */
+    public List<String> pendingBranches() {
+        java.util.LinkedHashSet<String> branches = new java.util.LinkedHashSet<>();
+        for (PendingRequest item : items) {
+            String b = Hierarchy.normalize(item.branchName());
+            if (!b.isBlank()) {
+                branches.add(b);
+            }
+        }
+        return new ArrayList<>(branches);
     }
 }

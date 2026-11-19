@@ -7,22 +7,23 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
@@ -33,7 +34,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.JToggleButton;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
@@ -57,14 +58,21 @@ import themythofcrawl.model.ActionPolicy.ScopeType;
 import themythofcrawl.model.ActionPolicy.Stage;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.Branch;
+import themythofcrawl.ui.kit.MethodChipBar;
+import themythofcrawl.ui.kit.ModernToggleSwitch;
 import themythofcrawl.ui.kit.Pill;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Builds the Unified Action Policy Ledger tab (Full + Extended CRUD, Multi-Scope Filter,
- * Audit Timestamps, Per-API Effective Policy Explainer, Presets, JSON Import/Export,
- * Emergency Reset All, and Soft-Delete Undo Trash) for {@link ActionWorkbenchDialog}.
+ * Builds the Unified Action Policy Ledger tab (V_3.5_beta Progressive CRUD Form):
+ * <ul>
+ *   <li>Context-aware form that only shows Branch / Path / Proxy / Replay fields relevant to the chosen Scope &amp; Stage.</li>
+ *   <li>Unmistakable solid primary Save buttons ({@code Lưu chính sách mới} / {@code Lưu thay đổi} + {@code Ctrl+S}),
+ *       auto-naming when the Name field is left empty, and instant green confirmation feedback.</li>
+ *   <li>Burp-LAF-proof {@link MethodChipBar} and {@link ModernToggleSwitch}.</li>
+ *   <li>Full CRUD + Priority Reorder + Presets + JSON Import/Export + Undo Trash + Emergency Reset All.</li>
+ * </ul>
  */
 final class ActionLedgerTabBuilder {
 
@@ -107,7 +115,7 @@ final class ActionLedgerTabBuilder {
         JComboBox<String> stateFilterCombo = new JComboBox<>(new String[] {
                 "Mọi trạng thái", "Đang BẬT", "Đang TẮT"
         });
-        JTextField searchField = new JTextField(16);
+        JTextField searchField = new JTextField(15);
         searchField.setToolTipText("Lọc nhanh theo tên chính sách, path, nhánh, method, nguồn tạo...");
         Pill summaryPill = new Pill(ledger.activeSummaryText(), t -> t.accent, t -> Icons.strategyShield(t.accent.text(), 12));
 
@@ -120,7 +128,7 @@ final class ActionLedgerTabBuilder {
         JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         topRight.setOpaque(false);
         JButton trashBtn = Ui.secondaryBtn("Thùng rác / Hoàn tác (0)", t -> Icons.undo(t.fg));
-        JButton resetAllBtn = Ui.secondaryBtn("Nhả toàn bộ -> Nguyên bản", t -> Icons.trash(t.danger.text()));
+        JButton resetAllBtn = Ui.dangerBtn("Nhả toàn bộ -> Nguyên bản", t -> Icons.trash(t.danger.text()), null);
         resetAllBtn.setToolTipText("Đưa toàn bộ chính sách vào Thùng rác Undo, tắt mọi chặn Proxy và chuyển về chế độ Nguyên bản");
         topRight.add(trashBtn);
         topRight.add(resetAllBtn);
@@ -129,7 +137,7 @@ final class ActionLedgerTabBuilder {
         topStrip.add(topRight, BorderLayout.EAST);
         root.add(topStrip, BorderLayout.NORTH);
 
-        // ---- Center: Top = Ledger Table + Bulk Toolbar, Bottom = CRUD Editor Form + Effective Explainer
+        // ---- Center Top: Ledger Table + Bulk Toolbar
         String[] cols = {
                 "#", "Bật/Tắt", "Phạm vi", "Đối tượng áp dụng", "Method",
                 "Giai đoạn & Hành vi", "Tạo lúc", "Sửa lúc", "Khớp cuối", "Hits", "Nguồn"
@@ -141,9 +149,10 @@ final class ActionLedgerTabBuilder {
             }
         };
         JTable ledgerTable = new ThemedTable(tableModel);
+        Ui.style(ledgerTable);
         ledgerTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         ledgerTable.setRowHeight(26);
-        int[] widths = {34, 62, 108, 190, 92, 175, 86, 86, 86, 46, 92};
+        int[] widths = {34, 62, 108, 190, 92, 180, 82, 82, 82, 46, 92};
         for (int i = 0; i < widths.length; i++) {
             ledgerTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -151,6 +160,8 @@ final class ActionLedgerTabBuilder {
         JScrollPane tableScroll = new JScrollPane(ledgerTable);
         tableScroll.setColumnHeaderView(ledgerTable.getTableHeader());
         tableScroll.setBorder(BorderFactory.createLineBorder(th.border));
+        tableScroll.setMinimumSize(new Dimension(400, 150));
+        tableScroll.setPreferredSize(new Dimension(780, 210));
 
         final List<ActionPolicy> displayedRows = new ArrayList<>();
         final String[] editingPolicyId = {null};
@@ -163,7 +174,7 @@ final class ActionLedgerTabBuilder {
         JButton upBtn = Ui.secondaryBtn("Lên", null);
         JButton downBtn = Ui.secondaryBtn("Xuống", null);
         JButton topBtn = Ui.secondaryBtn("Lên đầu", null);
-        JButton deleteBtn = Ui.secondaryBtn("Xóa chọn", t -> Icons.trash(t.danger.text()));
+        JButton deleteBtn = Ui.dangerBtn("Xóa chọn", t -> Icons.trash(t.danger.text()), null);
         JButton presetBtn = Ui.secondaryBtn("Bộ mẫu nhanh", t -> Icons.plus(t.accent.text()));
         JButton importBtn = Ui.secondaryBtn("Import JSON", null);
         JButton exportBtn = Ui.secondaryBtn("Export JSON", null);
@@ -186,16 +197,21 @@ final class ActionLedgerTabBuilder {
         tableWrap.add(tableScroll, BorderLayout.CENTER);
         tableWrap.add(tableBtns, BorderLayout.SOUTH);
 
-        // ---- Bottom Form: Full CRUD Editor
-        JPanel formCard = new JPanel(new BorderLayout(0, 4));
+        // ---- Center Bottom: Progressive Context-Aware CRUD Form
+        JPanel formCard = new JPanel(new BorderLayout(0, 6));
         formCard.setOpaque(true);
-        formCard.setBackground(th.surfaceAlt);
+        formCard.setBackground(th.surface);
         formCard.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(th.border),
-                BorderFactory.createEmptyBorder(8, 10, 8, 10)));
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
 
-        JLabel formHeader = Ui.bold("Tạo mới / Chỉnh sửa Chính sách Action (CRUD)");
-        formCard.add(formHeader, BorderLayout.NORTH);
+        JLabel formHeader = Ui.bold("Tạo chính sách Action mới");
+        Pill editModePill = new Pill("Chế độ: Tạo mới", t -> t.accent, t -> Icons.plus(t.accent.text(), 11));
+        JPanel formTopHead = new JPanel(new BorderLayout(8, 0));
+        formTopHead.setOpaque(false);
+        formTopHead.add(formHeader, BorderLayout.WEST);
+        formTopHead.add(editModePill, BorderLayout.EAST);
+        formCard.add(formTopHead, BorderLayout.NORTH);
 
         JPanel grid = new JPanel(new GridBagLayout());
         grid.setOpaque(false);
@@ -205,8 +221,8 @@ final class ActionLedgerTabBuilder {
         gc.anchor = GridBagConstraints.WEST;
 
         JTextField nameField = new JTextField(22);
-        JCheckBox enabledChk = new JCheckBox("Đang BẬT", true);
-        enabledChk.setOpaque(false);
+        nameField.putClientProperty("JTextField.placeholderText", "Để trống = hệ thống tự đặt tên gọn theo luật");
+        ModernToggleSwitch enabledSwitch = new ModernToggleSwitch(true, false).labels("Bật", "Tắt");
 
         JComboBox<ScopeType> scopeCombo = new JComboBox<>(ScopeType.values());
         scopeCombo.setRenderer((list, val, idx, sel, foc) -> {
@@ -241,7 +257,7 @@ final class ActionLedgerTabBuilder {
         JTextField branchesField = new JTextField(22);
         branchesField.setToolTipText("Nhiều nhánh cách nhau bằng dấu chấm phẩy ';'");
         JComboBox<String> branchPicker = new JComboBox<>();
-        branchPicker.addItem("(Chọn nhanh nhánh để thêm...)");
+        branchPicker.addItem("(Chọn nhánh để thêm...)");
         for (Branch b : engine.branches()) {
             branchPicker.addItem(b.name());
         }
@@ -267,6 +283,7 @@ final class ActionLedgerTabBuilder {
             return l;
         });
         JTextField pathField = new JTextField(20);
+        pathField.putClientProperty("JTextField.placeholderText", "VD: /api/v1/orders/{id}");
         JButton insertIdBtn = Ui.secondaryBtn("+ {id}", null);
         insertIdBtn.setToolTipText("Chèn placeholder {id} vào mẫu đường dẫn");
         insertIdBtn.addActionListener(e -> {
@@ -275,89 +292,127 @@ final class ActionLedgerTabBuilder {
             pathTypeCombo.setSelectedItem(PathMatchType.TEMPLATE);
         });
         JTextField hostField = new JTextField(12);
+        hostField.putClientProperty("JTextField.placeholderText", "Mọi Host");
         hostField.setToolTipText("Để trống = mọi Host (hỗ trợ wildcard *)");
 
-        // Method Matrix Toggle Chips
-        JPanel methodChipsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        methodChipsPanel.setOpaque(false);
-        Map<String, JToggleButton> methodBtns = new LinkedHashMap<>();
-        for (String m : ActionPolicy.ALL_METHODS) {
-            boolean defOn = ActionEngine.isActionMethod(m);
-            JToggleButton tb = new JToggleButton(m, defOn);
-            tb.setFocusable(false);
-            tb.setMargin(new Insets(2, 7, 2, 7));
-            methodBtns.put(m, tb);
-            methodChipsPanel.add(tb);
-        }
-        JButton onlyActionBtn = Ui.secondaryBtn("Chỉ Action", null);
-        onlyActionBtn.addActionListener(e -> methodBtns.forEach((m, b) -> b.setSelected(ActionEngine.isActionMethod(m))));
-        JButton allMethodBtn = Ui.secondaryBtn("Tất cả", null);
-        allMethodBtn.addActionListener(e -> methodBtns.forEach((m, b) -> b.setSelected(true)));
-        methodChipsPanel.add(onlyActionBtn);
-        methodChipsPanel.add(allMethodBtn);
+        // Burp-LAF-proof MethodChipBar (replaces raw JToggleButtons!)
+        MethodChipBar methodBar = new MethodChipBar(ActionEngine.ACTION_METHODS, true);
 
-        // Row 0: Name + Scope + Enabled
+        // Row 0: Name + Scope + Enabled Switch
         gc.gridy = 0;
         gc.gridx = 0; gc.weightx = 0; grid.add(Ui.muted("Tên chính sách:"), gc);
         gc.gridx = 1; gc.weightx = 0.45; grid.add(nameField, gc);
         gc.gridx = 2; gc.weightx = 0; grid.add(Ui.muted("Phạm vi:"), gc);
         gc.gridx = 3; gc.weightx = 0.35; grid.add(scopeCombo, gc);
-        gc.gridx = 4; gc.weightx = 0; grid.add(enabledChk, gc);
+        gc.gridx = 4; gc.weightx = 0; grid.add(enabledSwitch, gc);
 
-        // Row 1: Branches + Branch Picker + Sub-branch
+        // Row 1 (Progressive: Branch Scope only)
+        JLabel branchLbl = Ui.muted("Nhánh cây:");
+        JLabel branchPickLbl = Ui.muted("Chọn nhanh:");
         gc.gridy = 1;
-        gc.gridx = 0; gc.weightx = 0; grid.add(Ui.muted("Nhánh cây:"), gc);
+        gc.gridx = 0; gc.weightx = 0; grid.add(branchLbl, gc);
         gc.gridx = 1; gc.weightx = 0.45; grid.add(branchesField, gc);
-        gc.gridx = 2; gc.weightx = 0; grid.add(Ui.muted("Chọn nhanh:"), gc);
+        gc.gridx = 2; gc.weightx = 0; grid.add(branchPickLbl, gc);
         gc.gridx = 3; gc.weightx = 0.35; grid.add(branchPicker, gc);
         gc.gridx = 4; gc.weightx = 0; grid.add(subBranchChk, gc);
 
-        // Row 2: Path pattern + Type + {id} + Host
+        // Row 2 (Progressive: Path/API Scope only)
+        JLabel pathLbl = Ui.muted("Đường dẫn:");
         JPanel pathWrap = new JPanel(new BorderLayout(4, 0));
         pathWrap.setOpaque(false);
         pathWrap.add(pathTypeCombo, BorderLayout.WEST);
         pathWrap.add(pathField, BorderLayout.CENTER);
         pathWrap.add(insertIdBtn, BorderLayout.EAST);
 
-        gc.gridy = 2;
-        gc.gridx = 0; gc.weightx = 0; grid.add(Ui.muted("Đường dẫn:"), gc);
-        gc.gridx = 1; gc.gridwidth = 2; gc.weightx = 0.6; grid.add(pathWrap, gc);
-        gc.gridwidth = 1;
-        gc.gridx = 3; gc.weightx = 0.2;
         JPanel hostWrap = new JPanel(new BorderLayout(4, 0));
         hostWrap.setOpaque(false);
         hostWrap.add(Ui.muted("Host:"), BorderLayout.WEST);
         hostWrap.add(hostField, BorderLayout.CENTER);
-        grid.add(hostWrap, gc);
-        gc.gridx = 4; gc.weightx = 0; grid.add(Box.createHorizontalStrut(4), gc);
 
-        // Row 3: Stage + ProxyEffect + ReplayMode
+        gc.gridy = 2;
+        gc.gridx = 0; gc.weightx = 0; grid.add(pathLbl, gc);
+        gc.gridx = 1; gc.gridwidth = 2; gc.weightx = 0.6; grid.add(pathWrap, gc);
+        gc.gridwidth = 1;
+        gc.gridx = 3; gc.gridwidth = 2; gc.weightx = 0.4; grid.add(hostWrap, gc);
+        gc.gridwidth = 1;
+
+        // Row 3: Stage + Explicit Proxy Effect (Chặng 1) + Explicit Replay Mode (Chặng 2)
+        JLabel proxyEffectLbl = Ui.muted("Hành vi Proxy (Chặng 1):");
+        JLabel replayModeLbl = Ui.muted("Hành vi Replay (Chặng 2):");
+        JPanel behaviorWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        behaviorWrap.setOpaque(false);
+        behaviorWrap.add(proxyEffectLbl);
+        behaviorWrap.add(proxyEffectCombo);
+        behaviorWrap.add(replayModeLbl);
+        behaviorWrap.add(replayModeCombo);
+
         gc.gridy = 3;
         gc.gridx = 0; gc.weightx = 0; grid.add(Ui.muted("Giai đoạn:"), gc);
-        gc.gridx = 1; gc.weightx = 0.3; grid.add(stageCombo, gc);
-        gc.gridx = 2; gc.weightx = 0; grid.add(Ui.muted("Hành động Proxy:"), gc);
-        gc.gridx = 3; gc.weightx = 0.4; grid.add(proxyEffectCombo, gc);
-        gc.gridx = 4; gc.weightx = 0.2; grid.add(replayModeCombo, gc);
+        gc.gridx = 1; gc.weightx = 0.28; grid.add(stageCombo, gc);
+        gc.gridx = 2; gc.gridwidth = 3; gc.weightx = 0.72; grid.add(behaviorWrap, gc);
+        gc.gridwidth = 1;
 
-        // Row 4: Method Matrix
+        // Row 4: HTTP Method Chip Bar
         gc.gridy = 4;
         gc.gridx = 0; gc.weightx = 0; grid.add(Ui.muted("HTTP Method:"), gc);
-        gc.gridx = 1; gc.gridwidth = 4; gc.weightx = 1.0; grid.add(methodChipsPanel, gc);
+        gc.gridx = 1; gc.gridwidth = 4; gc.weightx = 1.0; grid.add(methodBar, gc);
         gc.gridwidth = 1;
 
         formCard.add(grid, BorderLayout.CENTER);
 
-        // Form Footer Buttons
-        JPanel formBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
-        formBtns.setOpaque(false);
-        JButton createBtn = Ui.primaryBtn("Thêm chính sách mới (Create)", t -> Icons.plus(t.accent.text()));
-        JButton updateBtn = Ui.secondaryBtn("Cập nhật dòng đang chọn (Update)", t -> Icons.check(t.success.text()));
-        updateBtn.setEnabled(false);
-        JButton clearFormBtn = Ui.secondaryBtn("Làm mới Form", null);
-        formBtns.add(clearFormBtn);
-        formBtns.add(updateBtn);
-        formBtns.add(createBtn);
-        formCard.add(formBtns, BorderLayout.SOUTH);
+        // Progressive visibility updater
+        Runnable syncProgressiveFields = () -> {
+            ScopeType sc = scopeCombo.getSelectedItem() instanceof ScopeType s ? s : ScopeType.PATH_PATTERN;
+            boolean showBranch = (sc == ScopeType.BRANCH);
+            boolean showPath = (sc == ScopeType.PATH_PATTERN || sc == ScopeType.API_EXACT);
+            branchLbl.setVisible(showBranch);
+            branchesField.setVisible(showBranch);
+            branchPickLbl.setVisible(showBranch);
+            branchPicker.setVisible(showBranch);
+            subBranchChk.setVisible(showBranch);
+
+            pathLbl.setVisible(showPath);
+            pathWrap.setVisible(showPath);
+            hostWrap.setVisible(showPath || sc == ScopeType.METHOD_MATRIX);
+
+            Stage st = stageCombo.getSelectedItem() instanceof Stage sg ? sg : Stage.PROXY_GATE;
+            boolean showProxy = (st == Stage.PROXY_GATE || st == Stage.BOTH);
+            boolean showReplay = (st == Stage.REPLAY_EXEC || st == Stage.BOTH);
+            proxyEffectLbl.setVisible(showProxy);
+            proxyEffectCombo.setVisible(showProxy);
+            replayModeLbl.setVisible(showReplay);
+            replayModeCombo.setVisible(showReplay);
+
+            grid.revalidate();
+            grid.repaint();
+            formCard.revalidate();
+        };
+        scopeCombo.addActionListener(e -> syncProgressiveFields.run());
+        stageCombo.addActionListener(e -> syncProgressiveFields.run());
+
+        // ---- Unmistakable Save / Update Footer + Green Feedback Label
+        JLabel saveFeedbackLbl = new JLabel(" ");
+        saveFeedbackLbl.setFont(th.smallBoldFont);
+        saveFeedbackLbl.setForeground(th.success.text());
+
+        JButton clearFormBtn = Ui.secondaryBtn("Tạo mới (Xóa form)", Icons::undo, null);
+        JButton updateBtn = Ui.solidPrimary("Lưu thay đổi", t -> Icons.check(t.accent.onSolid()), null);
+        updateBtn.setVisible(false);
+        JButton createBtn = Ui.solidPrimary("Lưu chính sách mới (Ctrl+S)", t -> Icons.save(t.accent.onSolid()), null);
+        createBtn.setToolTipText("Tạo và lưu ngay 1 bản ghi chính sách mới vào Sổ cái (Phím tắt: Ctrl+S)");
+
+        JPanel formBtnsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        formBtnsRight.setOpaque(false);
+        formBtnsRight.add(clearFormBtn);
+        formBtnsRight.add(updateBtn);
+        formBtnsRight.add(createBtn);
+
+        JPanel formFooter = new JPanel(new BorderLayout(8, 0));
+        formFooter.setOpaque(false);
+        formFooter.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, th.border));
+        formFooter.add(saveFeedbackLbl, BorderLayout.CENTER);
+        formFooter.add(formBtnsRight, BorderLayout.EAST);
+        formCard.add(formFooter, BorderLayout.SOUTH);
 
         // Prefill context if opened for a specific branch or API
         if (prefillBranch != null && !prefillBranch.isBlank()) {
@@ -369,11 +424,14 @@ final class ActionLedgerTabBuilder {
             pathTypeCombo.setSelectedItem(PathMatchType.TEMPLATE);
             pathField.setText(ActionEngine.normalizePathTemplate(focusGroup.path()));
             hostField.setText(focusGroup.host());
-            methodBtns.forEach((m, b) -> b.setSelected(m.equalsIgnoreCase(focusGroup.method())));
+            methodBar.setSingleMethod(focusGroup.method());
+        } else {
+            scopeCombo.setSelectedItem(ScopeType.PATH_PATTERN);
         }
+        syncProgressiveFields.run();
 
         JSplitPane centerSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableWrap, formCard);
-        centerSplit.setResizeWeight(0.56);
+        centerSplit.setResizeWeight(0.50);
         centerSplit.setDividerSize(6);
         centerSplit.setBorder(null);
         root.add(centerSplit, BorderLayout.CENTER);
@@ -414,6 +472,7 @@ final class ActionLedgerTabBuilder {
         }
 
         // ---- Refresh Logic
+        final String[] pendingSelectId = {null};
         Runnable refreshAll = () -> {
             ScopeType sf = switch (scopeFilterCombo.getSelectedIndex()) {
                 case 1 -> ScopeType.GLOBAL;
@@ -437,8 +496,10 @@ final class ActionLedgerTabBuilder {
             displayedRows.clear();
             displayedRows.addAll(list);
             tableModel.setRowCount(0);
-            for (ActionPolicy p : list) {
-                int rank = rankById.getOrDefault(p.id(), tableModel.getRowCount() + 1);
+            int rowToSelect = -1;
+            for (int i = 0; i < list.size(); i++) {
+                ActionPolicy p = list.get(i);
+                int rank = rankById.getOrDefault(p.id(), i + 1);
                 tableModel.addRow(new Object[] {
                         "#" + rank,
                         p.enabled() ? "BẬT" : "TẮT",
@@ -452,7 +513,16 @@ final class ActionLedgerTabBuilder {
                         p.hitCount(),
                         p.createdFrom()
                 });
+                if (pendingSelectId[0] != null && pendingSelectId[0].equals(p.id())) {
+                    rowToSelect = i;
+                }
             }
+            pendingSelectId[0] = null;
+            if (rowToSelect >= 0) {
+                ledgerTable.setRowSelectionInterval(rowToSelect, rowToSelect);
+                ledgerTable.scrollRectToVisible(ledgerTable.getCellRect(rowToSelect, 0, true));
+            }
+
             summaryPill.setText(ledger.activeSummaryText());
             summaryPill.setToken(ledger.activeCount() > 0 ? t -> t.warning : t -> t.success);
             trashBtn.setText("Thùng rác / Hoàn tác (" + ledger.trashSize() + ")");
@@ -488,14 +558,21 @@ final class ActionLedgerTabBuilder {
             int row = ledgerTable.getSelectedRow();
             if (row < 0 || row >= displayedRows.size()) {
                 editingPolicyId[0] = null;
-                updateBtn.setEnabled(false);
+                updateBtn.setVisible(false);
+                formHeader.setText("Tạo chính sách Action mới");
+                editModePill.setText("Chế độ: Tạo mới");
+                editModePill.setToken(t -> t.accent);
                 return;
             }
             ActionPolicy p = displayedRows.get(row);
             editingPolicyId[0] = p.id();
-            updateBtn.setEnabled(true);
+            updateBtn.setVisible(true);
+            formHeader.setText("Đang chỉnh sửa chính sách: " + p.name());
+            editModePill.setText("Đang sửa #" + (row + 1));
+            editModePill.setToken(t -> t.warning);
+
             nameField.setText(p.rawName());
-            enabledChk.setSelected(p.enabled());
+            enabledSwitch.setOn(p.enabled(), false);
             scopeCombo.setSelectedItem(p.scopeType());
             stageCombo.setSelectedItem(p.stage());
             proxyEffectCombo.setSelectedItem(p.proxyEffect());
@@ -505,11 +582,11 @@ final class ActionLedgerTabBuilder {
             pathTypeCombo.setSelectedItem(p.pathMatchType());
             pathField.setText(p.pathPattern());
             hostField.setText(p.hostPattern());
-            Set<String> ms = p.methods();
-            methodBtns.forEach((m, b) -> b.setSelected(ms.isEmpty() || ms.contains(m)));
+            methodBar.setSelectedMethods(p.methods());
+            syncProgressiveFields.run();
         });
 
-        // Build policy from form helper
+        // Build policy from form helper (with automatic clean naming when left blank!)
         java.util.function.Function<String, ActionPolicy> buildFromForm = existingId -> {
             ScopeType sc = (ScopeType) scopeCombo.getSelectedItem();
             Stage st = (Stage) stageCombo.getSelectedItem();
@@ -522,52 +599,92 @@ final class ActionLedgerTabBuilder {
                     branches.add(Hierarchy.normalize(seg.trim()));
                 }
             }
-            Set<String> selectedMethods = new LinkedHashSet<>();
-            methodBtns.forEach((m, b) -> {
-                if (b.isSelected()) selectedMethods.add(m);
-            });
+            Set<String> selectedMethods = methodBar.selectedMethods();
             if (selectedMethods.size() == ActionPolicy.ALL_METHODS.size()) {
                 selectedMethods.clear(); // empty = all methods
             }
             Integer apiGid = (sc == ScopeType.API_EXACT && focusGroup != null) ? focusGroup.gid() : null;
             int prio = existingId != null && ledger.findById(existingId) != null
                     ? ledger.findById(existingId).priority() : -1;
+
+            String finalName = nameField.getText().trim();
+            if (finalName.isEmpty()) {
+                String actionTag = (st == Stage.REPLAY_EXEC) ? rm.shortTitle() : pe.label;
+                String targetTag = switch (sc) {
+                    case GLOBAL -> "Toàn cục";
+                    case METHOD_MATRIX -> selectedMethods.isEmpty() ? "Mọi Method" : String.join("/", selectedMethods);
+                    case BRANCH -> branches.isEmpty() ? "Nhánh" : Hierarchy.leaf(branches.get(0));
+                    case PATH_PATTERN, API_EXACT -> pathField.getText().trim().isEmpty()
+                            ? "Đường dẫn" : Text.shortPath(pathField.getText().trim(), 30);
+                };
+                finalName = actionTag + " · " + targetTag;
+            }
+
             long now = System.currentTimeMillis();
             return new ActionPolicy(
-                    existingId, nameField.getText().trim(), "", enabledChk.isSelected(), prio,
+                    existingId, finalName, "", enabledSwitch.isOn(), prio,
                     sc, branches, subBranchChk.isSelected(), hostField.getText().trim(),
                     pt, pathField.getText().trim(), apiGid, selectedMethods,
                     st, pe, rm, 200, null, null, "",
                     now, now, existingId == null ? "Sổ cái CRUD" : "Chỉnh sửa CRUD", 0L, "", 0);
         };
 
-        createBtn.addActionListener(e -> {
+        Runnable doCreate = () -> {
             ActionPolicy created = buildFromForm.apply(null);
-            if (created.proxyEffect() == ProxyEffect.ALLOW_EXPLICIT) {
-                ledger.createAtTop(created);
-            } else {
-                ledger.upsert(created);
-            }
+            ActionPolicy saved = (created.proxyEffect() == ProxyEffect.ALLOW_EXPLICIT)
+                    ? ledger.createAtTop(created)
+                    : ledger.upsert(created);
             engine.saveActionPolicies();
+            pendingSelectId[0] = saved.id();
+            saveFeedbackLbl.setIcon(Icons.check(Theme.current().success.text(), 13));
+            saveFeedbackLbl.setText("Đã lưu chính sách mới: \"" + saved.name() + "\" — áp dụng tức thì!");
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        };
 
-        updateBtn.addActionListener(e -> {
-            if (editingPolicyId[0] == null) return;
+        Runnable doUpdate = () -> {
+            if (editingPolicyId[0] == null) {
+                doCreate.run();
+                return;
+            }
             ActionPolicy updated = buildFromForm.apply(editingPolicyId[0]);
-            ledger.upsert(updated);
+            ActionPolicy saved = ledger.upsert(updated);
             engine.saveActionPolicies();
+            pendingSelectId[0] = saved.id();
+            saveFeedbackLbl.setIcon(Icons.check(Theme.current().success.text(), 13));
+            saveFeedbackLbl.setText("Đã cập nhật chính sách: \"" + saved.name() + "\"!");
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
+        };
+
+        createBtn.addActionListener(e -> doCreate.run());
+        updateBtn.addActionListener(e -> doUpdate.run());
+
+        // Ctrl+S shortcut on formCard saves immediately
+        formCard.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK), "saveActionPolicy");
+        formCard.getActionMap().put("saveActionPolicy", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (editingPolicyId[0] != null) {
+                    doUpdate.run();
+                } else {
+                    doCreate.run();
+                }
+            }
         });
 
         clearFormBtn.addActionListener(e -> {
             editingPolicyId[0] = null;
             ledgerTable.clearSelection();
-            updateBtn.setEnabled(false);
+            updateBtn.setVisible(false);
+            formHeader.setText("Tạo chính sách Action mới");
+            editModePill.setText("Chế độ: Tạo mới");
+            editModePill.setToken(t -> t.accent);
+            saveFeedbackLbl.setIcon(null);
+            saveFeedbackLbl.setText(" ");
             nameField.setText("");
-            enabledChk.setSelected(true);
+            enabledSwitch.setOn(true, false);
             scopeCombo.setSelectedItem(ScopeType.PATH_PATTERN);
             stageCombo.setSelectedItem(Stage.PROXY_GATE);
             proxyEffectCombo.setSelectedItem(ProxyEffect.INTERCEPT_WAIT);
@@ -575,7 +692,8 @@ final class ActionLedgerTabBuilder {
             branchesField.setText("");
             pathField.setText("");
             hostField.setText("");
-            methodBtns.forEach((m, b) -> b.setSelected(ActionEngine.isActionMethod(m)));
+            methodBar.setSelectedMethods(ActionEngine.ACTION_METHODS);
+            syncProgressiveFields.run();
         });
 
         // Bulk & Table button actions
@@ -656,6 +774,8 @@ final class ActionLedgerTabBuilder {
                 pm.add(Ui.item(pr.label, null, () -> {
                     ledger.applyPreset(pr);
                     engine.saveActionPolicies();
+                    saveFeedbackLbl.setIcon(Icons.check(Theme.current().success.text(), 13));
+                    saveFeedbackLbl.setText("Đã áp dụng bộ mẫu: " + pr.label);
                     refreshAll.run();
                     if (onAfterAction != null) onAfterAction.run();
                 }));
@@ -725,7 +845,7 @@ final class ActionLedgerTabBuilder {
 
         trashBtn.addActionListener(e -> showTrashDialog(dialogParent, engine, refreshAll, onAfterAction));
 
-        // Live sync when ledger changes from other tabs (e.g. Gate Auditor or Quick Strategy)
+        // Live sync when ledger changes from other tabs (e.g. Gate Auditor, Guide Playbooks, or Quick Strategy)
         ledger.addListener(() -> SwingUtilities.invokeLater(refreshAll));
         refreshAll.run();
         return root;
@@ -768,7 +888,7 @@ final class ActionLedgerTabBuilder {
 
         JPanel foot = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         foot.setOpaque(false);
-        JButton restoreBtn = Ui.primaryBtn("Khôi phục mục đang chọn", t -> Icons.undo(t.accent.text()));
+        JButton restoreBtn = Ui.solidPrimary("Khôi phục mục đang chọn", t -> Icons.undo(t.accent.onSolid()), null);
         JButton restoreAllBtn = Ui.secondaryBtn("Khôi phục tất cả", null);
         JButton closeBtn = Ui.secondaryBtn("Đóng", null);
 
@@ -799,8 +919,7 @@ final class ActionLedgerTabBuilder {
         p.add(foot, BorderLayout.SOUTH);
 
         dlg.setContentPane(p);
-        Theme.track(dlg);
-        dlg.setSize(new Dimension(780, 420));
+        dlg.setSize(760, 380);
         dlg.setLocationRelativeTo(parent);
         dlg.setVisible(true);
     }

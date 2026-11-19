@@ -191,8 +191,8 @@ final class V23BetaTest {
                         "Custom status editor must NEVER flash a default Swing JCheckBox");
                 assertInstanceOf(RolesTab.SquareStatusRenderer.class, edComp);
 
-                List<SegmentedToggle> toggles = findAll(ui.roles.panel, SegmentedToggle.class);
-                assertFalse(toggles.isEmpty(), "Profile editor header must use SegmentedToggle for BẬT | TẮT");
+                List<themythofcrawl.ui.kit.ModernToggleSwitch> toggles = findAll(ui.roles.panel, themythofcrawl.ui.kit.ModernToggleSwitch.class);
+                assertFalse(toggles.isEmpty(), "Profile editor header must use ModernToggleSwitch for BẬT / TẮT");
 
                 // Toggle row 1 ON via table model and verify sync
                 tbl.setValueAt(Boolean.TRUE, 1, 1);
