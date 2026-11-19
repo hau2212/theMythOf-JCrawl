@@ -1,5 +1,6 @@
 package themythofcrawl.ui;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -8,6 +9,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Stroke;
 import java.util.List;
 
 import javax.swing.Icon;
@@ -16,12 +18,16 @@ import javax.swing.JTree;
 import javax.swing.UIManager;
 import javax.swing.tree.TreeCellRenderer;
 
+import themythofcrawl.app.Engine;
 import themythofcrawl.app.Logbook;
 import themythofcrawl.core.Audit;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.model.ApiTagCatalog;
+import themythofcrawl.model.GroupCluster;
+import themythofcrawl.model.NodeTypeCatalog;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.place.Decisions;
 import themythofcrawl.ui.kit.ThemedTree;
@@ -29,11 +35,12 @@ import themythofcrawl.ui.theme.Theme;
 
 /**
  * Rich, HTML-free tree cell renderer drawing Java2D status markers, clickable chips (Copy, Excel,
- * Duplicate), semantic method &amp; verdict pills, and dimmed path parameters with node-level layout
- * caching so scrolling thousands of rows allocates nothing.
+ * Duplicate/Origin, Tags), NodeType icons, distinct dashed Visual Cluster rows, and dimmed path parameters.
  */
 public final class TreeRenderer extends JComponent implements TreeCellRenderer, ThemedTree.ExtensionRenderer {
     private static final int ARC = 0;
+    private static final Stroke DASHED_STROKE = new BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+            10.0f, new float[] {4.0f, 3.0f}, 0.0f);
 
     private static final class Chip {
         String text;
@@ -56,14 +63,20 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         int resCount;
         boolean pendingFlag;
         int dupTotal;
+        int dupNo;
         String targetStt;
         boolean heldFlag;
         String actionNoteRef;
+        int tagCount;
+        boolean suspectedRefresh;
+        String nodeTypeSig;
+        boolean originFlag;
 
         int totalW;
         int totalH;
         Color fill;
         Color edge;
+        boolean dashedEdge;
 
         Icon leadIcon;
         int leadX;
@@ -108,7 +121,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
         void resetChips() {
             if (chips == null) {
-                chips = new Chip[8];
+                chips = new Chip[12];
                 for (int i = 0; i < chips.length; i++) {
                     chips[i] = new Chip();
                 }
@@ -132,9 +145,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             tailText = null;
             fill = null;
             edge = null;
+            dashedEdge = false;
         }
     }
 
+    private final Engine engine;
     private NodeLayout active;
     private boolean activeSelected;
     private Theme activeTheme;
@@ -143,6 +158,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
     private final char[] plainScratch = new char[256];
 
     public TreeRenderer() {
+        this(null);
+    }
+
+    public TreeRenderer(Engine engine) {
+        this.engine = engine;
         setOpaque(false);
     }
 
@@ -218,14 +238,22 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         return nl;
     }
 
-    private static boolean groupChanged(Node n, NodeLayout nl) {
+    private boolean groupChanged(Node n, NodeLayout nl) {
         if (n.payload instanceof ApiGroup g) {
             String stt = g.target() != null ? g.target().sttText() : null;
+            boolean orig = engine != null ? engine.isOrigin(g) : g.dupNo() == 1;
             return g.auditSummary() != nl.summaryRef || g.results().size() != nl.resCount
-                    || g.pending() != nl.pendingFlag || g.dupTotal() != nl.dupTotal
+                    || g.pending() != nl.pendingFlag || g.dupTotal() != nl.dupTotal || g.dupNo() != nl.dupNo
                     || g.heldAtProxy() != nl.heldFlag
+                    || g.tags().size() != nl.tagCount || g.suspectedRefresh() != nl.suspectedRefresh
+                    || orig != nl.originFlag
                     || !java.util.Objects.equals(g.activeIdNote(), nl.actionNoteRef)
                     || !java.util.Objects.equals(stt, nl.targetStt);
+        }
+        if (n.kind == Node.Kind.FOLDER && engine != null && n.payload instanceof String path) {
+            NodeTypeCatalog.NodeType nt = engine.nodeTypeOf(path);
+            String sig = nt.id() + "|" + nt.iconKind() + "|" + nt.colorKey() + "|" + nt.monogram() + "|" + nt.imagePath();
+            return !sig.equals(nl.nodeTypeSig);
         }
         return false;
     }
@@ -240,9 +268,19 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             nl.resCount = g.results().size();
             nl.pendingFlag = g.pending();
             nl.dupTotal = g.dupTotal();
+            nl.dupNo = g.dupNo();
             nl.heldFlag = g.heldAtProxy();
             nl.actionNoteRef = g.activeIdNote();
             nl.targetStt = g.target() != null ? g.target().sttText() : null;
+            nl.tagCount = g.tags().size();
+            nl.suspectedRefresh = g.suspectedRefresh();
+            nl.originFlag = engine != null ? engine.isOrigin(g) : g.dupNo() == 1;
+        }
+        if (n.kind == Node.Kind.FOLDER && engine != null && n.payload instanceof String path) {
+            NodeTypeCatalog.NodeType nt = engine.nodeTypeOf(path);
+            nl.nodeTypeSig = nt.id() + "|" + nt.iconKind() + "|" + nt.colorKey() + "|" + nt.monogram() + "|" + nt.imagePath();
+        } else {
+            nl.nodeTypeSig = null;
         }
 
         int rowH = Math.max(Theme.ROW_TREE, tree != null && tree.getRowHeight() > 0 ? tree.getRowHeight() : th.scaled(Theme.ROW_TREE));
@@ -255,6 +293,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             case FOLDER, LOGBRANCH -> x = layoutFolder(n, th, nl, x, gap);
             case ROOT -> x = layoutRoot(n, th, nl, x, gap);
             case APIS -> x = layoutApis(n, th, nl, x, gap);
+            case CLUSTER -> x = layoutCluster(n, th, nl, x, gap);
             case LOGSYS -> x = layoutLogSys(n, th, nl, x, gap);
             case GROUP -> x = layoutGroup(n, th, nl, x, gap);
             case LOGAPI -> x = layoutLogApi(n, th, nl, x, gap);
@@ -318,9 +357,19 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
     }
 
     private int layoutFolder(Node n, Theme th, NodeLayout nl, int x, int gap) {
-        // Flat Burp-style folder row: no filled box, folder glyph tinted by level, plain bold name.
-        Theme.Token lv = th.level(n.depth);
-        x = addLeadIcon(nl, Icons.folder(lv.base(), 14), x, gap);
+        Icon lead;
+        if (engine != null && n.kind == Node.Kind.FOLDER && n.payload instanceof String path) {
+            NodeTypeCatalog.NodeType nt = engine.nodeTypeOf(path);
+            if (NodeTypeCatalog.DEFAULT_ID.equals(nt.id()) && nt.monogram().isEmpty() && nt.imagePath().isEmpty()
+                    && "folder".equals(nt.iconKind())) {
+                lead = Icons.folder(th.level(n.depth).base(), 14);
+            } else {
+                lead = Icons.nodeIcon(nt, th, 14);
+            }
+        } else {
+            lead = Icons.folder(th.level(n.depth).base(), 14);
+        }
+        x = addLeadIcon(nl, lead, x, gap);
 
         Node.FolderMeta meta = n.folderMeta;
         if (meta == null && n.kind == Node.Kind.LOGBRANCH && n.payload instanceof List<?> gs) {
@@ -352,6 +401,35 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             }
         } else {
             x = addPrimary(nl, Icons.stripLeadingSymbol(n.label), th.boldFont, th.fg, x, th.scaled(4));
+        }
+        return x;
+    }
+
+    /** Visual Cluster row: distinct cluster glyph, [CỤM] rectangular badge, and dashed outline (never a folder). */
+    private int layoutCluster(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        GroupCluster cl = n.payload instanceof GroupCluster c ? c : null;
+        Theme.Token tok = Icons.tokenForKey(th, cl != null ? cl.colorKey() : "accent");
+        nl.fill = tok.fill();
+        nl.edge = tok.border();
+        nl.dashedEdge = true;
+
+        x = addLeadIcon(nl, Icons.cluster(tok.text(), 14), x, th.scaled(4));
+        x = addChip(th, nl, "CỤM", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
+
+        Node.FolderMeta m = n.folderMeta;
+        String title = m != null ? m.name() : (cl != null ? cl.name() : Icons.stripLeadingSymbol(n.label));
+        x = addPrimary(nl, title, th.boldFont, tok.text(), x, gap);
+        if (m != null && m.countChip() != null && !m.countChip().isEmpty()) {
+            x = addTail(nl, th, m.countChip(), x, gap);
+        }
+        if (m != null && m.verdictChip() != null && !m.verdictChip().isEmpty() && !"-".equals(m.verdictChip())) {
+            Theme.Token at = th.audit(n.level);
+            x = addChip(th, nl, compactVerdict(m.verdictChip()), th.smallBoldFont, at.fill(), at.border(),
+                    at.text(), Icons.forAudit(n.level, at.text()), true, x, th.scaled(4));
+        }
+        if (m != null && m.pendingChip() != null && !m.pendingChip().isEmpty()) {
+            x = addChip(th, nl, m.pendingChip(), th.smallBoldFont, th.pending.fill(), th.pending.border(),
+                    th.pending.text(), Icons.hourglass(th.pending.text(), 11), true, x, th.scaled(4));
         }
         return x;
     }
@@ -392,10 +470,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
     }
 
     private int layoutRoot(Node n, Theme th, NodeLayout nl, int x, int gap) {
-        x = addLeadIcon(nl, Icons.folder(th.muted, 14), x, gap);
+        boolean focused = n.payload instanceof String s && !s.isEmpty();
+        x = addLeadIcon(nl, focused ? Icons.focus(th.info.text(), 14) : Icons.folder(th.muted, 14), x, gap);
         Node.FolderMeta m = n.folderMeta;
         if (m != null) {
-            x = addPrimary(nl, m.name(), th.boldFont, th.fg, x, gap);
+            x = addPrimary(nl, m.name(), th.boldFont, focused ? th.info.text() : th.fg, x, gap);
             if (m.countChip() != null && !m.countChip().isEmpty()) {
                 x = addTail(nl, th, m.countChip(), x, gap);
             }
@@ -472,15 +551,25 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (g.target() != null && !g.target().sttText().isBlank()) {
             nl.excelX0 = x;
             x = addChip(th, nl, "#" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
-                    th.info.text(), Icons.excel(th.info.text(), 11), false, x, th.scaled(4));
+                    th.info.text(), Icons.excel(th.info.text(), 11), true, x, th.scaled(4));
             nl.excelX1 = x - th.scaled(4);
         }
 
-        // Clickable Duplicate badge
+        // Clickable Duplicate / Origin lineage badge
         if (g.dupTotal() > 1) {
             nl.dupX0 = x;
-            x = addChip(th, nl, "#" + g.dupNo() + "/" + g.dupTotal(), th.smallBoldFont, th.dup.fill(), th.dup.border(),
-                    th.dup.text(), Icons.dup(th.dup.text(), 11), false, x, th.scaled(4));
+            boolean isOrig = nl.originFlag;
+            if (isOrig) {
+                x = addChip(th, nl, "GỐC · " + g.dupTotal(), th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                        th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
+            } else {
+                ApiGroup orig = engine != null ? engine.originOf(g.bookKey()) : null;
+                String dupTxt = orig != null && orig.gid() != g.gid()
+                        ? "#" + g.dupNo() + " <- " + Text.groupId(orig.gid())
+                        : "#" + g.dupNo() + "/" + g.dupTotal();
+                x = addChip(th, nl, dupTxt, th.smallBoldFont, th.dup.fill(), th.dup.border(),
+                        th.dup.text(), Icons.dup(th.dup.text(), 11), true, x, th.scaled(4));
+            }
             nl.dupX1 = x - th.scaled(4);
         }
 
@@ -488,7 +577,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (g.pending()) {
             x = addChip(th, nl, compactPending(g), th.smallBoldFont,
                     th.pending.fillStrong(), th.pending.border(), th.pending.text(),
-                    Icons.hourglass(th.pending.text(), 11), false, x, th.scaled(4));
+                    Icons.hourglass(th.pending.text(), 11), true, x, th.scaled(4));
         }
 
         // Verdict pill (audit summary)
@@ -498,7 +587,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             Theme.Token at = g.results().isEmpty() ? th.orig : th.audit(auditLvl);
             Icon ic = g.results().isEmpty() ? Icons.pin(at.text(), 11) : Icons.forAudit(auditLvl, at.text());
             x = addChip(th, nl, compactVerdict(summary), th.smallBoldFont,
-                    at.fill(), at.border(), at.text(), ic, false, x, th.scaled(4));
+                    at.fill(), at.border(), at.text(), ic, true, x, th.scaled(4));
         }
 
         // Action / ID Protection status chip (when proxy-held or ID substituted/restored)
@@ -508,6 +597,23 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         } else if (g.heldAtProxy()) {
             x = addChip(th, nl, "Chặn Proxy", th.smallBoldFont,
                     th.info.fill(), th.info.border(), th.info.text(), null, true, x, th.scaled(4));
+        }
+
+        // API Tag chips (REFRESH / INIT / POLLING / custom) + Suspected Refresh hint
+        int shownTags = 0;
+        for (String tagId : g.tags()) {
+            if (shownTags >= 2) {
+                break;
+            }
+            ApiTagCatalog.TagDef def = engine != null ? engine.tagCatalog().byId(tagId) : null;
+            Theme.Token ttok = Icons.tokenForKey(th, def != null ? def.colorKey() : "warn");
+            Icon tic = ApiTagCatalog.TAG_REFRESH.equals(tagId) ? Icons.refresh(ttok.text(), 10) : Icons.tag(ttok.text(), 10);
+            x = addChip(th, nl, tagId, th.smallBoldFont, ttok.fill(), ttok.border(), ttok.text(), tic, true, x, th.scaled(4));
+            shownTags++;
+        }
+        if (shownTags < 2 && g.suspectedRefresh() && !g.hasTag(ApiTagCatalog.TAG_REFRESH)) {
+            x = addChip(th, nl, "? Refresh", th.smallBoldFont, th.warning.fill(), th.warning.border(),
+                    th.warning.text(), Icons.refresh(th.warning.text(), 10), true, x, th.scaled(4));
         }
         return x;
     }
@@ -680,8 +786,15 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 g2.fillRect(0, 0, w - 1, h - 1);
             }
             if (edge != null) {
+                Stroke prev = g2.getStroke();
+                if (nl.dashedEdge) {
+                    g2.setStroke(DASHED_STROKE);
+                }
                 g2.setColor(edge);
                 g2.drawRect(0, 0, w - 1, h - 2);
+                if (nl.dashedEdge) {
+                    g2.setStroke(prev);
+                }
             }
 
             // Tree-Table horizontal row border and vertical column cell separators

@@ -56,6 +56,7 @@ public class SegmentedToggle extends JPanel {
     private int selectedIndex;
     private IntConsumer onChange;
     private boolean suppressEvents;
+    private int fixedHeight = -1;
 
     public SegmentedToggle(Option... opts) {
         super(new FlowLayout(FlowLayout.LEFT, 2, 2));
@@ -132,6 +133,25 @@ public class SegmentedToggle extends JPanel {
         if (idx >= 0 && idx < buttons.size()) {
             buttons.get(idx).setToolTipText(tip);
         }
+    }
+
+    public SegmentedToggle setFixedHeight(int px) {
+        this.fixedHeight = px;
+        for (SegmentButton b : buttons) {
+            b.refreshMetrics();
+        }
+        revalidate();
+        repaint();
+        return this;
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        Dimension d = super.getPreferredSize();
+        if (fixedHeight > 0) {
+            d.height = Theme.current().scaled(fixedHeight);
+        }
+        return d;
     }
 
     @Override
@@ -244,8 +264,10 @@ public class SegmentedToggle extends JPanel {
             Insets pad = new Insets(Math.round(2 * t.scale), Math.round(6 * t.scale),
                     Math.round(2 * t.scale), Math.round(6 * t.scale));
             int w = iw + (label.isEmpty() ? 0 : fm.stringWidth(label)) + pad.left + pad.right;
-            int h = Math.max(ih, fm.getHeight()) + pad.top + pad.bottom;
-            pref = new Dimension(Math.max(22, w), Math.max(20, h));
+            int h = fixedHeight > 0
+                    ? Math.max(16, t.scaled(fixedHeight) - 6)
+                    : Math.max(20, Math.max(ih, fm.getHeight()) + pad.top + pad.bottom);
+            pref = new Dimension(Math.max(22, w), h);
             return new Dimension(pref);
         }
 

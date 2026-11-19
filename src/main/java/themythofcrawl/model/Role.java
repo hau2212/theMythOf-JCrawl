@@ -9,24 +9,90 @@ import java.util.Map;
 import themythofcrawl.core.Text;
 
 /** A role profile (01_Admin, 10_Guest ...) or the API gốc profile. Immutable. */
-public record Role(String name, boolean enabled, List<HeaderRule> rules) {
+public record Role(String name, boolean enabled, List<HeaderRule> rules, Tier tier) {
     public static final String ORIGINAL_PROFILE_NAME = "00_API GỐC (Acc Crawl)";
     public static final String ORIGINAL_LABEL = "[API GỐC] 00_Original (Acc Crawl)";
 
+    /** Cấp quyền dự kiến của Role (dùng để nhận diện nhanh & phân tầng trong bảng Role). */
+    public enum Tier {
+        ADMIN("ADM", "Quản trị cao nhất (Admin)"),
+        MANAGER("MGR", "Quản lý / Điều hành (Manager)"),
+        STAFF("STF", "Nhân viên / Hỗ trợ / Auditor"),
+        USER("USR", "Người dùng thường (User)"),
+        GUEST("GST", "Khách / Chưa đăng nhập (Guest)"),
+        CUSTOM("CUS", "Tùy chỉnh");
+
+        public final String badge;
+        public final String label;
+
+        Tier(String badge, String label) {
+            this.badge = badge;
+            this.label = label;
+        }
+
+        public static Tier infer(String roleName, List<HeaderRule> rules) {
+            String n = Text.nz(roleName).toLowerCase(Locale.ROOT);
+            if (n.contains("admin") || n.contains("root") || n.contains("super")) {
+                return ADMIN;
+            }
+            if (n.contains("manager") || n.contains("lead") || n.contains("mod")) {
+                return MANAGER;
+            }
+            if (n.contains("staff") || n.contains("support") || n.contains("audit") || n.contains("operator")) {
+                return STAFF;
+            }
+            if (n.contains("guest") || n.contains("anon") || n.contains("unauth") || n.contains("noauth")
+                    || n.contains("public") || n.contains("khach") || n.contains("expired")) {
+                return GUEST;
+            }
+            if (n.contains("user") || n.contains("member") || n.contains("tenant") || n.contains("client")) {
+                return USER;
+            }
+            if (rules != null && !rules.isEmpty()) {
+                boolean removed = false;
+                boolean added = false;
+                for (HeaderRule r : rules) {
+                    String hn = r.name().toLowerCase(Locale.ROOT);
+                    if (hn.equals("authorization") || hn.equals("cookie") || hn.equals("x-auth-token")
+                            || hn.equals("x-api-key") || r.mode().cookie()) {
+                        if (r.mode().removes()) {
+                            removed = true;
+                        } else {
+                            added = true;
+                        }
+                    }
+                }
+                if (removed && !added) {
+                    return GUEST;
+                }
+            }
+            return CUSTOM;
+        }
+    }
+
     public Role {
         rules = List.copyOf(rules == null ? List.of() : rules);
+        tier = tier == null ? Tier.infer(name, rules) : tier;
+    }
+
+    public Role(String name, boolean enabled, List<HeaderRule> rules) {
+        this(name, enabled, rules, Tier.infer(name, rules));
     }
 
     public Role withEnabled(boolean on) {
-        return new Role(name, on, rules);
+        return new Role(name, on, rules, tier);
     }
 
     public Role withRules(List<HeaderRule> r) {
-        return new Role(name, enabled, r);
+        return new Role(name, enabled, r, tier);
     }
 
     public Role withName(String n) {
-        return new Role(n, enabled, rules);
+        return new Role(n, enabled, rules, tier);
+    }
+
+    public Role withTier(Tier t) {
+        return new Role(name, enabled, rules, t == null ? Tier.infer(name, rules) : t);
     }
 
     /** Unauthenticated / stripped-credentials profile (Guest, Anon, or only removes auth headers). */
@@ -69,6 +135,7 @@ public record Role(String name, boolean enabled, List<HeaderRule> rules) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name);
         m.put("enabled", enabled);
+        m.put("tier", tier.name());
         List<Object> hs = new ArrayList<>();
         for (HeaderRule r : rules) {
             hs.add(r.toMap());
@@ -116,6 +183,15 @@ public record Role(String name, boolean enabled, List<HeaderRule> rules) {
                 rules.add(rule);
             }
         }
-        return new Role(name, enabled, rules);
+        Tier tier = null;
+        Object rawTier = m.get("tier");
+        if (rawTier != null) {
+            try {
+                tier = Tier.valueOf(String.valueOf(rawTier).trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                tier = null;
+            }
+        }
+        return new Role(name, enabled, rules, tier);
     }
 }

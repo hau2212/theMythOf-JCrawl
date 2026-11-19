@@ -53,6 +53,20 @@ public final class Config {
         }
     }
 
+    /** Chính sách xử lý các API gắn tag REFRESH (GET tự tải lại sau hành động POST/PUT/DELETE). */
+    public enum RefreshPolicy {
+        TAG_ONLY("M1: Chỉ gắn nhãn [REFRESH] hiển thị (giữ nguyên luồng crawl)"),
+        AUTO_SKIP_DUP("M2: Tự giữ duy nhất GỐC #1, bỏ qua bản lặp ở nhánh mới (Khuyên dùng)"),
+        AUTO_CLUSTER("M3: Tự gom các API [REFRESH] vào Cụm [≡ Auto-Refresh] trong nhánh"),
+        AUTO_HIDE("M4: Tự ẩn bản lặp [REFRESH] khỏi màn hình crawl (vẫn lưu Audit)");
+
+        public final String label;
+
+        RefreshPolicy(String label) {
+            this.label = label;
+        }
+    }
+
     // capture
     public boolean captureEnabled = false;
     public boolean inScopeOnly = true;
@@ -97,6 +111,9 @@ public final class Config {
     public ActionEngine.ActionMode actionMode = ActionEngine.ActionMode.AUTO_SMART;
     public ActionEngine.Lock2xxStrategy lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
     public boolean holdActionAtProxy = false;
+    // Tag REFRESH (GET-after-Action)
+    public RefreshPolicy refreshPolicy = RefreshPolicy.AUTO_SKIP_DUP;
+    public boolean autoDetectRefresh = true;
 
     public Config copy() {
         return fromMap(toMap());
@@ -123,6 +140,7 @@ public final class Config {
         apiRegex = Text.nz(apiRegex);
         if (actionMode == null) actionMode = ActionEngine.ActionMode.AUTO_SMART;
         if (lock2xxStrategy == null) lock2xxStrategy = ActionEngine.Lock2xxStrategy.REAL_SEND_FRESH_ID;
+        if (refreshPolicy == null) refreshPolicy = RefreshPolicy.AUTO_SKIP_DUP;
         return this;
     }
 
@@ -170,6 +188,8 @@ public final class Config {
         m.put("action_mode", actionMode.name());
         m.put("lock_2xx_strategy", lock2xxStrategy.name());
         m.put("hold_action_at_proxy", holdActionAtProxy);
+        m.put("refresh_policy", refreshPolicy.name());
+        m.put("auto_detect_refresh", autoDetectRefresh);
         return m;
     }
 
@@ -216,6 +236,8 @@ public final class Config {
         c.actionMode = e(ActionEngine.ActionMode.class, m.get("action_mode"), c.actionMode);
         c.lock2xxStrategy = e(ActionEngine.Lock2xxStrategy.class, m.get("lock_2xx_strategy"), c.lock2xxStrategy);
         c.holdActionAtProxy = b(m, "hold_action_at_proxy", c.holdActionAtProxy);
+        c.refreshPolicy = e(RefreshPolicy.class, m.get("refresh_policy"), c.refreshPolicy);
+        c.autoDetectRefresh = b(m, "auto_detect_refresh", c.autoDetectRefresh);
         return c.normalized();
     }
 

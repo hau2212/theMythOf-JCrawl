@@ -91,6 +91,8 @@ final class SettingsTab {
     private final JCheckBox restore = new JCheckBox("API đã xóa quay về chỗ cũ khi bắt lại (giữ chỗ)");
     private final JCheckBox dupNew = new JCheckBox("Gặp API trùng ở chỗ mới: tạo bản #2, #3 ... và hỏi giữ hay ẩn (màu tím)");
     private final JCheckBox ghosts = new JCheckBox("Hiện API đã xóa (giữ chỗ) trong cây");
+    private final JComboBox<String> refreshPolicyBox = new JComboBox<>();
+    private final JCheckBox autoDetectRefreshChk = new JCheckBox("Tự phát hiện API GET xuất hiện ngay sau hành động (<= 2.5s) & gợi ý [? Refresh]");
     private final JComboBox<String> profile = new JComboBox<>();
     private final JTextField delay = new JTextField(6);
     private final JTextField jitter = new JTextField(6);
@@ -128,6 +130,9 @@ final class SettingsTab {
     SettingsTab(MainPanel ui) {
         this.ui = ui;
         this.engine = ui.engine;
+        for (Config.RefreshPolicy rp : Config.RefreshPolicy.values()) {
+            refreshPolicyBox.addItem(rp.label);
+        }
         for (Config.SendProfile p : Config.SendProfile.values()) {
             profile.addItem(p.label);
         }
@@ -158,9 +163,13 @@ final class SettingsTab {
         sections.add(section("1.  Bắt API từ Proxy", t -> t.info,
                 "Request qua Proxy được bắt và nhân bản theo Role. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
                 row(scope), pair(ignoreStatic, staticExt), pair(regexOn, regex), pair(null, regexError), row(options)));
-        sections.add(section("2.  Chống trùng lặp & vị trí", t -> t.dup,
-                "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại được đặt.",
-                row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts)));
+        sections.add(section("2.  Chống trùng lặp, vị trí & API REFRESH", t -> t.dup,
+                "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại / API REFRESH được xử lý.",
+                row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts),
+                field("Chính sách API [REFRESH]:", refreshPolicyBox, null),
+                row(autoDetectRefreshChk),
+                pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
+                        Ui.muted("Danh mục Tag & hành vi M1–M4 cho API GET tự tải lại"))));
         sections.add(section("3.  Gửi request, Bảo vệ Action API & chống lỗi 429", t -> t.success,
                 "Hàng đợi theo host chống 429/503; tích hợp 4 Phương pháp bảo vệ & tự phục hồi ID cho Action API (POST/PUT/PATCH/DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
@@ -253,7 +262,7 @@ final class SettingsTab {
         });
 
         for (JCheckBox b : new JCheckBox[] {scope, ignoreStatic, regexOn, options, dedup, dedupIds, dedupBranch, confirmNew, restore, dupNew,
-            ghosts, sendOriginal, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
+            ghosts, autoDetectRefreshChk, sendOriginal, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
             b.addActionListener(e -> apply());
             b.setOpaque(false);
         }
@@ -281,7 +290,7 @@ final class SettingsTab {
                 saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             }
         });
-        for (JComboBox<?> c : new JComboBox<?>[] {profile, actionModeBox, lock2xxStrategyBox, queryMode, copyFallback}) {
+        for (JComboBox<?> c : new JComboBox<?>[] {refreshPolicyBox, profile, actionModeBox, lock2xxStrategyBox, queryMode, copyFallback}) {
             c.addActionListener(e -> apply());
         }
         regex.getDocument().addDocumentListener(new DocumentListener() {
@@ -412,6 +421,8 @@ final class SettingsTab {
             restore.setSelected(c.restoreKnownPlace);
             dupNew.setSelected(c.dupNewPlace);
             ghosts.setSelected(c.showGhosts);
+            refreshPolicyBox.setSelectedIndex(c.refreshPolicy.ordinal());
+            autoDetectRefreshChk.setSelected(c.autoDetectRefresh);
             profile.setSelectedIndex(c.sendProfile.ordinal());
             delay.setText(String.valueOf(c.sendDelayMs));
             jitter.setText(String.valueOf(c.sendJitterPct));
@@ -500,6 +511,8 @@ final class SettingsTab {
         c.restoreKnownPlace = restore.isSelected();
         c.dupNewPlace = dupNew.isSelected();
         c.showGhosts = ghosts.isSelected();
+        c.refreshPolicy = Config.RefreshPolicy.values()[Math.max(0, refreshPolicyBox.getSelectedIndex())];
+        c.autoDetectRefresh = autoDetectRefreshChk.isSelected();
         Config.SendProfile p = Config.SendProfile.values()[Math.max(0, profile.getSelectedIndex())];
         int d = num(delay, c.sendDelayMs);
         int j = num(jitter, c.sendJitterPct);

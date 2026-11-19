@@ -86,7 +86,7 @@ final class AuditTab {
                 r -> r.pathCols(2), 1);
         placeTable = table(placeModel, new int[] {78, 205, 130, 205, 68, 145, 74, 80, 74, 115, 190, 76}, 5, 0,
                 r -> r.pathCols(1).numberCols(6, 7, 8, 11).timeCols(9), 3);
-        dupTable = table(dupModel, new int[] {320, 70, 80, 320, 140, 70, 90}, 4, null,
+        dupTable = table(dupModel, new int[] {320, 120, 80, 320, 145, 70, 90}, 4, null,
                 r -> r.pathCols(0).timeCols(6), 1);
         logTable = table(logModel, new int[] {54, 110, 230, 70, 84, 260, 240, 240, 300}, 2, 4,
                 r -> r.pathCols(5).numberCols(0).timeCols(1), 0);
@@ -188,6 +188,22 @@ final class AuditTab {
         Ui.onPopup(decideTable, e -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, gs.size() == 1,
+                    () -> LineageDialog.show(ui, gs.get(0))));
+            m.add(Ui.item("Đặt làm API GỐC #1", Icons::star, gs.size() == 1, () -> {
+                if (engine.promoteToOrigin(gs.get(0))) {
+                    ui.flash("Đã đặt " + Text.groupId(gs.get(0).gid()) + " làm API GỐC #1");
+                    stale = true;
+                    ui.tick(true);
+                }
+            }));
+            m.add(Ui.item("Gắn Tag [REFRESH]", Icons::tag, !gs.isEmpty(), () -> {
+                engine.setApiTag(gs, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH, true);
+                ui.flash("Đã gắn tag [REFRESH] cho " + gs.size() + " API");
+                stale = true;
+                ui.tick(true);
+            }));
+            m.addSeparator();
             m.add(Ui.item("Giữ chỗ hiện tại", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> decide("keep")));
             m.add(Ui.item("Về nơi vừa gặp", Icons::move, !gs.isEmpty(), () -> decide("found")));
             m.add(Ui.item("Path khác...", Icons::folder, !gs.isEmpty(), () -> decide("other")));
@@ -211,8 +227,23 @@ final class AuditTab {
         cardOther = Ui.button("Path khác...", Icons::folder, () -> decide("other"));
         cardHide = Ui.button("Không giữ", Icons::hide, () -> decide("hide"));
         cardDelete = Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete"));
+        JButton cardLineage = Ui.button("Chuỗi Gốc & Trùng...", Icons::dup, () -> {
+            List<ApiGroup> gs = selected(decideTable, decideModel);
+            if (!gs.isEmpty()) {
+                LineageDialog.show(ui, gs.get(0));
+            }
+        });
+        JButton cardTagRefresh = Ui.button("Tag REFRESH", Icons::tag, () -> {
+            List<ApiGroup> gs = selected(decideTable, decideModel);
+            if (!gs.isEmpty()) {
+                engine.setApiTag(gs, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH, true);
+                ui.flash("Đã gắn tag [REFRESH] cho " + gs.size() + " API");
+                stale = true;
+                ui.tick(true);
+            }
+        });
 
-        JPanel cardActions = Ui.flow(FlowLayout.LEFT, cardKeep, cardFound, cardOther, cardHide, cardDelete);
+        JPanel cardActions = Ui.flow(FlowLayout.LEFT, cardKeep, cardFound, cardOther, cardHide, cardDelete, cardLineage, cardTagRefresh);
         JPanel cardInner = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         cardInner.setOpaque(false);
         cardInner.add(MainPanel.scroll(decideText), BorderLayout.CENTER);
@@ -221,10 +252,18 @@ final class AuditTab {
         decideCard.setBody(cardInner);
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(decideTable), decideCard);
-        split.setResizeWeight(0.62);
+        split.setResizeWeight(0.60);
         JButton[] moreDecideRef = new JButton[1];
-        JButton moreDecide = Ui.dropdown("Thao tác khác", null, "Chọn cách xử lý hoặc xem hướng dẫn", () -> {
+        JButton moreDecide = Ui.dropdown("Thao tác khác", null, "Chọn cách xử lý, Lineage, Tag REFRESH hoặc xem hướng dẫn", () -> {
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, () -> {
+                List<ApiGroup> gs = selected(decideTable, decideModel);
+                if (!gs.isEmpty()) {
+                    LineageDialog.show(ui, gs.get(0));
+                }
+            }));
+            m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
+            m.addSeparator();
             m.add(Ui.item("Về nơi vừa gặp", Icons::move, () -> decide("found")));
             m.add(Ui.item("Chuyển sang Path khác...", Icons::folder, () -> decide("other")));
             m.add(Ui.item("Không giữ (ẩn)", Icons::hide, () -> decide("hide")));
@@ -239,6 +278,7 @@ final class AuditTab {
         p.add(Ui.flow(FlowLayout.LEFT, keep,
                 Ui.button("Về nơi vừa gặp", Icons::move, () -> decide("found")),
                 Ui.button("Chọn hết", decideTable::selectAll),
+                Ui.button("Tag & REFRESH...", Icons::tag, ui::openTagManager),
                 moreDecide), BorderLayout.NORTH);
         p.add(split, BorderLayout.CENTER);
         explain();
@@ -257,11 +297,12 @@ final class AuditTab {
             decideKindPill.setToken(t -> t.neutral).setIcon(null).setText("Chưa chọn");
             decideCard.setAccentToken(t -> t.neutral, false);
             decideText.setText(decideModel.getRowCount() == 0 ? "Không có việc nào cần xử lý."
-                    : "Chọn 1 dòng để xem giải thích và lựa chọn.");
+                    : "Chọn 1 dòng để xem giải thích bằng lời nói tự nhiên và khuyến nghị hành động.");
         } else if (gs.size() == 1) {
             ApiGroup g = gs.get(0);
             Decisions.Kind k = Decisions.kind(g);
-            decideKindPill.setText(Icons.stripLeadingSymbol(k.label));
+            Decisions.SmartAdvice advice = Decisions.advise(engine, g);
+            decideKindPill.setText(Icons.stripLeadingSymbol(k.label) + (advice.suspectedRefresh() ? " · ?REFRESH" : ""));
             switch (k) {
                 case DUP -> {
                     decideKindPill.setToken(t -> t.dup).setIcon(t -> Icons.dup(t.dup.text(), 11));
@@ -276,7 +317,7 @@ final class AuditTab {
                     decideCard.setAccentToken(t -> t.pending, true);
                 }
             }
-            decideText.setText(Icons.stripInlineSymbols(Decisions.text(g, engine.copiesOf(g.bookKey()))));
+            decideText.setText(Icons.stripInlineSymbols(advice.toFormattedText()));
         } else {
             decideKindPill.setToken(t -> t.accent).setIcon(null).setText("Đang chọn " + gs.size() + " API");
             decideCard.setAccentToken(t -> t.accent, true);
@@ -327,8 +368,13 @@ final class AuditTab {
         onText(placeFilter, this::reload);
         placeView.addActionListener(e -> reload());
         JButton[] moreRef = new JButton[1];
-        JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ", () -> {
+        JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ, Lineage & Tag REFRESH", () -> {
+            PlacementBook.Record r = selectedPlace();
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, r != null,
+                    () -> LineageDialog.showByKey(ui, r.key, null)));
+            m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
+            m.addSeparator();
             m.add(Ui.item("Thêm vị trí giữ chỗ thủ công...", Icons::plus, this::addPlace));
             m.add(Ui.item("Sửa vị trí giữ chỗ đang chọn...", Icons::edit, () -> editPlace(selectedPlace())));
             m.addSeparator();
@@ -346,6 +392,15 @@ final class AuditTab {
         Ui.onPopup(placeTable, e -> {
             PlacementBook.Record r = selectedPlace();
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, r != null,
+                    () -> LineageDialog.showByKey(ui, r.key, null)));
+            m.add(Ui.item("Bật / Tắt Tag [REFRESH]", Icons::tag, r != null, () -> {
+                boolean has = r.tags.contains(themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
+                engine.toggleEndpointTag(r.key, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH, !has);
+                stale = true;
+                ui.tick(true);
+            }));
+            m.addSeparator();
             m.add(Ui.item("Sửa chỗ...", Icons::edit, r != null, () -> editPlace(r)));
             m.add(Ui.item("Quên giữ chỗ", Icons::error, r != null, this::forgetPlace));
             m.add(Ui.item("Cho phép bắt lại ngay", Icons::refresh, r != null, this::recapture));
@@ -358,6 +413,12 @@ final class AuditTab {
         placesLabel.setForeground(Theme.current().muted);
         JPanel top = Ui.flow(FlowLayout.LEFT, placeFilter, placeView,
                 Ui.button("Sửa chỗ...", Icons::edit, () -> editPlace(selectedPlace())),
+                Ui.button("Lineage...", Icons::dup, () -> {
+                    PlacementBook.Record r = selectedPlace();
+                    if (r != null) {
+                        LineageDialog.showByKey(ui, r.key, null);
+                    }
+                }),
                 more, placesLabel);
         JPanel p = new JPanel(new BorderLayout());
         p.add(top, BorderLayout.NORTH);
@@ -474,27 +535,54 @@ final class AuditTab {
     // ================================================================== API trùng & ẩn
     private JPanel dupsPanel() {
         dupView.addActionListener(e -> reload());
-        Ui.onDoubleClick(dupTable, () -> dupAction("open"));
+        Ui.onDoubleClick(dupTable, () -> {
+            List<ApiGroup> gs = selected(dupTable, dupModel);
+            if (!gs.isEmpty()) {
+                LineageDialog.show(ui, gs.get(0));
+                stale = true;
+                ui.tick(true);
+            }
+        });
         Ui.onPopup(dupTable, e -> {
             List<ApiGroup> gs = selected(dupTable, dupModel);
+            ApiGroup first = gs.isEmpty() ? null : gs.get(0);
+            boolean one = gs.size() == 1 && first != null;
+            boolean hasRefresh = first != null && engine.book().hasTag(first.bookKey(), themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Mở", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, one, () -> dupAction("lineage")));
+            m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
+            m.addSeparator();
+            m.add(Ui.item("Đặt làm API GỐC #1", Icons::check, one, () -> dupAction("promote")));
+            m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
+            m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
             m.add(Ui.item("Hiện", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
             m.add(Ui.item("Ẩn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
-            m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
+            m.addSeparator();
+            m.add(Ui.item(hasRefresh ? "Gỡ Tag [REFRESH]" : "Gắn Tag [REFRESH]", Icons::tag, one, () -> dupAction("toggle_refresh")));
+            m.add(Ui.item("Quản lý Tag & REFRESH...", Icons::tag, ui::openTagManager));
+            m.add(Ui.item("Lịch sử vị trí", Icons::compass, one, () -> show(1, first.bookKey())));
             m.add(Ui.item("Xóa", t -> Icons.trash(t.danger.text()), !gs.isEmpty(), () -> dupAction("delete")));
-            m.add(Ui.item("Lịch sử vị trí", Icons::compass, gs.size() == 1, () -> show(1, gs.get(0).bookKey())));
             m.show(e.getComponent(), e.getX(), e.getY());
         });
         JButton[] moreDupsRef = new JButton[1];
-        JButton moreDups = Ui.dropdown("Thao tác", null, "Mở, xóa bản trùng hoặc xem hướng dẫn", () -> {
+        JButton moreDups = Ui.dropdown("Thao tác", null, "Lineage, Gốc #1, REFRESH Tag, xóa hoặc xem hướng dẫn", () -> {
             List<ApiGroup> gs = selected(dupTable, dupModel);
+            ApiGroup first = gs.isEmpty() ? null : gs.get(0);
+            boolean one = gs.size() == 1 && first != null;
+            boolean hasRefresh = first != null && engine.book().hasTag(first.bookKey(), themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
             JPopupMenu m = new JPopupMenu();
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, one, () -> dupAction("lineage")));
             m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
+            m.addSeparator();
+            m.add(Ui.item("Đặt làm API GỐC #1", Icons::check, one, () -> dupAction("promote")));
+            m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
             m.add(Ui.item("Hiện bản đang chọn", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
             m.add(Ui.item("Ẩn bản đang chọn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
             m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
-            m.add(Ui.item("Lịch sử vị trí", Icons::compass, gs.size() == 1, () -> show(1, gs.get(0).bookKey())));
+            m.addSeparator();
+            m.add(Ui.item(hasRefresh ? "Gỡ Tag [REFRESH]" : "Gắn Tag [REFRESH]", Icons::tag, one, () -> dupAction("toggle_refresh")));
+            m.add(Ui.item("Quản lý Tag & REFRESH...", Icons::tag, ui::openTagManager));
+            m.add(Ui.item("Lịch sử vị trí", Icons::compass, one, () -> show(1, first.bookKey())));
             m.add(Ui.item("Xóa bản đang chọn", t -> Icons.trash(t.danger.text()), !gs.isEmpty(), () -> dupAction("delete")));
             m.addSeparator();
             m.add(Ui.item("Hướng dẫn API trùng & ẩn...", Icons::info,
@@ -504,6 +592,8 @@ final class AuditTab {
         moreDupsRef[0] = moreDups;
         JPanel p = new JPanel(new BorderLayout());
         p.add(Ui.flow(FlowLayout.LEFT, dupView,
+                Ui.button("Lineage...", Icons::dup, () -> dupAction("lineage")),
+                Ui.button("Đặt GỐC #1", Icons::check, () -> dupAction("promote")),
                 Ui.button("Giữ (bản chờ)", t -> Icons.check(t.success.text()), () -> dupAction("keep")),
                 Ui.button("Hiện", Icons::show, () -> dupAction("show")),
                 Ui.button("Ẩn", Icons::hide, () -> dupAction("hide")),
@@ -518,6 +608,21 @@ final class AuditTab {
             return;
         }
         switch (action) {
+            case "lineage" -> LineageDialog.show(ui, gs.get(0));
+            case "promote" -> {
+                engine.promoteToOrigin(gs.get(0));
+                ui.flash("Đã đặt API #" + gs.get(0).gid() + " làm API GỐC #1");
+            }
+            case "keep_origin" -> {
+                int hidden = engine.keepOnlyOriginAndHideOthers(gs.get(0).bookKey());
+                ui.flash("Đã giữ GỐC #1 và ẩn " + hidden + " bản trùng");
+            }
+            case "toggle_refresh" -> {
+                String key = gs.get(0).bookKey();
+                boolean has = engine.book().hasTag(key, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
+                engine.toggleEndpointTag(key, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH, !has);
+                ui.flash(!has ? "Đã gắn Tag [REFRESH]" : "Đã gỡ Tag [REFRESH]");
+            }
             case "show" -> engine.show(gs);
             case "hide" -> engine.hide(gs, "");
             case "keep" -> engine.keepDuplicates(gs);

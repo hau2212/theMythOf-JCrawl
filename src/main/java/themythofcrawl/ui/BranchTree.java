@@ -66,12 +66,14 @@ public final class BranchTree {
     private boolean restoring;
     private ChipHandler chips;
     private BiConsumer<List<ApiGroup>, String> moveHandler;
+    private String focusPath;
+    private boolean focusRecursive;
 
     public BranchTree(Engine engine) {
         this.engine = engine;
         Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API", AuditLevel.NONE, "ROOT", 0);
         model = new DefaultTreeModel(root);
-        tree = new ThemedTree(model, new TreeRenderer());
+        tree = new ThemedTree(model, new TreeRenderer(engine));
         tree.setRowHeight(themythofcrawl.ui.theme.Theme.ROW_TREE);
         tree.setLargeModel(true);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
@@ -101,6 +103,9 @@ public final class BranchTree {
                     Node n = (Node) e.getPath().getLastPathComponent();
                     collapsed.remove(n.key);
                     expanded.add(n.key);
+                    if (n.kind == Node.Kind.CLUSTER && n.payload instanceof themythofcrawl.model.GroupCluster cl && cl.collapsed()) {
+                        cl.setCollapsed(false);
+                    }
                 }
             }
 
@@ -110,6 +115,9 @@ public final class BranchTree {
                     Node n = (Node) e.getPath().getLastPathComponent();
                     expanded.remove(n.key);
                     collapsed.add(n.key);
+                    if (n.kind == Node.Kind.CLUSTER && n.payload instanceof themythofcrawl.model.GroupCluster cl && !cl.collapsed()) {
+                        cl.setCollapsed(true);
+                    }
                 }
             }
         });
@@ -145,6 +153,29 @@ public final class BranchTree {
 
     public boolean restoring() {
         return restoring;
+    }
+
+    /** Isolates the tree on a single branch (exact or including sub-folders). Pass null to exit Focus Mode. */
+    public void setFocus(String path, boolean recursive) {
+        this.focusPath = path == null || path.isBlank() ? null : Hierarchy.normalize(path);
+        this.focusRecursive = recursive;
+        rebuild(engine.config().showGhosts);
+    }
+
+    public void clearFocus() {
+        if (this.focusPath != null) {
+            this.focusPath = null;
+            this.focusRecursive = false;
+            rebuild(engine.config().showGhosts);
+        }
+    }
+
+    public String focusPath() {
+        return focusPath;
+    }
+
+    public boolean focusRecursive() {
+        return focusRecursive;
     }
 
     /** Keep an API open in this tree (a returning API shows its 'vị trí cũ / vừa gặp tại' rows). */
@@ -282,6 +313,9 @@ public final class BranchTree {
             if ((n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) && n.payload instanceof String s) {
                 return s;
             }
+            if (n.kind == Node.Kind.CLUSTER && n.payload instanceof themythofcrawl.model.GroupCluster cl) {
+                return cl.branchPath();
+            }
             ApiGroup g = groupOf(n);
             return g != null ? g.branch() : null;
         }
@@ -323,6 +357,13 @@ public final class BranchTree {
         return r.roleName() + "   ·   " + st + "   ·   " + len + "   ·   " + Audit.badge(g, r);
     }
 
+    private boolean matchesFocus(String branchPath) {
+        if (focusPath == null) {
+            return true;
+        }
+        return focusRecursive ? Hierarchy.matchesPrefix(branchPath, focusPath) : Hierarchy.same(branchPath, focusPath);
+    }
+
     // ------------------------------------------------------------------ build
     /** Rebuild from the engine, keeping open folders / APIs and the selection. */
     public void rebuild(boolean showGhosts) {
@@ -333,7 +374,9 @@ public final class BranchTree {
                 selected.add(((Node) p.getLastPathComponent()).key);
             }
         }
-        List<ApiGroup> groups = engine.groups();
+        List<ApiGroup> allGroups = engine.groups();
+        List<ApiGroup> groups = focusPath == null ? allGroups
+                : allGroups.stream().filter(g -> matchesFocus(g.branch())).toList();
         List<Branch> branches = engine.branches();
         Map<String, int[]> counts = Audit.prefixCounts(groups);
         Map<String, Integer> pend = new HashMap<>();
@@ -349,7 +392,7 @@ public final class BranchTree {
         Map<String, Integer> ghostCount = new HashMap<>();
         if (showGhosts) {
             for (PlacementBook.Record r : engine.book().records()) {
-                if (r.gid == null && r.place != null) {
+                if (r.gid == null && r.place != null && matchesFocus(r.place)) {
                     ghosts.computeIfAbsent(Hierarchy.key(r.place), k -> new ArrayList<>()).add(r);
                     List<String> parts = Hierarchy.split(r.place);
                     for (int i = 1; i <= parts.size(); i++) {
@@ -358,9 +401,16 @@ public final class BranchTree {
                 }
             }
         }
-        Node.FolderMeta rootMeta = new Node.FolderMeta("Tất cả Group & API", null,
-                branches.size() + " Nhánh · " + groups.size() + " API", null, null, null);
-        Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API)",
+        Node.FolderMeta rootMeta = focusPath == null
+                ? new Node.FolderMeta("Tất cả Group & API", null,
+                        branches.size() + " Nhánh · " + groups.size() + " API", null, null, null)
+                : new Node.FolderMeta("Tập trung: " + focusPath, null,
+                        groups.size() + " API" + (focusRecursive ? " (kèm nhánh con)" : " (chỉ nhánh này)"),
+                        null, null, null);
+        Node root = new Node(Node.Kind.ROOT, focusPath == null ? "" : focusPath,
+                focusPath == null
+                        ? "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API)"
+                        : "Tập trung: " + focusPath + " (" + groups.size() + " API)",
                 AuditLevel.NONE, "ROOT", 0, rootMeta);
         Map<Object, Node> nodes = new HashMap<>();
         nodes.put(root.key, root);
@@ -372,19 +422,37 @@ public final class BranchTree {
         Consumer<String> ensure = path -> ensureFolder(root, Hierarchy.split(path), nodes, counts, pend, ghostCount, reachable,
                 expand);
         Set<String> paths = new LinkedHashSet<>();
-        for (Branch b : branches) {
-            paths.add(Hierarchy.normalize(b.name()));
-        }
-        for (ApiGroup g : groups) {
-            paths.add(Hierarchy.normalize(g.branch()));
+        if (focusPath == null) {
+            for (Branch b : branches) {
+                paths.add(Hierarchy.normalize(b.name()));
+            }
+            for (ApiGroup g : groups) {
+                paths.add(Hierarchy.normalize(g.branch()));
+            }
+        } else {
+            paths.add(focusPath);
+            if (focusRecursive) {
+                for (Branch b : branches) {
+                    String bn = Hierarchy.normalize(b.name());
+                    if (Hierarchy.matchesPrefix(bn, focusPath)) {
+                        paths.add(bn);
+                    }
+                }
+                for (ApiGroup g : groups) {
+                    paths.add(Hierarchy.normalize(g.branch()));
+                }
+            }
         }
         paths.forEach(ensure);
         // A folder's own APIs and its ghost row are collected first, then attached by layoutFolders():
-        // APIs on top (in a collapsible bucket when the folder also has sub-folders), sub-folders at the bottom.
+        // APIs (and Visual Clusters) on top, ghost row next, sub-folders at the bottom.
         Map<Node, List<Node>> ownApis = new LinkedHashMap<>();
         Map<Node, Node> ghostRows = new HashMap<>();
         for (ApiGroup g : groups) {
             Node leaf = nodes.get("F" + Hierarchy.key(g.branch()));
+            if (leaf == null) {
+                continue;
+            }
             Node n = new Node(Node.Kind.GROUP, g, Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 48),
                     Audit.display(g), "G" + g.gid(), 0);
             nodes.put(n.key, n);
@@ -442,7 +510,8 @@ public final class BranchTree {
                         name + " · " + c[0] + " API · " + v.summary(), v.level(), "F" + k, i + 1, meta);
                 nodes.put(n.key, n);
                 parent.add(n);
-                boolean visible = Boolean.TRUE.equals(reachable.get(parent)) && !collapsed.contains(n.key);
+                boolean visible = Boolean.TRUE.equals(reachable.get(parent))
+                        && (focusPath != null || !collapsed.contains(n.key));
                 reachable.put(n, visible);
                 if (visible) {
                     expand.add(n);
@@ -459,9 +528,8 @@ public final class BranchTree {
     }
 
     /**
-     * Re-orders every folder's children: the folder's own APIs first (wrapped in a collapsible
-     * {@link Node.Kind#APIS} bucket when the folder also has sub-folders, so they fold away in one click),
-     * then the ghost row, then the sub-folders at the bottom.
+     * Re-orders every folder's children: the folder's own APIs (and Visual Clusters) first — wrapped in a
+     * collapsible {@link Node.Kind#APIS} bucket when the folder also has sub-folders — then ghosts, then sub-folders.
      */
     private void layoutFolders(Map<Object, Node> nodes, Map<Node, List<Node>> ownApis, Map<Node, Node> ghostRows,
                                Map<Node, Boolean> reachable, List<Node> expand) {
@@ -493,7 +561,52 @@ public final class BranchTree {
                 }
                 apiParent = bucket;
             }
+
+            // Group visual clusters inside this branch's API area (never modifying branch paths)
+            String branchPath = folder.payload instanceof String s ? s : "";
+            List<themythofcrawl.model.GroupCluster> branchClusters = engine.clustersInBranch(branchPath);
+            Set<Integer> clusteredGids = new HashSet<>();
+            if (!branchClusters.isEmpty() && !apis.isEmpty()) {
+                Map<Integer, Node> byGid = new LinkedHashMap<>();
+                for (Node n : apis) {
+                    if (n.payload instanceof ApiGroup g) {
+                        byGid.put(g.gid(), n);
+                    }
+                }
+                for (themythofcrawl.model.GroupCluster cl : branchClusters) {
+                    List<Node> members = new ArrayList<>();
+                    for (int gid : cl.gids()) {
+                        Node member = byGid.get(gid);
+                        if (member != null && clusteredGids.add(gid)) {
+                            members.add(member);
+                        }
+                    }
+                    if (!members.isEmpty()) {
+                        Node clNode = clusterNode(folder, cl, members);
+                        nodes.put(clNode.key, clNode);
+                        apiParent.add(clNode);
+                        boolean clOpen = apisOpen && !cl.collapsed();
+                        reachable.put(clNode, clOpen);
+                        if (clOpen) {
+                            expand.add(clNode);
+                        }
+                        for (Node m : members) {
+                            if (clOpen && expanded.contains(m.key)) {
+                                fillGroup(m, nodes);
+                                expand.add(m);
+                            } else {
+                                m.lazy();
+                            }
+                            clNode.add(m);
+                        }
+                    }
+                }
+            }
+
             for (Node n : apis) {
+                if (n.payload instanceof ApiGroup g && clusteredGids.contains(g.gid())) {
+                    continue;
+                }
                 if (apisOpen && expanded.contains(n.key)) {
                     fillGroup(n, nodes);
                     expand.add(n);
@@ -517,6 +630,24 @@ public final class BranchTree {
         }
     }
 
+    private static Node clusterNode(Node folder, themythofcrawl.model.GroupCluster cl, List<Node> members) {
+        List<ApiGroup> gs = new ArrayList<>(members.size());
+        int pending = 0;
+        for (Node n : members) {
+            ApiGroup g = (ApiGroup) n.payload;
+            gs.add(g);
+            if (g.pending()) {
+                pending++;
+            }
+        }
+        Audit.Verdict v = Audit.branch(gs);
+        String count = gs.size() + " API";
+        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "CỤM", count, v.summary(),
+                pending > 0 ? String.valueOf(pending) : null, null);
+        return new Node(Node.Kind.CLUSTER, cl, "[CỤM] " + cl.name() + " · " + count, v.level(),
+                "C" + cl.id(), folder.depth, meta);
+    }
+
     private static Node apisBucket(Node folder, List<Node> apis) {
         List<ApiGroup> gs = new ArrayList<>(apis.size());
         int pending = 0;
@@ -535,13 +666,17 @@ public final class BranchTree {
                 bucketKey(folder.key), folder.depth, meta);
     }
 
-    /** The APIs held by an {@link Node.Kind#APIS} bucket (the folder's own APIs, not its sub-folders'). */
+    /** The APIs held by an {@link Node.Kind#APIS} bucket or {@link Node.Kind#CLUSTER} node. */
     public static List<ApiGroup> directGroups(Node bucket) {
         List<ApiGroup> out = new ArrayList<>();
         if (bucket != null) {
             for (int i = 0; i < bucket.getChildCount(); i++) {
-                if (bucket.getChildAt(i) instanceof Node c && c.payload instanceof ApiGroup g) {
-                    out.add(g);
+                if (bucket.getChildAt(i) instanceof Node c) {
+                    if (c.payload instanceof ApiGroup g) {
+                        out.add(g);
+                    } else if (c.kind == Node.Kind.CLUSTER) {
+                        out.addAll(directGroups(c));
+                    }
                 }
             }
         }
@@ -626,7 +761,7 @@ public final class BranchTree {
         return null;
     }
 
-    /** APIs of every selected row (a folder brings all its APIs). */
+    /** APIs of every selected row (a folder brings all its APIs; a cluster brings its member APIs). */
     public List<ApiGroup> selectedGroups() {
         Set<ApiGroup> out = new LinkedHashSet<>();
         TreePath[] paths = tree.getSelectionPaths();
@@ -634,10 +769,18 @@ public final class BranchTree {
             for (TreePath p : paths) {
                 Node n = (Node) p.getLastPathComponent();
                 if (n.kind == Node.Kind.ROOT) {
-                    out.addAll(engine.groups());
+                    if (focusPath == null) {
+                        out.addAll(engine.groups());
+                    } else {
+                        for (ApiGroup g : engine.groups()) {
+                            if (matchesFocus(g.branch())) {
+                                out.add(g);
+                            }
+                        }
+                    }
                 } else if (n.kind == Node.Kind.FOLDER) {
                     out.addAll(engine.groupsUnder((String) n.payload));
-                } else if (n.kind == Node.Kind.APIS) {
+                } else if (n.kind == Node.Kind.APIS || n.kind == Node.Kind.CLUSTER) {
                     out.addAll(directGroups(n));
                 } else {
                     ApiGroup g = groupOf(n);
@@ -650,7 +793,7 @@ public final class BranchTree {
         return new ArrayList<>(out);
     }
 
-    /** Branch of the selected row (a folder / its API bucket, or the branch of the selected API). */
+    /** Branch of the selected row (a folder / its API bucket / cluster, or the branch of the selected API). */
     public String selectedBranch() {
         Node n = selectedNode();
         if (n == null) {
@@ -658,6 +801,9 @@ public final class BranchTree {
         }
         if (n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
             return (String) n.payload;
+        }
+        if (n.kind == Node.Kind.CLUSTER && n.payload instanceof themythofcrawl.model.GroupCluster cl) {
+            return cl.branchPath();
         }
         ApiGroup g = groupOf(n);
         return g != null ? g.branch() : null;
@@ -695,13 +841,14 @@ public final class BranchTree {
         return false;
     }
 
-    /** Open (true) or close every folder (and every "API của nhánh" bucket). */
+    /** Open (true) or close every folder (and every "API của nhánh" bucket and cluster). */
     public void expandFolders(boolean open) {
         if (open) {
             collapsed.clear();
             for (int i = 0; i < tree.getRowCount(); i++) {
                 Node n = (Node) tree.getPathForRow(i).getLastPathComponent();
-                if (n.kind == Node.Kind.ROOT || n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
+                if (n.kind == Node.Kind.ROOT || n.kind == Node.Kind.FOLDER
+                        || n.kind == Node.Kind.APIS || n.kind == Node.Kind.CLUSTER) {
                     tree.expandRow(i);
                 }
             }

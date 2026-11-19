@@ -38,7 +38,10 @@ public final class PlacementBook {
         DUP("⧉ Gặp API trùng ở chỗ mới · chờ quyết định"),
         DUP_KEEP("⧉ Giữ API trùng ở chỗ mới"),
         HIDE("🙈 Ẩn khỏi màn hình crawl"),
-        SHOW("👁 Hiện lại");
+        SHOW("👁 Hiện lại"),
+        PROMOTE_ORIGIN("★ Đặt làm API GỐC định hình"),
+        TAG_REFRESH("🏷 Gắn/gỡ tag REFRESH"),
+        REFRESH_SKIP("↻ Tự bỏ qua bản lặp REFRESH");
 
         public final String label;
 
@@ -56,14 +59,20 @@ public final class PlacementBook {
         public String place;
         public boolean placeConfirmed;
         public Integer gid;
+        public Integer originGid;
+        public String originBranch;
+        public String originAt;
         public boolean pending;
         public int deleted;
         public String deletedAt;
         public int seen;
         public int skipped;
+        public int refreshCount;
         public String lastSeen;
         public String lastFoundAt;
         public int nextNo;
+        public final java.util.LinkedHashSet<String> tags = new java.util.LinkedHashSet<>();
+        public final List<String> triggeredByActions = new ArrayList<>();
         public final List<String[]> history = new ArrayList<>();   // [time, place]
 
         Record(String key) {
@@ -86,14 +95,20 @@ public final class PlacementBook {
             m.put("place", place);
             m.put("place_confirmed", placeConfirmed);
             m.put("gid", gid);
+            m.put("origin_gid", originGid);
+            m.put("origin_branch", originBranch);
+            m.put("origin_at", originAt);
             m.put("pending", pending);
             m.put("deleted", deleted);
             m.put("deleted_at", deletedAt);
             m.put("seen", seen);
             m.put("skipped", skipped);
+            m.put("refresh_count", refreshCount);
             m.put("last_seen", lastSeen);
             m.put("last_found_at", lastFoundAt);
             m.put("next_no", nextNo);
+            m.put("tags", new ArrayList<>(tags));
+            m.put("triggered_by", new ArrayList<>(triggeredByActions));
             List<Object> h = new ArrayList<>();
             for (String[] e : history) {
                 h.add(List.of(e[0], e[1]));
@@ -169,8 +184,69 @@ public final class PlacementBook {
         if (r != null) {
             r.gid = gid;
             r.pending = pending;
+            if (r.originGid == null && gid != null) {
+                r.originGid = gid;
+                r.originAt = Clock.stamp();
+            }
             dirty = true;
         }
+    }
+
+    public synchronized void setOrigin(String key, Integer originGid, String originBranch) {
+        Record r = entries.get(key);
+        if (r != null) {
+            r.originGid = originGid;
+            if (originBranch != null) {
+                r.originBranch = originBranch;
+            }
+            if (r.originAt == null) {
+                r.originAt = Clock.stamp();
+            }
+            if (originGid != null) {
+                r.gid = originGid;
+            }
+            dirty = true;
+        }
+    }
+
+    public synchronized boolean setTag(String key, String tagId, boolean present) {
+        Record r = entries.get(key);
+        if (r == null || Text.blank(tagId)) {
+            return false;
+        }
+        String norm = themythofcrawl.model.ApiTagCatalog.normalizeId(tagId);
+        boolean changed = present ? r.tags.add(norm) : r.tags.remove(norm);
+        if (changed) {
+            dirty = true;
+        }
+        return changed;
+    }
+
+    public synchronized boolean hasTag(String key, String tagId) {
+        Record r = entries.get(key);
+        if (r == null || Text.blank(tagId)) {
+            return false;
+        }
+        return r.tags.contains(themythofcrawl.model.ApiTagCatalog.normalizeId(tagId));
+    }
+
+    public synchronized void noteRefresh(String key, String actionLabel, String foundAt) {
+        Record r = entries.get(key);
+        if (r == null) {
+            return;
+        }
+        r.refreshCount++;
+        if (!Text.blank(actionLabel) && !r.triggeredByActions.contains(actionLabel)) {
+            r.triggeredByActions.add(actionLabel);
+            while (r.triggeredByActions.size() > 15) {
+                r.triggeredByActions.remove(0);
+            }
+        }
+        r.lastSeen = Clock.stamp();
+        if (foundAt != null) {
+            r.lastFoundAt = foundAt;
+        }
+        dirty = true;
     }
 
     public synchronized void setPending(String key, boolean pending) {
@@ -207,6 +283,8 @@ public final class PlacementBook {
         r.gid = remainingGid;
         if (remainingGid == null) {
             r.pending = false;
+        } else if (r.originGid == null || !r.originGid.equals(remainingGid)) {
+            // keep originGid if another live copy isn't replacing it yet; if origin was deleted and remaining exists, let Engine decide
         }
         r.deleted++;
         r.deletedAt = Clock.stamp();
@@ -241,6 +319,9 @@ public final class PlacementBook {
             if (r.place != null && Hierarchy.matchesPrefix(r.place, oldPrefix)) {
                 r.place = Hierarchy.replacePrefix(r.place, oldPrefix, newPrefix);
                 n++;
+            }
+            if (r.originBranch != null && Hierarchy.matchesPrefix(r.originBranch, oldPrefix)) {
+                r.originBranch = Hierarchy.replacePrefix(r.originBranch, oldPrefix, newPrefix);
             }
         }
         dirty = true;
@@ -342,14 +423,29 @@ public final class PlacementBook {
             r.placeConfirmed = Json.bool(rm, "place_confirmed", r.place != null);
             Object gid = rm.get("gid");
             r.gid = gid instanceof Number n && liveGids != null && liveGids.contains(n.intValue()) ? n.intValue() : null;
+            Object ogid = rm.get("origin_gid");
+            r.originGid = ogid instanceof Number n && liveGids != null && liveGids.contains(n.intValue()) ? n.intValue() : r.gid;
+            r.originBranch = Json.str(rm, "origin_branch", r.place);
+            r.originAt = Json.str(rm, "origin_at", null);
             r.pending = r.gid != null && Json.bool(rm, "pending", false);
             r.deleted = (int) Json.num(rm, "deleted", 0);
             r.deletedAt = Json.str(rm, "deleted_at", null);
             r.seen = (int) Json.num(rm, "seen", 0);
             r.skipped = (int) Json.num(rm, "skipped", 0);
+            r.refreshCount = (int) Json.num(rm, "refresh_count", 0);
             r.lastSeen = Json.str(rm, "last_seen", null);
             r.lastFoundAt = Json.str(rm, "last_found_at", null);
             r.nextNo = (int) Json.num(rm, "next_no", 0);
+            for (Object t : Json.list(rm, "tags")) {
+                if (t != null && !String.valueOf(t).isBlank()) {
+                    r.tags.add(themythofcrawl.model.ApiTagCatalog.normalizeId(String.valueOf(t)));
+                }
+            }
+            for (Object a : Json.list(rm, "triggered_by")) {
+                if (a != null && !String.valueOf(a).isBlank()) {
+                    r.triggeredByActions.add(String.valueOf(a));
+                }
+            }
             for (Object h : Json.list(rm, "history")) {
                 if (h instanceof List<?> l && l.size() == 2) {
                     r.history.add(new String[] {String.valueOf(l.get(0)), String.valueOf(l.get(1))});

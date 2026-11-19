@@ -43,12 +43,15 @@ import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.model.ApiTagCatalog;
 import themythofcrawl.model.Branch;
+import themythofcrawl.model.GroupCluster;
 import themythofcrawl.model.ResultState;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.model.RoleScopes;
 import themythofcrawl.ui.kit.Pill;
 import themythofcrawl.ui.kit.SearchField;
+import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
@@ -101,6 +104,12 @@ final class ApiTab {
     private final UiHost.Viewer respViewer;
     private final JComboBox<String> pathEditor = new JComboBox<>();
     private JButton filterDropdownBtn;
+    private JButton focusBtn;
+    private JPanel focusBanner;
+    private JLabel focusLabel;
+    private SegmentedToggle focusScopeToggle;
+    private String focusPath;
+    private boolean focusRecursive;
     private boolean expandedTabs = false;
     private boolean treeStale = true;
     private boolean branchStale = true;
@@ -119,7 +128,10 @@ final class ApiTab {
         reqViewer = ui.host.requestViewer(true);
         respViewer = ui.host.responseViewer();
         initFilterPills();
-        panel.add(actionBar(), BorderLayout.NORTH);
+        JPanel northWrap = new JPanel(new BorderLayout(0, 0));
+        northWrap.add(actionBar(), BorderLayout.NORTH);
+        northWrap.add(buildFocusBanner(), BorderLayout.SOUTH);
+        panel.add(northWrap, BorderLayout.NORTH);
 
         // left: branch tree + branch table (compact, no redundant bottom bar)
         tree.onChip((c, g, t, x, y) -> ui.chip(c, g, t, x, y));
@@ -376,8 +388,11 @@ final class ApiTab {
                 () -> toolsMenu().show(toolsRef[0], 0, toolsRef[0].getHeight()));
         toolsRef[0] = tools;
 
+        focusBtn = Ui.button("Tập trung", t -> Icons.focus(t.fg, 14), this::toggleFocusFromSelection);
+        focusBtn.setToolTipText("Chế độ Tập trung: chỉ hiển thị cây & bảng API trong nhánh đang chọn");
+
         search.setColumns(13);
-        search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh hoặc Excel STT (Ctrl+F)");
+        search.setToolTipText("Lọc nhanh bảng API theo #, method, path, nhánh, tag hoặc Excel STT (Ctrl+F)");
         search.onChange(q -> {
             groupModel.setTextFilter(q);
             updateFilterStrip();
@@ -385,7 +400,7 @@ final class ApiTab {
 
         JButton[] filterRef = new JButton[1];
         filterDropdownBtn = Ui.dropdown("Lọc: Tất cả", t -> Icons.withChevron(Icons.sliders(t.fg), t.fg),
-                "Lọc bảng API theo trạng thái (OK, Lệch, Bypass, Lỗi, Chưa gửi, Chờ XN) & Chế độ Nhánh",
+                "Lọc bảng API theo trạng thái, Tag (REFRESH...) & Phạm vi nhánh",
                 () -> filterPopupMenu().show(filterRef[0], 0, filterRef[0].getHeight()));
         filterRef[0] = filterDropdownBtn;
 
@@ -394,7 +409,7 @@ final class ApiTab {
 
         JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 1));
         leftActions.setOpaque(false);
-        for (java.awt.Component comp : new java.awt.Component[] {sendApi, sendMenu, actionMenuBtn, repMenu, branchBtn, tools}) {
+        for (java.awt.Component comp : new java.awt.Component[] {sendApi, sendMenu, actionMenuBtn, repMenu, branchBtn, focusBtn, tools}) {
             leftActions.add(comp);
         }
         JPanel rightMode = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 1));
@@ -407,6 +422,49 @@ final class ApiTab {
         bar.add(leftActions, BorderLayout.WEST);
         bar.add(rightMode, BorderLayout.EAST);
         return bar;
+    }
+
+    private JPanel buildFocusBanner() {
+        focusLabel = new JLabel("TẬP TRUNG");
+        focusLabel.setIcon(Icons.themed(t -> Icons.focus(t.accent.text(), 14)));
+        focusLabel.setIconTextGap(6);
+        focusScopeToggle = new SegmentedToggle(
+                new SegmentedToggle.Option("Chỉ nhánh này", "Chỉ hiện API nằm trực tiếp trong nhánh đang tập trung", t -> t.accent, null),
+                new SegmentedToggle.Option("Kèm nhánh con", "Hiện cả API trong các nhánh con bên dưới", t -> t.accent, null)
+        ).setFixedHeight(20).onChange(idx -> {
+            if (focusPath != null) {
+                setFocusBranch(focusPath, idx == 1);
+            }
+        });
+        JButton exitBtn = Ui.button("Thoát", t -> Icons.error(t.danger.text(), 12), this::clearFocusBranch);
+        exitBtn.setToolTipText("Thoát chế độ Tập trung, quay lại chế độ bình thường");
+        exitBtn.setPreferredSize(new Dimension(exitBtn.getPreferredSize().width, 20));
+
+        focusBanner = new JPanel(new BorderLayout(8, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.accent.fill());
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(1, 0, 1, 0, t.accent.border()),
+                        BorderFactory.createEmptyBorder(1, 8, 1, 6)));
+                if (focusLabel != null) {
+                    focusLabel.setFont(t.smallBoldFont);
+                    focusLabel.setForeground(t.accent.text());
+                }
+            }
+        };
+        focusBanner.setOpaque(true);
+        focusBanner.setPreferredSize(new Dimension(0, 26));
+        focusBanner.add(focusLabel, BorderLayout.CENTER);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 1));
+        right.setOpaque(false);
+        right.add(focusScopeToggle);
+        right.add(exitBtn);
+        focusBanner.add(right, BorderLayout.EAST);
+        focusBanner.setVisible(false);
+        return focusBanner;
     }
 
     private void initFilterPills() {
@@ -444,12 +502,43 @@ final class ApiTab {
             m.add(item);
         }
         m.addSeparator();
+        String curTag = groupModel.tagFilter();
+        javax.swing.JRadioButtonMenuItem allTags = new javax.swing.JRadioButtonMenuItem("Tag: Tất cả API", curTag == null);
+        allTags.addActionListener(e -> {
+            groupModel.setTagFilter(null);
+            updateFilterStrip();
+        });
+        m.add(allTags);
+        javax.swing.JRadioButtonMenuItem suspected = new javax.swing.JRadioButtonMenuItem(
+                "Tag: ? Gợi ý REFRESH / Đã gắn REFRESH", GroupTableModel.TAG_FILTER_SUSPECTED.equals(curTag));
+        suspected.addActionListener(e -> {
+            groupModel.setTagFilter(GroupTableModel.TAG_FILTER_SUSPECTED);
+            updateFilterStrip();
+        });
+        m.add(suspected);
+        for (ApiTagCatalog.TagDef td : engine.tagCatalog().all()) {
+            javax.swing.JRadioButtonMenuItem tItem = new javax.swing.JRadioButtonMenuItem(
+                    "Tag: [" + td.label() + "]", td.id().equalsIgnoreCase(curTag));
+            tItem.addActionListener(e -> {
+                groupModel.setTagFilter(td.id());
+                updateFilterStrip();
+            });
+            m.add(tItem);
+        }
+        m.add(Ui.item("Quản lý Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
+        m.addSeparator();
         javax.swing.JRadioButtonMenuItem allBranches = new javax.swing.JRadioButtonMenuItem(
-                "Phạm vi: Tất cả API (Mặc định)", viewMode.getSelectedIndex() == 0);
-        allBranches.addActionListener(e -> viewMode.setSelectedIndex(0));
+                "Phạm vi: Tất cả API (Mặc định)", focusPath == null && viewMode.getSelectedIndex() == 0);
+        allBranches.addActionListener(e -> {
+            clearFocusBranch();
+            viewMode.setSelectedIndex(0);
+        });
         javax.swing.JRadioButtonMenuItem selectedBranchOnly = new javax.swing.JRadioButtonMenuItem(
-                "Phạm vi: Chỉ theo Nhánh đang chọn", viewMode.getSelectedIndex() == 1);
-        selectedBranchOnly.addActionListener(e -> viewMode.setSelectedIndex(1));
+                "Phạm vi: Chỉ theo Nhánh đang chọn", focusPath == null && viewMode.getSelectedIndex() == 1);
+        selectedBranchOnly.addActionListener(e -> {
+            clearFocusBranch();
+            viewMode.setSelectedIndex(1);
+        });
         m.add(allBranches);
         m.add(selectedBranchOnly);
         return m;
@@ -591,7 +680,11 @@ final class ApiTab {
 
     void select(ApiGroup g, RoleResult r) {
         if (groupModel.rowOf(g) < 0) {
+            if (focusPath != null) {
+                clearFocusBranch();
+            }
             groupModel.setBranchFilter(null);
+            groupModel.setTagFilter(null);
             clearAuditFilters();
             viewMode.setSelectedIndex(0);
         }
@@ -606,12 +699,15 @@ final class ApiTab {
             return;
         }
         leftTabs.setSelectedIndex(0);
+        if (focusPath != null && !Hierarchy.matchesPrefix(branchPath, focusPath)) {
+            clearFocusBranch();
+        }
         if (treeStale) {
             treeStale = false;
             tree.rebuild(engine.config().showGhosts);
         }
         tree.selectBranchPath(branchPath);
-        if (viewMode.getSelectedIndex() == 1) {
+        if (focusPath == null && viewMode.getSelectedIndex() == 1) {
             groupModel.setBranchFilter(branchPath);
             updateFilterStrip();
         }
@@ -709,17 +805,97 @@ final class ApiTab {
         updateFilterStrip();
     }
 
+    void setFocusBranch(String path, boolean recursive) {
+        String clean = path == null || path.isBlank() ? null : Hierarchy.normalize(path);
+        if (clean == null) {
+            clearFocusBranch();
+            return;
+        }
+        focusPath = clean;
+        focusRecursive = recursive;
+        tree.setFocus(clean, recursive);
+        groupModel.setBranchFilter(clean, !recursive);
+        if (focusLabel != null) {
+            focusLabel.setText("TẬP TRUNG: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
+            focusLabel.setToolTipText("Đang cô lập hiển thị cho đường dẫn: " + clean);
+        }
+        if (focusScopeToggle != null) {
+            focusScopeToggle.setSelectedIndex(recursive ? 1 : 0, false);
+        }
+        if (focusBanner != null) {
+            focusBanner.setVisible(true);
+            focusBanner.revalidate();
+            focusBanner.repaint();
+        }
+        if (focusBtn != null) {
+            focusBtn.setText("Thoát Tập trung");
+        }
+        updateFilterStrip();
+        ui.flash("Đang tập trung vào nhánh: " + clean + (recursive ? " (kèm nhánh con)" : " (chỉ nhánh này)"));
+    }
+
+    void clearFocusBranch() {
+        if (focusPath == null && tree.focusPath() == null) {
+            return;
+        }
+        focusPath = null;
+        focusRecursive = false;
+        tree.clearFocus();
+        if (viewMode.getSelectedIndex() == 0) {
+            groupModel.setBranchFilter(null, false);
+        } else {
+            groupModel.setBranchFilter(ui.selectedBranch(), false);
+        }
+        if (focusBanner != null) {
+            focusBanner.setVisible(false);
+        }
+        if (focusBtn != null) {
+            focusBtn.setText("Tập trung");
+        }
+        updateFilterStrip();
+    }
+
+    String focusPath() {
+        return focusPath;
+    }
+
+    boolean focusRecursive() {
+        return focusRecursive;
+    }
+
+    private void toggleFocusFromSelection() {
+        if (focusPath != null) {
+            clearFocusBranch();
+            ui.flash("Đã thoát chế độ Tập trung — hiển thị lại toàn bộ cây");
+            return;
+        }
+        String target = ui.selectedBranch();
+        if (target == null || target.isBlank()) {
+            target = engine.activeBranch().name();
+        }
+        setFocusBranch(target, false);
+    }
+
     private void updateFilterStrip() {
         filterAll.setActive(activeFilters.isEmpty());
         for (Map.Entry<AuditLevel, Pill> en : filterPills.entrySet()) {
             en.getValue().setActive(activeFilters.contains(en.getKey()));
         }
         if (filterDropdownBtn != null) {
-            if (activeFilters.isEmpty()) {
-                filterDropdownBtn.setText(viewMode.getSelectedIndex() == 1 ? "Lọc: Theo Nhánh" : "Lọc: Tất cả");
-            } else {
-                filterDropdownBtn.setText("Lọc (" + activeFilters.size() + ")");
+            List<String> parts = new ArrayList<>();
+            if (!activeFilters.isEmpty()) {
+                parts.add(activeFilters.size() + " trạng thái");
             }
+            String tf = groupModel.tagFilter();
+            if (tf != null) {
+                parts.add(GroupTableModel.TAG_FILTER_SUSPECTED.equals(tf) ? "Tag: ?Refresh" : "Tag: " + tf);
+            }
+            if (focusPath != null) {
+                parts.add("Tập trung");
+            } else if (viewMode.getSelectedIndex() == 1) {
+                parts.add("Theo Nhánh");
+            }
+            filterDropdownBtn.setText(parts.isEmpty() ? "Lọc: Tất cả" : "Lọc: " + String.join(" · ", parts));
         }
         int shown = groupModel.getRowCount();
         int total = groupModel.total();
@@ -727,13 +903,20 @@ final class ApiTab {
     }
 
     private void showAll() {
+        if (focusPath != null) {
+            clearFocusBranch();
+        }
         viewMode.setSelectedIndex(0);
         groupModel.setBranchFilter(null);
+        groupModel.setTagFilter(null);
         branchTable.clearSelection();
         updateFilterStrip();
     }
 
     private void applyViewMode() {
+        if (focusPath != null) {
+            return;
+        }
         if (viewMode.getSelectedIndex() == 0) {
             groupModel.setBranchFilter(null);
         } else {
@@ -881,7 +1064,7 @@ final class ApiTab {
         switch (n.kind) {
             case ROOT -> {
                 findSendBranch.setText("Gửi Tất cả (" + engine.groups().size() + " API)");
-                if (viewMode.getSelectedIndex() == 1) {
+                if (focusPath == null && viewMode.getSelectedIndex() == 1) {
                     groupModel.setBranchFilter(null);
                 }
             }
@@ -890,9 +1073,15 @@ final class ApiTab {
                 findSendBranch.setText("Gửi \"" + Text.shortPath("/" + Hierarchy.leaf(p), 19).substring(1) + "\" ("
                         + engine.groupsUnder(p).size() + " API)");
                 findSendBranch.setToolTipText("Gửi đệ quy toàn bộ nhánh: " + p);
-                if (viewMode.getSelectedIndex() == 1) {
+                if (focusPath == null && viewMode.getSelectedIndex() == 1) {
                     groupModel.setBranchFilter(p);
                 }
+            }
+            case CLUSTER -> {
+                GroupCluster cl = (GroupCluster) n.payload;
+                int sz = tree.selectedGroups().size();
+                findSendBranch.setText("Gửi Cụm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
+                findSendBranch.setToolTipText("Cụm hiển thị trực quan: " + cl.name() + " (không đổi đường dẫn API)");
             }
             default -> {
                 ApiGroup g = BranchTree.groupOf(n);
@@ -1129,6 +1318,13 @@ final class ApiTab {
         m.add(Ui.item("Bật / Tắt Role cho " + n + " API đang chọn...",
                 Icons::sliders, () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, gs, null)));
         m.addSeparator();
+        m.add(ui.clusterMenu(gs));
+        m.add(ui.tagMenu(gs));
+        if (primary != null) {
+            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup,
+                    () -> ui.openLineage(primary, table, 16, 16)));
+        }
+        m.addSeparator();
         ui.placeItems(m, gs);
         m.addSeparator();
         m.add(Ui.item("Đổi Group Path cho API đang chọn...", Icons::folder, () -> ui.moveDialog(gs)));
@@ -1210,6 +1406,8 @@ final class ApiTab {
         m.add(Ui.item("Đổi Group Path cho API đang chọn...", Icons::folder, () -> ui.moveDialog(selectedOrScope())));
         m.add(Ui.item("Rebuild Roles cho API đang chọn (Áp dụng lại cấu hình Role)", Icons::refresh, () -> ui.rebuild(selectedOrScope())));
         m.add(Ui.item("Xem Request/Response của API Gốc (Acc Crawl)", Icons::pin, this::showOriginal));
+        m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
+        m.add(Ui.item("Quản lý Loại mục con & Biểu tượng (Folder/Link/Button/Icon)...", Icons::sliders, ui::openNodeTypeManager));
         m.addSeparator();
         m.add(Ui.item("Xuất Excel (.xlsx): STT / Method / Path / Vị trí...", Icons::excel, ui::exportExcel));
         m.add(Ui.item("Export Matrix JSON...", Icons::save, ui::exportMatrix));
@@ -1235,16 +1433,31 @@ final class ApiTab {
         m.add(Ui.item("Đẩy Nhánh đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
         m.add(Ui.item("Đẩy / Gửi Nhánh có chọn Role...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.addSeparator();
+        if (focusPath != null) {
+            m.add(Ui.item("Thoát chế độ Tập trung (" + Hierarchy.leaf(focusPath) + ")", Icons::focus, this::clearFocusBranch));
+        } else {
+            String selBranch = ui.selectedBranch();
+            String label = selBranch == null || selBranch.isBlank()
+                    ? "Tập trung vào Nhánh Đích hiện tại"
+                    : "Tập trung vào nhánh \"" + Hierarchy.leaf(selBranch) + "\"";
+            m.add(Ui.item(label, Icons::focus, this::toggleFocusFromSelection));
+        }
         m.add(Ui.item("Đặt làm ĐÍCH cho request mới", Icons::move, ui::destinationFromTree));
-        m.add(Ui.item("Thêm Sub-folder con vào Nhánh đang chọn...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
+        m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
         m.add(Ui.item("Thêm Nhánh mới cùng cấp...", Icons::plus, ui::nextSibling));
+        m.add(Ui.item("Đổi loại & Icon nhánh đang chọn...", Icons::sliders, () -> {
+            String b = ui.selectedBranch();
+            if (b != null) {
+                ui.editNodeTypeDialog(b);
+            }
+        }));
         m.add(Ui.item("Đổi tên Nhánh đang chọn...", Icons::edit, () -> {
             String b = ui.selectedBranch();
             if (b != null) {
                 ui.renameBranchDialog(b);
             }
         }));
-        m.add(Ui.item("Quản lý các cấp Sub-folder...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));
+        m.add(Ui.item("Quản lý các cấp & Loại Sub-folder...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));
         m.add(Ui.item("Xóa Nhánh đang chọn...", t -> Icons.trash(t.danger.text()), () -> ui.deleteBranchDialog(ui.selectedBranch())));
         m.addSeparator();
         m.add(Ui.item("Xem tất cả API (Bỏ lọc Nhánh)", Icons::show, this::showAll));

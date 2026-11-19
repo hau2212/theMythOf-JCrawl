@@ -81,6 +81,10 @@ public final class GroupCodec {
         m.put("dup_pending", g.dupPending());
         m.put("dup_no", g.dupNo());
         m.put("hidden", g.hidden());
+        m.put("captured_at_branch", g.capturedAtBranch());
+        m.put("tags", new ArrayList<>(g.tags()));
+        m.put("suspected_refresh", g.suspectedRefresh());
+        m.put("triggered_by_action", g.triggeredByAction());
         PlaceHint h = g.placeHint();
         if (h != null) {
             Map<String, Object> hm = new LinkedHashMap<>();
@@ -149,6 +153,17 @@ public final class GroupCodec {
         g.setDupPending(Json.bool(m, "dup_pending", false));
         g.setDupNo((int) Json.num(m, "dup_no", 1));
         g.setHidden(Json.bool(m, "hidden", false));
+        String capAt = Json.str(m, "captured_at_branch", null);
+        if (capAt != null && !capAt.isBlank()) {
+            g.setCapturedAtBranch(capAt);
+        }
+        for (Object t : Json.list(m, "tags")) {
+            if (t != null) {
+                g.addTag(String.valueOf(t));
+            }
+        }
+        g.setSuspectedRefresh(Json.bool(m, "suspected_refresh", false));
+        g.setTriggeredByAction(Json.str(m, "triggered_by_action", null));
         Map<String, Object> hm = Json.obj(m, "hint");
         if (!hm.isEmpty()) {
             g.setPlaceHint(new PlaceHint(Json.str(hm, "old", ""), Json.str(hm, "found", ""), Json.bool(hm, "old_missing", false),

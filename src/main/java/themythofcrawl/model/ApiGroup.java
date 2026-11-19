@@ -1,9 +1,12 @@
 package themythofcrawl.model;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import themythofcrawl.core.ActionEngine;
 import themythofcrawl.core.AuditLevel;
@@ -25,6 +28,7 @@ public final class ApiGroup {
     private final long createdMillis;
     private volatile int branchId;
     private volatile String branch;
+    private volatile String capturedAtBranch;
     private volatile Blob origRequest;
     private volatile Blob origResponse;
     private volatile Integer origStatus;
@@ -44,6 +48,9 @@ public final class ApiGroup {
     private volatile List<RoleResult> results = List.of();
     private volatile TargetEntry target;
     private final Map<String, Boolean> roleOverrides = new LinkedHashMap<>();
+    private final LinkedHashSet<String> tags = new LinkedHashSet<>();
+    private volatile boolean suspectedRefresh;
+    private volatile String triggeredByAction;
     private volatile Integer copyStt;
     private volatile String copiedLabel;
     private volatile String bookKey;
@@ -182,6 +189,52 @@ public final class ApiGroup {
     public synchronized void clearRoleOverrides() {
         roleOverrides.clear();
     }
+
+    public String capturedAtBranch() {
+        return capturedAtBranch != null ? capturedAtBranch : branch;
+    }
+
+    public void setCapturedAtBranch(String b) {
+        this.capturedAtBranch = b;
+    }
+
+    public synchronized Set<String> tags() {
+        return new LinkedHashSet<>(tags);
+    }
+
+    public synchronized boolean hasTag(String tagId) {
+        return tagId != null && tags.contains(ApiTagCatalog.normalizeId(tagId));
+    }
+
+    public synchronized boolean addTag(String tagId) {
+        if (Text.blank(tagId)) {
+            return false;
+        }
+        return tags.add(ApiTagCatalog.normalizeId(tagId));
+    }
+
+    public synchronized boolean removeTag(String tagId) {
+        if (Text.blank(tagId)) {
+            return false;
+        }
+        return tags.remove(ApiTagCatalog.normalizeId(tagId));
+    }
+
+    public synchronized void setTags(Collection<String> next) {
+        tags.clear();
+        if (next != null) {
+            for (String t : next) {
+                if (!Text.blank(t)) {
+                    tags.add(ApiTagCatalog.normalizeId(t));
+                }
+            }
+        }
+    }
+
+    public boolean suspectedRefresh() { return suspectedRefresh; }
+    public void setSuspectedRefresh(boolean s) { suspectedRefresh = s; }
+    public String triggeredByAction() { return triggeredByAction; }
+    public void setTriggeredByAction(String a) { triggeredByAction = a; }
 
     public Integer copyStt() { return copyStt; }
     public void setCopyStt(Integer n) { copyStt = n; }

@@ -832,6 +832,296 @@ public final class Icons {
         });
     }
 
+    public static Icon link(Color color, int size) {
+        return cached("link", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 1, y + s / 2 - 2, s / 2, 5);
+            g.drawRect(x + s / 2 - 1, y + s / 2 - 3, s / 2, 5);
+        });
+    }
+
+    public static Icon buttonNode(Color color, int size) {
+        return cached("btnNode", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 1, y + 3, s - 3, s - 6);
+            g.fillRect(x + 4, y + s / 2 - 1, s - 8, 2);
+        });
+    }
+
+    public static Icon iconNode(Color color, int size) {
+        return cached("iconNode", color, size, (c, g, x, y, s, col) -> {
+            int m = s / 2;
+            int[] xs = {x + m, x + s - 2, x + m, x + 2};
+            int[] ys = {y + 2, y + m, y + s - 2, y + m};
+            g.drawPolygon(xs, ys, 4);
+            g.fillRect(x + m - 1, y + m - 1, 2, 2);
+        });
+    }
+
+    public static Icon tabNode(Color color, int size) {
+        return cached("tabNode", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 1, y + 4, s - 3, s - 6);
+            g.fillRect(x + 1, y + 2, (s - 2) / 2, 3);
+        });
+    }
+
+    public static Icon modalNode(Color color, int size) {
+        return cached("modalNode", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 1, y + 2, s - 3, s - 4);
+            g.drawLine(x + 1, y + 5, x + s - 2, y + 5);
+            g.fillRect(x + s - 4, y + 3, 2, 1);
+        });
+    }
+
+    public static Icon formNode(Color color, int size) {
+        return cached("formNode", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 2, y + 2, s - 4, 3);
+            g.drawRect(x + 2, y + 7, s - 4, 3);
+            g.fillRect(x + s - 5, y + s - 3, 3, 2);
+        });
+    }
+
+    /** Crisp stacked-bars cluster glyph (distinct from folder icon). */
+    public static Icon cluster(Color color, int size) {
+        return cached("cluster", color, size, (c, g, x, y, s, col) -> {
+            g.drawLine(x + 2, y + 2, x + 2, y + s - 2);
+            g.drawLine(x + 2, y + 2, x + 4, y + 2);
+            g.drawLine(x + 2, y + s - 2, x + 4, y + s - 2);
+            g.fillRect(x + 5, y + 3, s - 7, 2);
+            g.fillRect(x + 5, y + s / 2 - 1, s - 7, 2);
+            g.fillRect(x + 5, y + s - 5, s - 9, 2);
+        });
+    }
+
+    /** Focus / isolate square crosshair glyph. */
+    public static Icon focus(Color color, int size) {
+        return cached("focus", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 2, y + 2, s - 5, s - 5);
+            int m = s / 2;
+            g.fillRect(x + m - 1, y + m - 1, 3, 3);
+            g.drawLine(x + m, y + 0, x + m, y + 2);
+            g.drawLine(x + m, y + s - 3, x + m, y + s - 1);
+            g.drawLine(x + 0, y + m, x + 2, y + m);
+            g.drawLine(x + s - 3, y + m, x + s - 1, y + m);
+        });
+    }
+
+    public static Icon tag(Color color, int size) {
+        return cached("tag", color, size, (c, g, x, y, s, col) -> {
+            Path2D p = new Path2D.Float();
+            p.moveTo(x + 2, y + 3);
+            p.lineTo(x + s - 5, y + 3);
+            p.lineTo(x + s - 2, y + s / 2.0);
+            p.lineTo(x + s - 5, y + s - 3);
+            p.lineTo(x + 2, y + s - 3);
+            p.closePath();
+            g.draw(p);
+            g.fillRect(x + 4, y + s / 2 - 1, 2, 2);
+        });
+    }
+
+    public static Icon star(Color color, int size) {
+        return cached("star", color, size, (c, g, x, y, s, col) -> {
+            double cx = x + s / 2.0;
+            double cy = y + s / 2.0;
+            double outer = s * 0.44;
+            double inner = s * 0.20;
+            Path2D p = new Path2D.Float();
+            for (int i = 0; i < 10; i++) {
+                double r = (i % 2 == 0) ? outer : inner;
+                double a = -Math.PI / 2.0 + i * Math.PI / 5.0;
+                double px = cx + Math.cos(a) * r;
+                double py = cy + Math.sin(a) * r;
+                if (i == 0) p.moveTo(px, py); else p.lineTo(px, py);
+            }
+            p.closePath();
+            g.fill(p);
+        });
+    }
+
+    public static Icon bell(Color color, int size) {
+        return cached("bell", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 3, y + 3, s - 6, s - 7);
+            g.drawLine(x + 2, y + s - 4, x + s - 2, y + s - 4);
+            g.fillRect(x + s / 2 - 1, y + s - 2, 2, 2);
+        });
+    }
+
+    public static Icon cart(Color color, int size) {
+        return cached("cart", color, size, (c, g, x, y, s, col) -> {
+            g.drawLine(x + 1, y + 3, x + 3, y + 3);
+            g.drawRect(x + 3, y + 4, s - 5, s - 8);
+            g.fillRect(x + 4, y + s - 3, 2, 2);
+            g.fillRect(x + s - 4, y + s - 3, 2, 2);
+        });
+    }
+
+    public static Icon lock(Color color, int size) {
+        return cached("lock", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 3, y + 6, s - 6, s - 8);
+            g.drawRect(x + 4, y + 2, s - 8, 4);
+        });
+    }
+
+    public static Icon key(Color color, int size) {
+        return cached("key", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 2, y + s / 2 - 2, 4, 4);
+            g.drawLine(x + 6, y + s / 2, x + s - 2, y + s / 2);
+            g.drawLine(x + s - 4, y + s / 2, x + s - 4, y + s / 2 + 2);
+            g.drawLine(x + s - 2, y + s / 2, x + s - 2, y + s / 2 + 2);
+        });
+    }
+
+    public static Icon database(Color color, int size) {
+        return cached("db", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 2, y + 2, s - 4, 3);
+            g.drawRect(x + 2, y + 5, s - 4, 3);
+            g.drawRect(x + 2, y + 8, s - 4, 3);
+        });
+    }
+
+    public static Icon shield(Color color, int size) {
+        return cached("shield", color, size, (c, g, x, y, s, col) -> {
+            Path2D p = new Path2D.Float();
+            p.moveTo(x + s / 2.0, y + 2);
+            p.lineTo(x + s - 2, y + 4);
+            p.lineTo(x + s - 3, y + s - 5);
+            p.lineTo(x + s / 2.0, y + s - 2);
+            p.lineTo(x + 3, y + s - 5);
+            p.lineTo(x + 2, y + 4);
+            p.closePath();
+            g.draw(p);
+        });
+    }
+
+    public static Icon terminal(Color color, int size) {
+        return cached("term", color, size, (c, g, x, y, s, col) -> {
+            g.drawRect(x + 1, y + 2, s - 3, s - 4);
+            g.drawLine(x + 3, y + 5, x + 5, y + 7);
+            g.drawLine(x + 5, y + 7, x + 3, y + 9);
+            g.drawLine(x + 7, y + 9, x + s - 4, y + 9);
+        });
+    }
+
+    public static Icon compare(Color color, int size) {
+        return cached("cmp", color, size, (c, g, x, y, s, col) -> {
+            g.drawLine(x + 2, y + 5, x + s - 2, y + 5);
+            g.drawLine(x + s - 5, y + 3, x + s - 2, y + 5);
+            g.drawLine(x + s - 5, y + 7, x + s - 2, y + 5);
+            g.drawLine(x + 2, y + s - 5, x + s - 2, y + s - 5);
+            g.drawLine(x + 5, y + s - 7, x + 2, y + s - 5);
+            g.drawLine(x + 5, y + s - 3, x + 2, y + s - 5);
+        });
+    }
+
+    /** Maps a semantic colorKey string ("info", "accent", "warn", "purple", "teal", "bad", "ok", "muted") to a Theme.Token. */
+    public static Theme.Token tokenForKey(Theme t, String colorKey) {
+        if (colorKey == null) {
+            return t.info;
+        }
+        return switch (colorKey.toLowerCase(java.util.Locale.ROOT)) {
+            case "accent" -> t.accent;
+            case "warn", "warning" -> t.warning;
+            case "purple", "dup" -> t.dup;
+            case "teal" -> t.teal;
+            case "bad", "danger" -> t.danger;
+            case "ok", "success" -> t.success;
+            case "muted", "neutral" -> t.neutral;
+            default -> t.info;
+        };
+    }
+
+    /** Resolves a NodeType's icon (custom image, monogram badge, or crisp vector icon). */
+    public static Icon nodeIcon(themythofcrawl.model.NodeTypeCatalog.NodeType nt, Theme t, int size) {
+        if (nt == null) {
+            return folder(t.info.text(), size);
+        }
+        Color col = tokenForKey(t, nt.colorKey()).text();
+        if ("image".equals(nt.iconKind()) && nt.imagePath() != null && !nt.imagePath().isBlank()) {
+            Icon img = imageIcon(nt.imagePath(), size);
+            if (img != null) {
+                return img;
+            }
+        }
+        if ("monogram".equals(nt.iconKind()) && nt.monogram() != null && !nt.monogram().isBlank()) {
+            return monogramIcon(nt.monogram(), tokenForKey(t, nt.colorKey()), size);
+        }
+        return vectorIcon(nt.iconKind(), col, size);
+    }
+
+    public static Icon vectorIcon(String kind, Color color, int size) {
+        if (kind == null) {
+            return folder(color, size);
+        }
+        return switch (kind.toLowerCase(java.util.Locale.ROOT)) {
+            case "link" -> link(color, size);
+            case "button" -> buttonNode(color, size);
+            case "icon" -> iconNode(color, size);
+            case "tab" -> tabNode(color, size);
+            case "modal" -> modalNode(color, size);
+            case "form" -> formNode(color, size);
+            case "star" -> star(color, size);
+            case "bell" -> bell(color, size);
+            case "cart" -> cart(color, size);
+            case "lock" -> lock(color, size);
+            case "key" -> key(color, size);
+            case "globe" -> globe(color);
+            case "database" -> database(color, size);
+            case "shield" -> shield(color, size);
+            case "tag" -> tag(color, size);
+            case "terminal" -> terminal(color, size);
+            case "cluster" -> cluster(color, size);
+            case "focus" -> focus(color, size);
+            default -> folder(color, size);
+        };
+    }
+
+    private static synchronized Icon monogramIcon(String letters, Theme.Token tok, int size) {
+        String key = "mono|" + letters + "|" + size + "|" + tok.text().getRGB() + "|" + tok.fillStrong().getRGB();
+        Icon have = CACHE.get(key);
+        if (have != null) {
+            return have;
+        }
+        Icon made = new Drawn(size, size) {
+            @Override
+            void draw(Component c, Graphics2D g, int x, int y) {
+                g.setColor(tok.fillStrong());
+                g.fillRect(x, y, size - 1, size - 1);
+                g.setColor(tok.border());
+                g.drawRect(x, y, size - 1, size - 1);
+                g.setColor(tok.text());
+                g.setFont(Theme.current().smallBoldFont.deriveFont(Math.max(8f, size - 4.5f)));
+                java.awt.FontMetrics fm = g.getFontMetrics();
+                int tw = fm.stringWidth(letters);
+                g.drawString(letters, x + Math.max(1, (size - tw) / 2), y + (size - fm.getHeight()) / 2 + fm.getAscent());
+            }
+        };
+        CACHE.put(key, made);
+        return made;
+    }
+
+    private static synchronized Icon imageIcon(String path, int size) {
+        String key = "img|" + path + "|" + size;
+        Icon have = CACHE.get(key);
+        if (have != null) {
+            return have;
+        }
+        try {
+            java.io.File f = new java.io.File(path);
+            if (!f.isFile()) {
+                return null;
+            }
+            java.awt.image.BufferedImage raw = javax.imageio.ImageIO.read(f);
+            if (raw == null) {
+                return null;
+            }
+            java.awt.Image scaled = raw.getScaledInstance(size, size, java.awt.Image.SCALE_SMOOTH);
+            Icon made = new javax.swing.ImageIcon(scaled);
+            CACHE.put(key, made);
+            return made;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     // ------------------------------------------------------------------ Theme-bound convenience overloads
     public static Icon copy(Theme t) { return copy(t.fg); }
     public static Icon send(Theme t) { return send(t.fg); }
@@ -881,6 +1171,11 @@ public final class Icons {
     public static Icon chevronDown(Theme t) { return chevronDown(t.fg); }
     public static Icon chevronRight(Theme t) { return chevronRight(t.fg); }
     public static Icon codeBraces(Theme t) { return codeBraces(t.fg); }
+    public static Icon cluster(Theme t) { return cluster(t.accent.text(), 14); }
+    public static Icon focus(Theme t) { return focus(t.info.text(), 14); }
+    public static Icon tag(Theme t) { return tag(t.warning.text(), 14); }
+    public static Icon star(Theme t) { return star(t.accent.text(), 14); }
+    public static Icon compare(Theme t) { return compare(t.info.text(), 14); }
 
     /** Paints two icons side-by-side (e.g. gear + dropdown chevron or folder + toggle arrow). */
     public static Icon pair(Icon left, Icon right, int gap) {

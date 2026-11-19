@@ -10,7 +10,7 @@ public final class Node extends DefaultMutableTreeNode {
      * {@code APIS}: collapsible bucket holding the APIs that sit directly in a folder which also has
      * sub-folders (payload = the folder path). Keeps APIs on top and sub-folders below instead of mixing them.
      */
-    public enum Kind { ROOT, FOLDER, APIS, GROUP, ORIG, ROLE, PLACE, GHOSTS, GHOST, LOADING, LOGBRANCH, LOGAPI, LOGSYS, LOGLINE }
+    public enum Kind { ROOT, FOLDER, APIS, CLUSTER, GROUP, ORIG, ROLE, PLACE, GHOSTS, GHOST, LOADING, LOGBRANCH, LOGAPI, LOGSYS, LOGLINE }
 
     /** Precomputed chip labels for folder / root rows so TreeRenderer allocates nothing while painting. */
     public record FolderMeta(String name, String levelChip, String countChip, String verdictChip, String pendingChip,

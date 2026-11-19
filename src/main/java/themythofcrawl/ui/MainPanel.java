@@ -215,6 +215,7 @@ public final class MainPanel {
 
     private JPanel buildHeader() {
         Config c = engine.config();
+        int h24 = Theme.current().scaled(24);
         captureToggle = new SegmentedToggle(
                 new SegmentedToggle.Option("Dừng", "Tạm dừng Capture Proxy", t -> t.slate,
                         (t, sel) -> Icons.circle(sel ? t.slate.onSolid() : t.muted, false), false),
@@ -223,6 +224,7 @@ public final class MainPanel {
                             Color dot = sel ? (pulseDim ? t.danger.border() : t.danger.base()) : t.muted;
                             return Icons.statusDot(dot, 10);
                         }, true));
+        captureToggle.setFixedHeight(24);
         captureToggle.setSelectedIndex(c.captureEnabled ? 1 : 0);
         captureToggle.onChange(idx -> update(x -> x.captureEnabled = idx == 1));
 
@@ -231,10 +233,12 @@ public final class MainPanel {
                         (t, sel) -> Icons.hide(sel ? t.slate.onSolid() : t.muted, 12), false),
                 new SegmentedToggle.Option("Gửi", "Tự động gửi ngay 1..N Roles khi bắt được API", t -> t.success,
                         (t, sel) -> Icons.send(sel ? t.success.onSolid() : t.success.text(), 12), false));
+        sendModeToggle.setFixedHeight(24);
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
 
-        queue.setPadding(2, 5, 2, 5);
+        queue.setPadding(2, 6, 2, 6);
+        queue.setFixedHeight(24);
         queue.onClick(() -> {
             if (queue.isEnabled()) {
                 engine.cancelPending("Đã hủy");
@@ -242,7 +246,9 @@ public final class MainPanel {
         });
 
         dest.setMaxSegments(2);
-        dest.setMaxLabelChars(10);
+        dest.setCellWidth(84);
+        dest.setCellHeight(24);
+        dest.setIconResolver(segPath -> Icons.nodeIcon(engine.nodeTypeOf(segPath), Theme.current(), 12));
         dest.onSegmentClick(seg -> {
             if (Hierarchy.normalize(seg).equals(Hierarchy.normalize(engine.activeBranch().name()))) {
                 destinationMenu();
@@ -251,11 +257,14 @@ public final class MainPanel {
             }
         });
         dest.onDropdown(this::destinationMenu);
+        dest.onQuickAdd(() -> addSubfolder(engine.activeBranch().name()));
 
-        todo.setPadding(2, 6, 2, 6);
+        todo.setPadding(2, 5, 2, 5);
+        todo.setFixedHeight(24);
         todo.onClick(this::todoMenu);
 
-        status.setPadding(2, 6, 2, 6);
+        status.setPadding(2, 5, 2, 5);
+        status.setFixedHeight(24);
         status.onClick(this::statusMenu);
 
         for (Pill chip : new Pill[] {rolesChip, branchChip, infoChip, hiddenChip, skippedChip, excelChip}) {
@@ -272,19 +281,26 @@ public final class MainPanel {
 
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
         spotlightBtn.setToolTipText("Tìm kiếm toàn cục API (#, path), Nhánh, Role (Ctrl+K)");
-        spotlightBtn.setMargin(new Insets(1, 4, 1, 4));
+        spotlightBtn.setMargin(new Insets(0, 0, 0, 0));
+        spotlightBtn.setPreferredSize(new Dimension(h24, h24));
         spotlightBtn.addActionListener(e -> spotlight.open());
+
         options.setIcon(Icons.themed(t -> Icons.withChevron(Icons.gear(t.fg), t.fg)));
-        options.setToolTipText("Tùy chọn bắt, tự gửi, giữ chỗ, trợ giúp & chẩn đoán...");
-        options.setMargin(new Insets(1, 4, 1, 4));
+        options.setToolTipText("Tùy chọn bắt, tự gửi, giữ chỗ, loại node, tag & trợ giúp...");
+        options.setMargin(new Insets(0, 4, 0, 4));
+        options.setPreferredSize(new Dimension(Theme.current().scaled(32), h24));
         options.addActionListener(e -> optionsMenu());
+
         detach.setIcon(Icons.themed(t -> Icons.window(t.fg)));
-        detach.setMargin(new Insets(1, 4, 1, 4));
+        detach.setMargin(new Insets(0, 0, 0, 0));
+        detach.setPreferredSize(new Dimension(h24, h24));
         detach.setToolTipText("Tách extension ra cửa sổ riêng");
         detach.addActionListener(e -> toggleDetach());
+
         workspace.setIcon(Icons.themed(t -> Icons.withChevron(Icons.folder(t.fg), t.fg)));
         workspace.setHorizontalTextPosition(SwingConstants.LEADING);
-        workspace.setMargin(new Insets(1, 4, 1, 4));
+        workspace.setMargin(new Insets(0, 4, 0, 4));
+        workspace.setPreferredSize(new Dimension(Theme.current().scaled(76), h24));
         workspace.addActionListener(e -> workspaceMenu());
 
         JPanel leftZone = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
@@ -293,7 +309,7 @@ public final class MainPanel {
         leftZone.add(sendModeToggle);
         leftZone.add(queue);
 
-        JLabel destLabel = new JLabel("Đích:", Icons.themed(t -> Icons.arrowRight(t.critical.text())), SwingConstants.LEFT) {
+        JLabel destLabel = new JLabel("Đích", Icons.themed(t -> Icons.arrowRight(t.critical.text())), SwingConstants.LEFT) {
             @Override
             public void updateUI() {
                 super.updateUI();
@@ -311,7 +327,7 @@ public final class MainPanel {
         centerZone.add(dest, BorderLayout.CENTER);
 
         ToolbarGroup actions = new ToolbarGroup(spotlightBtn, options, detach, workspace);
-        ((java.awt.FlowLayout) actions.getLayout()).setHgap(1);
+        ((java.awt.FlowLayout) actions.getLayout()).setHgap(2);
         ((java.awt.FlowLayout) actions.getLayout()).setVgap(0);
         JPanel rightZone = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         rightZone.setOpaque(false);
@@ -320,7 +336,7 @@ public final class MainPanel {
         rightZone.add(vSep());
         rightZone.add(actions);
 
-        JPanel row1 = new JPanel(new BorderLayout(3, 0));
+        JPanel row1 = new JPanel(new BorderLayout(2, 0));
         row1.setOpaque(false);
         row1.add(leftZone, BorderLayout.WEST);
         row1.add(centerZone, BorderLayout.CENTER);
@@ -377,7 +393,9 @@ public final class MainPanel {
         String name = b.name();
         if (!dest.path().equals(name)) {
             dest.setPath(name);
-            dest.setToolTipText("Request mới sẽ vào: " + name + "  (bấm cấp để chọn, bấm mũi tên để mở menu)");
+            dest.setToolTipText("Request mới sẽ vào: " + name + "  (bấm ô cấp để chọn, bấm nút mũi tên mở menu, bấm + thêm mục con)");
+        } else {
+            dest.refresh();
         }
 
         Engine.Stats st = engine.stats();
@@ -418,9 +436,11 @@ public final class MainPanel {
 
         rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
-        status.setText("API " + st.apis() + " · " + st.branches() + " nhánh · "
+        status.setText("API " + st.apis() + " · " + st.branches() + "N · "
                 + engine.roles().enabledCount() + "/" + engine.roles().count() + "R");
-        status.setToolTipText("Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
+        status.setToolTipText(st.apis() + " API · " + st.branches() + " nhánh · "
+                + engine.roles().enabledCount() + "/" + engine.roles().count()
+                + " Roles — Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
 
         infoChip.setVisible(st.info() > 0);
         if (st.info() > 0) {
@@ -462,16 +482,14 @@ public final class MainPanel {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Chọn đích từ danh sách...", Icons::folder, this::pickDestination));
         m.add(Ui.item("Lấy nhánh đang chọn trong cây", Icons::branch, this::destinationFromTree));
-        m.add(Ui.item("Nhánh con mới của đích...", Icons::plus, () -> {
-            String n = ask("Đường dẫn nhánh mới (ngăn cách bởi '>'), sẽ thành đích cho request mới:",
-                    engine.activeBranch().name() + " > ");
-            if (n != null && !n.replace(">", "").isBlank()) {
-                setDestination(n);
-            }
-        }));
-        m.add(Ui.item("Nhánh mới cùng cấp (nút / action tiếp theo)...", Icons::plus, this::nextSibling));
+        m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus,
+                () -> addSubfolder(engine.activeBranch().name())));
+        m.add(Ui.item("Thêm mục cùng cấp (action / nút tiếp theo)...", Icons::plus, this::nextSibling));
         m.add(Ui.item("Lên 1 cấp", Icons::arrowUp,
                 () -> setDestination(themythofcrawl.core.Hierarchy.parent(engine.activeBranch().name()))));
+        m.addSeparator();
+        m.add(Ui.item("Đổi loại & Icon của đích hiện tại...", Icons::sliders,
+                () -> editNodeTypeDialog(engine.activeBranch().name())));
         m.add(Ui.item("Đổi tên / sửa đường dẫn đích...", Icons::edit, () -> {
             Branch b = engine.activeBranch();
             String n = ask("Sửa đường dẫn của đích (các API trong nhánh này đổi theo):", b.name());
@@ -482,6 +500,7 @@ public final class MainPanel {
         JMenu more = new JMenu("Khác");
         more.add(Ui.item("Quản lý các cấp của đích (thêm / xóa / sửa / đổi thứ tự)...", Icons::gear,
                 () -> LevelsDialog.show(root, engine)));
+        more.add(Ui.item("Quản lý danh mục Loại Node & Icon...", Icons::sliders, this::openNodeTypeManager));
         more.add(Ui.item("Xóa nhánh đích...", t -> Icons.trash(t.danger.text()),
                 () -> deleteBranchDialog(engine.activeBranch().name())));
         m.add(more);
@@ -491,7 +510,7 @@ public final class MainPanel {
             m.addSeparator();
             m.add(Ui.item("Gần đây:", false, () -> { }));
             for (String p : recent.subList(0, Math.min(8, recent.size()))) {
-                m.add(Ui.item("   " + p, () -> setDestination(p)));
+                m.add(Ui.item("   " + p, t -> Icons.nodeIcon(engine.nodeTypeOf(p), t, 12), () -> setDestination(p)));
             }
         }
         m.show(dest, 0, dest.getHeight());
@@ -522,12 +541,19 @@ public final class MainPanel {
     }
 
     void nextSibling() {
-        String cur = engine.activeBranch().name();
-        String parent = themythofcrawl.core.Hierarchy.depth(cur) > 1 ? themythofcrawl.core.Hierarchy.parent(cur) : "";
-        String n = ask("Tên nút / action tiếp theo (cùng cấp với nhánh đích):", "");
-        if (n != null && !n.isBlank()) {
-            setDestination(parent.isEmpty() ? n : themythofcrawl.core.Hierarchy.append(parent, n));
+        NodeEditorDialog.AddResult res = NodeEditorDialog.showAdd(root, engine, engine.activeBranch().name(), true, true);
+        if (res == null) {
+            return;
         }
+        if (res.setAsDestination()) {
+            engine.setDestination(res.fullPath());
+        } else {
+            engine.findOrCreateBranch(res.fullPath(), false);
+        }
+        engine.setPathNodeType(res.fullPath(), res.typeId());
+        syncHeader();
+        tick(true);
+        flash((res.setAsDestination() ? "Đích mới: " : "Đã tạo nhánh: ") + res.fullPath());
     }
 
     private void todoMenu() {
@@ -570,6 +596,7 @@ public final class MainPanel {
             {"API đã xóa quay về chỗ cũ (giữ chỗ)", c.restoreKnownPlace, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.restoreKnownPlace = v},
             {"Gặp API trùng ở chỗ mới: hỏi giữ thêm bản (màu tím)", c.dupNewPlace, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.dupNewPlace = v},
             {"Hiện API đã xóa (giữ chỗ) trong cây", c.showGhosts, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.showGhosts = v},
+            {"Tự phát hiện API GET-sau-hành-động (gợi ý Tag REFRESH)", c.autoDetectRefresh, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.autoDetectRefresh = v},
         };
         for (Object[] t : toggles) {
             if (t == null) {
@@ -583,6 +610,8 @@ public final class MainPanel {
             m.add(it);
         }
         m.addSeparator();
+        m.add(Ui.item("Quản lý Loại Node & Icon (Folder / Link / Button...)...", Icons::sliders, this::openNodeTypeManager));
+        m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, this::openTagManager));
         JMenu helpMenu = new JMenu("Hướng dẫn & Trợ giúp");
         helpMenu.add(Ui.item("Bắt & gửi (Capture / Auto-Send)", Icons::info, () -> Ui.popover(options, "Bắt & gửi", Help.CAPTURE)));
         helpMenu.add(Ui.item("Đích của request mới (Sub-folder)", Icons::info, () -> Ui.popover(options, "Đích của request mới", Help.DEST)));
@@ -820,6 +849,10 @@ public final class MainPanel {
                     return new Scope(engine.groupsUnder((String) n.payload), "Nhánh \"" + n.payload + "\"");
                 case APIS:
                     return new Scope(BranchTree.directGroups(n), "API trực tiếp của nhánh \"" + n.payload + "\"");
+                case CLUSTER: {
+                    String cname = n.payload instanceof themythofcrawl.model.GroupCluster cl ? cl.name() : "Cụm";
+                    return new Scope(BranchTree.directGroups(n), "Cụm \"" + cname + "\"");
+                }
                 default:
                     ApiGroup g = BranchTree.groupOf(n);
                     if (g != null) {
@@ -989,16 +1022,151 @@ public final class MainPanel {
 
     void addSubfolder(String base) {
         String b = base != null ? base : engine.activeBranch().name();
-        String sub = ask("Thêm Sub-folder con bên dưới nhánh '" + b + "':\n(Có thể nhập nhiều cấp cách nhau bởi '>')", "Subfolder_mới");
-        if (sub == null || sub.isBlank()) {
+        NodeEditorDialog.AddResult res = NodeEditorDialog.showAdd(root, engine, b, false, true);
+        if (res == null) {
             return;
         }
-        String path = themythofcrawl.core.Hierarchy.append(b, sub);
-        if (confirmDialog("Đặt '" + path + "' làm ĐÍCH cho request mới luôn?")) {
-            setDestination(path);
+        if (res.setAsDestination()) {
+            engine.setDestination(res.fullPath());
         } else {
-            engine.findOrCreateBranch(path, false);
+            engine.findOrCreateBranch(res.fullPath(), false);
         }
+        engine.setPathNodeType(res.fullPath(), res.typeId());
+        syncHeader();
+        tick(true);
+        flash((res.setAsDestination() ? "Đích mới: " : "Đã tạo mục: ") + res.fullPath());
+    }
+
+    void editNodeTypeDialog(String path) {
+        if (path == null || path.isBlank()) {
+            return;
+        }
+        String typeId = NodeEditorDialog.showEditType(root, engine, path);
+        if (typeId != null) {
+            engine.setPathNodeType(path, typeId);
+            syncHeader();
+            tick(true);
+            flash("Đã đổi loại nhánh '" + Hierarchy.leaf(path) + "' sang " + engine.nodeTypes().byId(typeId).label());
+        }
+    }
+
+    void openNodeTypeManager() {
+        if (NodeTypeManagerDialog.show(root, engine)) {
+            syncHeader();
+            tick(true);
+        }
+    }
+
+    void openTagManager() {
+        TagManagerDialog.show(this);
+    }
+
+    void openLineage(ApiGroup g, Component anchor, int x, int y) {
+        if (g != null) {
+            LineageDialog.show(this, g);
+        }
+    }
+
+    void createClusterDialog(List<ApiGroup> gs) {
+        if (gs == null || gs.isEmpty()) {
+            info("Chọn ít nhất 1 API trước khi gom Cụm hiển thị.");
+            return;
+        }
+        String branch = gs.get(0).branch();
+        String name = ask("Tên Cụm hiển thị mới trong nhánh '" + branch + "'\n"
+                + "(Cụm chỉ gom gọn để dễ nhìn, KHÔNG đổi đường dẫn nhánh / Copy STT / Excel):",
+                "Cụm " + (engine.clustersInBranch(branch).size() + 1));
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        themythofcrawl.model.GroupCluster cl = engine.createCluster(branch, name.trim(), "accent", gs);
+        if (cl != null) {
+            tick(true);
+            flash("Đã gom " + cl.size() + " API vào Cụm [" + cl.name() + "] (giữ nguyên đường dẫn nhánh)");
+        } else {
+            info("Các API cần thuộc cùng một nhánh để gom vào cùng Cụm hiển thị.");
+        }
+    }
+
+    void editClusterDialog(themythofcrawl.model.GroupCluster cl) {
+        if (cl == null) {
+            return;
+        }
+        String name = ask("Đổi tên Cụm hiển thị (nhánh " + cl.branchPath() + "):", cl.name());
+        if (name != null && !name.isBlank()) {
+            engine.renameCluster(cl.id(), name.trim(), null);
+            tick(true);
+            flash("Đã đổi tên Cụm thành [" + name.trim() + "]");
+        }
+    }
+
+    JMenu clusterMenu(List<ApiGroup> gs) {
+        JMenu sub = new JMenu("Cụm hiển thị (Cluster)");
+        sub.setIcon(Icons.themed(Icons::cluster));
+        if (gs == null || gs.isEmpty()) {
+            sub.setEnabled(false);
+            return sub;
+        }
+        String branch = gs.get(0).branch();
+        sub.add(Ui.item("Gom " + gs.size() + " API vào Cụm mới...", Icons::plus, () -> createClusterDialog(gs)));
+        List<themythofcrawl.model.GroupCluster> existing = engine.clustersInBranch(branch);
+        if (!existing.isEmpty()) {
+            sub.addSeparator();
+            for (themythofcrawl.model.GroupCluster cl : existing) {
+                sub.add(Ui.item("Thêm vào Cụm [" + cl.name() + "] (" + cl.size() + " API)", Icons::cluster, () -> {
+                    if (engine.addToCluster(cl.id(), gs)) {
+                        tick(true);
+                        flash("Đã thêm vào Cụm [" + cl.name() + "]");
+                    }
+                }));
+            }
+        }
+        boolean anyInCluster = gs.stream().anyMatch(g -> engine.clusterOf(g.gid()) != null);
+        sub.addSeparator();
+        sub.add(Ui.item("Tách khỏi Cụm hiển thị", Icons::undo, anyInCluster, () -> {
+            int n = engine.removeFromCluster(gs);
+            if (n > 0) {
+                tick(true);
+                flash("Đã tách " + n + " API khỏi Cụm hiển thị");
+            }
+        }));
+        return sub;
+    }
+
+    JMenu tagMenu(List<ApiGroup> gs) {
+        JMenu sub = new JMenu("Gắn Tag & REFRESH");
+        sub.setIcon(Icons.themed(Icons::tag));
+        if (gs == null || gs.isEmpty()) {
+            sub.setEnabled(false);
+            return sub;
+        }
+        for (themythofcrawl.model.ApiTagCatalog.TagDef def : engine.tagCatalog().all()) {
+            boolean allHave = gs.stream().allMatch(g -> g.hasTag(def.id()));
+            JCheckBoxMenuItem item = new JCheckBoxMenuItem(def.id() + " — " + def.label(), allHave);
+            item.addActionListener(e -> {
+                boolean present = item.isSelected();
+                engine.setApiTag(gs, def.id(), present);
+                tick(true);
+                flash((present ? "Đã gắn" : "Đã gỡ") + " Tag [" + def.id() + "] cho " + gs.size() + " API");
+            });
+            sub.add(item);
+        }
+        sub.addSeparator();
+        sub.add(Ui.item("Gắn Tag tùy chỉnh...", Icons::plus, () -> {
+            String raw = ask("Nhập mã Tag mới (VD: AUTH, PAYMENT, NOISE):", "");
+            if (raw != null && !raw.isBlank()) {
+                String id = themythofcrawl.model.ApiTagCatalog.normalizeId(raw);
+                if (engine.tagCatalog().byId(id) == null) {
+                    engine.tagCatalog().upsert(new themythofcrawl.model.ApiTagCatalog.TagDef(id, raw.trim(), "info", "", false));
+                    engine.saveTagCatalog();
+                }
+                engine.setApiTag(gs, id, true);
+                tick(true);
+                flash("Đã gắn Tag [" + id + "]");
+            }
+        }));
+        sub.add(Ui.item("Quản lý Tag & Chính sách REFRESH...", Icons::gear, this::openTagManager));
+        return sub;
     }
 
     void renameBranchDialog(String prefix) {

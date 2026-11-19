@@ -23,7 +23,7 @@ public final class Diagnostics {
     private static String resolveVersion() {
         Package pkg = Diagnostics.class.getPackage();
         String v = pkg != null ? pkg.getImplementationVersion() : null;
-        return v != null && !v.isBlank() ? v : "2.0.0";
+        return v != null && !v.isBlank() ? v : "2.0.0-beta";
     }
 
     public static String lafName() {

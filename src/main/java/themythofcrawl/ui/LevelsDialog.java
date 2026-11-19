@@ -39,6 +39,21 @@ final class LevelsDialog {
         JList<String> list = new JList<>(model);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setFixedCellHeight(Theme.current().scaled(Theme.ROW_TABLE));
+        list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> l, Object val, int idx, boolean sel, boolean foc) {
+                javax.swing.JLabel lbl = (javax.swing.JLabel) super.getListCellRendererComponent(l, val, idx, sel, foc);
+                List<String> segs = new ArrayList<>();
+                for (int k = 0; k <= idx && k < model.size(); k++) {
+                    segs.add(model.get(k));
+                }
+                String segPath = Hierarchy.join(segs);
+                var nt = engine.nodeTypeOf(segPath);
+                lbl.setIcon(Icons.nodeIcon(nt, Theme.current(), 14));
+                lbl.setText("Cấp " + (idx + 1) + ": " + val + "   [" + nt.label() + "]");
+                return lbl;
+            }
+        });
         Runnable add = () -> {
             Object v = JOptionPane.showInputDialog(d, "Tên cấp mới (thêm sau cấp đang chọn):", "Subfolder_mới");
             if (v != null && !v.toString().isBlank()) {
@@ -52,6 +67,21 @@ final class LevelsDialog {
                 Object v = JOptionPane.showInputDialog(d, "Sửa tên cấp " + (i + 1) + ":", model.get(i));
                 if (v != null && !v.toString().isBlank()) {
                     model.set(i, v.toString().trim());
+                }
+            }
+        };
+        Runnable editType = () -> {
+            int i = list.getSelectedIndex();
+            if (i >= 0) {
+                List<String> segs = new ArrayList<>();
+                for (int k = 0; k <= i; k++) {
+                    segs.add(model.get(k));
+                }
+                String segPath = Hierarchy.join(segs);
+                String picked = NodeEditorDialog.showEditType(d, engine, segPath);
+                if (picked != null) {
+                    engine.setPathNodeType(segPath, picked);
+                    list.repaint();
                 }
             }
         };
@@ -85,10 +115,11 @@ final class LevelsDialog {
         d.setLayout(new BorderLayout(6, 6));
         JPanel north = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         north.add(Ui.dialogHeader("Các cấp của đích: " + b.name(),
-                "Cấp 1 ở trên cùng — thêm, sửa, xóa hoặc đổi thứ tự"), BorderLayout.NORTH);
+                "Cấp 1 ở trên cùng — thêm, sửa, đổi loại/icon, xóa hoặc đổi thứ tự"), BorderLayout.NORTH);
         JPanel tools = Ui.flow(FlowLayout.LEFT,
                 Ui.button("Thêm", t -> Icons.plus(t.success.text()), add),
-                Ui.button("Sửa", t -> Icons.edit(t.info.text()), edit),
+                Ui.button("Sửa tên", t -> Icons.edit(t.info.text()), edit),
+                Ui.button("Loại / Icon", t -> Icons.sliders(t.accent.text()), editType),
                 Ui.button("Xóa", t -> Icons.trash(t.danger.text()), del),
                 Ui.button("", t -> Icons.arrowUp(t.fg), "Đưa lên", () -> move.accept(-1)),
                 Ui.button("", t -> Icons.arrowDown(t.fg), "Đưa xuống", () -> move.accept(1)));

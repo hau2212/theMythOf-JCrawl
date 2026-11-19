@@ -33,11 +33,14 @@ import themythofcrawl.excel.HitLog;
 import themythofcrawl.excel.TargetEntry;
 import themythofcrawl.excel.TargetList;
 import themythofcrawl.model.ApiGroup;
+import themythofcrawl.model.ApiTagCatalog;
 import themythofcrawl.model.Blob;
 import themythofcrawl.model.Branch;
 import themythofcrawl.model.BranchRule;
 import themythofcrawl.model.Clock;
+import themythofcrawl.model.GroupCluster;
 import themythofcrawl.model.HeaderRule;
+import themythofcrawl.model.NodeTypeCatalog;
 import themythofcrawl.model.PlaceHint;
 import themythofcrawl.model.ResultState;
 import themythofcrawl.model.Role;
@@ -59,9 +62,14 @@ public final class Engine {
     public static final String PREF_CONFIG = "tmoc.config.v2";
     public static final String PREF_ROLES = "tmoc.roles.v1";
     public static final String PREF_ORIGINAL = "tmoc.original_profile.v1";
+    public static final String PREF_NODE_TYPES = "tmoc.nodetypes.v1";
+    public static final String PREF_TAGS = "tmoc.tags.v1";
 
     /** A message handed to the capture pipeline. */
     public record Message(Service service, byte[] request, byte[] response, String url) {
+    }
+
+    private record RecentAction(long ts, String method, String path, String resourceKey, String label) {
     }
 
     private final Bridge bridge;
@@ -71,6 +79,8 @@ public final class Engine {
     private final Logbook logbook = new Logbook();
     private final Roles roles = new Roles();
     private final ActionEngine actionEngine = new ActionEngine();
+    private final NodeTypeCatalog nodeTypes = new NodeTypeCatalog();
+    private final ApiTagCatalog tagCatalog = new ApiTagCatalog();
     private final Set<Integer> forceRawGids = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final ExecutorService captureExec;
     private final ThreadPoolExecutor sendExec;
@@ -90,6 +100,10 @@ public final class Engine {
     // ---- workspace state (guarded by this)
     private Storage storage = new MemoryStorage();
     private final List<Branch> branches = new ArrayList<>();
+    private final Map<String, String> pathNodeTypes = new LinkedHashMap<>();
+    private final List<GroupCluster> clusters = new ArrayList<>();
+    private int nextClusterId = 1;
+    private final java.util.Deque<RecentAction> recentActions = new java.util.ArrayDeque<>();
     private int activeBranchId = 1;
     private int nextBranchId = 2;
     private int nextGid = 1;
@@ -115,6 +129,8 @@ public final class Engine {
         compileFilters(config);
         syncActionEngine(config);
         loadRoles();
+        nodeTypes.loadJson(prefs.get(PREF_NODE_TYPES));
+        tagCatalog.loadJson(prefs.get(PREF_TAGS));
         captureExec = Executors.newSingleThreadExecutor(daemon("JCrawl-capture"));
         sendExec = new ThreadPoolExecutor(config.threads, config.threads, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
                 daemon("JCrawl-send"));
@@ -397,6 +413,22 @@ public final class Engine {
                 rs.add(Hierarchy.matchesPrefix(r.prefix(), o) ? new BranchRule(Hierarchy.replacePrefix(r.prefix(), o, n), r.roles()) : r);
             }
             branchRules = rs;
+            Map<String, String> updatedTypes = new LinkedHashMap<>();
+            for (Map.Entry<String, String> e : pathNodeTypes.entrySet()) {
+                String k = e.getKey();
+                if (Hierarchy.matchesPrefix(k, o)) {
+                    updatedTypes.put(Hierarchy.key(Hierarchy.replacePrefix(k, o, n)), e.getValue());
+                } else {
+                    updatedTypes.put(k, e.getValue());
+                }
+            }
+            pathNodeTypes.clear();
+            pathNodeTypes.putAll(updatedTypes);
+            for (GroupCluster cl : clusters) {
+                if (Hierarchy.matchesPrefix(cl.branchPath(), o)) {
+                    cl.setBranchPath(Hierarchy.replacePrefix(cl.branchPath(), o, n));
+                }
+            }
             stateDirty = true;
         }
         int places = book.renamePrefix(o, n);
@@ -415,6 +447,8 @@ public final class Engine {
         List<ApiGroup> matched;
         synchronized (this) {
             branches.removeIf(b -> Hierarchy.matchesPrefix(b.name(), clean));
+            clusters.removeIf(cl -> Hierarchy.matchesPrefix(cl.branchPath(), clean));
+            pathNodeTypes.entrySet().removeIf(e -> Hierarchy.matchesPrefix(e.getKey(), clean));
             if (branches.isEmpty()) {
                 branches.add(new Branch(nextBranchId++, parent, null));
             }
@@ -454,6 +488,362 @@ public final class Engine {
             paths.addAll(Hierarchy.levels(p));
         }
         return paths;
+    }
+
+    // =================================================================== node types (Folder / Link / Button / Icon ...)
+    public NodeTypeCatalog nodeTypes() {
+        return nodeTypes;
+    }
+
+    public void saveNodeTypes() {
+        prefs.set(PREF_NODE_TYPES, nodeTypes.toJson());
+        changes.structure();
+    }
+
+    public synchronized String explicitNodeTypeId(String path) {
+        if (Text.blank(path)) {
+            return null;
+        }
+        return pathNodeTypes.get(Hierarchy.key(path));
+    }
+
+    public NodeTypeCatalog.NodeType nodeTypeOf(String path) {
+        String explicit = explicitNodeTypeId(path);
+        return nodeTypes.resolveForPath(explicit, Hierarchy.leaf(path));
+    }
+
+    public void setPathNodeType(String path, String nodeTypeId) {
+        if (Text.blank(path)) {
+            return;
+        }
+        String key = Hierarchy.key(path);
+        synchronized (this) {
+            if (Text.blank(nodeTypeId)) {
+                pathNodeTypes.remove(key);
+            } else {
+                pathNodeTypes.put(key, nodeTypeId.trim().toLowerCase(java.util.Locale.ROOT));
+            }
+            stateDirty = true;
+        }
+        changes.structure();
+        changes.status();
+    }
+
+    // =================================================================== visual clusters (GroupCluster — zero path mutation)
+    public synchronized List<GroupCluster> clusters() {
+        return new ArrayList<>(clusters);
+    }
+
+    public synchronized List<GroupCluster> clustersInBranch(String branchPath) {
+        String key = Hierarchy.key(branchPath);
+        List<GroupCluster> out = new ArrayList<>();
+        for (GroupCluster cl : clusters) {
+            if (cl.branchKey().equals(key)) {
+                out.add(cl);
+            }
+        }
+        return out;
+    }
+
+    public synchronized GroupCluster clusterById(String clusterId) {
+        if (clusterId == null) {
+            return null;
+        }
+        for (GroupCluster cl : clusters) {
+            if (clusterId.equals(cl.id())) {
+                return cl;
+            }
+        }
+        return null;
+    }
+
+    public synchronized GroupCluster clusterOf(int gid) {
+        for (GroupCluster cl : clusters) {
+            if (cl.contains(gid)) {
+                return cl;
+            }
+        }
+        return null;
+    }
+
+    /** Gom một nhóm API trong cùng nhánh vào một Cụm hiển thị (KHÔNG đổi branch/path của API). */
+    public GroupCluster createCluster(String branchPath, String name, String colorKey, Collection<ApiGroup> gs) {
+        if (gs == null || gs.isEmpty()) {
+            return null;
+        }
+        String targetBranch = Text.blank(branchPath) ? gs.iterator().next().branch() : Hierarchy.normalize(branchPath);
+        String targetKey = Hierarchy.key(targetBranch);
+        List<Integer> memberGids = new ArrayList<>();
+        for (ApiGroup g : gs) {
+            if (g != null && Hierarchy.key(g.branch()).equals(targetKey)) {
+                memberGids.add(g.gid());
+            }
+        }
+        if (memberGids.isEmpty()) {
+            return null;
+        }
+        GroupCluster created;
+        synchronized (this) {
+            for (GroupCluster existing : clusters) {
+                for (int gid : memberGids) {
+                    existing.removeGid(gid);
+                }
+            }
+            clusters.removeIf(GroupCluster::isEmpty);
+            created = new GroupCluster("CL-" + (nextClusterId++), targetBranch, name, colorKey, false, memberGids);
+            clusters.add(created);
+            stateDirty = true;
+        }
+        changes.structure();
+        log("Đã gom " + memberGids.size() + " API vào Cụm hiển thị [" + created.name() + "] tại " + targetBranch
+                + " (không thay đổi đường dẫn nhánh).", null);
+        return created;
+    }
+
+    public boolean addToCluster(String clusterId, Collection<ApiGroup> gs) {
+        if (Text.blank(clusterId) || gs == null || gs.isEmpty()) {
+            return false;
+        }
+        int added = 0;
+        synchronized (this) {
+            GroupCluster target = clusterById(clusterId);
+            if (target == null) {
+                return false;
+            }
+            for (ApiGroup g : gs) {
+                if (g == null || !Hierarchy.key(g.branch()).equals(target.branchKey())) {
+                    continue;
+                }
+                for (GroupCluster other : clusters) {
+                    if (other != target) {
+                        other.removeGid(g.gid());
+                    }
+                }
+                if (target.addGid(g.gid())) {
+                    added++;
+                }
+            }
+            clusters.removeIf(GroupCluster::isEmpty);
+            if (added > 0) {
+                stateDirty = true;
+            }
+        }
+        if (added > 0) {
+            changes.structure();
+        }
+        return added > 0;
+    }
+
+    public int removeFromCluster(Collection<ApiGroup> gs) {
+        if (gs == null || gs.isEmpty()) {
+            return 0;
+        }
+        int removed = 0;
+        synchronized (this) {
+            for (ApiGroup g : gs) {
+                if (g == null) continue;
+                for (GroupCluster cl : clusters) {
+                    if (cl.removeGid(g.gid())) {
+                        removed++;
+                    }
+                }
+            }
+            clusters.removeIf(GroupCluster::isEmpty);
+            if (removed > 0) {
+                stateDirty = true;
+            }
+        }
+        if (removed > 0) {
+            changes.structure();
+        }
+        return removed;
+    }
+
+    public boolean renameCluster(String clusterId, String newName, String newColorKey) {
+        synchronized (this) {
+            GroupCluster cl = clusterById(clusterId);
+            if (cl == null) {
+                return false;
+            }
+            if (!Text.blank(newName)) {
+                cl.setName(newName);
+            }
+            if (!Text.blank(newColorKey)) {
+                cl.setColorKey(newColorKey);
+            }
+            stateDirty = true;
+        }
+        changes.structure();
+        return true;
+    }
+
+    public boolean toggleClusterCollapsed(String clusterId) {
+        synchronized (this) {
+            GroupCluster cl = clusterById(clusterId);
+            if (cl == null) {
+                return false;
+            }
+            cl.setCollapsed(!cl.collapsed());
+            stateDirty = true;
+        }
+        changes.structure();
+        return true;
+    }
+
+    public void setAllClustersCollapsed(boolean collapsed) {
+        synchronized (this) {
+            for (GroupCluster cl : clusters) {
+                cl.setCollapsed(collapsed);
+            }
+            stateDirty = true;
+        }
+        changes.structure();
+    }
+
+    /** Gỡ Cụm hiển thị: toàn bộ API bên trong trở lại hiển thị trực tiếp trong nhánh (không mất API). */
+    public boolean dissolveCluster(String clusterId) {
+        GroupCluster removed = null;
+        synchronized (this) {
+            for (int i = 0; i < clusters.size(); i++) {
+                if (clusterId.equals(clusters.get(i).id())) {
+                    removed = clusters.remove(i);
+                    stateDirty = true;
+                    break;
+                }
+            }
+        }
+        if (removed != null) {
+            changes.structure();
+            log("Đã gỡ Cụm hiển thị [" + removed.name() + "] — các API giữ nguyên trong nhánh " + removed.branchPath(), null);
+        }
+        return removed != null;
+    }
+
+    private synchronized void detachFromClusters(int gid) {
+        boolean changed = false;
+        for (GroupCluster cl : clusters) {
+            if (cl.removeGid(gid)) {
+                changed = true;
+            }
+        }
+        if (changed) {
+            clusters.removeIf(GroupCluster::isEmpty);
+            stateDirty = true;
+        }
+    }
+
+    // =================================================================== API tags & REFRESH policy
+    public ApiTagCatalog tagCatalog() {
+        return tagCatalog;
+    }
+
+    public void saveTagCatalog() {
+        prefs.set(PREF_TAGS, tagCatalog.toJson());
+        changes.structure();
+    }
+
+    /** Gắn hoặc gỡ tag cho một nhóm API (đồng bộ xuống PlacementBook cho endpoint tương ứng). */
+    public int setApiTag(Collection<ApiGroup> gs, String tagId, boolean present) {
+        if (gs == null || gs.isEmpty() || Text.blank(tagId)) {
+            return 0;
+        }
+        String norm = ApiTagCatalog.normalizeId(tagId);
+        int changed = 0;
+        Set<String> touchedKeys = new LinkedHashSet<>();
+        for (ApiGroup g : gs) {
+            if (g == null) continue;
+            boolean c = present ? g.addTag(norm) : g.removeTag(norm);
+            if (ApiTagCatalog.TAG_REFRESH.equals(norm) && present) {
+                g.setSuspectedRefresh(false);
+            }
+            if (c) {
+                touch(g);
+                changed++;
+            }
+            if (g.bookKey() != null) {
+                touchedKeys.add(g.bookKey());
+            }
+        }
+        for (String bk : touchedKeys) {
+            if (book.get(bk) != null) {
+                book.setTag(bk, norm, present);
+                if (ApiTagCatalog.TAG_REFRESH.equals(norm)) {
+                    PlacementBook.Record rec = book.get(bk);
+                    book.event(PlacementBook.Action.TAG_REFRESH, bk, rec.gid, rec.method, rec.path, null, null,
+                            (present ? "Gắn" : "Gỡ") + " tag [" + norm + "]");
+                }
+            }
+            // Đồng bộ tag REFRESH cho mọi bản sao cùng endpoint
+            if (ApiTagCatalog.TAG_REFRESH.equals(norm)) {
+                for (ApiGroup cp : copiesOf(bk)) {
+                    if (present ? cp.addTag(norm) : cp.removeTag(norm)) {
+                        cp.setSuspectedRefresh(false);
+                        touch(cp);
+                    }
+                }
+            }
+        }
+        if (changed > 0 || !touchedKeys.isEmpty()) {
+            synchronized (this) {
+                stateDirty = true;
+            }
+            changes.structure();
+        }
+        return changed;
+    }
+
+    public boolean toggleEndpointTag(String bookKey, String tagId, boolean present) {
+        if (Text.blank(bookKey) || Text.blank(tagId)) {
+            return false;
+        }
+        String norm = ApiTagCatalog.normalizeId(tagId);
+        boolean changed = book.setTag(bookKey, norm, present);
+        for (ApiGroup cp : copiesOf(bookKey)) {
+            if (present ? cp.addTag(norm) : cp.removeTag(norm)) {
+                if (ApiTagCatalog.TAG_REFRESH.equals(norm) && present) {
+                    cp.setSuspectedRefresh(false);
+                }
+                touch(cp);
+                changed = true;
+            }
+        }
+        if (changed) {
+            PlacementBook.Record rec = book.get(bookKey);
+            if (rec != null && ApiTagCatalog.TAG_REFRESH.equals(norm)) {
+                book.event(PlacementBook.Action.TAG_REFRESH, bookKey, rec.gid, rec.method, rec.path, null, null,
+                        (present ? "Gắn" : "Gỡ") + " tag [REFRESH]");
+            }
+            synchronized (this) {
+                stateDirty = true;
+            }
+            changes.structure();
+        }
+        return changed;
+    }
+
+    public List<PlacementBook.Record> taggedRecords(String tagId) {
+        String norm = Text.blank(tagId) ? null : ApiTagCatalog.normalizeId(tagId);
+        List<PlacementBook.Record> out = new ArrayList<>();
+        for (PlacementBook.Record r : book.records()) {
+            if (norm == null ? !r.tags.isEmpty() : r.tags.contains(norm)) {
+                out.add(r);
+            }
+        }
+        return out;
+    }
+
+    public Set<String> allUsedTags() {
+        Set<String> out = new LinkedHashSet<>();
+        for (ApiTagCatalog.TagDef t : tagCatalog.all()) {
+            out.add(t.id());
+        }
+        for (ApiGroup g : groups()) {
+            out.addAll(g.tags());
+        }
+        for (PlacementBook.Record r : book.records()) {
+            out.addAll(r.tags);
+        }
+        return out;
     }
 
     // =================================================================== groups
@@ -781,6 +1171,10 @@ public final class Engine {
                         hit.accept(HitLog.Result.DUP, new Object[] {earlier, ""});
                         book.ensure(pkey, method, svc.host(), path);
                         book.seen(pkey, standing, true);
+                        if (book.hasTag(pkey, ApiTagCatalog.TAG_REFRESH)) {
+                            RecentAction ra = findRecentAction(path, System.currentTimeMillis());
+                            book.noteRefresh(pkey, ra != null ? ra.label() : null, standing);
+                        }
                         if ("Manual".equals(source)) {
                             log("Skipped " + method + " " + url + " (duplicate endpoint)", null);
                         }
@@ -790,10 +1184,33 @@ public final class Engine {
             }
         }
 
+        // RefreshDetector: ghi nhận các Action API (POST/PUT/PATCH/DELETE) trong cửa sổ 6 giây
+        long nowMs = System.currentTimeMillis();
+        if (ActionEngine.isActionMethod(method)) {
+            recordRecentAction(nowMs, method, path);
+        }
+        RecentAction recentAct = "GET".equalsIgnoreCase(method) ? findRecentAction(path, nowMs) : null;
+
         // Placement: a deleted API that comes back returns to its remembered place ('giữ chỗ'); a duplicate
         // met at a new place asks whether to keep it there; new APIs wait (grey) for a confirmation.
         PlacementBook.Record rec = book.get(pkey);
         List<ApiGroup> cps = copiesOf(pkey);
+        boolean isTaggedRefresh = rec != null && rec.tags.contains(ApiTagCatalog.TAG_REFRESH);
+
+        // Chính sách REFRESH M2 (AUTO_SKIP_DUP): đã có API GỐC #1 -> bỏ qua bản lặp ở nhánh mới
+        if (isTaggedRefresh && !cps.isEmpty() && c.refreshPolicy == Config.RefreshPolicy.AUTO_SKIP_DUP) {
+            skip("refresh-tag");
+            book.noteRefresh(pkey, recentAct != null ? recentAct.label() : null, standing);
+            book.seen(pkey, standing, true);
+            ApiGroup origin = originOf(pkey);
+            book.event(PlacementBook.Action.REFRESH_SKIP, pkey, origin != null ? origin.gid() : null, method, path,
+                    standing, origin != null ? origin.branch() : rec.place,
+                    "Bỏ qua bản lặp [REFRESH]" + (recentAct != null ? " sau " + recentAct.label() : ""));
+            hit.accept(HitLog.Result.DUP, new Object[] {origin != null ? origin.gid() : null, "REFRESH bỏ qua"});
+            changes.structure();
+            return null;
+        }
+
         boolean pending = c.confirmNewApis;
         PlacementBook.Action action = pending ? PlacementBook.Action.PENDING : PlacementBook.Action.CAPTURE;
         PlaceHint hint = null;
@@ -819,7 +1236,8 @@ public final class Engine {
         Blob req = storage.put(gid, GroupCodec.ORIG_REQ, m.request());
         Blob resp = m.response() != null ? storage.put(gid, GroupCodec.ORIG_RESP, m.response()) : null;
         ApiGroup g = new ApiGroup(gid, svc, method, path, url, source, feat.id(), feat.name(), req, resp, Clock.hms(),
-                System.currentTimeMillis());
+                nowMs);
+        g.setCapturedAtBranch(standing);
         g.setTarget(target);
         g.setBookKey(pkey);
         g.setPending(pending);
@@ -839,20 +1257,41 @@ public final class Engine {
         if (autoProd != null && autoProd != gid) {
             g.setProducerGid(autoProd);
         }
-        book.ensure(pkey, method, svc.host(), path);
+        PlacementBook.Record ensured = book.ensure(pkey, method, svc.host(), path);
+        // Kế thừa tag đã gắn cho endpoint
+        for (String t : ensured.tags) {
+            g.addTag(t);
+        }
+        // Tự phát hiện GET chạy ngay sau hành động (suspected REFRESH)
+        if ("GET".equalsIgnoreCase(method) && recentAct != null) {
+            String resKey = ActionEngine.extractResourceKey(path);
+            boolean sameResource = !Text.blank(resKey) && resKey.equalsIgnoreCase(recentAct.resourceKey());
+            if (isTaggedRefresh) {
+                g.setTriggeredByAction(recentAct.label());
+                book.noteRefresh(pkey, recentAct.label(), standing);
+            } else if (c.autoDetectRefresh && (!cps.isEmpty() || sameResource)) {
+                g.setSuspectedRefresh(true);
+                g.setTriggeredByAction(recentAct.label());
+                book.noteRefresh(pkey, recentAct.label(), standing);
+            }
+        }
         g.setDupNo(book.nextCopyNo(pkey));
         g.setDupPending(!cps.isEmpty());
         if (cps.isEmpty()) {
             book.live(pkey, gid, pending);
+            book.setOrigin(pkey, gid, feat.name());
         }
         book.seen(pkey, standing, false);
         if (!pending) {
             book.setPlace(pkey, feat.name());
         }
         if (!cps.isEmpty()) {
-            ApiGroup first = cps.stream().min(Comparator.comparingInt(ApiGroup::dupNo)).orElse(cps.get(0));
+            ApiGroup first = originOf(pkey);
+            if (first == null) {
+                first = cps.stream().min(Comparator.comparingInt(ApiGroup::dupNo)).orElse(cps.get(0));
+            }
             book.event(action, pkey, gid, method, path, first.branch(), feat.name(),
-                    "bản #" + g.dupNo() + "; bản #" + first.dupNo() + " (API #" + first.gid() + ") đang ở " + first.branch());
+                    "bản #" + g.dupNo() + "; GỐC #" + first.dupNo() + " (API #" + first.gid() + ") đang ở " + first.branch());
         } else if (hint != null) {
             book.event(action, pkey, gid, method, path, hint.found(), feat.name(), "từng ở đây (đã xóa " + hint.deleted()
                     + " lần); vừa gặp tại " + hint.found() + (hint.oldMissing() ? "; nhánh cũ đã bị xóa nên được tạo lại" : ""));
@@ -874,13 +1313,32 @@ public final class Engine {
         g.origResult().setStatus(g.origStatus());
         g.origResult().setLength(g.origLength());
         Audit.recalc(g);
+
+        boolean autoHideRefresh = isTaggedRefresh && !cps.isEmpty() && c.refreshPolicy == Config.RefreshPolicy.AUTO_HIDE;
         synchronized (this) {
-            groups.put(gid, g);
+            if (autoHideRefresh) {
+                g.setHidden(true);
+                g.setDupPending(false);
+                g.setPending(false);
+                hidden.put(gid, g);
+            } else {
+                groups.put(gid, g);
+            }
             refreshSnapshot();
             dirtyGroups.add(g);
         }
         addCopy(g);
-        changes.added(g);
+        if (autoHideRefresh) {
+            book.event(PlacementBook.Action.HIDE, pkey, gid, method, path, feat.name(), null,
+                    "Tự ẩn theo chính sách [REFRESH] M4");
+            changes.structure();
+        } else {
+            // Chính sách REFRESH M3 (AUTO_CLUSTER): tự gom vào Cụm [Auto-Refresh] trong nhánh
+            if (isTaggedRefresh && c.refreshPolicy == Config.RefreshPolicy.AUTO_CLUSTER) {
+                autoClusterRefresh(g);
+            }
+            changes.added(g);
+        }
         String note = "";
         if (g.results().isEmpty()) {
             note += " (không có role nào bật - chỉ lưu API gốc)";
@@ -894,11 +1352,16 @@ public final class Engine {
         if (g.heldAtProxy()) {
             note += " [Đã chặn ở Proxy - Server giữ nguyên trạng thái cho tới khi bấm Gửi]";
         }
+        if (isTaggedRefresh) {
+            note += " [Tag REFRESH]";
+        } else if (g.suspectedRefresh()) {
+            note += " [Gợi ý REFRESH sau " + g.triggeredByAction() + "]";
+        }
         log("Bắt từ " + source + ": " + method + " " + url + " -> 1 API gốc + " + g.results().size() + " role" + note, gid);
-        if (c.autoRepeater) {
+        if (!autoHideRefresh && c.autoRepeater) {
             toRepeater(g, defaultTargets(g, false), false);
         }
-        if (c.autoSend) {
+        if (!autoHideRefresh && c.autoSend) {
             List<RoleResult> t = new ArrayList<>(g.results());
             if (c.autoSendOriginal) {
                 t.add(0, g.origResult());
@@ -908,6 +1371,51 @@ public final class Engine {
             }
         }
         return g;
+    }
+
+    private synchronized void recordRecentAction(long nowMs, String method, String path) {
+        String cleanPath = Text.stripQuery(path);
+        recentActions.addFirst(new RecentAction(nowMs, method, cleanPath, ActionEngine.extractResourceKey(path),
+                method + " " + Text.shortPath(cleanPath, 36)));
+        while (recentActions.size() > 16) {
+            recentActions.removeLast();
+        }
+    }
+
+    private synchronized RecentAction findRecentAction(String getPath, long nowMs) {
+        String resKey = ActionEngine.extractResourceKey(getPath);
+        RecentAction fallback = null;
+        var it = recentActions.iterator();
+        while (it.hasNext()) {
+            RecentAction ra = it.next();
+            if (nowMs - ra.ts() > 6000L) {
+                it.remove();
+                continue;
+            }
+            if (!Text.blank(resKey) && resKey.equalsIgnoreCase(ra.resourceKey())) {
+                return ra;
+            }
+            if (fallback == null) {
+                fallback = ra;
+            }
+        }
+        return fallback;
+    }
+
+    private void autoClusterRefresh(ApiGroup g) {
+        String branchPath = g.branch();
+        GroupCluster existing = null;
+        for (GroupCluster cl : clustersInBranch(branchPath)) {
+            if ("Auto-Refresh".equalsIgnoreCase(cl.name())) {
+                existing = cl;
+                break;
+            }
+        }
+        if (existing != null) {
+            addToCluster(existing.id(), List.of(g));
+        } else {
+            createCluster(branchPath, "Auto-Refresh", "warn", List.of(g));
+        }
     }
 
     private List<RoleResult> makeResults(ApiGroup g, List<RoleScopes.Indexed> eff, Config c) {
@@ -1693,6 +2201,7 @@ public final class Engine {
                 if (pushHistory) {
                     g.pushPlace(old);
                 }
+                detachFromClusters(g.gid());
             }
             if (confirm && g.pending()) {
                 g.setPending(false);
@@ -1703,6 +2212,10 @@ public final class Engine {
             if (changed || confirm) {
                 if (g.bookKey() != null && !g.pending()) {
                     book.setPlace(g.bookKey(), b.name());
+                    PlacementBook.Record rec = book.get(g.bookKey());
+                    if (rec != null && Integer.valueOf(g.gid()).equals(rec.originGid)) {
+                        book.setOrigin(g.bookKey(), g.gid(), b.name());
+                    }
                 }
                 book.event(action, g.bookKey(), g.gid(), g.method(), g.path(), old, b.name(),
                         Text.nz(note) + (confirm && !changed ? " (đã xác nhận)" : ""));
@@ -1722,6 +2235,131 @@ public final class Engine {
 
     public int moveToPath(Collection<ApiGroup> gs, String path, String note) {
         return moveToBranch(gs, findOrCreateBranch(path, false).id(), PlacementBook.Action.MOVE, true, note, true);
+    }
+
+    /** Trả về API GỐC định hình (#1) của một endpoint (ưu tiên originGid trong PlacementBook, sau đó bản có dupNo nhỏ nhất). */
+    public ApiGroup originOf(String bookKey) {
+        if (Text.blank(bookKey)) {
+            return null;
+        }
+        List<ApiGroup> cps = copiesOf(bookKey);
+        if (cps.isEmpty()) {
+            return null;
+        }
+        PlacementBook.Record rec = book.get(bookKey);
+        if (rec != null && rec.originGid != null) {
+            for (ApiGroup c : cps) {
+                if (c.gid() == rec.originGid) {
+                    return c;
+                }
+            }
+        }
+        return cps.stream()
+                .min(Comparator.comparingInt(ApiGroup::dupNo).thenComparingInt(ApiGroup::gid))
+                .orElse(cps.get(0));
+    }
+
+    /** Kiểm tra xem một API Group có phải là API GỐC định hình (#1) của endpoint đó hay không. */
+    public boolean isOrigin(ApiGroup g) {
+        if (g == null || Text.blank(g.bookKey())) {
+            return true;
+        }
+        ApiGroup origin = originOf(g.bookKey());
+        return origin == null || origin.gid() == g.gid();
+    }
+
+    /** Nâng một bản sao bất kỳ lên làm API GỐC định hình (#1), cập nhật PlacementBook và đánh số lại #1, #2, #3... */
+    public boolean promoteToOrigin(ApiGroup newOrigin) {
+        if (newOrigin == null || Text.blank(newOrigin.bookKey())) {
+            return false;
+        }
+        String key = newOrigin.bookKey();
+        List<ApiGroup> cps = copiesOf(key);
+        if (cps.isEmpty()) {
+            return false;
+        }
+        if (newOrigin.hidden()) {
+            show(List.of(newOrigin));
+        }
+        ApiGroup oldOrigin = originOf(key);
+        List<ApiGroup> ordered = new ArrayList<>();
+        ordered.add(newOrigin);
+        cps.stream()
+                .filter(c -> c.gid() != newOrigin.gid())
+                .sorted(Comparator.comparingInt(ApiGroup::dupNo).thenComparingInt(ApiGroup::gid))
+                .forEach(ordered::add);
+        for (int i = 0; i < ordered.size(); i++) {
+            ApiGroup c = ordered.get(i);
+            c.setDupNo(i + 1);
+            c.setDupTotal(ordered.size());
+            if (i == 0) {
+                c.setPending(false);
+                c.setDupPending(false);
+                c.setPlaceHint(null);
+            }
+            touch(c);
+        }
+        book.setOrigin(key, newOrigin.gid(), newOrigin.branch());
+        book.setPlace(key, newOrigin.branch());
+        book.setPending(key, false);
+        book.event(PlacementBook.Action.PROMOTE_ORIGIN, key, newOrigin.gid(), newOrigin.method(), newOrigin.path(),
+                oldOrigin != null ? oldOrigin.branch() : null, newOrigin.branch(),
+                "Đặt API #" + newOrigin.gid() + " làm GỐC định hình #1"
+                        + (oldOrigin != null && oldOrigin.gid() != newOrigin.gid() ? " (thay API #" + oldOrigin.gid() + ")" : ""));
+        changes.structure();
+        log("★ Đã đặt API #" + newOrigin.gid() + " (" + newOrigin.branch() + ") làm API GỐC định hình #1.", newOrigin.gid());
+        return true;
+    }
+
+    /** Sửa trực tiếp STT Copy của một API Group. */
+    public void setApiCopyStt(ApiGroup g, Integer stt) {
+        if (g == null) {
+            return;
+        }
+        g.setCopyStt(stt);
+        if (g.copiedLabel() != null) {
+            g.setCopiedLabel(copyLabel(g, false));
+        }
+        touch(g);
+        changes.structure();
+    }
+
+    /** Chỉ giữ lại API GỐC #1 (xác nhận nếu đang chờ) và ẩn tất cả các bản trùng #2..#N. */
+    public int keepOnlyOriginAndHideOthers(String bookKey) {
+        if (Text.blank(bookKey)) {
+            return 0;
+        }
+        ApiGroup origin = originOf(bookKey);
+        if (origin == null) {
+            return 0;
+        }
+        if (origin.hidden()) {
+            show(List.of(origin));
+        }
+        if (origin.pending() || origin.dupPending()) {
+            confirm(List.of(origin), "Xác nhận API GỐC định hình #1");
+        }
+        List<ApiGroup> others = copiesOf(bookKey).stream()
+                .filter(c -> c.gid() != origin.gid() && !c.hidden())
+                .toList();
+        return others.isEmpty() ? 0 : hide(others, "Chỉ giữ API GỐC #1 (" + Text.apiLabel(origin.gid()) + ")");
+    }
+
+    /** Di chuyển một bản sao về đúng nhánh của API GỐC định hình (hoặc vị trí giữ chỗ). */
+    public boolean moveCopyToOrigin(ApiGroup copy) {
+        if (copy == null || Text.blank(copy.bookKey())) {
+            return false;
+        }
+        ApiGroup origin = originOf(copy.bookKey());
+        PlacementBook.Record rec = book.get(copy.bookKey());
+        String dst = origin != null && origin.gid() != copy.gid()
+                ? origin.branch()
+                : (rec != null && rec.place != null ? rec.place : null);
+        if (Text.blank(dst)) {
+            return false;
+        }
+        moveToPath(List.of(copy), dst, "Đưa về nhánh của API GỐC #1");
+        return true;
     }
 
     /** Each API goes back to the branch it was in before its last move. */
@@ -1751,7 +2389,7 @@ public final class Engine {
                     return "Đã trả vị trí giữ chỗ về: " + (ev.src() == null ? "(trống)" : ev.src());
                 }
                 return "Endpoint của dòng này không còn trong bộ nhớ giữ chỗ.";
-            case MANUAL, FORGET, RENAME, DELETE, RECAPTURE:
+            case MANUAL, FORGET, RENAME, DELETE, RECAPTURE, PROMOTE_ORIGIN, TAG_REFRESH, REFRESH_SKIP:
                 return "Thao tác '" + ev.action().label + "' không hoàn tác tự động được.";
             default:
                 break;
@@ -1868,6 +2506,7 @@ public final class Engine {
                 hidden.remove(g.gid());
                 dirtyGroups.remove(g);
                 deletedGids.add(g.gid());
+                detachFromClusters(g.gid());
             }
             refreshSnapshot();
         }
@@ -1998,6 +2637,10 @@ public final class Engine {
             activeBranchId = 1;
             branches.clear();
             branches.add(new Branch(1, Hierarchy.DEFAULT_PATH, null));
+            clusters.clear();
+            nextClusterId = 1;
+            pathNodeTypes.clear();
+            recentActions.clear();
             stateDirty = true;
         }
         logbook.clearAll();
@@ -2054,6 +2697,9 @@ public final class Engine {
     public String copyLabel(ApiGroup g, boolean assign) {
         Config c = config;
         Object stt = g.target() != null ? g.target().stt() : null;
+        if (Text.blank(stt) && g.copyStt() != null) {
+            stt = g.copyStt();
+        }
         if (Text.blank(stt)) {
             if (c.copySttFallback == Config.CopyFallback.API) {
                 stt = g.gid();
@@ -2179,7 +2825,7 @@ public final class Engine {
 
     private String stateJson() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("version", 2);
+        m.put("version", 3);
         List<Object> bs = new ArrayList<>();
         for (Branch b : branches) {
             bs.add(Map.of("id", b.id(), "name", b.name(), "created", b.created()));
@@ -2197,6 +2843,13 @@ public final class Engine {
             rules.add(Map.of("prefix", r.prefix(), "roles", r.roles()));
         }
         m.put("branch_rules", rules);
+        m.put("path_node_types", new LinkedHashMap<>(pathNodeTypes));
+        List<Object> cls = new ArrayList<>();
+        for (GroupCluster cl : clusters) {
+            cls.add(cl.toMap());
+        }
+        m.put("clusters", cls);
+        m.put("next_cluster_id", nextClusterId);
         m.put("skipped", skipped);
         m.put("targets", targets == null ? null : targets.toJson());
         m.put("hits", hits.toJson());
@@ -2249,6 +2902,9 @@ public final class Engine {
             hidden.clear();
             copies.clear();
             branches.clear();
+            pathNodeTypes.clear();
+            clusters.clear();
+            recentActions.clear();
             seenKeys.clear();
             seenGid.clear();
             recentDest.clear();
@@ -2277,6 +2933,20 @@ public final class Engine {
                     seenGid.put(k, n.intValue());
                 }
             });
+            Json.obj(m, "path_node_types").forEach((k, v) -> {
+                if (v != null && !String.valueOf(v).isBlank()) {
+                    pathNodeTypes.put(k, String.valueOf(v));
+                }
+            });
+            for (Object o : Json.list(m, "clusters")) {
+                if (o instanceof Map<?, ?> cm) {
+                    GroupCluster cl = GroupCluster.fromMap((Map<String, Object>) cm);
+                    if (!cl.isEmpty()) {
+                        clusters.add(cl);
+                    }
+                }
+            }
+            nextClusterId = Math.max((int) Json.num(m, "next_cluster_id", clusters.size() + 1), clusters.size() + 1);
             skipped = (int) Json.num(m, "skipped", 0);
             for (ApiGroup g : loaded) {
                 if (g.hidden()) {
@@ -2312,6 +2982,71 @@ public final class Engine {
         }
         changes.structure();
         log("Đang dùng workspace " + next.name() + " (" + loaded.size() + " API) - " + next.location(), null);
+    }
+
+    /** Kết quả Ping kiểm tra Session còn sống hay đã hết hạn cho 1 Role. */
+    public record ProbeResult(String roleName, Integer status, long elapsedMs, String error) {
+        public boolean alive() {
+            return error == null && status != null && status >= 200 && status < 400;
+        }
+
+        public boolean dead() {
+            return error != null || (status != null && (status == 401 || status == 403));
+        }
+
+        public String badge() {
+            if (error != null && !error.isBlank()) {
+                return "ERR";
+            }
+            if (status == null) {
+                return "ERR";
+            }
+            if (status >= 200 && status < 400) {
+                return status + " LIVE";
+            }
+            if (status == 401) {
+                return "401 DEAD";
+            }
+            if (status == 403) {
+                return "403 DENY";
+            }
+            return String.valueOf(status);
+        }
+    }
+
+    /** Sends a lightweight one-off probe request for {@code role} using {@code sample} API without mutating group results. */
+    public ProbeResult probeRole(ApiGroup sample, Role role) {
+        if (sample == null || role == null) {
+            return new ProbeResult(role == null ? "" : role.name(), null, 0, "Thiếu API mẫu hoặc Role");
+        }
+        byte[] orig = requestOf(sample, sample.origResult());
+        if (orig == null || orig.length == 0) {
+            return new ProbeResult(role.name(), null, 0, "Không có dữ liệu request gốc");
+        }
+        try {
+            byte[] req = builder.build(orig, role.rules());
+            Bridge.Sent sent = bridge.send(sample.service(), req);
+            if (sent == null) {
+                return new ProbeResult(role.name(), null, 0, "Không nhận được phản hồi");
+            }
+            Integer status = sent.response() == null ? null : HttpBytes.statusCode(sent.response());
+            return new ProbeResult(role.name(), status, sent.elapsedMs(), sent.error());
+        } catch (Exception e) {
+            return new ProbeResult(role.name(), null, 0, e.getMessage());
+        }
+    }
+
+    /** Asynchronous wrapper over {@link #probeRole(ApiGroup, Role)} running on {@code sendExec}. */
+    public void probeRoleAsync(ApiGroup sample, Role role, java.util.function.Consumer<ProbeResult> onDone) {
+        if (closed) {
+            return;
+        }
+        sendExec.execute(() -> {
+            ProbeResult res = probeRole(sample, role);
+            if (onDone != null) {
+                onDone.accept(res);
+            }
+        });
     }
 
     public void close() {

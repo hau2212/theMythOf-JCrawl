@@ -32,9 +32,13 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
     public static final int EXCEL_COL = 15;
     public static final int DUP_COL = 16;
 
+    public static final String TAG_FILTER_SUSPECTED = "__SUSPECTED_REFRESH__";
+
     /** Empty = every status; non-empty = match any toggled status (including PENDING). */
     private final EnumSet<AuditLevel> auditFilters = EnumSet.noneOf(AuditLevel.class);
     private String prefix;
+    private boolean exactBranchOnly;
+    private String tagFilter;
     private String textFilter = "";
     private final Engine engine;
     private final Function<ApiGroup, Integer> hits;
@@ -48,8 +52,20 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
     }
 
     private boolean matches(ApiGroup g) {
-        if (prefix != null && !Hierarchy.matchesPrefix(g.branch(), prefix)) {
-            return false;
+        if (prefix != null) {
+            boolean ok = exactBranchOnly ? Hierarchy.same(g.branch(), prefix) : Hierarchy.matchesPrefix(g.branch(), prefix);
+            if (!ok) {
+                return false;
+            }
+        }
+        if (tagFilter != null) {
+            if (TAG_FILTER_SUSPECTED.equals(tagFilter)) {
+                if (!g.suspectedRefresh() && !g.hasTag(themythofcrawl.model.ApiTagCatalog.TAG_REFRESH)) {
+                    return false;
+                }
+            } else if (!g.hasTag(tagFilter)) {
+                return false;
+            }
         }
         if (!textFilter.isEmpty() && !matchesText(g, textFilter)) {
             return false;
@@ -77,6 +93,11 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                 || Text.nz(g.branch()).toLowerCase(java.util.Locale.ROOT).contains(q)
                 || Text.nz(g.url()).toLowerCase(java.util.Locale.ROOT).contains(q)) {
             return true;
+        }
+        for (String tag : g.tags()) {
+            if (tag.toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                return true;
+            }
         }
         return g.target() != null && Text.nz(g.target().sttText()).toLowerCase(java.util.Locale.ROOT).contains(q);
     }
@@ -148,17 +169,41 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
     }
 
     public void setBranchFilter(String p) {
+        setBranchFilter(p, false);
+    }
+
+    public void setBranchFilter(String p, boolean exactOnly) {
         String clean = p == null || p.isBlank() ? null : p;
-        if (java.util.Objects.equals(clean, prefix)) {
+        boolean nextExact = clean != null && exactOnly;
+        if (java.util.Objects.equals(clean, prefix) && nextExact == exactBranchOnly) {
             return;
         }
         prefix = clean;
+        exactBranchOnly = nextExact;
         rebuildView();
         fireTableDataChanged();
     }
 
     public String branchFilter() {
         return prefix;
+    }
+
+    public boolean exactBranchOnly() {
+        return exactBranchOnly;
+    }
+
+    public void setTagFilter(String tag) {
+        String clean = tag == null || tag.isBlank() ? null : tag;
+        if (java.util.Objects.equals(clean, tagFilter)) {
+            return;
+        }
+        tagFilter = clean;
+        rebuildView();
+        fireTableDataChanged();
+    }
+
+    public String tagFilter() {
+        return tagFilter;
     }
 
     public void setTextFilter(String query) {
@@ -269,7 +314,15 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
             case 0 -> g.gid();
             case 1 -> Text.groupId(g.gid());
             case 2 -> g.branch();
-            case 3 -> g.pending() ? Decisions.pendingLabel(g) + " · " + Audit.summary(g) : Audit.summary(g);
+            case 3 -> {
+                String base = g.pending() ? Decisions.pendingLabel(g) + " · " + Audit.summary(g) : Audit.summary(g);
+                if (!g.tags().isEmpty()) {
+                    base = "[" + String.join("][", g.tags()) + "] " + base;
+                } else if (g.suspectedRefresh()) {
+                    base = "[? Refresh] " + base;
+                }
+                yield base;
+            }
             case 4 -> g.method();
             case 5 -> g.service().hostLabel();
             case 6 -> g.path();
@@ -292,8 +345,16 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                 yield n > 0 ? "#" + g.target().sttText() + " · gặp " + n : "#" + g.target().sttText();
             }
             case 16 -> {
-                String b = BranchTree.dupBadge(g);
-                yield b.isEmpty() ? "" : b.substring(1, b.length() - 1);
+                if (g.dupTotal() <= 1) {
+                    yield "";
+                }
+                if (engine.isOrigin(g)) {
+                    yield "GỐC · " + g.dupTotal();
+                }
+                ApiGroup orig = engine.originOf(g.bookKey());
+                yield orig != null && orig.gid() != g.gid()
+                        ? "#" + g.dupNo() + " <- " + Text.groupId(orig.gid())
+                        : "#" + g.dupNo() + "/" + g.dupTotal();
             }
             default -> "";
         };

@@ -40,6 +40,7 @@ public class Pill extends JComponent {
     private boolean solidWhenActive;
     private Runnable onClick;
     private Dimension cachedPref;
+    private int fixedHeight = -1;
 
     public Pill(String text) {
         this(text, t -> t.neutral, null);
@@ -158,6 +159,14 @@ public class Pill extends JComponent {
         return this;
     }
 
+    public Pill setFixedHeight(int px) {
+        this.fixedHeight = px;
+        cachedPref = null;
+        revalidate();
+        repaint();
+        return this;
+    }
+
     public Pill setActive(boolean active) {
         if (this.active != active) {
             this.active = active;
@@ -223,7 +232,8 @@ public class Pill extends JComponent {
         int th = fm.getHeight();
         int hPad = Math.round((padding.left + padding.right) * resolvedTheme.scale);
         int vPad = Math.round((padding.top + padding.bottom) * resolvedTheme.scale);
-        cachedPref = new Dimension(Math.max(16, iw + tw + dw + hPad), Math.max(18, Math.max(ih, th) + vPad));
+        int h = fixedHeight > 0 ? resolvedTheme.scaled(fixedHeight) : Math.max(18, Math.max(ih, th) + vPad);
+        cachedPref = new Dimension(Math.max(16, iw + tw + dw + hPad), h);
         return new Dimension(cachedPref);
     }
 
