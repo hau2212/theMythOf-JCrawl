@@ -55,7 +55,7 @@ final class DupPopup {
         JTable t = new ThemedTable(model);
         Ui.style(t);
         t.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        Ui.widths(t, 56, 112, 74, 220, 112, 98, 76);
+        Ui.widths(t, 54, 114, 74, 260, 130, 108, 84);
         AuditRenderer r = new AuditRenderer(model, null, 4, null, 0, 1).numberCols(0);
         for (int i = 0; i < t.getColumnCount(); i++) {
             t.getColumnModel().getColumn(i).setCellRenderer(r);
@@ -65,7 +65,7 @@ final class DupPopup {
             t.setRowSelectionInterval(mine, mine);
         }
         JScrollPane sp = new JScrollPane(t);
-        sp.setPreferredSize(new Dimension(760, Math.min(54 + Theme.ROW_TABLE * Math.max(1, rows.size()), 210)));
+        sp.setPreferredSize(new Dimension(840, Math.min(54 + Theme.ROW_TABLE * Math.max(1, rows.size()), 210)));
 
         StructuredAdviceCard adviceCard = new StructuredAdviceCard();
         adviceCard.setAdvice(Decisions.advise(ui.engine, g));

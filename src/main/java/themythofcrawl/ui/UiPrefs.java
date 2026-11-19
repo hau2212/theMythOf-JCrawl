@@ -1,5 +1,6 @@
 package themythofcrawl.ui;
 
+import java.awt.Dimension;
 import java.lang.reflect.Field;
 import java.util.prefs.Preferences;
 
@@ -21,6 +22,8 @@ public final class UiPrefs {
     public static final String KEY_DISPLAY_MODE = "tmoc.ui.displayMode";
     public static final String KEY_TOP_COMPACT = "tmoc.ui.topCompact";
     public static final String KEY_INSPECTOR_EXPANDED = "tmoc.ui.inspectorExpanded";
+    public static final String KEY_LINEAGE_W = "tmoc.ui.lineage.width";
+    public static final String KEY_LINEAGE_H = "tmoc.ui.lineage.height";
     public static final String KEY_COLUMNS_PREFIX = "tmoc.ui.columns.";
 
     public static final int[] FONT_SCALE_CHOICES = {90, 100, 110, 115, 120};
@@ -197,6 +200,37 @@ public final class UiPrefs {
     public static void setInspectorExpanded(Prefs prefs, boolean expanded) {
         if (prefs != null) {
             prefs.set(KEY_INSPECTOR_EXPANDED, Boolean.toString(expanded));
+        }
+    }
+
+    public static Dimension lineageSize(Prefs prefs) {
+        int defW = 1040;
+        int defH = 620;
+        if (prefs == null) {
+            return new Dimension(defW, defH);
+        }
+        int w = parseClampedInt(prefs.get(KEY_LINEAGE_W), defW, 860, 2400);
+        int h = parseClampedInt(prefs.get(KEY_LINEAGE_H), defH, 520, 1400);
+        return new Dimension(w, h);
+    }
+
+    public static void setLineageSize(Prefs prefs, int width, int height) {
+        if (prefs == null || width < 700 || height < 420) {
+            return;
+        }
+        prefs.set(KEY_LINEAGE_W, Integer.toString(Math.max(860, Math.min(2400, width))));
+        prefs.set(KEY_LINEAGE_H, Integer.toString(Math.max(520, Math.min(1400, height))));
+    }
+
+    private static int parseClampedInt(String raw, int fallback, int min, int max) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            int v = Integer.parseInt(raw.trim());
+            return Math.max(min, Math.min(max, v));
+        } catch (NumberFormatException e) {
+            return fallback;
         }
     }
 

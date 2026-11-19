@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.function.Function;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -24,17 +23,17 @@ import themythofcrawl.ui.theme.FontManager;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * Clean, sharp-cornered (arc = 0) structured explanation card replacing raw {@code JTextArea}
- * walls-of-text in Duplicate, Lineage, and Audit decision panels.
- * Shows: (1) Badge + clear Vietnamese headline, (2) Origin vs Current structured fact rows,
- * (3) Concise plain-Vietnamese guidance box.
+ * Clean, sharp-cornered (arc = 0) structured explanation card replacing raw walls-of-text
+ * in Duplicate, Lineage, and Audit decision panels.
+ * Uses pure-Swing {@link WrappedText} (zero HTML) so Burp Suite's {@code html.disable}
+ * never leaks raw {@code <html>} or entity codes, and lays out flush-left at 100% full width.
  */
 public final class StructuredAdviceCard extends JPanel {
     private final Pill badgePill = new Pill("Chưa chọn", t -> t.neutral);
     private final JLabel headlineLbl = new JLabel("Chọn 1 dòng để xem giải thích & hướng xử lý");
     private final JPanel factsPanel = new JPanel(new GridBagLayout());
     private final JPanel tipsPanel = new JPanel();
-    private final JPanel bodyWrap = new JPanel();
+    private final JPanel bodyWrap = new JPanel(new BorderLayout(0, Theme.SPACE_1));
     private Function<Theme, Theme.Token> accentFn = t -> t.info;
 
     public StructuredAdviceCard() {
@@ -55,18 +54,16 @@ public final class StructuredAdviceCard extends JPanel {
         tipsPanel.setOpaque(true);
         tipsPanel.setLayout(new BoxLayout(tipsPanel, BoxLayout.Y_AXIS));
 
+        // BorderLayout ensures factsPanel and tipsPanel ALWAYS span 100% full width flush left (zero BoxLayout center-drift)
         bodyWrap.setOpaque(false);
-        bodyWrap.setLayout(new BoxLayout(bodyWrap, BoxLayout.Y_AXIS));
-        bodyWrap.add(factsPanel);
-        bodyWrap.add(Box.createVerticalStrut(Theme.SPACE_1));
-        bodyWrap.add(tipsPanel);
+        bodyWrap.add(factsPanel, BorderLayout.NORTH);
+        bodyWrap.add(tipsPanel, BorderLayout.CENTER);
         add(bodyWrap, BorderLayout.CENTER);
 
         applyTheme();
     }
 
     public void setEmpty(String headline, String detail) {
-        Theme th = Theme.current();
         accentFn = t -> t.neutral;
         badgePill.setText("Chưa chọn");
         badgePill.setToken(t -> t.neutral);
@@ -75,14 +72,13 @@ public final class StructuredAdviceCard extends JPanel {
         factsPanel.removeAll();
         tipsPanel.removeAll();
         if (detail != null && !detail.isBlank()) {
-            JLabel d = new JLabel("<html><body style='width:540px'>" + escapeHtml(detail) + "</body></html>");
-            d.setFont(th.smallFont);
-            d.setForeground(th.muted);
+            WrappedText d = WrappedText.muted(Icons.stripInlineSymbols(detail), 640);
             tipsPanel.add(d);
             tipsPanel.setVisible(true);
         } else {
             tipsPanel.setVisible(false);
         }
+        applyTheme();
         revalidate();
         repaint();
     }
@@ -97,6 +93,7 @@ public final class StructuredAdviceCard extends JPanel {
             factsPanel.removeAll();
             tipsPanel.removeAll();
             tipsPanel.setVisible(false);
+            applyTheme();
             revalidate();
             repaint();
             return;
@@ -147,10 +144,7 @@ public final class StructuredAdviceCard extends JPanel {
             gc.gridwidth = 3;
             gc.weightx = 1.0;
             gc.fill = GridBagConstraints.HORIZONTAL;
-            JLabel desc = new JLabel("<html><body style='width:620px'>"
-                    + escapeHtml(Icons.stripInlineSymbols(adv.explanation())).replace("\n", "<br/>") + "</body></html>");
-            desc.setFont(th.baseFont);
-            desc.setForeground(th.fg);
+            WrappedText desc = WrappedText.body(Icons.stripInlineSymbols(adv.explanation()), 680);
             factsPanel.add(desc, gc);
         }
 
@@ -162,15 +156,12 @@ public final class StructuredAdviceCard extends JPanel {
             tipTitle.setFont(th.smallBoldFont);
             tipTitle.setForeground(accentFn.apply(th).text());
             tipTitle.setAlignmentX(LEFT_ALIGNMENT);
+            tipTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 3, 0));
             tipsPanel.add(tipTitle);
             for (int i = 0; i < Math.min(3, recs.size()); i++) {
                 String line = Icons.stripInlineSymbols(recs.get(i));
-                JLabel row = new JLabel("<html><body style='width:640px'>" + (i + 1) + ". "
-                        + escapeHtml(line) + "</body></html>");
-                row.setFont(th.smallFont);
-                row.setForeground(th.fg);
-                row.setBorder(BorderFactory.createEmptyBorder(2, 4, 0, 0));
-                row.setAlignmentX(LEFT_ALIGNMENT);
+                WrappedText row = WrappedText.small((i + 1) + ". " + line, 720);
+                row.setBorder(BorderFactory.createEmptyBorder(1, 6, 2, 0));
                 tipsPanel.add(row);
             }
         } else {
@@ -214,13 +205,6 @@ public final class StructuredAdviceCard extends JPanel {
             return Icons.ghost(tok.text(), 12);
         }
         return Icons.originCrown(tok.text(), 12);
-    }
-
-    private static String escapeHtml(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private void applyTheme() {

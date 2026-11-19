@@ -85,37 +85,23 @@ jobs:
           cat <<EOF > /tmp/release_notes.md
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
-          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
+          > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Toàn bộ các bản phát hành trước đó (\`V_2.2_beta\`, \`V_2.1_beta\`, \`V_2.0_beta\`, \`V_1.0\`, \`v2.0.0\`) được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
           > Quy ước phiên bản xem tại \`VERSIONING.md\` (nâng tính năng/UI tăng số sau: \`2.2 -> 2.3 -> 2.4\`; nâng thuật toán/kiến trúc lõi từ \`2.X\` giữ nguyên nhánh sau: \`2.2 -> 3.2\`, \`2.3 -> 3.3\`).
 
-          ### 7 Trụ cột nâng cấp trong \`${TAG}\`
+          ### Các nâng cấp & sửa lỗi trọng tâm trong \`${TAG}\`
 
-          1. **Chính sách phát hành Bất biến & Quản lý Phiên bản chuẩn hóa**:
-             - Tập trung phiên bản tại \`version.properties\` và quy chuẩn đặt tên tại \`VERSIONING.md\`.
-             - CI gắn cổng **IMMUTABLE RELEASE GUARD**: từ chối ghi đè mọi tag/release cũ, mỗi bản mới luôn tạo release riêng độc lập.
+          1. **Loại bỏ 100% lỗi rò rỉ thẻ \`<html>\` & mã \`&amp;\` / \`&gt;\` trên Burp Suite**:
+             - Thay thế hoàn toàn toàn bộ \`JLabel("<html>...")\` bằng thành phần xuống dòng thuần Swing mới \`WrappedText\` (miễn nhiễm với \`UIManager.put("html.disable", true)\` của Burp Suite).
+             - Sửa triệt để lỗi thụt lề 200px & khoảng trắng rỗng trong thẻ hướng dẫn \`StructuredAdviceCard\` và 4 thẻ chiến lược ở **Action Workbench**.
+             - Bổ sung kiểm thử tự động vĩnh viễn cấm tuyệt đối thẻ \`<html>\` trong toàn bộ mã nguồn UI.
 
-          2. **Luật Chặn Request chủ động tại Proxy (Proactive Interception Rules)**:
-             - Khai báo trước luật chặn theo **Nhánh / Đường dẫn** và ma trận từng **HTTP Method** (\`GET / POST / PUT / PATCH / DELETE / HEAD / OPTIONS\`) ngay từ trước khi bấm crawl.
-             - Hỗ trợ 3 chế độ theo thứ tự ưu tiên: **Chặn & Giả lập 200 OK** (tùy chỉnh status code + JSON body), **Chặn & Hủy (Drop)**, và **Ngoại lệ Cho phép (Allow)** để vượt qua luật chặn tổng quát.
-             - Tích hợp Tab **2. Luật Chặn Proxy** trong **Action Workbench** (kèm trình **Kiểm thử khớp trực tiếp — Dry-Run**) và menu chuột phải trực tiếp trên từng nhánh cây.
+          2. **Thiết kế lại Công tắc \`BẬT | TẮT\` trong Tab Vai trò (Roles)**:
+             - Thay thế ô \`[ □ TẮT ]\` lạc quẻ bằng cụm công tắc phân đoạn 2 ô vuông góc tối giản **\`[ BẬT | TẮT ]\`** (\`arc = 0\`, viền hairline \`1px\`, xanh ngọc khi BẬT / xám đá thanh lịch có gạch chân \`2px\` khi TẮT) đồng bộ hoàn hảo với thanh chọn ở khung cấu hình bên phải và không còn bị chói nền khi chọn dòng.
+             - Bổ sung bộ biên tập ô tùy chỉnh \`SquareStatusEditor\` bấm 1 chạm mượt mà, loại bỏ hoàn toàn hiện tượng nhấp nháy checkbox mặc định của Swing.
 
-          3. **Sửa triệt để lỗi dồn chữ & bẹp ô nhập liệu trong Tab Cấu hình**:
-             - Cố định độ rộng tối thiểu cho mọi \`JComboBox\` và ô nhập số trong Mục 3, tự động chuyển 1 cột / 2 cột mượt mà không bao giờ bị bẹp 10px hay cắt nhãn chữ.
-
-          4. **Căn cân đối khu vực \`Đích\` + Thanh công cụ Thu gọn / Responsive chia đôi màn hình**:
-             - Căn giữa đồng bộ chiều cao \`24px\` cho ô \`Đích\`, chỉ báo \`Đợi: 0\` và đường dẫn nhánh.
-             - Thêm nút thu gọn / mở rộng thanh công cụ phía trên (lưu cấu hình lâu dài) hoạt động cho cả toàn màn hình và chế độ chia đôi màn hình: khi cửa sổ hẹp, tự động gom gọn vào dropdown **Điều khiển** & **Thao tác**; bấm mở rộng sẽ xổ hàng drawer tách biệt, không đè chữ.
-
-          5. **Thanh xem Request / Response siêu gọn thu gọn mặc định (\`24px\`)**:
-             - Thu gọn mặc định thành 1 dải ngang mảnh \`24px\` tối đa hóa diện tích đọc Request/Response và bảng API; bấm biểu tượng mở rộng để xem đầy đủ chi tiết & nút chức năng.
-
-          6. **Thiết kế lại toàn diện Tab Vai trò (Roles) & Quy tắc (Rules) theo phong cách Tối giản Hiện đại**:
-             - Bảo vệ chiều cao hàng thoáng (\`38px\` cho bảng Vai trò, \`32px\` cho bảng Quy tắc) với \`AUTO_RESIZE_OFF\` giúp tiêu đề **"Trạng thái"** và tên vai trò không bao giờ bị cắt cụt.
-             - Thiết kế lại thẻ tiêu đề vai trò, thanh thao tác Rules 3 nhóm tinh gọn, badge chế độ sắc nét, và thanh **JWT / Token Inspector** có thể thu gọn.
-
-          7. **Trình quản lý \`{Placeholder}\` & Xác minh khớp trực tiếp cho Excel**:
-             - Mở từ nút **\`{...} Placeholder\`** trên tab Excel hoặc chuột phải bất kỳ dòng Excel nào để bấm trực tiếp vào từng đoạn đường dẫn (VD: \`/api/a/9f8e7d6c/c\` -> \`/api/a/{session}/c\`).
-             - Hỗ trợ CRUD danh mục \`{placeholder}\` (mặc định + tùy chỉnh Regex) và bảng **Kiểm thử khớp trực tiếp (Live Match Verifier)** trích xuất ngay giá trị từng biến động để yên tâm 100%.
+          3. **Cửa sổ Quản lý Bản Trùng & Bản Gốc (#1) dạng Nổi (Floating) — Kéo thả & Mở rộng tùy ý**:
+             - Thay thế popup \`JPopupMenu\` bị ghim cứng tại chỗ bằng cửa sổ nổi không khóa thao tác (**modeless**), cho phép **kéo thả di chuyển tự do**, **kéo viền mở rộng/thu gọn tùy ý**, ghi nhớ kích thước yêu thích (\`UiPrefs\`), bấm **\`Ghim\`** để nổi trên cùng, và bấm \`ESC\` để đóng nhanh.
+             - Cột \`Vị trí trong cây\` tự động giãn lấp đầy khung khi mở rộng cửa sổ; nới rộng cột \`Trạng thái\` & \`Lần cuối\` để không bao giờ bị cắt chữ \`Chờ bạn chọn\` hay giờ \`07:21:45\`.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

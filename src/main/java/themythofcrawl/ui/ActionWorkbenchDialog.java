@@ -1404,14 +1404,12 @@ public final class ActionWorkbenchDialog {
             head.add(statePill, BorderLayout.EAST);
             add(head, BorderLayout.NORTH);
 
-            JLabel descLbl = new JLabel("<html><body style='width:305px'>" + desc + "</body></html>");
-            descLbl.setFont(t.baseFont);
-            descLbl.setForeground(t.fg);
+            themythofcrawl.ui.kit.WrappedText descLbl = themythofcrawl.ui.kit.WrappedText.body(desc, 340);
+            descLbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             add(descLbl, BorderLayout.CENTER);
 
-            JLabel tipLbl = new JLabel("<html><body style='width:305px'>" + bestFor + "</body></html>");
-            tipLbl.setFont(t.smallFont);
-            tipLbl.setForeground(t.muted);
+            themythofcrawl.ui.kit.WrappedText tipLbl = themythofcrawl.ui.kit.WrappedText.muted(bestFor, 340);
+            tipLbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             add(tipLbl, BorderLayout.SOUTH);
 
             MouseAdapter clicker = new MouseAdapter() {

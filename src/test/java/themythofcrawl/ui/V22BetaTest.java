@@ -101,11 +101,13 @@ final class V22BetaTest {
         try (InputStream in = Files.newInputStream(propsPath)) {
             props.load(in);
         }
-        assertEquals("V_2.2_beta", props.getProperty("releaseTag"));
-        assertEquals("2.2-beta", props.getProperty("versionName"));
-        assertEquals("theMythOf-JCrawl_V_2.2_beta.jar", props.getProperty("jarName"));
-        assertEquals("2.2-beta", Extension.VERSION);
-        assertEquals("2.2-beta", Diagnostics.VERSION);
+        String tag = props.getProperty("releaseTag");
+        String ver = props.getProperty("versionName");
+        String jar = props.getProperty("jarName");
+        assertTrue(tag != null && tag.startsWith("V_2."), "releaseTag must follow V_2.X_channel convention");
+        assertEquals("theMythOf-JCrawl_" + tag + ".jar", jar);
+        assertEquals(ver, Extension.VERSION);
+        assertEquals(ver, Diagnostics.VERSION);
 
         Path versioningDoc = Path.of("VERSIONING.md");
         assertTrue(Files.exists(versioningDoc), "VERSIONING.md must document minor/major lineage policy");

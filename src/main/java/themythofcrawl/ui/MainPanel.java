@@ -1674,7 +1674,7 @@ public final class MainPanel {
             }
             case DUP -> {
                 if (g.dupTotal() > 1) {
-                    DupPopup.show(this, g, anchor, x, y);
+                    LineageDialog.showFloating(this, g);
                 }
             }
             default -> { }

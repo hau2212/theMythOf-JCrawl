@@ -36,7 +36,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "2.2-beta";
+    public static final String VERSION = "2.3-beta";
 
     @Override
     public void initialize(MontoyaApi api) {

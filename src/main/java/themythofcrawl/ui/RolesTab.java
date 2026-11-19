@@ -3,6 +3,7 @@ package themythofcrawl.ui;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.FontMetrics;
@@ -10,6 +11,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -25,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.swing.AbstractCellEditor;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultCellEditor;
 import javax.swing.DefaultListCellRenderer;
@@ -50,6 +54,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.SimpleAttributeSet;
@@ -68,6 +73,7 @@ import themythofcrawl.model.Roles;
 import themythofcrawl.model.RuleMode;
 import themythofcrawl.ui.kit.Card;
 import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.kit.ThemedTree;
 import themythofcrawl.ui.theme.Theme;
@@ -112,13 +118,9 @@ final class RolesTab {
     private final JTextField name = new JTextField(16);
     private final JComboBox<Role.Tier> tierBox = new JComboBox<>(Role.Tier.values());
     private boolean enabledState = true;
-    private final JButton enabledToggle = new JButton("BẬT") {
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            styleEnabledToggle();
-        }
-    };
+    private final SegmentedToggle enabledToggle = new SegmentedToggle(
+            new SegmentedToggle.Option("BẬT", "Role đang bật — sẽ chạy khi gửi kiểm thử", t -> t.success, null, false),
+            new SegmentedToggle.Option("TẮT", "Role đang tắt — bỏ qua khi gửi kiểm thử", t -> t.slate, null, false));
     private final RuleModel rules = new RuleModel();
     private final ThemedTable rulesTable = new ThemedTable(rules) {
         @Override
@@ -170,11 +172,12 @@ final class RolesTab {
         Ui.onPopup(table, e -> roleMenu(true).show(e.getComponent(), e.getX(), e.getY()));
         table.getColumnModel().getColumn(0).setCellRenderer(new RoleIndexRenderer());
         table.getColumnModel().getColumn(1).setCellRenderer(new SquareStatusRenderer());
+        table.getColumnModel().getColumn(1).setCellEditor(new SquareStatusEditor());
         table.getColumnModel().getColumn(2).setCellRenderer(new AvatarNameRenderer());
         table.getColumnModel().getColumn(3).setCellRenderer(new RuleChipsRenderer());
-        Ui.widths(table, 38, 86, 205, 320);
+        Ui.widths(table, 38, 96, 205, 320);
         table.getColumnModel().getColumn(0).setMinWidth(34);
-        table.getColumnModel().getColumn(1).setMinWidth(82);
+        table.getColumnModel().getColumn(1).setMinWidth(90);
         table.getColumnModel().getColumn(2).setMinWidth(150);
         table.getColumnModel().getColumn(3).setMinWidth(200);
 
@@ -256,22 +259,21 @@ final class RolesTab {
             }
         });
 
-        enabledToggle.setFocusPainted(false);
-        enabledToggle.setPreferredSize(new Dimension(72, 26));
-        enabledToggle.setToolTipText("Bấm để bật / tắt Role này");
-        enabledToggle.addActionListener(e -> {
-            setEnabledState(!enabledState);
+        enabledToggle.setFixedHeight(24);
+        enabledToggle.setSelectedIndex(0);
+        enabledToggle.setToolTipText("Chọn BẬT hoặc TẮT Role này");
+        enabledToggle.onChange(idx -> {
+            enabledState = (idx == 0);
             markDirty();
         });
-        styleEnabledToggle();
 
         jwt.setEditable(false);
         jwt.setFont(Theme.current().monoFont);
         jwt.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2, Theme.SPACE_2));
         expBadge.setVisible(false);
 
-        // Minimalist bordered Profile Header Card
-        JPanel headCard = new JPanel(new BorderLayout(8, 0)) {
+        // Minimalist bordered Profile Header Card (flexible GridBagLayout prevents overlap at any width)
+        JPanel headCard = new JPanel(new java.awt.GridBagLayout()) {
             @Override
             public void updateUI() {
                 super.updateUI();
@@ -288,20 +290,40 @@ final class RolesTab {
                 BorderFactory.createLineBorder(Theme.current().border),
                 BorderFactory.createEmptyBorder(6, 10, 6, 10)));
 
-        JPanel headLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        headLeft.setOpaque(false);
-        headLeft.add(title);
-        headLeft.add(name);
-        headLeft.add(tierBox);
-        headLeft.add(enabledToggle);
+        name.setPreferredSize(new Dimension(132, 26));
+        name.setMinimumSize(new Dimension(96, 26));
+        tierBox.setPreferredSize(new Dimension(118, 26));
+        tierBox.setMinimumSize(new Dimension(104, 26));
 
-        JPanel headRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        headRight.setOpaque(false);
-        headRight.add(dirty);
-        headRight.add(Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save));
+        java.awt.GridBagConstraints hc = new java.awt.GridBagConstraints();
+        hc.gridy = 0;
+        hc.anchor = java.awt.GridBagConstraints.WEST;
+        hc.insets = new java.awt.Insets(0, 0, 0, 6);
 
-        headCard.add(headLeft, BorderLayout.WEST);
-        headCard.add(headRight, BorderLayout.EAST);
+        hc.gridx = 0;
+        hc.weightx = 0;
+        hc.fill = java.awt.GridBagConstraints.NONE;
+        headCard.add(title, hc);
+
+        hc.gridx = 1;
+        hc.weightx = 1.0;
+        hc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        headCard.add(name, hc);
+
+        hc.gridx = 2;
+        hc.weightx = 0;
+        hc.fill = java.awt.GridBagConstraints.NONE;
+        headCard.add(tierBox, hc);
+
+        hc.gridx = 3;
+        headCard.add(enabledToggle, hc);
+
+        hc.gridx = 4;
+        headCard.add(dirty, hc);
+
+        hc.gridx = 5;
+        hc.insets = new java.awt.Insets(0, 0, 0, 0);
+        headCard.add(Ui.accent("Lưu Profile", t -> Icons.save(t.accent.onSolid()), t -> t.accent, this::save), hc);
 
         // Streamlined 3-group Rules Action Bar (no clutter)
         JButton[] quickRef = new JButton[1];
@@ -465,26 +487,8 @@ final class RolesTab {
 
     private void setEnabledState(boolean on) {
         this.enabledState = on;
-        styleEnabledToggle();
-    }
-
-    private void styleEnabledToggle() {
-        if (enabledToggle == null) {
-            return;
-        }
-        Theme t = Theme.current();
-        enabledToggle.setText(enabledState ? "BẬT" : "TẮT");
-        enabledToggle.setFont(t.smallBoldFont);
-        enabledToggle.setOpaque(true);
-        enabledToggle.setContentAreaFilled(true);
-        if (enabledState) {
-            enabledToggle.setBackground(t.success.fillStrong());
-            enabledToggle.setForeground(t.success.text());
-            enabledToggle.setBorder(BorderFactory.createLineBorder(t.success.border(), 1));
-        } else {
-            enabledToggle.setBackground(t.neutral.fill());
-            enabledToggle.setForeground(t.muted);
-            enabledToggle.setBorder(BorderFactory.createLineBorder(t.border, 1));
+        if (enabledToggle != null) {
+            enabledToggle.setSelectedIndex(on ? 0 : 1);
         }
     }
 
@@ -1610,8 +1614,9 @@ final class RolesTab {
     }
 
     /**
-     * Sharp square/rectangular status cell renderer (arc = 0, 1px border):
-     * replaces the legacy rounded sliding switch with minimalist [BẬT] / [TẮT].
+     * Minimalist architectural 2-cell segmented switch plate (arc = 0, 1px hairline border):
+     * renders {@code [ BẬT | TẮT ]} with crisp emerald active left half or calm slate active right half,
+     * harmonizing cleanly with both Light/Dark themes and row selection highlights.
      */
     static final class SquareStatusRenderer extends JComponent implements TableCellRenderer, ThemedTree.ExtensionRenderer {
         private Theme theme;
@@ -1623,13 +1628,18 @@ final class RolesTab {
             setOpaque(true);
         }
 
+        void configure(Theme th, boolean on, boolean selected, int row) {
+            this.theme = th != null ? th : Theme.current();
+            this.on = on;
+            this.selected = selected;
+            this.row = row;
+            setToolTipText(on ? "Role đang BẬT — bấm để tắt" : "Role đang TẮT — bấm để bật");
+        }
+
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
-            this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
-            this.on = Boolean.TRUE.equals(v);
-            this.selected = sel;
-            this.row = row;
-            setToolTipText(on ? "Role đang BẬT (bấm để tắt)" : "Role đang TẮT (bấm để bật)");
+            Theme th = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
+            configure(th, Boolean.TRUE.equals(v), sel, row);
             return this;
         }
 
@@ -1644,38 +1654,95 @@ final class RolesTab {
                 g2.setColor(selected ? th.selectionBg : th.zebra[row & 1]);
                 g2.fillRect(0, 0, w, h);
 
-                int bw = Math.min(w - th.scaled(12), th.scaled(62));
-                int bh = Math.min(h - th.scaled(14), th.scaled(22));
+                int bw = Math.min(w - th.scaled(10), th.scaled(78));
+                int bh = Math.min(h - th.scaled(12), th.scaled(22));
                 int bx = (w - bw) / 2;
                 int by = (h - bh) / 2;
+                int half = bw / 2;
+                int rightW = bw - half;
 
-                g2.setColor(on ? th.success.fillStrong() : th.surfaceAlt);
-                g2.fillRect(bx, by, bw - 1, bh - 1);
-                g2.setColor(on ? th.success.border() : th.border);
-                g2.drawRect(bx, by, bw - 1, bh - 1);
+                // Recessed neutral track (blends harmoniously even inside selected rows)
+                g2.setColor(selected ? th.surface : th.surfaceAlt);
+                g2.fillRect(bx, by, bw, bh);
 
-                // Sharp 6x6 square status indicator on the left
-                int sq = 6;
-                int sqx = bx + 7;
-                int sqy = by + (bh - sq) / 2;
+                // Active half fill
                 if (on) {
-                    g2.setColor(th.success.text());
-                    g2.fillRect(sqx, sqy, sq, sq);
+                    g2.setColor(th.success.solidFill());
+                    g2.fillRect(bx, by, half, bh);
                 } else {
-                    g2.setColor(th.muted);
-                    g2.drawRect(sqx, sqy, sq - 1, sq - 1);
+                    g2.setColor(th.slate.fillStrong());
+                    g2.fillRect(bx + half, by, rightW, bh);
+                    // Crisp 2px architectural bottom bar on active OFF half
+                    g2.setColor(th.slate.text());
+                    g2.fillRect(bx + half, by + bh - 2, rightW, 2);
                 }
 
+                // Hairline outer frame & crisp center divider (arc = 0)
+                g2.setColor(on ? th.success.border() : th.border);
+                g2.drawRect(bx, by, bw - 1, bh - 1);
+                g2.setColor(th.border);
+                g2.drawLine(bx + half, by + 1, bx + half, by + bh - 2);
+
+                // Crisp centered labels for both halves
                 g2.setFont(th.smallBoldFont);
                 FontMetrics fm = g2.getFontMetrics();
-                String txt = on ? "BẬT" : "TẮT";
-                g2.setColor(on ? th.success.text() : th.muted);
-                int tx = sqx + sq + 6;
                 int ty = by + (bh - fm.getHeight()) / 2 + fm.getAscent();
-                g2.drawString(txt, tx, ty);
+
+                String onTxt = "BẬT";
+                int onTx = bx + (half - fm.stringWidth(onTxt)) / 2;
+                g2.setColor(on ? th.success.onSolid() : th.muted);
+                g2.drawString(onTxt, onTx, ty);
+
+                String offTxt = "TẮT";
+                int offTx = bx + half + (rightW - fm.stringWidth(offTxt)) / 2;
+                g2.setColor(on ? th.muted : th.slate.text());
+                g2.drawString(offTxt, offTx, ty);
             } finally {
                 g2.dispose();
             }
+        }
+    }
+
+    /**
+     * Matching table cell editor for {@link SquareStatusRenderer}: renders the exact same
+     * 2-cell {@code [ BẬT | TẮT ]} plate and toggles immediately on click without ever flashing
+     * a native Swing {@code JCheckBox}.
+     */
+    private static final class SquareStatusEditor extends AbstractCellEditor implements TableCellEditor {
+        private final SquareStatusRenderer view = new SquareStatusRenderer();
+        private boolean value;
+
+        SquareStatusEditor() {
+            view.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            view.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    if (!SwingUtilities.isLeftMouseButton(e)) {
+                        cancelCellEditing();
+                        return;
+                    }
+                    int mid = view.getWidth() / 2;
+                    boolean clickedLeft = e.getX() < mid;
+                    // Clicking inactive half selects it; clicking active half also toggles cleanly
+                    value = (clickedLeft != value) ? clickedLeft : !value;
+                    view.configure(Theme.current(), value, true, view.row);
+                    view.repaint();
+                    stopCellEditing();
+                }
+            });
+        }
+
+        @Override
+        public Object getCellEditorValue() {
+            return value;
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable table, Object val, boolean isSelected, int row, int column) {
+            this.value = Boolean.TRUE.equals(val);
+            Theme th = table != null ? Theme.of(table.getBackground(), table.getForeground()) : Theme.current();
+            view.configure(th, this.value, true, row);
+            return view;
         }
     }
 
