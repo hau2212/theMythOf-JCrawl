@@ -1098,6 +1098,7 @@ public final class MainPanel {
             return;
         }
         engine.setDestination(path);
+        engine.teamSync().updateLocalPresence(engine.activeBranch().name(), "");
         syncHeader();
         flash("Request mới sẽ vào: " + engine.activeBranch().name());
     }
@@ -1782,6 +1783,19 @@ public final class MainPanel {
                     revert(moved);
                     tick(true);
                 });
+    }
+
+    void jumpToTreeBranchOrApi(ApiGroup g, String branchPath, boolean focusOnBranch) {
+        if (g != null && g.hidden()) {
+            engine.show(List.of(g));
+            tick(true);
+        }
+        tabs.setSelectedComponent(treeTab.panel);
+        treeTab.jumpTo(g, branchPath, focusOnBranch);
+        String dest = g != null ? g.branch() : branchPath;
+        if (!Text.blank(dest)) {
+            flash("Đã đi tới nhánh: " + dest + (focusOnBranch ? " (Đang Tập trung kèm nhánh con)" : ""));
+        }
     }
 
     void jumpToGroup(ApiGroup g) {

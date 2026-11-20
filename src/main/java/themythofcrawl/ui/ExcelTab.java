@@ -78,6 +78,7 @@ final class ExcelTab {
     private final HitModel hitModel = new HitModel();
     private final JTable hitTable = new ThemedTable(hitModel);
     private final JLabel hitsLabel = Ui.bold(" Chọn 1 dòng Excel để xem các lần đã gặp (timeline: icon kết quả, giờ, vị trí).");
+    final InventoryBoardPanel inventoryBoard;
     boolean stale = true;
     private long nextOk;
 
@@ -234,7 +235,12 @@ final class ExcelTab {
         deck.setOpaque(false);
         deck.add(emptyState, CARD_EMPTY);
         deck.add(loadedView, CARD_LOADED);
-        panel.add(deck, BorderLayout.CENTER);
+
+        inventoryBoard = new InventoryBoardPanel(ui);
+        javax.swing.JTabbedPane excelModeTabs = new javax.swing.JTabbedPane();
+        excelModeTabs.addTab("1. Tổng hợp & Đồng bộ (7 Ngữ cảnh · Auto-Inventory)", inventoryBoard);
+        excelModeTabs.addTab("2. Đối chiếu File Excel & Timeline", deck);
+        panel.add(excelModeTabs, BorderLayout.CENTER);
 
         controls(engine.groups());
     }
@@ -394,6 +400,9 @@ final class ExcelTab {
 
     void reload() {
         stale = false;
+        if (inventoryBoard != null) {
+            inventoryBoard.reload();
+        }
         TargetEntry keep = selected();
         List<ApiGroup> groups = engine.groups();
         coverage.reload(engine.targets(), groups, filterIndex, engine.hits());

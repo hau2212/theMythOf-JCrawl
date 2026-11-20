@@ -49,7 +49,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "3.7-beta";
+    public static final String VERSION = "5.0-beta";
 
     private static final long BRIDGE_TTL_MS = 15_000L;
     private static final Method SPOOF_METHOD = resolveStaticMethod(

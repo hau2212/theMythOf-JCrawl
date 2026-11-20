@@ -38,6 +38,31 @@ public final class Xlsx {
     public record Sheet(String name, List<List<Object>> rows) {
     }
 
+    /** Semantic Excel cell styles rendered natively in Microsoft Excel Online, Desktop Excel, and Google Sheets. */
+    public enum CellTone {
+        DEFAULT(0),
+        HEADER(1),
+        DONE_GREEN(2),
+        INFO_YELLOW(3),
+        MISSING_RED(4),
+        OOS_GRAY(5),
+        CONFLICT_ORANGE(6),
+        DOING_BLUE(7);
+
+        final int styleIndex;
+
+        CellTone(int styleIndex) {
+            this.styleIndex = styleIndex;
+        }
+    }
+
+    /** Wrapper for a cell value with an explicit Excel fill/font style. */
+    public record StyledCell(Object value, CellTone tone) {
+        public static StyledCell of(Object value, CellTone tone) {
+            return new StyledCell(value, tone == null ? CellTone.DEFAULT : tone);
+        }
+    }
+
     // ------------------------------------------------------------------ reading
     private static DocumentBuilder builder() throws ParserConfigurationException {
         DocumentBuilderFactory f = DocumentBuilderFactory.newDefaultInstance();
@@ -251,12 +276,21 @@ public final class Xlsx {
             x.append("<row r=\"").append(r + 1).append("\">");
             List<Object> row = all.get(r);
             for (int c = 0; c < row.size(); c++) {
-                Object v = row.get(c);
-                if (v == null) {
+                Object raw = row.get(c);
+                if (raw == null) {
                     continue;
                 }
+                int styleIdx = r == 0 ? CellTone.HEADER.styleIndex : CellTone.DEFAULT.styleIndex;
+                Object v = raw;
+                if (raw instanceof StyledCell sc) {
+                    v = sc.value();
+                    if (v == null) {
+                        continue;
+                    }
+                    styleIdx = sc.tone().styleIndex;
+                }
                 String ref = column(c) + (r + 1);
-                String style = r == 0 ? " s=\"1\"" : "";
+                String style = styleIdx > 0 ? " s=\"" + styleIdx + "\"" : "";
                 if (r > 0 && (v instanceof Integer || v instanceof Long || v instanceof Double)) {
                     x.append("<c r=\"").append(ref).append('"').append(style).append("><v>").append(v).append("</v></c>");
                 } else {
@@ -313,16 +347,39 @@ public final class Xlsx {
             put(z, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
                     + "<Relationships xmlns=\"" + NS_PKG + "\">" + rels + "</Relationships>");
             put(z, "xl/styles.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\""
-                    + NS_MAIN + "\"><fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font>"
-                    + "<font><b/><sz val=\"11\"/><color rgb=\"FFFFFFFF\"/><name val=\"Calibri\"/></font></fonts>"
-                    + "<fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill>"
+                    + NS_MAIN + "\">"
+                    + "<fonts count=\"8\">"
+                    + "<font><sz val=\"11\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FFFFFFFF\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF166534\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF854D0E\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF991B1B\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF475569\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF9A3412\"/><name val=\"Calibri\"/></font>"
+                    + "<font><b/><sz val=\"11\"/><color rgb=\"FF1E40AF\"/><name val=\"Calibri\"/></font>"
+                    + "</fonts>"
+                    + "<fills count=\"9\">"
+                    + "<fill><patternFill patternType=\"none\"/></fill>"
                     + "<fill><patternFill patternType=\"gray125\"/></fill>"
-                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF2563EB\"/><bgColor indexed=\"64\"/>"
-                    + "</patternFill></fill></fills>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF2563EB\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFDCFCE7\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFFEF9C3\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFFEE2E2\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFE2E8F0\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFFFEDD5\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFDBEAFE\"/><bgColor indexed=\"64\"/></patternFill></fill>"
+                    + "</fills>"
                     + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
                     + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
-                    + "<cellXfs count=\"2\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+                    + "<cellXfs count=\"8\">"
+                    + "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
                     + "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"2\" fillId=\"3\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"3\" fillId=\"4\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"4\" fillId=\"5\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"5\" fillId=\"6\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"6\" fillId=\"7\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
+                    + "<xf numFmtId=\"0\" fontId=\"7\" fillId=\"8\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
                     + "</cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>"
                     + "</styleSheet>");
         }

@@ -74,6 +74,9 @@ public final class Engine {
     public static final String PREF_INTERCEPT_RULES = "tmoc.intercept_rules.v1";
     public static final String PREF_ACTION_POLICIES = "tmoc.action_policies.v1";
     public static final String PREF_EXCEL_PLACEHOLDERS = "tmoc.excel_placeholders.v1";
+    public static final String PREF_COLLAB_MEMBER = "tmoc.collab.member.v1";
+    public static final String PREF_COLLAB_TAGS = "tmoc.collab.tags.v1";
+    public static final String PREF_GSHEETS_URL = "tmoc.collab.gsheets_url.v1";
 
     /** Outcome returned by {@link #evaluateProxyIntercept(Service, byte[], String)} for Montoya Proxy/Http handlers. */
     public record ProxyInterceptOutcome(
@@ -139,6 +142,9 @@ public final class Engine {
     private final NodeTypeCatalog nodeTypes = new NodeTypeCatalog();
     private final ApiTagCatalog tagCatalog = new ApiTagCatalog();
     private final PlaceholderCatalog placeholders = new PlaceholderCatalog();
+    private final themythofcrawl.collab.InventoryCatalog inventoryCatalog = new themythofcrawl.collab.InventoryCatalog();
+    private final themythofcrawl.collab.TeamSyncService teamSync = new themythofcrawl.collab.TeamSyncService(inventoryCatalog);
+    private final themythofcrawl.collab.GoogleSheetsBridge googleSheets = new themythofcrawl.collab.GoogleSheetsBridge(inventoryCatalog);
     private final Set<Integer> forceRawGids = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final ExecutorService captureExec;
     private final ThreadPoolExecutor sendExec;
@@ -198,6 +204,20 @@ public final class Engine {
         }
         placeholders.loadJson(prefs.get(PREF_EXCEL_PLACEHOLDERS));
         PathMatch.setActiveCatalog(placeholders);
+        String savedMember = prefs.get(PREF_COLLAB_MEMBER);
+        if (savedMember != null && !savedMember.isBlank()) {
+            inventoryCatalog.setMemberName(savedMember);
+        }
+        inventoryCatalog.importTagsJson(prefs.get(PREF_COLLAB_TAGS));
+        String savedGSheets = prefs.get(PREF_GSHEETS_URL);
+        if (savedGSheets != null && !savedGSheets.isBlank()) {
+            googleSheets.configure(savedGSheets, false, this);
+        }
+        inventoryCatalog.addListener(() -> {
+            changes.status();
+            googleSheets.markDirty();
+        });
+        teamSync.addListener(changes::status);
         captureExec = Executors.newSingleThreadExecutor(daemon("JCrawl-capture"));
         sendExec = new ThreadPoolExecutor(config.threads, config.threads, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
                 daemon("JCrawl-send"));
@@ -404,6 +424,24 @@ public final class Engine {
         PathMatch.notifyCatalogChanged();
         retag();
         changes.status();
+    }
+
+    public themythofcrawl.collab.InventoryCatalog inventoryCatalog() {
+        return inventoryCatalog;
+    }
+
+    public themythofcrawl.collab.TeamSyncService teamSync() {
+        return teamSync;
+    }
+
+    public themythofcrawl.collab.GoogleSheetsBridge googleSheets() {
+        return googleSheets;
+    }
+
+    public void saveCollabPrefs() {
+        prefs.set(PREF_COLLAB_MEMBER, inventoryCatalog.memberName());
+        prefs.set(PREF_COLLAB_TAGS, inventoryCatalog.exportTagsJson());
+        prefs.set(PREF_GSHEETS_URL, googleSheets.webAppUrl());
     }
 
     private static java.util.concurrent.ThreadFactory daemon(String name) {
@@ -1719,6 +1757,10 @@ public final class Engine {
                 autoClusterRefresh(g);
             }
             changes.added(g);
+            var recordedMeta = inventoryCatalog.recordLocalCapture(g);
+            if (recordedMeta != null) {
+                teamSync.broadcastEndpoint(recordedMeta);
+            }
         }
         String note = "";
         if (g.results().isEmpty()) {
@@ -3771,6 +3813,8 @@ public final class Engine {
 
     public void close() {
         closed = true;
+        teamSync.close();
+        googleSheets.close();
         proxyQueue.releaseAll(ProxyInterceptQueue.ResolutionKind.DROP);
         dispatcher.cancelAll();
         flushQuietly();

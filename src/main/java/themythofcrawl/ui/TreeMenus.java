@@ -38,16 +38,16 @@ final class TreeMenus {
                                     if (tree == ui.api.tree) {
                                         ui.api.clearFocusBranch();
                                     } else {
-                                        tree.clearFocus();
+                                        ui.treeTab.clearFocusBranch();
                                     }
                                 }));
                     } else {
-                        m.add(Ui.item("Tập trung vào nhánh \"" + Hierarchy.leaf(prefix) + "\" (Chỉ hiện nhánh này)", Icons::focus,
+                        m.add(Ui.item("Tập trung vào nhánh \"" + Hierarchy.leaf(prefix) + "\" (Kèm nhánh con)", Icons::focus,
                                 () -> {
                                     if (tree == ui.api.tree) {
-                                        ui.api.setFocusBranch(prefix, false);
+                                        ui.api.setFocusBranch(prefix, true);
                                     } else {
-                                        tree.setFocus(prefix, false);
+                                        ui.treeTab.setFocusBranch(prefix, true);
                                     }
                                 }));
                     }
@@ -65,7 +65,7 @@ final class TreeMenus {
                                     if (tree == ui.api.tree) {
                                         ui.api.clearFocusBranch();
                                     } else {
-                                        tree.clearFocus();
+                                        ui.treeTab.clearFocusBranch();
                                     }
                                 }));
                         m.addSeparator();

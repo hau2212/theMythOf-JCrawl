@@ -1356,7 +1356,7 @@ final class ApiTab {
         if (target == null || target.isBlank()) {
             target = engine.activeBranch().name();
         }
-        setFocusBranch(target, false);
+        setFocusBranch(target, true);
     }
 
     private void updateFilterStrip() {

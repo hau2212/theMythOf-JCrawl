@@ -28,6 +28,7 @@ import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.ui.kit.Breadcrumb;
 import themythofcrawl.ui.kit.Pill;
+import themythofcrawl.ui.kit.SegmentedToggle;
 import themythofcrawl.ui.theme.Theme;
 
 /**
@@ -54,6 +55,10 @@ final class TreeTab {
     private final JLabel headerMeta = Ui.muted(" ");
     private final JButton windowBtn;
     private final JButton more;
+    private final JPanel topHeaderStack;
+    private final JPanel focusBanner;
+    private JLabel focusLabel;
+    private SegmentedToggle focusScopeToggle;
 
     private final JLabel reqLabel = Ui.bold(" Request — chọn 1 API / Role hoặc mục [CHỜ DUYỆT] trong cây");
     private final JLabel respLabel = Ui.bold(" Response");
@@ -105,14 +110,36 @@ final class TreeTab {
         sendSelBtn.setToolTipText("Gửi lên Server các mục đang chọn (gồm cả [CHỜ DUYỆT] và API đã lưu)");
         sendSelBtn.addActionListener(e -> sendSelectedItems());
 
+        JButton focusTreeBtn = Ui.secondaryBtn("Tập trung", t -> Icons.focus(t.accent.text(), 13));
+        focusTreeBtn.setToolTipText("Tập trung vào nhánh đang chọn (mặc định hiển thị cả nhánh con bên dưới)");
+        focusTreeBtn.addActionListener(e -> {
+            if (tree.focusPath() != null) {
+                clearFocusBranch();
+            } else {
+                String target = tree.selectedBranch();
+                if (target == null || target.isBlank()) {
+                    target = engine.activeBranch().name();
+                }
+                setFocusBranch(target, true);
+            }
+        });
+
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, sendSelBtn, more, windowBtn);
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, focusTreeBtn, sendSelBtn, more, windowBtn);
 
         JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         head.setOpaque(false);
         head.setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_1, 2, Theme.SPACE_1));
         head.add(leftBar, BorderLayout.CENTER);
         head.add(rightBar, BorderLayout.EAST);
+
+        focusBanner = buildFocusBanner();
+        focusBanner.setVisible(false);
+        JPanel topStack = new JPanel(new BorderLayout(0, 2));
+        topStack.setOpaque(false);
+        topStack.add(head, BorderLayout.NORTH);
+        topStack.add(focusBanner, BorderLayout.SOUTH);
+        this.topHeaderStack = topStack;
 
         // Editable Request viewer right inside TreeTab (Tree-First inline quick edit!)
         req = ui.host.requestViewer(true);
@@ -256,7 +283,7 @@ final class TreeTab {
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(tree.tree), bottomPane);
         split.setResizeWeight(0.54);
         split.setOneTouchExpandable(true);
-        content.add(head, BorderLayout.NORTH);
+        content.add(topHeaderStack, BorderLayout.NORTH);
         content.add(split, BorderLayout.CENTER);
         placeholder.add(new JLabel("Cây Sub-folder đang mở ở cửa sổ riêng."));
         placeholder.add(Ui.secondaryBtn("Gắn lại vào tab", null));
@@ -264,6 +291,106 @@ final class TreeTab {
         panel.add(content, BorderLayout.CENTER);
         syncHeaderBreadcrumb();
         syncQuickButtons();
+    }
+
+    private JPanel buildFocusBanner() {
+        focusLabel = new JLabel("TẬP TRUNG");
+        focusLabel.setIcon(Icons.themed(t -> Icons.focus(t.accent.text(), 14)));
+        focusLabel.setIconTextGap(6);
+        focusScopeToggle = new SegmentedToggle(
+                new SegmentedToggle.Option("Chỉ nhánh này", "Chỉ hiện API nằm trực tiếp trong nhánh đang tập trung", t -> t.accent, null),
+                new SegmentedToggle.Option("Kèm nhánh con", "Hiện cả các nhánh con và API bên dưới", t -> t.accent, null)
+        ).setFixedHeight(20).onChange(idx -> {
+            String fp = tree.focusPath();
+            if (fp != null) {
+                setFocusBranch(fp, idx == 1);
+            }
+        });
+        JButton exitBtn = Ui.button("Thoát", t -> Icons.error(t.danger.text(), 12), this::clearFocusBranch);
+        exitBtn.setToolTipText("Thoát chế độ Tập trung, hiển thị lại toàn bộ cây");
+        exitBtn.setPreferredSize(new Dimension(exitBtn.getPreferredSize().width, 20));
+
+        JPanel bar = new JPanel(new BorderLayout(8, 0)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Theme t = Theme.current();
+                setBackground(t.accent.fill());
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(1, 0, 1, 0, t.accent.border()),
+                        BorderFactory.createEmptyBorder(2, 8, 2, 6)));
+                if (focusLabel != null) {
+                    focusLabel.setFont(t.smallBoldFont);
+                    focusLabel.setForeground(t.accent.text());
+                }
+            }
+        };
+        bar.setOpaque(true);
+        bar.setBackground(Theme.current().accent.fill());
+        bar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 1, 0, Theme.current().accent.border()),
+                BorderFactory.createEmptyBorder(2, 8, 2, 6)));
+        bar.setPreferredSize(new Dimension(0, 26));
+        focusLabel.setFont(Theme.current().smallBoldFont);
+        focusLabel.setForeground(Theme.current().accent.text());
+        bar.add(focusLabel, BorderLayout.CENTER);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 1));
+        right.setOpaque(false);
+        right.add(focusScopeToggle);
+        right.add(exitBtn);
+        bar.add(right, BorderLayout.EAST);
+        return bar;
+    }
+
+    void setFocusBranch(String path, boolean recursive) {
+        if (path == null || path.isBlank()) {
+            clearFocusBranch();
+            return;
+        }
+        String clean = themythofcrawl.core.Hierarchy.normalize(path);
+        tree.setFocus(clean, recursive);
+        focusLabel.setText("TẬP TRUNG: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
+        focusScopeToggle.setSelectedIndex(recursive ? 1 : 0);
+        focusBanner.setVisible(true);
+        tree.rebuild(engine.config().showGhosts);
+        tree.expandFolders(true);
+        syncHeaderBreadcrumb();
+        topHeaderStack.revalidate();
+        topHeaderStack.repaint();
+        ui.flash("Đang tập trung vào: " + clean + (recursive ? " (Kèm nhánh con)" : " (Chỉ nhánh này)"));
+    }
+
+    void clearFocusBranch() {
+        tree.clearFocus();
+        focusBanner.setVisible(false);
+        tree.rebuild(engine.config().showGhosts);
+        syncHeaderBreadcrumb();
+        topHeaderStack.revalidate();
+        topHeaderStack.repaint();
+    }
+
+    /** Jumps directly to a specific API or Branch from the Excel / Inventory tab. */
+    void jumpTo(ApiGroup targetGroup, String branchPath, boolean focusOnBranch) {
+        String targetBranch = targetGroup != null && !Text.blank(targetGroup.branch())
+                ? targetGroup.branch()
+                : branchPath;
+        if (focusOnBranch && !Text.blank(targetBranch)) {
+            setFocusBranch(targetBranch, true);
+        } else {
+            if (tree.focusPath() != null && !Text.blank(targetBranch)
+                    && !themythofcrawl.core.Hierarchy.matchesPrefix(targetBranch, tree.focusPath())) {
+                clearFocusBranch();
+            } else {
+                tree.rebuild(engine.config().showGhosts);
+            }
+        }
+        if (targetGroup != null) {
+            tree.selectGroup(targetGroup);
+            showEntry(targetGroup, targetGroup.origResult());
+        } else if (!Text.blank(targetBranch)) {
+            tree.selectBranchPath(targetBranch);
+        }
+        syncHeaderBreadcrumb();
     }
 
     private void syncQuickButtons() {
