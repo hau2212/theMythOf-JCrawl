@@ -36,6 +36,7 @@ import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
 import themythofcrawl.app.Engine;
 import themythofcrawl.app.Prefs;
+import themythofcrawl.core.ForwardDeliveryGuard;
 import themythofcrawl.core.ProxyInterceptQueue;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.ActionInterceptRule;
@@ -48,7 +49,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "3.6-beta";
+    public static final String VERSION = "3.7-beta";
 
     private static final long BRIDGE_TTL_MS = 15_000L;
     private static final Method SPOOF_METHOD = resolveStaticMethod(
@@ -162,6 +163,8 @@ public final class Extension implements BurpExtension {
         // Bridges ProxyRequestHandler -> HttpHandler when returning a spoofed 200 OK (Montoya 2026.7+)
         ConcurrentHashMap<String, TimedSpoof> pendingSpoofsExact = new ConcurrentHashMap<>();
         ConcurrentHashMap<String, TimedSpoof> pendingSpoofsRoute = new ConcurrentHashMap<>();
+        // Guarantees FORWARD always reaches the Server & Logger++ even if the browser closed/timed out its Proxy socket
+        ForwardDeliveryGuard forwardGuard = new ForwardDeliveryGuard();
 
         // Primary Proxy Request Handler — works across ALL Burp Suite Montoya versions (2023 -> 2026.7+)
         api.proxy().registerRequestHandler(new ProxyRequestHandler() {
@@ -188,15 +191,38 @@ public final class Extension implements BurpExtension {
                         ProxyInterceptQueue.Resolution res = engine.proxyQueue().enqueueAndAwait(
                                 service, method, path, url, branchName, outcome.reason(),
                                 outcome.spoofResponse(), raw, ProxyInterceptQueue.DEFAULT_TIMEOUT_MS);
-                        byte[] finalBytes = (res.editedRequest() != null && res.editedRequest().length > 0)
-                                ? res.editedRequest() : raw;
+                        boolean wasEdited = res.editedRequest() != null
+                                && res.editedRequest().length > 0
+                                && !Arrays.equals(res.editedRequest(), raw);
+                        byte[] finalBytes = wasEdited ? res.editedRequest() : raw;
 
                         switch (res.kind()) {
                             case FORWARD -> {
-                                HttpRequest finalReq = HttpRequest.httpRequest(
-                                        req.httpService(), ByteArray.byteArray(finalBytes));
+                                // Preserve the original InterceptedRequest when unedited (keeps HTTP/2 framing intact)
+                                HttpRequest finalReq = wasEdited
+                                        ? HttpRequest.httpRequest(req.httpService(), ByteArray.byteArray(finalBytes))
+                                        : req;
                                 engine.recordGateAuditOutcome(outcome.auditSeq(), "Đã bấm Gửi lên Server");
                                 engine.log("ĐÃ GỬI LÊN SERVER [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
+                                int msgId = req.messageId();
+                                byte[] fallbackBytes = Arrays.copyOf(finalBytes, finalBytes.length);
+                                forwardGuard.arm(msgId, () -> {
+                                    try {
+                                        HttpRequest directReq = MontoyaBridge.request(service, fallbackBytes);
+                                        HttpRequestResponse rr = api.http().sendRequest(directReq);
+                                        byte[] respBytes = (rr != null && rr.hasResponse())
+                                                ? rr.response().toByteArray().getBytes() : null;
+                                        int st = (rr != null && rr.hasResponse()) ? rr.response().statusCode() : 0;
+                                        engine.recordGateAuditOutcome(outcome.auditSeq(),
+                                                "Gửi trực tiếp (Proxy socket đóng) -> HTTP " + st);
+                                        engine.log("Proxy kết nối trình duyệt đã đóng -> Tự động đẩy thẳng lên Server ["
+                                                + method + " " + path + "] -> HTTP " + st + ".", null);
+                                        engine.onProxyMessage(new Engine.Message(service, fallbackBytes, respBytes, url));
+                                    } catch (Throwable ex) {
+                                        api.logging().logToError(Text.EXT_NAME + " forward-fallback: " + ex);
+                                        engine.log("Lỗi đẩy trực tiếp [" + method + " " + path + "]: " + ex.getMessage(), null);
+                                    }
+                                });
                                 return ProxyRequestReceivedAction.doNotIntercept(finalReq);
                             }
                             case HOLD_AND_SPOOF -> {
@@ -247,6 +273,11 @@ public final class Extension implements BurpExtension {
 
             @Override
             public ProxyRequestToBeSentAction handleRequestToBeSent(InterceptedRequest req) {
+                try {
+                    forwardGuard.markProxyDispatched(req.messageId());
+                } catch (Throwable ignored) {
+                    // never break Proxy request sending
+                }
                 return ProxyRequestToBeSentAction.continueWith(req);
             }
         });
@@ -348,6 +379,7 @@ public final class Extension implements BurpExtension {
         });
 
         api.extension().registerUnloadingHandler(() -> {
+            forwardGuard.close();
             engine.proxyQueue().releaseAll(ProxyInterceptQueue.ResolutionKind.DROP);
             if (panel[0] != null) {
                 panel[0].dispose();

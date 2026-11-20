@@ -887,7 +887,54 @@ public final class BranchTree {
         return new ArrayList<>(out);
     }
 
-    /** Branch of the selected row (a folder / its API bucket / cluster, or the branch of the selected API). */
+    /**
+     * Live Proxy-held {@code [CHỜ DUYỆT]} requests matching the current tree selection
+     * (direct HELD_PENDING rows, or all held requests inside selected FOLDER / APIS / ROOT nodes).
+     */
+    public List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> selectedHeld() {
+        Map<Long, themythofcrawl.core.ProxyInterceptQueue.PendingRequest> out = new LinkedHashMap<>();
+        TreePath[] paths = tree.getSelectionPaths();
+        if (paths == null || paths.length == 0) {
+            return List.of();
+        }
+        List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> allPending = engine.proxyQueue().pending();
+        if (allPending.isEmpty()) {
+            return List.of();
+        }
+        for (TreePath p : paths) {
+            Node n = (Node) p.getLastPathComponent();
+            if (n.kind == Node.Kind.HELD_PENDING) {
+                themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr = heldOf(n);
+                if (pr != null) {
+                    out.put(pr.id(), pr);
+                }
+            } else if (n.kind == Node.Kind.ROOT) {
+                for (var pr : allPending) {
+                    if (matchesFocus(Hierarchy.normalize(pr.branchName()))) {
+                        out.put(pr.id(), pr);
+                    }
+                }
+            } else if (n.kind == Node.Kind.FOLDER && n.payload instanceof String prefix) {
+                String normPref = Hierarchy.normalize(prefix);
+                for (var pr : allPending) {
+                    String bn = Hierarchy.normalize(pr.branchName());
+                    if (Hierarchy.matchesPrefix(bn, normPref)) {
+                        out.put(pr.id(), pr);
+                    }
+                }
+            } else if (n.kind == Node.Kind.APIS && n.payload instanceof String exact) {
+                String normExact = Hierarchy.normalize(exact);
+                for (var pr : allPending) {
+                    if (Hierarchy.same(Hierarchy.normalize(pr.branchName()), normExact)) {
+                        out.put(pr.id(), pr);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(out.values());
+    }
+
+    /** Branch of the selected row (a folder / its API bucket / cluster, held request, or the branch of the selected API). */
     public String selectedBranch() {
         Node n = selectedNode();
         if (n == null) {
@@ -895,6 +942,10 @@ public final class BranchTree {
         }
         if (n.kind == Node.Kind.FOLDER || n.kind == Node.Kind.APIS) {
             return (String) n.payload;
+        }
+        if (n.kind == Node.Kind.HELD_PENDING) {
+            var pr = heldOf(n);
+            return pr != null ? pr.branchName() : null;
         }
         if (n.kind == Node.Kind.CLUSTER && n.payload instanceof themythofcrawl.model.GroupCluster cl) {
             return cl.branchPath();

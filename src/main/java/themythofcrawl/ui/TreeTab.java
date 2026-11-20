@@ -102,10 +102,8 @@ final class TreeTab {
         headerBreadcrumb.onSegmentClick(seg -> tree.selectBranchPath(seg));
 
         JButton sendSelBtn = Ui.solidPrimary("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()));
-        sendSelBtn.addActionListener(e -> {
-            ui.useSource(tree);
-            ui.send(ui.scope().groups());
-        });
+        sendSelBtn.setToolTipText("Gửi lên Server các mục đang chọn (gồm cả [CHỜ DUYỆT] và API đã lưu)");
+        sendSelBtn.addActionListener(e -> sendSelectedItems());
 
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
         JPanel rightBar = Ui.flow(FlowLayout.RIGHT, sendSelBtn, more, windowBtn);
@@ -283,6 +281,45 @@ final class TreeTab {
         return fallback;
     }
 
+    /**
+     * Unified Send handler for the TreeTab header "Gửi mục chọn" button and menu item:
+     * forwards any selected {@code [CHỜ DUYỆT]} requests (preserving inline edits for the currently shown item)
+     * AND replays any selected saved API groups.
+     */
+    void sendSelectedItems() {
+        ui.useSource(tree);
+        List<PendingRequest> heldSel = tree.selectedHeld();
+        List<ApiGroup> groupSel = tree.selectedGroups();
+        int forwarded = 0;
+        if (!heldSel.isEmpty()) {
+            PendingRequest activeShown = shownHeld;
+            for (PendingRequest pr : heldSel) {
+                byte[] payload = (activeShown != null && activeShown.id() == pr.id())
+                        ? currentEditorBytes(pr.originalRequest())
+                        : pr.originalRequest();
+                if (engine.proxyQueue().resolve(pr.id(), ResolutionKind.FORWARD, payload)) {
+                    forwarded++;
+                    if (activeShown != null && activeShown.id() == pr.id()) {
+                        shownHeld = null;
+                        inlineCardLayout.show(inlineActionBar, CARD_API);
+                        respLabel.setText(" Response — đang đẩy lên Server...");
+                    }
+                }
+            }
+        }
+        if (!groupSel.isEmpty()) {
+            ui.send(groupSel);
+        }
+        if (forwarded > 0) {
+            ui.syncHeader();
+            tree.rebuild(engine.config().showGhosts);
+            ui.flash("Đã gửi lên Server " + forwarded + " request chờ duyệt"
+                    + (!groupSel.isEmpty() ? " + " + groupSel.size() + " API" : "") + ".");
+        } else if (groupSel.isEmpty()) {
+            ui.flash("Hãy chọn ít nhất 1 mục [CHỜ DUYỆT], API hoặc Nhánh trên cây để gửi.");
+        }
+    }
+
     private void resolveShownHeld(ResolutionKind kind) {
         PendingRequest pr = shownHeld;
         if (pr == null) {
@@ -293,6 +330,9 @@ final class TreeTab {
         if (ok) {
             shownHeld = null;
             inlineCardLayout.show(inlineActionBar, CARD_API);
+            if (kind == ResolutionKind.FORWARD) {
+                respLabel.setText(" Response — đang đẩy lên Server...");
+            }
             ui.syncHeader();
             tree.rebuild(engine.config().showGhosts);
             ui.flash(kind.label + ": " + pr.method() + " " + Text.shortPath(pr.path(), 42));
@@ -391,8 +431,8 @@ final class TreeTab {
     private void menu() {
         ui.useSource(tree);
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Gửi mục đang chọn (nhánh / API / role)", t -> Icons.send(t.critical.text()),
-                () -> ui.send(ui.scope().groups())));
+        m.add(Ui.item("Gửi mục đang chọn (nhánh / API / role / chờ duyệt)", t -> Icons.send(t.critical.text()),
+                this::sendSelectedItems));
         m.add(Ui.item("Đẩy mục đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
         m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.add(Ui.item("Copy STT + Path (Ctrl+Shift+C)", t -> Icons.copy(t.muted), () -> ui.copy(ui.scope().groups())));

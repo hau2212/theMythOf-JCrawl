@@ -73,7 +73,24 @@ final class TreeMenus {
                     m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus,
                             () -> ui.addSubfolder(null)));
                 }
-                m.add(Ui.item("Gửi (Replay) toàn bộ Nhánh \"" + title + "\"", t -> Icons.send(t.critical.text()), () -> ui.send(many)));
+                m.add(Ui.item("Gửi (Replay) toàn bộ Nhánh \"" + title + "\"", t -> Icons.send(t.critical.text()), () -> {
+                    List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> held = tree.selectedHeld();
+                    int forwarded = 0;
+                    for (var pr : held) {
+                        if (engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest())) {
+                            forwarded++;
+                        }
+                    }
+                    if (!many.isEmpty()) {
+                        ui.send(many);
+                    }
+                    if (forwarded > 0) {
+                        ui.syncHeader();
+                        ui.flash("Đã gửi lên Server " + forwarded + " request chờ duyệt"
+                                + (!many.isEmpty() ? " + " + many.size() + " API" : "") + ".");
+                    }
+                }));
                 if (n.kind == Node.Kind.FOLDER) {
                     m.addSeparator();
                     ui.placeItems(m, many);
