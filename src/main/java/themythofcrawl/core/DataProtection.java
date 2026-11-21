@@ -80,18 +80,34 @@ public final class DataProtection {
 
     /** Answer to question 2 ("Cách gửi lại"), mapped onto the existing per-API Action modes. */
     public enum Resend {
-        AUTO("Tự động", ActionEngine.ActionMode.AUTO_SMART),
-        RAW("Gửi nguyên bản", ActionEngine.ActionMode.NONE),
-        LIVE_ID("Thay ID còn sống", ActionEngine.ActionMode.LIVE_ID_POOL),
-        RECREATE("Tạo bản ghi mới rồi gửi", ActionEngine.ActionMode.PRODUCER_RECREATE),
-        REUSE_200("Dùng lại kết quả 200 cũ", ActionEngine.ActionMode.LOCK_2XX);
+        AUTO("Tự động", ActionEngine.ActionMode.AUTO_SMART,
+                "Kết quả lần gửi đầu + Kho ID sống + API tạo mới (nếu đã nhận ra)",
+                "Lần đầu 2xx mà giờ 4xx -> thử thay ID còn sống; không có thì gọi API tạo mới lấy ID mới rồi gửi lại"),
+        RAW("Gửi nguyên bản", ActionEngine.ActionMode.NONE,
+                "Request y nguyên như lúc crawl",
+                "Gửi y nguyên lên Server; ID đã bị xóa thì nhận 404/400 thật (trung thực nhất)"),
+        LIVE_ID("Thay ID còn sống", ActionEngine.ActionMode.LIVE_ID_POOL,
+                "Kho ID sống: ID tự thu từ response trước đó (vd GET /orders trả về 77, 78)",
+                "DELETE /orders/15 (15 đã xóa) -> gửi DELETE /orders/78"),
+        RECREATE("Tạo bản ghi mới rồi gửi", ActionEngine.ActionMode.PRODUCER_RECREATE,
+                "API tạo mới của cùng tài nguyên (vd POST /orders, tự nhận ra khi crawl)",
+                "Gọi POST /orders -> nhận id 91 -> gửi DELETE /orders/91 (mỗi role xóa bản ghi của riêng nó)"),
+        REUSE_200("Dùng lại kết quả 200 cũ", ActionEngine.ActionMode.LOCK_2XX,
+                "Response 2xx đầu tiên đã được lưu lại",
+                "KHÔNG gửi lại lên Server; hiển thị lại 200 cũ (tránh xóa / thanh toán 2 lần)");
 
         public final String label;
         public final ActionEngine.ActionMode mode;
+        /** What this option needs (Đầu vào). */
+        public final String input;
+        /** What the resend actually does (Đầu ra), as a concrete example. */
+        public final String output;
 
-        Resend(String label, ActionEngine.ActionMode mode) {
+        Resend(String label, ActionEngine.ActionMode mode, String input, String output) {
             this.label = label;
             this.mode = mode;
+            this.input = input;
+            this.output = output;
         }
 
         @Override

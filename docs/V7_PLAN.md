@@ -133,3 +133,14 @@ Team Workbook 6 sheet: `Tổng hợp` · `Ma trận Role` (Thấy/Gọi được
 - **Bảo vệ dữ liệu**: `core/DataProtection` (2 câu hỏi, câu tiếng Việt, gộp cấu hình cũ) · `Engine.explainProtection` (Thử luật, không ghi log) · `ui/DataProtectionDialog`.
   Gộp cấu hình cũ là **thao tác chủ động** (nút trong dialog), không tự chạy khi mở workspace để không đổi hành vi ngầm.
 - **Tab**: `MainPanel.selectTab/selectedTab` cho tab nhóm Báo cáo / Cài đặt.
+
+## 10. V_7.1_beta — Cổng chặn Proxy trực quan
+
+Vấn đề người dùng gặp: menu "Chặn · 1" trộn 6 chế độ (chặn ở Proxy lẫn cách gửi lại), không nói rõ chặn **host nào / path nào**,
+và "200 ảo" bị hiểu nhầm là trả 200 cho Server.
+
+Giải pháp (`core/ProxyGate`, `ui/ProxyGateDialog`, `ui/ProxyFlowDiagram`):
+- **Một** luật chính (id `gate-main`) trong sổ luật = công tắc + phạm vi (mọi host / 1 host / host + path / nhánh) + method + hành động.
+- Hành động chỉ còn 3, mỗi cái có câu "điều gì xảy ra" + "dùng khi" + sơ đồ: Hỏi tôi trước · Giữ lại, trả 200 giả cho **trình duyệt** · Chặn hẳn.
+- Cách gửi lại (Kho ID sống, tạo mới, dùng lại 200 cũ) tách hẳn sang câu 2 với thẻ **Đầu vào → Đầu ra**.
+- Test: `V71ProxyGateTest`.

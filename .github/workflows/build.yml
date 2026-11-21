@@ -90,13 +90,11 @@ jobs:
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Tab Cây dạng bảng thẳng hàng** (tab mặc định): mọi dòng API / role / chờ duyệt vẽ trên lưới cột cố định \`Nhánh/API | Method | Path | Status | Length | Kết quả Role | Đánh giá\` dù ở nhánh sâu hay nông; header kéo đổi độ rộng; ẩn khung chi tiết / chế độ tối đa.
-          2. **Tab API kiểu Burp HTTP History** + cột Kết quả Role dạng ô màu + cột Cách gửi lại; cây bên trái chỉ còn nhánh để lọc.
-          3. **Crawl N role không trùng & Ma trận Role**: tự nhận diện role theo token/cookie, API trùng chỉ ghi thêm "Thấy bởi"; Thấy bởi × Gọi được + độ giống body → NGHI BAC; Quyền mong đợi theo nhánh → VI PHẠM; xuất test case Excel/JSON.
-          4. **Đẩy sang Logger++** (gửi lại 1 lần, mặc định chỉ GET/HEAD 2xx, header đánh dấu tùy chọn) và **Xuất HAR**.
-          5. **Làm việc nhóm an toàn với SOC**: đồng bộ qua thư mục chung (không mở cổng, không gọi mạng), Excel nhóm 6 sheet xuất/gộp; phòng LAN chỉ 127.0.0.1 + passcode bắt buộc.
-          6. **Bảo vệ dữ liệu**: mục Action thành 2 câu hỏi + danh sách luật bằng câu tiếng Việt + Thử luật; gộp cấu hình chặn kiểu cũ về một nơi.
-          7. **Ẩn/hiện bố cục** (\`Ctrl+Alt+0..3/H\`), tab gọn: Cây · API · Ma trận Role · Báo cáo · Roles · Cần xử lý · Cài đặt.
+          1. **Cổng chặn Proxy trực quan** thay cho menu chế độ trên thanh trên cùng: 1 công tắc + 3 câu hỏi — Chặn request nào? (mọi host / 1 host / 1 host + path / 1 nhánh) · Method nào? · Làm gì với request bị chặn? (Hỏi tôi trước / Giữ lại + trả 200 giả cho trình duyệt / Chặn hẳn).
+          2. **Sơ đồ luồng** Trình duyệt -> Burp + JCrawl -> Server vẽ đúng điều sẽ xảy ra, câu tóm tắt tiếng Việt, ô **Thử với 1 request** (không gửi gì).
+          3. Thanh trên cùng hiện đúng trạng thái: \`Chặn: TẮT\` / \`Chặn: Hỏi trước\` / \`Chặn: 200 giả\` / \`Chặn: N chờ duyệt\`.
+          4. **Bảo vệ dữ liệu**: câu 1 trỏ về Cổng chặn; câu 2 có thẻ **Đầu vào -> Đầu ra** cho từng cách gửi lại khi ID đã bị xóa.
+          5. Kế thừa toàn bộ V_7.0_beta: tab Cây thẳng hàng, bảng API kiểu Burp History, Ma trận Role / NGHI BAC, Đẩy sang Logger++ / HAR, nhóm qua thư mục chung & Excel nhóm.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

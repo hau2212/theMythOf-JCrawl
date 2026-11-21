@@ -78,25 +78,20 @@ final class DataProtectionDialog {
         banner.add(bannerText, BorderLayout.CENTER);
         banner.add(migrate, BorderLayout.EAST);
 
-        // ---------------------------------------------------------------- question 1
-        JPanel q1 = section("1. Khi trình duyệt gửi request THAY ĐỔI dữ liệu (POST / PUT / PATCH / DELETE) — với mọi API:");
-        ButtonGroup bg = new ButtonGroup();
-        JPanel radios = new JPanel(new GridLayout(1, 3, 8, 0));
-        radios.setOpaque(false);
-        List<JRadioButton> radioList = new ArrayList<>();
-        for (DataProtection.Choice c : new DataProtection.Choice[] {DataProtection.Choice.PASS, DataProtection.Choice.ASK,
-            DataProtection.Choice.HOLD}) {
-            JRadioButton rb = new JRadioButton(c.label);
-            rb.setOpaque(false);
-            rb.putClientProperty("choice", c);
-            bg.add(rb);
-            radios.add(rb);
-            radioList.add(rb);
-        }
-        q1.add(radios, BorderLayout.CENTER);
-        q1.add(Ui.muted("Muốn khác đi cho một nhánh / method / API cụ thể: thêm luật bên dưới (luật cụ thể luôn thắng luật chung)."),
-                BorderLayout.SOUTH);
-
+        // ---------------------------------------------------------------- question 1 = Cổng chặn Proxy
+        JPanel q1 = section("1. Khi trình duyệt gửi request — chặn ở Proxy hay cho đi? (Cổng chặn Proxy)");
+        JLabel gateLine = Ui.bold(" ");
+        JButton openGate = Ui.solidPrimary("Thiết lập Cổng chặn Proxy (host / path / method / cách chặn)...",
+                t -> Icons.strategyShield(t.accent.onSolid(), 12));
+        openGate.addActionListener(e -> {
+            MainPanel mp = MainPanel.forEngine(engine);
+            if (mp != null) {
+                ProxyGateDialog.show(mp);
+            }
+        });
+        q1.add(gateLine, BorderLayout.CENTER);
+        q1.add(Ui.flow(FlowLayout.LEFT, openGate,
+                Ui.muted("Luật riêng bên dưới (theo nhánh / API) luôn thắng cổng chặn chung.")), BorderLayout.SOUTH);
         // ---------------------------------------------------------------- rules
         JPanel rulesSec = section("Danh sách luật (đọc từ trên xuống — luật đầu tiên khớp sẽ được áp dụng):");
         DefaultListModel<ActionPolicy> rulesModel = new DefaultListModel<>();
@@ -155,6 +150,21 @@ final class DataProtectionDialog {
                 onChanged.run();
             }
         });
+        JLabel ioIn = new JLabel(" ");
+        JLabel ioOut = new JLabel(" ");
+        Runnable showIo = () -> {
+            DataProtection.Resend r = (DataProtection.Resend) defResend.getSelectedItem();
+            ioIn.setText("Đầu vào:  " + r.input);
+            ioOut.setText("Đầu ra:   " + r.output);
+        };
+        defResend.addActionListener(e -> showIo.run());
+        showIo.run();
+        JPanel ioCard = new JPanel(new GridLayout(0, 1, 0, 2));
+        ioCard.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(th.info.border()),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+        ioCard.setBackground(th.info.fill());
+        ioCard.add(ioIn);
+        ioCard.add(ioOut);
         JPanel q2rows = new JPanel(new GridLayout(0, 1, 0, 4));
         q2rows.setOpaque(false);
         q2rows.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Mặc định cho mọi API:"), defResend,
@@ -175,6 +185,7 @@ final class DataProtectionDialog {
             }
         }
         q2.add(q2rows, BorderLayout.CENTER);
+        q2.add(ioCard, BorderLayout.SOUTH);
 
         // ---------------------------------------------------------------- refresh + wiring
         Runnable reload = () -> {
@@ -182,10 +193,7 @@ final class DataProtectionDialog {
             banner.setVisible(legacy > 0);
             bannerText.setText("Còn " + legacy + " cấu hình chặn kiểu cũ nằm ngoài danh sách luật (công tắc giữ ở Proxy, chặn chờ"
                     + " theo nhánh/API, luật Proxy cũ). Gộp vào để chỉ còn MỘT nơi cần xem.");
-            DataProtection.Choice g = DataProtection.globalChoice(ledger);
-            for (JRadioButton rb : radioList) {
-                rb.setSelected(rb.getClientProperty("choice") == g);
-            }
+            gateLine.setText(engine.proxyGate().sentence());
             ActionPolicy keep = rulesList.getSelectedValue();
             rulesModel.clear();
             for (ActionPolicy p : ledger.all()) {
@@ -202,13 +210,6 @@ final class DataProtectionDialog {
             }
             runTest.run();
         };
-        for (JRadioButton rb : radioList) {
-            rb.addActionListener(e -> {
-                DataProtection.setGlobalChoice(ledger, (DataProtection.Choice) rb.getClientProperty("choice"));
-                changed.run();
-                reload.run();
-            });
-        }
         migrate.addActionListener(e -> {
             Config c = engine.config().copy();
             int n = DataProtection.migrateLegacy(engine.actionEngine(), c);

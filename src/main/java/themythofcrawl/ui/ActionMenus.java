@@ -214,6 +214,15 @@ public final class ActionMenus {
         Config cfg = engine.config();
         ApiGroup active = activeGroupSupplier != null ? activeGroupSupplier.get() : null;
 
+        JMenuItem gate = new JMenuItem("Cổng chặn Proxy: chặn host / path / method nào, chặn ra sao...",
+                Icons.strategyShield(th.danger.text(), 14));
+        gate.addActionListener(e -> {
+            MainPanel mp = MainPanel.forEngine(engine);
+            if (mp != null) {
+                ProxyGateDialog.show(mp);
+            }
+        });
+        menu.add(gate);
         JMenuItem protect = new JMenuItem("Bảo vệ dữ liệu: 2 câu hỏi + danh sách luật + Thử luật...",
                 Icons.strategyShield(th.accent.text(), 14));
         protect.addActionListener(e -> DataProtectionDialog.show(parent, engine, active, onAfterAction));

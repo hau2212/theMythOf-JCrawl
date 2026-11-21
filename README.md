@@ -1,9 +1,29 @@
-# theMythOf-JCrawl (Java / Montoya) - V_7.0_beta
+# theMythOf-JCrawl (Java / Montoya) - V_7.1_beta
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_7.1_beta — Cổng chặn Proxy trực quan
+
+![Cổng chặn Proxy](docs/images/v71-cong-chan-proxy.png)
+
+Bấm nút **Chặn: ...** trên thanh trên cùng (hoặc menu *Bảo vệ dữ liệu → Cổng chặn Proxy*). Một công tắc + 3 câu hỏi:
+
+| Bước | Hỏi | Lựa chọn |
+|---|---|---|
+| 1 | **Chặn request nào?** | Mọi host · Chỉ 1 host · 1 host + path (`/api/orders` = mọi path bên dưới, `*` = bất kỳ) · Chỉ khi đang crawl ở 1 nhánh |
+| 2 | **Method nào?** | Tích chọn GET / POST / PUT / PATCH / DELETE / HEAD / OPTIONS (mặc định chỉ POST, PUT, PATCH, DELETE) |
+| 3 | **Làm gì với request bị chặn?** | **Hỏi tôi trước** (dừng ở Burp, bạn bấm Gửi/Hủy) · **Giữ lại, trả 200 giả cho trình duyệt** · **Chặn hẳn** |
+
+- **"200 giả" nghĩa là gì?** Response 200 giả được trả về cho **trình duyệt**, không phải cho Server: Server **không nhận gì**, trình duyệt tưởng
+  thành công và chạy tiếp, request được lưu trong JCrawl để gửi tay / gửi theo role sau. Dùng khi crawl nút Xóa / Hủy / Thanh toán mà không muốn đổi dữ liệu thật.
+- **Sơ đồ luồng** Trình duyệt → Burp + JCrawl → Server vẽ lại ngay khi bạn đổi lựa chọn; câu tóm tắt cho biết chính xác cái gì bị chặn, cái gì đi thẳng.
+- **Thử với 1 request**: nhập method + URL → biết ngay request đó sẽ bị xử lý ra sao (không gửi gì).
+- Công tắc trên thanh trên cùng: BẬT = dùng thiết lập đã lưu · TẮT = tắt mọi chặn, request đi thẳng.
+- Dialog **Bảo vệ dữ liệu**: câu 1 trỏ về Cổng chặn; câu 2 (gửi lại khi ID đã bị xóa) có thẻ **Đầu vào → Đầu ra** cho từng cách
+  (Tự động / Gửi nguyên bản / Thay ID còn sống / Tạo bản ghi mới rồi gửi / Dùng lại kết quả 200 cũ).
 
 ## Điểm mới V_7.0_beta
 
@@ -54,7 +74,7 @@ Kế hoạch & giải thích đầy đủ: [`docs/V7_PLAN.md`](docs/V7_PLAN.md).
 
 Chỉ chia sẻ metadata (method, host, path, trạng thái, tag, người tìm) — không bao giờ chia sẻ token / cookie.
 
-### 6. Bảo vệ dữ liệu (thay cho mục Action khó hiểu)
+### 6. Bảo vệ dữ liệu (thay cho mục Action khó hiểu — từ V_7.1 câu 1 là Cổng chặn Proxy)
 
 ![Bảo vệ dữ liệu](docs/images/v7-bao-ve-du-lieu.png)
 
