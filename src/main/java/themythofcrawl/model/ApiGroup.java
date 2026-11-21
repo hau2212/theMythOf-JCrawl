@@ -49,6 +49,8 @@ public final class ApiGroup {
     private volatile TargetEntry target;
     private final Map<String, Boolean> roleOverrides = new LinkedHashMap<>();
     private final LinkedHashSet<String> tags = new LinkedHashSet<>();
+    /** V_7.0: roles whose own UI reached this endpoint while crawling ("Thấy bởi"). */
+    private final LinkedHashSet<String> seenBy = new LinkedHashSet<>();
     private volatile boolean suspectedRefresh;
     private volatile String triggeredByAction;
     private volatile Integer copyStt;
@@ -198,6 +200,30 @@ public final class ApiGroup {
 
     public void setCapturedAtBranch(String b) {
         this.capturedAtBranch = b;
+    }
+
+    public synchronized Set<String> seenBy() {
+        return new LinkedHashSet<>(seenBy);
+    }
+
+    public synchronized boolean seenBy(String role) {
+        return role != null && seenBy.contains(role);
+    }
+
+    /** Records that {@code role} reached this endpoint through its own UI; true when new. */
+    public synchronized boolean addSeenBy(String role) {
+        return !Text.blank(role) && seenBy.add(role.trim());
+    }
+
+    public synchronized void setSeenBy(Collection<String> roles) {
+        seenBy.clear();
+        if (roles != null) {
+            for (String r : roles) {
+                if (!Text.blank(r)) {
+                    seenBy.add(r.trim());
+                }
+            }
+        }
     }
 
     public synchronized Set<String> tags() {

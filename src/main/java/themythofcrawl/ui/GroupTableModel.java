@@ -25,12 +25,29 @@ import themythofcrawl.place.Decisions;
 /** The API list: one row per captured API, filtered by branch / audit chips. Rows are added incrementally. */
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
     public static final String[] COLS = {"API #", "Group", "Group Path", "Đánh giá (Info)",
-        "Method", "Host", "Path", "Orig", "Orig Len", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
-        "Excel", "Trùng"};
+        "Method", "Host", "Path", "Status", "Length", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
+        "Excel", "Trùng", "Kết quả Role", "Cách gửi lại"};
     public static final int PATH_COL = 2;
     public static final int COPY_COL = 14;
     public static final int EXCEL_COL = 15;
     public static final int DUP_COL = 16;
+    /** V_7.0: per-role heatmap strip (painted by {@link RoleStripRenderer}). */
+    public static final int ROLES_COL = 17;
+    /** V_7.0: how a POST/PUT/PATCH/DELETE is resent when its ID is gone + what happened last time. */
+    public static final int RESEND_COL = 18;
+    public static final int GID_COL = 0;
+    public static final int GROUP_COL = 1;
+    public static final int AUDIT_COL = 3;
+    public static final int METHOD_COL = 4;
+    public static final int HOST_COL = 5;
+    public static final int URL_COL = 6;
+    public static final int STATUS_COL = 7;
+    public static final int LENGTH_COL = 8;
+    public static final int ROLES_TEXT_COL = 9;
+    public static final int SENT_COL = 10;
+    public static final int SOURCE_COL = 11;
+    public static final int TIME_COL = 12;
+    public static final int COPIED_COL = 13;
 
     public static final String TAG_FILTER_SUSPECTED = "__SUSPECTED_REFRESH__";
 
@@ -356,8 +373,52 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                         ? "#" + g.dupNo() + " <- " + Text.groupId(orig.gid())
                         : "#" + g.dupNo() + "/" + g.dupTotal();
             }
+            case 17 -> roleStripText(g);
+            case 18 -> {
+                if (!themythofcrawl.core.ActionEngine.isActionMethod(g.method())) {
+                    yield "";
+                }
+                String how = themythofcrawl.core.DataProtection.Resend.of(engine.effectiveActionMode(g)).label;
+                String note = g.activeIdNote();
+                yield note == null || note.isBlank() ? how : how + " · " + note;
+            }
             default -> "";
         };
+    }
+
+    /** Sortable / copyable text of the role heatmap: worst verdicts first. */
+    static String roleStripText(ApiGroup g) {
+        int ok = 0;
+        int blocked = 0;
+        int bypass = 0;
+        int err = 0;
+        int unsent = 0;
+        for (RoleResult r : g.results()) {
+            switch (Audit.level(g, r)) {
+                case OK -> ok++;
+                case WARN -> bypass++;
+                case ERROR -> err++;
+                case NONE, PENDING -> unsent++;
+                default -> blocked++;
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        if (bypass > 0) {
+            sb.append("Bypass ").append(bypass).append(' ');
+        }
+        if (err > 0) {
+            sb.append("Lỗi ").append(err).append(' ');
+        }
+        if (blocked > 0) {
+            sb.append("Chặn/Lệch ").append(blocked).append(' ');
+        }
+        if (ok > 0) {
+            sb.append("OK ").append(ok).append(' ');
+        }
+        if (unsent > 0) {
+            sb.append("Chưa gửi ").append(unsent);
+        }
+        return sb.toString().trim();
     }
 
     public static String apiTitle(ApiGroup g) {

@@ -421,6 +421,8 @@ class ThemedComponentTest {
 
             // BranchTree chip hit testing (Copy, Excel, Dup badges)
             BranchTree bt = panel.api.tree;
+            panel.api.setTreeShowsApis(true); // V_7.0: API rows in the tree are opt-in (legacy mode)
+            bt.rebuild(false);
             bt.expandFolders(true);
             bt.tree.setSize(720, 480);
             bt.tree.doLayout();
@@ -597,7 +599,7 @@ class ThemedComponentTest {
             assertSame(hitRole, ui.api.selectedResult());
 
             // 4. Mode switching (Ma trận + Văn bản) & Burp renderer retention
-            ui.tabs.setSelectedComponent(ui.history.panel);
+            ui.selectTab(ui.history.panel);
             rv.setViewMode(HistoryReportView.MODE_MATRIX);
             UiPreview.PlainHost.simulateBurpTheme(rv);
             ThemedTable mat = rv.matrixTable();
@@ -930,22 +932,23 @@ class ThemedComponentTest {
                     assertTrue(pref.height <= 64, "header height must stay <= 64, was " + pref.height);
                     assertTrue(pref.width <= 1100, "header width must fit 1100px, was " + pref.width);
 
-                    // 2. Tab tooltips + Alt+1..8 tab switching
+                    // 2. Tab tooltips + Alt+1..7 tab switching (V_7.0: Cây first, Báo cáo / Cài đặt grouped)
                     assertTrue(ui.tabs.getToolTipTextAt(0).contains("Alt+1"));
-                    assertTrue(ui.tabs.getToolTipTextAt(7).contains("Alt+8"));
-                    assertTrue(ui.dispatchShortcut("alt 4"));
-                    assertSame(ui.settings.panel, ui.tabs.getSelectedComponent());
+                    assertTrue(ui.tabs.getToolTipTextAt(6).contains("Alt+7"));
+                    assertTrue(ui.dispatchShortcut("alt 7"));
+                    ui.settingsTabs.setSelectedComponent(ui.settings.panel);
+                    assertSame(ui.settings.panel, ui.selectedTab());
                     assertSame(ui.settings.searchField(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 5"));
-                    assertSame(ui.log.panel, ui.tabs.getSelectedComponent());
+                    ui.settingsTabs.setSelectedComponent(ui.log.panel);
+                    assertSame(ui.log.panel, ui.selectedTab());
                     assertSame(ui.log.searchField(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 8"));
+                    assertTrue(ui.dispatchShortcut("alt 6"));
                     assertSame(ui.audit.panel, ui.tabs.getSelectedComponent());
                     ui.audit.tabs().setSelectedIndex(1);
                     assertSame(ui.audit.placeSearch(), ui.activeSearchField());
                     ui.audit.tabs().setSelectedIndex(3);
                     assertSame(ui.audit.logSearch(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 1"));
+                    assertTrue(ui.dispatchShortcut("alt 2"));
                     assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
                     assertSame(ui.api.searchField(), ui.activeSearchField());
 
@@ -1022,6 +1025,7 @@ class ThemedComponentTest {
                     assertEquals(3, e.groups().size(), "declining Delete confirmation must keep APIs");
 
                     // 6. BranchTree Drag & Drop + Undo toast
+                    ui.api.setTreeShowsApis(true); // V_7.0: API rows in the tree are opt-in (legacy mode)
                     ui.api.tree.rebuild(false);
                     ui.api.tree.expandFolders(true);
                     ui.api.tree.selectGroup(gAlpha);
@@ -1059,7 +1063,7 @@ class ThemedComponentTest {
                     cm.setColumnVisible(lastModelCol, false);
                     cm.saveNow();
 
-                    String colJson = ui.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api");
+                    String colJson = ui.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + ApiTab.API_COLUMNS_ID);
                     assertNotNull(colJson);
                     assertTrue(colJson.contains("213"));
                     assertFalse(cm.isColumnVisible(lastModelCol));
@@ -1079,7 +1083,7 @@ class ThemedComponentTest {
                         assertTrue(colMenu.getComponentCount() >= lastModelCol);
                         cm2.resetDefaults();
                         assertTrue(cm2.isColumnVisible(lastModelCol));
-                        assertNull(ui2.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api"));
+                        assertNull(ui2.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + ApiTab.API_COLUMNS_ID));
                     } finally {
                         ui2.dispose();
                     }

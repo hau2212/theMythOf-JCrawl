@@ -44,6 +44,7 @@ public final class TeamSyncService implements AutoCloseable {
 
     public enum Mode {
         OFFLINE("Độc lập (Offline)"),
+        FOLDER("Thư mục chung (an toàn, không mở cổng)"),
         HOST("Đang mở Phòng (Host)"),
         CLIENT("Đã nối Phòng (Client)");
 
@@ -166,10 +167,30 @@ public final class TeamSyncService implements AutoCloseable {
 
     // ------------------------------------------------------------------ Host / Client lifecycle
 
+    /** Minimum passcode length for a room (V_7.0: a passcode is mandatory). */
+    public static final int MIN_PASSCODE = 8;
+
+    /** Opens a room reachable from THIS machine only (127.0.0.1) — safe default, no LAN exposure. */
     public synchronized void startHost(int port, String roomPasscode) throws IOException {
+        startHost(port, roomPasscode, false);
+    }
+
+    /**
+     * Opens a room. {@code lanExposed=false} binds to 127.0.0.1 only (teammates reach it through an approved
+     * tunnel such as SSH port-forwarding); {@code true} listens on every interface, which security monitoring
+     * may flag as an unusual listening service — use only in a lab network with SOC approval.
+     */
+    public synchronized void startHost(int port, String roomPasscode, boolean lanExposed) throws IOException {
+        String pass = roomPasscode == null ? "" : roomPasscode.trim();
+        if (pass.length() < MIN_PASSCODE) {
+            throw new IllegalArgumentException("Bắt buộc đặt passcode phòng từ " + MIN_PASSCODE + " ký tự trở lên");
+        }
         stop();
-        this.passcode = roomPasscode == null ? "" : roomPasscode.trim();
-        HttpServer s = HttpServer.create(new InetSocketAddress("0.0.0.0", Math.max(0, port)), 0);
+        this.passcode = pass;
+        InetSocketAddress bind = lanExposed
+                ? new InetSocketAddress(Math.max(0, port))
+                : new InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), Math.max(0, port));
+        HttpServer s = HttpServer.create(bind, 0);
         s.createContext("/api/sync/events", this::handleHostEvents);
         s.createContext("/api/sync/push", this::handleHostPush);
         s.createContext("/api/sync/presence", this::handleHostPresence);
@@ -184,7 +205,7 @@ public final class TeamSyncService implements AutoCloseable {
         this.boundPort = s.getAddress().getPort();
         this.roomUrl = "http://127.0.0.1:" + boundPort;
         this.mode = Mode.HOST;
-        this.lastStatus = "Đang mở phòng trên cổng " + boundPort;
+        this.lastStatus = "Đang mở phòng trên cổng " + boundPort + (lanExposed ? " (mở cho LAN)" : " (chỉ máy này)");
         updateLocalPresence(localBranch, "");
         fireChanged();
     }
@@ -224,6 +245,8 @@ public final class TeamSyncService implements AutoCloseable {
             server = null;
         }
         boundPort = 0;
+        folderDir = null;
+        folderOffsets.clear();
         presenceMap.clear();
         recentActions.clear();
         lastStatus = "Chế độ độc lập (Offline)";
@@ -248,6 +271,15 @@ public final class TeamSyncService implements AutoCloseable {
             body.put("branch", p.branch());
             body.put("activeEndpoint", p.activeEndpoint());
             postAsync("/api/sync/presence", body);
+        } else if (mode == Mode.FOLDER && p.updatedAtMs() - lastFolderPresenceMs > 15_000L) {
+            lastFolderPresenceMs = p.updatedAtMs();
+            Map<String, Object> ev = new LinkedHashMap<>();
+            ev.put("type", "PRESENCE");
+            ev.put("member", p.member());
+            ev.put("branch", p.branch());
+            ev.put("activeEndpoint", p.activeEndpoint());
+            ev.put("updatedAtMs", p.updatedAtMs());
+            appendFolderEvent(ev);
         }
     }
 
@@ -272,6 +304,8 @@ public final class TeamSyncService implements AutoCloseable {
             appendHostEvent(ev);
         } else if (mode == Mode.CLIENT) {
             postAsync("/api/sync/push", ev);
+        } else if (mode == Mode.FOLDER) {
+            appendFolderEvent(ev);
         }
     }
 
@@ -288,6 +322,8 @@ public final class TeamSyncService implements AutoCloseable {
             appendHostEvent(ev);
         } else if (mode == Mode.CLIENT) {
             postAsync("/api/sync/push", ev);
+        } else if (mode == Mode.FOLDER) {
+            appendFolderEvent(ev);
         }
     }
 
@@ -316,6 +352,10 @@ public final class TeamSyncService implements AutoCloseable {
                     "pathTemplate", notice.pathTemplate(),
                     "phase", notice.phase(),
                     "atMs", notice.atMs()));
+        } else if (mode == Mode.FOLDER) {
+            Map<String, Object> ev = new LinkedHashMap<>(body);
+            ev.put("type", "ACTION_LOCK");
+            appendFolderEvent(ev);
         } else if (mode == Mode.CLIENT) {
             postAsync("/api/sync/action-lock", body);
         }
@@ -324,9 +364,19 @@ public final class TeamSyncService implements AutoCloseable {
     // ------------------------------------------------------------------ Host HTTP handlers
 
     private boolean authorized(HttpExchange ex) {
-        if (passcode.isEmpty()) return true;
         String hdr = ex.getRequestHeaders().getFirst("X-JCrawl-Passcode");
-        return passcode.equals(hdr);
+        if (passcode.isEmpty() || hdr == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                passcode.getBytes(StandardCharsets.UTF_8), hdr.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Random room passcode (URL-safe, 16 chars) suggested by the UI instead of a fixed default. */
+    public static String randomPasscode() {
+        byte[] b = new byte[12];
+        new java.security.SecureRandom().nextBytes(b);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
     private void handleHostEvents(HttpExchange ex) throws IOException {
@@ -439,6 +489,162 @@ public final class TeamSyncService implements AutoCloseable {
                 hostEvents.remove(0);
             }
         }
+    }
+
+
+    // ------------------------------------------------------------------ V_7.0 shared-folder sync (no sockets)
+    /** Sub-folder created inside the shared folder; one append-only {@code <member>.jsonl} per teammate. */
+    public static final String FOLDER_NAME = "jcrawl-team";
+    public static final long FOLDER_POLL_MS = 3000L;
+
+    private volatile java.nio.file.Path folderDir;
+    private final Map<java.nio.file.Path, Long> folderOffsets = new ConcurrentHashMap<>();
+    private volatile long lastFolderPresenceMs;
+
+    /**
+     * Joins a team through a folder that the company's own sync client already shares (OneDrive,
+     * SharePoint, Google Drive for desktop, an SMB share...). Burp opens NO port and makes NO network
+     * call: each member appends events to its own file and reads the others' files every few seconds.
+     */
+    public synchronized void startFolder(java.nio.file.Path sharedFolder) throws IOException {
+        if (sharedFolder == null) {
+            throw new IllegalArgumentException("Chưa chọn thư mục chung");
+        }
+        stop();
+        java.nio.file.Path dir = sharedFolder.resolve(FOLDER_NAME);
+        java.nio.file.Files.createDirectories(dir);
+        this.folderDir = dir;
+        this.roomUrl = dir.toString();
+        this.mode = Mode.FOLDER;
+        this.lastStatus = "Đồng bộ qua thư mục chung: " + dir;
+        // Publish what this member already has, so teammates joining later catch up
+        for (InventoryCatalog.EndpointMeta meta : catalog.allMeta()) {
+            if (meta.owners.isEmpty() || meta.owners.contains(catalog.memberName())) {
+                broadcastEndpoint(meta);
+            }
+        }
+        for (String t : catalog.allTags()) {
+            broadcastCustomTag(t);
+        }
+        lastFolderPresenceMs = 0;
+        updateLocalPresence(localBranch, "");
+        poller = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "JCrawl-team-folder");
+            t.setDaemon(true);
+            return t;
+        });
+        poller.scheduleWithFixedDelay(this::pollFolderSafe, 100, FOLDER_POLL_MS, TimeUnit.MILLISECONDS);
+        fireChanged();
+    }
+
+    public java.nio.file.Path folderDir() {
+        return folderDir;
+    }
+
+    /** This member's own event file inside the shared folder. */
+    public java.nio.file.Path ownFolderFile() {
+        java.nio.file.Path d = folderDir;
+        return d == null ? null : d.resolve(safeFileName(catalog.memberName()) + ".jsonl");
+    }
+
+    public static String safeMemberFile(String member) {
+        return safeFileName(member);
+    }
+
+    static String safeFileName(String member) {
+        String m = member == null || member.isBlank() ? "member" : member.trim();
+        return m.replaceAll("[^A-Za-z0-9._-]+", "_");
+    }
+
+    private void appendFolderEvent(Map<String, Object> ev) {
+        java.nio.file.Path f = ownFolderFile();
+        if (f == null) {
+            return;
+        }
+        try {
+            java.nio.file.Files.writeString(f, Json.write(ev) + "\n", StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            lastStatus = "Không ghi được file nhóm: " + e.getMessage();
+            fireChanged();
+        }
+    }
+
+    private void pollFolderSafe() {
+        try {
+            pollFolderNow();
+        } catch (Exception ex) {
+            lastStatus = "Lỗi đọc thư mục nhóm: " + ex.getMessage();
+            fireChanged();
+        }
+    }
+
+    /** Reads new complete lines from every teammate's file (deterministic, used by tests and Refresh). */
+    public void pollFolderNow() throws IOException {
+        java.nio.file.Path dir = folderDir;
+        if (mode != Mode.FOLDER || dir == null) {
+            return;
+        }
+        java.nio.file.Path own = ownFolderFile();
+        int applied = 0;
+        try (java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(dir, "*.jsonl")) {
+            for (java.nio.file.Path f : ds) {
+                if (f.equals(own)) {
+                    continue;
+                }
+                long size = java.nio.file.Files.size(f);
+                long off = folderOffsets.getOrDefault(f, 0L);
+                if (size < off) {
+                    off = 0L; // file was replaced / truncated by the sync client
+                }
+                if (size == off) {
+                    continue;
+                }
+                byte[] chunk;
+                try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f.toFile(), "r")) {
+                    raf.seek(off);
+                    chunk = new byte[(int) Math.min(size - off, 8L * 1024 * 1024)];
+                    raf.readFully(chunk);
+                }
+                int lastNl = -1;
+                for (int i = chunk.length - 1; i >= 0; i--) {
+                    if (chunk[i] == '\n') {
+                        lastNl = i;
+                        break;
+                    }
+                }
+                if (lastNl < 0) {
+                    continue; // partial line still being synced
+                }
+                String text = new String(chunk, 0, lastNl, StandardCharsets.UTF_8);
+                folderOffsets.put(f, off + lastNl + 1);
+                for (String line : text.split("\n")) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    try {
+                        Object o = Json.parse(line);
+                        if (o instanceof Map<?, ?> ev) {
+                            if ("PRESENCE".equals(str(ev.get("type")))) {
+                                String member = str(ev.get("member"));
+                                if (!member.isEmpty() && !member.equalsIgnoreCase(catalog.memberName())) {
+                                    presenceMap.put(member, new Presence(member, str(ev.get("branch")),
+                                            str(ev.get("activeEndpoint")), System.currentTimeMillis()));
+                                }
+                            } else {
+                                applyIncomingEvent(ev);
+                            }
+                            applied++;
+                        }
+                    } catch (RuntimeException ignored) {
+                        // skip a corrupted line
+                    }
+                }
+            }
+        }
+        lastStatus = "Thư mục chung: " + dir + " · " + activePeers().size() + " đồng đội"
+                + (applied > 0 ? " · vừa nhận " + applied + " cập nhật" : "");
+        fireChanged();
     }
 
     // ------------------------------------------------------------------ Client polling

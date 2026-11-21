@@ -77,6 +77,11 @@ public final class Engine {
     public static final String PREF_COLLAB_MEMBER = "tmoc.collab.member.v1";
     public static final String PREF_COLLAB_TAGS = "tmoc.collab.tags.v1";
     public static final String PREF_GSHEETS_URL = "tmoc.collab.gsheets_url.v1";
+    public static final String PREF_CRAWL_ROLE = "tmoc.crawl_role.v1";
+    public static final String PREF_TEAM_FOLDER = "tmoc.collab.folder.v7";
+    public static final String PREF_EXPECTED_ACCESS = "tmoc.expected_access.v1";
+    /** "Thấy bởi" label of requests whose account matches no role (the crawl account / API gốc). */
+    public static final String CRAWL_ACCOUNT = "Acc Crawl";
 
     /** Outcome returned by {@link #evaluateProxyIntercept(Service, byte[], String)} for Montoya Proxy/Http handlers. */
     public record ProxyInterceptOutcome(
@@ -138,6 +143,8 @@ public final class Engine {
     private final Logbook logbook = new Logbook();
     private final Roles roles = new Roles();
     private final ActionEngine actionEngine = new ActionEngine();
+    private volatile String crawlRoleOverride;
+    private final themythofcrawl.core.ExpectedAccess expectedAccess = new themythofcrawl.core.ExpectedAccess();
     private final ProxyInterceptQueue proxyQueue = new ProxyInterceptQueue();
     private final NodeTypeCatalog nodeTypes = new NodeTypeCatalog();
     private final ApiTagCatalog tagCatalog = new ApiTagCatalog();
@@ -207,6 +214,14 @@ public final class Engine {
         String savedMember = prefs.get(PREF_COLLAB_MEMBER);
         if (savedMember != null && !savedMember.isBlank()) {
             inventoryCatalog.setMemberName(savedMember);
+        }
+        String folder = prefs.get(PREF_TEAM_FOLDER);
+        if (folder != null && !folder.isBlank() && java.nio.file.Files.isDirectory(java.nio.file.Path.of(folder))) {
+            try {
+                teamSync.startFolder(java.nio.file.Path.of(folder));
+            } catch (Exception ignored) {
+                // folder unavailable (sync client offline): stay independent
+            }
         }
         inventoryCatalog.importTagsJson(prefs.get(PREF_COLLAB_TAGS));
         String savedGSheets = prefs.get(PREF_GSHEETS_URL);
@@ -434,6 +449,22 @@ public final class Engine {
         return teamSync;
     }
 
+    /** Shared team folder (OneDrive / SharePoint / SMB...) remembered for automatic re-join, or null. */
+    public String teamFolder() {
+        return prefs.get(PREF_TEAM_FOLDER);
+    }
+
+    public void startTeamFolder(java.nio.file.Path folder) throws java.io.IOException {
+        teamSync.startFolder(folder);
+        prefs.set(PREF_TEAM_FOLDER, folder.toString());
+        log("Đồng bộ nhóm qua thư mục chung: " + teamSync.folderDir() + " (không mở cổng mạng)", null);
+    }
+
+    public void stopTeamSync() {
+        teamSync.stop();
+        prefs.set(PREF_TEAM_FOLDER, null);
+    }
+
     public themythofcrawl.collab.GoogleSheetsBridge googleSheets() {
         return googleSheets;
     }
@@ -492,6 +523,9 @@ public final class Engine {
         } catch (RuntimeException e) {
             roles.setAll(Roles.template());
         }
+        String forcedRole = prefs.get(PREF_CRAWL_ROLE);
+        crawlRoleOverride = Text.blank(forcedRole) ? null : forcedRole;
+        expectedAccess.loadJson(prefs.get(PREF_EXPECTED_ACCESS));
         String op = prefs.get(PREF_ORIGINAL);
         if (op != null) {
             try {
@@ -1233,6 +1267,174 @@ public final class Engine {
         changes.dirty(g);
     }
 
+    // =================================================================== V_7.0 multi-role crawl
+    /** Role forced for the crawl ("Đang crawl bằng"), or null = auto-detect from the request's token / cookie. */
+    public String crawlRoleOverride() {
+        return crawlRoleOverride;
+    }
+
+    public void setCrawlRoleOverride(String roleName) {
+        crawlRoleOverride = Text.blank(roleName) ? null : roleName.trim();
+        prefs.set(PREF_CRAWL_ROLE, crawlRoleOverride);
+        changes.status();
+        log("Đang crawl bằng: " + (crawlRoleOverride == null ? "Tự nhận diện theo token/cookie" : crawlRoleOverride), null);
+    }
+
+    /** Which role's account sent {@code request}: the override, the detected role, or {@link #CRAWL_ACCOUNT}. */
+    public String resolveCrawlRole(byte[] request) {
+        String forced = crawlRoleOverride;
+        if (forced != null) {
+            return forced;
+        }
+        String found = themythofcrawl.rolereq.CrawlRoleDetector.detect(request, roles.all());
+        return found != null ? found : CRAWL_ACCOUNT;
+    }
+
+    /** Every role that has crawled at least one API (union of "Thấy bởi"). */
+    public Set<String> crawledRoles() {
+        Set<String> out = new LinkedHashSet<>();
+        for (ApiGroup g : groups()) {
+            out.addAll(g.seenBy());
+        }
+        return out;
+    }
+
+    // =================================================================== V_7.0 Logger++ hand-off
+    /** Options of "Đẩy sang Logger++". */
+    public record LoggerPushOptions(boolean onlyOrig2xx, boolean allowActions, boolean includeRoles,
+                                    boolean markerHeader, long delayMs) {
+        public static LoggerPushOptions defaults() {
+            return new LoggerPushOptions(true, false, false, false, 400);
+        }
+    }
+
+    /** Outcome of one "Đẩy sang Logger++" run. */
+    public record LoggerPushReport(int sent, int skippedNot2xx, int skippedAction, int failed) {
+        public String summary() {
+            return "Đã gửi " + sent + " request (Logger++ ghi ở tool Extensions)"
+                    + (skippedNot2xx > 0 ? " · bỏ " + skippedNot2xx + " API gốc không 2xx" : "")
+                    + (skippedAction > 0 ? " · bỏ " + skippedAction + " API POST/PUT/PATCH/DELETE (chưa cho phép)" : "")
+                    + (failed > 0 ? " · lỗi " + failed : "");
+        }
+    }
+
+    public static final String MARKER_HEADER = "X-JCrawl-Ref";
+    private final java.util.concurrent.ExecutorService loggerExec = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "JCrawl-logger-push");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * Sends each API ONCE through Burp's HTTP client so Logger++ (with the Extensions tool logged) records
+     * the request + real response and can forward it to the test-management server. Read-only methods
+     * only unless {@code allowActions}; never touches the role results. Runs in the background.
+     */
+    public java.util.concurrent.Future<LoggerPushReport> pushToLogger(Collection<ApiGroup> gs, LoggerPushOptions opt,
+                                                                     java.util.function.Consumer<String> progress) {
+        List<ApiGroup> list = new ArrayList<>(gs);
+        LoggerPushOptions o = opt == null ? LoggerPushOptions.defaults() : opt;
+        return loggerExec.submit(() -> {
+            int sent = 0;
+            int not2xx = 0;
+            int action = 0;
+            int failed = 0;
+            for (ApiGroup g : list) {
+                if (closed) {
+                    break;
+                }
+                Integer st = g.origStatus();
+                if (o.onlyOrig2xx() && (st == null || st < 200 || st >= 300)) {
+                    not2xx++;
+                    continue;
+                }
+                if (!o.allowActions() && ActionEngine.isActionMethod(g.method())) {
+                    action++;
+                    continue;
+                }
+                List<RoleResult> targets = new ArrayList<>();
+                targets.add(g.origResult());
+                if (o.includeRoles()) {
+                    targets.addAll(g.results());
+                }
+                for (RoleResult r : targets) {
+                    byte[] req = requestOf(g, r);
+                    if (req == null) {
+                        continue;
+                    }
+                    if (o.markerHeader()) {
+                        req = withHeader(req, MARKER_HEADER, markerValue(g, r));
+                    }
+                    Bridge.Sent res = bridge.send(g.service(), req);
+                    if (res == null || res.response() == null) {
+                        failed++;
+                    } else {
+                        sent++;
+                    }
+                    if (progress != null) {
+                        progress.accept("Logger++: " + sent + " đã gửi / " + list.size() + " API");
+                    }
+                    if (o.delayMs() > 0) {
+                        try {
+                            Thread.sleep(o.delayMs());
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return new LoggerPushReport(sent, not2xx, action, failed);
+                        }
+                    }
+                }
+            }
+            LoggerPushReport rep = new LoggerPushReport(sent, not2xx, action, failed);
+            log("Đẩy sang Logger++: " + rep.summary(), null);
+            return rep;
+        });
+    }
+
+    /** ASCII-only marker value: API#12;role=01_Admin;branch=Toppage>Orders;by=A */
+    public String markerValue(ApiGroup g, RoleResult r) {
+        String role = r == null || r.original() ? CRAWL_ACCOUNT : r.roleKey();
+        String branch = java.text.Normalizer.normalize(Text.nz(g.branch()), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").replace('đ', 'd').replace('Đ', 'D').replaceAll("\\s*>\\s*", ">");
+        String v = "API#" + g.gid() + ";role=" + role + ";branch=" + branch
+                + ";by=" + inventoryCatalog.memberName();
+        return v.replaceAll("[^\\x20-\\x7E]", "").replace("\r", "").replace("\n", "");
+    }
+
+    /** Adds (or replaces) one header right after the request line. */
+    public static byte[] withHeader(byte[] request, String name, String value) {
+        String raw = new String(request, java.nio.charset.StandardCharsets.ISO_8859_1);
+        int eol = raw.indexOf("\r\n");
+        String nl = "\r\n";
+        if (eol < 0) {
+            eol = raw.indexOf('\n');
+            nl = "\n";
+        }
+        if (eol < 0) {
+            return request;
+        }
+        int bodyAt = HttpBytes.bodyOffset(request);
+        String head = raw.substring(0, Math.min(bodyAt, raw.length()));
+        String body = raw.substring(Math.min(bodyAt, raw.length()));
+        head = head.replaceAll("(?im)^" + java.util.regex.Pattern.quote(name) + ":[^\r\n]*\r?\n", "");
+        int first = head.indexOf(nl);
+        String out = head.substring(0, first + nl.length()) + name + ": " + value + nl + head.substring(first + nl.length());
+        return (out + body).getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+    }
+
+    public themythofcrawl.core.ExpectedAccess expectedAccess() {
+        return expectedAccess;
+    }
+
+    public void saveExpectedAccess() {
+        prefs.set(PREF_EXPECTED_ACCESS, expectedAccess.toJson());
+        changes.structure();
+    }
+
+    /** Builds the role access matrix (Thấy bởi × Gọi được) and BAC findings for {@code gs}. */
+    public themythofcrawl.core.AccessMatrix accessMatrix(Collection<ApiGroup> gs) {
+        return themythofcrawl.core.AccessMatrix.build(this, gs);
+    }
+
     // =================================================================== capture
     public String placeKey(String method, Service s, String path) {
         return Text.dedupKey(method, s.protocol(), s.host(), s.port(), path, config.dedupNormalizeIds);
@@ -1440,6 +1642,37 @@ public final class Engine {
      * Phương pháp 1 (HOLD_AT_PROXY): Kiểm tra xem request từ trình duyệt đi qua Proxy có cần được
      * chặn lại trước khi tới Server (để giữ nguyên trạng thái ID trên Server) hay không.
      */
+    /**
+     * V_7.0 "Thử luật": what the Proxy gate WOULD do with this request, in one Vietnamese sentence.
+     * Dry run — records no hit, no audit line, sends nothing.
+     */
+    public String explainProtection(String method, String host, String path, String branch) {
+        Config c = config;
+        String m = Text.nz(method).trim().toUpperCase(java.util.Locale.ROOT);
+        String b = Text.blank(branch) ? activeBranch().name() : branch;
+        ActionPolicyLedger.EvaluationResult ev = actionEngine.policyLedger().evaluateProxy(b, Text.nz(host), m, path, null);
+        if (ev.matched()) {
+            ActionPolicy win = ev.winningPolicy();
+            return themythofcrawl.core.DataProtection.Choice.of(win.proxyEffect()).label + " — theo luật: \""
+                    + themythofcrawl.core.DataProtection.sentence(win) + "\""
+                    + (ev.allMatched().size() > 1 ? " (thắng " + (ev.allMatched().size() - 1) + " luật khác khớp nhưng ưu tiên thấp hơn)" : "");
+        }
+        ActionEngine.InterceptDecision d = actionEngine.evaluateInterceptRules(b, Text.nz(host), m, path);
+        if (d.matched()) {
+            return (d.effect() == ActionInterceptRule.Effect.ALLOW ? "Cho đi" : "Chặn") + " — theo luật Proxy kiểu cũ \""
+                    + d.rule().name() + "\" (nên bấm Gộp cấu hình cũ)";
+        }
+        String wait = actionEngine.matchInterceptWaitReason(b, m, path);
+        if (wait != null) {
+            return "Hỏi tôi trước — theo cấu hình chặn chờ kiểu cũ: " + wait + " (nên bấm Gộp cấu hình cũ)";
+        }
+        if (ActionEngine.isActionMethod(m) && (c.holdActionAtProxy || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
+                || actionEngine.isHoldAllActionAtProxy() || actionEngine.isEndpointProxyHold(m, path))) {
+            return "Giữ lại, không gửi — theo công tắc giữ ở Proxy kiểu cũ (nên bấm Gộp cấu hình cũ)";
+        }
+        return "Cho đi bình thường — không luật nào khớp " + m + " " + path + " ở nhánh " + b;
+    }
+
     public boolean shouldHoldAtProxy(Service svc, byte[] request, String url) {
         ProxyInterceptOutcome outcome = evaluateProxyIntercept(svc, request, url);
         return outcome != null && outcome.shouldBlock();
@@ -1531,6 +1764,7 @@ public final class Engine {
         String url = m.url() != null ? m.url() : svc.protocol() + "://" + svc.hostLabel() + path;
         Branch feat = branchId != null && branch(branchId) != null ? branch(branchId) : activeBranch();
         String standing = feat.name();
+        final String crawlRole = resolveCrawlRole(m.request());
         TargetEntry target = targetMatch(method, path, svc.host());
         if (target != null && !target.position().isEmpty() && c.targetUsePosition) {
             feat = findOrCreateBranch(target.position(), false);
@@ -1586,6 +1820,19 @@ public final class Engine {
                         }
                     }
                     if (!newPlace) {
+                        // V_7.0: the same endpoint reached by ANOTHER role's UI is not a new API — just "Thấy bởi" +1
+                        ApiGroup known = earlier != null ? group(earlier) : null;
+                        if (known == null) {
+                            known = originOf(pkey);
+                        }
+                        if (known != null && known.addSeenBy(crawlRole)) {
+                            synchronized (this) {
+                                stateDirty = true;
+                            }
+                            touch(known);
+                            log("Role " + crawlRole + " cũng thấy " + method + " " + Text.shortPath(path, 60)
+                                    + " (API #" + known.gid() + ") — không tạo bản trùng.", known.gid());
+                        }
                         skip("dedup");
                         hit.accept(HitLog.Result.DUP, new Object[] {earlier, ""});
                         book.ensure(pkey, method, svc.host(), path);
@@ -1657,6 +1904,7 @@ public final class Engine {
         ApiGroup g = new ApiGroup(gid, svc, method, path, url, source, feat.id(), feat.name(), req, resp, Clock.hms(),
                 nowMs);
         g.setCapturedAtBranch(standing);
+        g.addSeenBy(crawlRole);
         g.setTarget(target);
         g.setBookKey(pkey);
         g.setPending(pending);
@@ -1780,7 +2028,8 @@ public final class Engine {
         } else if (g.suspectedRefresh()) {
             note += " [Gợi ý REFRESH sau " + g.triggeredByAction() + "]";
         }
-        log("Bắt từ " + source + ": " + method + " " + url + " -> 1 API gốc + " + g.results().size() + " role" + note, gid);
+        log("Bắt từ " + source + " [" + crawlRole + "]: " + method + " " + url + " -> 1 API gốc + " + g.results().size()
+                + " role" + note, gid);
         if (!autoHideRefresh && c.autoRepeater) {
             toRepeater(g, defaultTargets(g, false), false);
         }
@@ -3819,6 +4068,7 @@ public final class Engine {
         dispatcher.cancelAll();
         flushQuietly();
         captureExec.shutdownNow();
+        loggerExec.shutdownNow();
         sendExec.shutdownNow();
         scheduler.shutdownNow();
         synchronized (this) {

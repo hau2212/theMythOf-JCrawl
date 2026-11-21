@@ -422,7 +422,7 @@ final class V35TreeFirstUxTest {
                     try {
                         ui.tick(true);
                         // 1. Top Bar + TreeTab with live [CHỜ DUYỆT · CHƯA GỬI] node selected
-                        ui.tabs.setSelectedComponent(ui.treeTab.panel);
+                        ui.selectTab(ui.treeTab.panel);
                         ui.treeTab.tree.rebuild(false);
                         PendingRequest firstHeld = e.proxyQueue().pending().get(0);
                         Node heldNode = findHeldNode(
@@ -433,7 +433,7 @@ final class V35TreeFirstUxTest {
                         renderPng(ui.root(), 1260, 760, outDir.resolve("topbar_tree_" + suffix + ".png").toFile());
 
                         // 2. RolesTab with ModernToggleSwitch
-                        ui.tabs.setSelectedComponent(ui.roles.panel);
+                        ui.selectTab(ui.roles.panel);
                         ui.tick(true);
                         renderPng(ui.root(), 1260, 740, outDir.resolve("roles_" + suffix + ".png").toFile());
 

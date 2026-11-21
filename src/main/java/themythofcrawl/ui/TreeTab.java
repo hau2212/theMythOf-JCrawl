@@ -76,6 +76,9 @@ final class TreeTab {
     private final JButton quickComposerBtn;
 
     private JFrame window;
+    private JSplitPane treeSplit;
+    private JPanel bottomDetail;
+    private int lastTreeDivider = -1;
     boolean stale = true;
     private ApiGroup shownGroup;
     private RoleResult shown;
@@ -125,7 +128,9 @@ final class TreeTab {
         });
 
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, focusTreeBtn, sendSelBtn, more, windowBtn);
+        javax.swing.JComboBox<String> crawlRole = AccessMatrixTab.crawlRoleCombo(engine);
+        crawlRole.setPrototypeDisplayValue("Tự nhận diện (token/cookie)");
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn, more, windowBtn);
 
         JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         head.setOpaque(false);
@@ -163,8 +168,8 @@ final class TreeTab {
         resetApiBtn.addActionListener(e -> restoreOriginalRequest());
 
         JButton[] qaRef = new JButton[1];
-        quickActionBtn = Ui.secondaryBtn("Action", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
-        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Nhả về Nguyên bản hoặc mở Sổ cái cho API này");
+        quickActionBtn = Ui.secondaryBtn("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
+        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Tắt chặn hoặc mở Luật chặn cho API này");
         quickActionBtn.addActionListener(e -> {
             JPopupMenu m = new JPopupMenu();
             if (shownGroup != null) {
@@ -274,17 +279,30 @@ final class TreeTab {
         rs.add(resp.component(), BorderLayout.CENTER);
         JSplitPane viewers = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, rq, rs);
         viewers.setResizeWeight(0.5);
-        viewers.setPreferredSize(new Dimension(600, 300));
+
 
         JPanel bottomPane = new JPanel(new BorderLayout(0, 0));
         bottomPane.add(inlineActionBar, BorderLayout.NORTH);
         bottomPane.add(viewers, BorderLayout.CENTER);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, MainPanel.scroll(tree.tree), bottomPane);
-        split.setResizeWeight(0.54);
+        // V_7.0: tree-table — API / role rows line up in fixed columns under a header, whatever their depth
+        TreeColumns.enable(tree.tree);
+        javax.swing.JScrollPane treeScroll = MainPanel.scroll(tree.tree);
+        treeScroll.getHorizontalScrollBar().setUnitIncrement(24);
+        TreeColumns.installHeader(tree.tree, treeScroll);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, treeScroll, bottomPane);
+        split.setResizeWeight(0.72);
+        treeSplit = split;
+        bottomDetail = bottomPane;
+        // The tree is where most of the work happens: give it ~70% of the height by default
+        bottomPane.setMinimumSize(new Dimension(0, 120));
+        viewers.setPreferredSize(new Dimension(600, 200));
         split.setOneTouchExpandable(true);
         content.add(topHeaderStack, BorderLayout.NORTH);
         content.add(split, BorderLayout.CENTER);
+        if ("0".equals(ui.uiPrefs.get(KEY_TREE_DETAIL))) {
+            bottomPane.setVisible(false);
+        }
         placeholder.add(new JLabel("Cây Sub-folder đang mở ở cửa sổ riêng."));
         placeholder.add(Ui.secondaryBtn("Gắn lại vào tab", null));
         ((JButton) placeholder.getComponent(1)).addActionListener(e -> closeWindow());
@@ -867,4 +885,57 @@ final class TreeTab {
     JFrame detachedWindow() {
         return window;
     }
+
+    // =================================================================== V_7.0 hideable layout
+    boolean detailVisible() {
+        return bottomDetail != null && bottomDetail.isVisible();
+    }
+
+    /** Hide / show the Request / Response pane under the tree (Ctrl+Alt+2 while the Cây tab is open). */
+    void setDetailVisible(boolean on) {
+        if (bottomDetail == null || bottomDetail.isVisible() == on) {
+            return;
+        }
+        if (!on && treeSplit.getDividerLocation() > 0) {
+            lastTreeDivider = treeSplit.getDividerLocation();
+        }
+        bottomDetail.setVisible(on);
+        if (on) {
+            if (lastTreeDivider > 0) {
+                treeSplit.setDividerLocation(lastTreeDivider);
+            } else {
+                treeSplit.resetToPreferredSizes();
+            }
+        }
+        ui.uiPrefs.set(KEY_TREE_DETAIL, on ? "1" : "0");
+        panel.revalidate();
+        panel.repaint();
+    }
+
+    void toggleDetail() {
+        setDetailVisible(!detailVisible());
+    }
+
+    boolean toolbarVisible() {
+        return topHeaderStack.isVisible();
+    }
+
+    void setToolbarVisible(boolean on) {
+        topHeaderStack.setVisible(on);
+        panel.revalidate();
+    }
+
+    boolean maximized() {
+        return !detailVisible() && !toolbarVisible() && !ui.headerVisible();
+    }
+
+    /** Ctrl+Alt+0 on the Cây tab: only the tree (with its column header) stays on screen. */
+    void toggleMaximized() {
+        boolean max = !maximized();
+        setDetailVisible(!max);
+        setToolbarVisible(!max);
+        ui.setHeaderVisible(!max);
+    }
+
+    static final String KEY_TREE_DETAIL = "tmoc.ui.tree.detail.v7";
 }

@@ -1,11 +1,77 @@
-# theMythOf-JCrawl (Java / Montoya) - 2.0
+# theMythOf-JCrawl (Java / Montoya) - V_7.0_beta
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
 
-## Giao diện mới (Light & Dark)
+## Điểm mới V_7.0_beta
+
+Kế hoạch & giải thích đầy đủ: [`docs/V7_PLAN.md`](docs/V7_PLAN.md).
+
+### 1. Tab Cây dạng bảng thẳng hàng (tab mở mặc định)
+
+![Tab Cây V_7.0](docs/images/v7-cay-tree-table.png)
+
+- Nhánh vẫn thụt lề như cây, nhưng **mọi dòng API / role / [CHỜ DUYỆT] vẽ trên cùng một lưới cột**:
+  `Nhánh / API | Method | Path | Status | Length | Kết quả Role | Đánh giá · Tag` — API ở nhánh sâu hay nông đều thẳng hàng.
+- Kéo mép tiêu đề cột để đổi độ rộng (nhớ lại lần sau), nhấp đúp mép cột để về mặc định.
+- `Ctrl+Alt+2` ẩn/hiện khung Request/Response dưới cây · `Ctrl+Alt+0` chỉ còn cây · ô **Crawl bằng** chọn role đang crawl.
+
+### 2. Tab API kiểu Burp HTTP History
+
+![Tab API V_7.0](docs/images/v7-api-light.png)
+
+- Cột `# | Method | Host | Path | Status | Length | Kết quả Role | Nhánh | Đánh giá | Cách gửi lại | Time`; cột ít dùng ẩn mặc định (chuột phải header để bật).
+- Cây bên trái chỉ còn nhánh + số đếm để lọc bảng; kéo dòng API thả vào nhánh để chuyển.
+- `Ctrl+Alt+1/2/3/H` ẩn/hiện Cây / Chi tiết / Thanh công cụ / Thanh trên cùng · `Ctrl+Alt+0` chế độ Tối đa · nút **Bố cục ▾**.
+
+### 3. Crawl N role không trùng & phát hiện BAC — tab **Ma trận Role**
+
+![Ma trận Role](docs/images/v7-ma-tran-role.png)
+
+- Extension **tự nhận ra role đang crawl** bằng cách so token / cookie của request với rule từng Role (hoặc chọn tay ở ô *Đang crawl bằng*).
+- API đã có mà role khác cũng thấy → **không tạo bản trùng**, chỉ ghi thêm vào cột **Thấy bởi**.
+- Gửi lại mọi API bằng mọi role → **Gọi được**. Role **không thấy** chức năng trong UI nhưng **gọi được 2xx cùng nội dung** (so độ giống body)
+  → **NGHI BAC**. Khai báo **Quyền mong đợi** theo nhánh (ví dụ `Toppage > Admin` chỉ `01_Admin`) → **VI PHẠM** chắc chắn.
+- Xuất **test case** (Excel 2 sheet / JSON) cho server quản lý.
+
+### 4. Đẩy sang Logger++ / Xuất HAR
+
+- Nút **Đẩy sang Logger++**: gửi lại mỗi API **1 lần** qua HTTP client của Burp (Logger++ bật log tool *Extensions* sẽ ghi request + response thật).
+  Mặc định chỉ API gốc **2xx** và chỉ **GET/HEAD** (POST/PUT/PATCH/DELETE phải bật riêng + xác nhận). Tùy chọn header `X-JCrawl-Ref: API#..;role=..;branch=..`
+  để lọc trong Logger++ (mặc định tắt để không để lại dấu vết lạ trên server mục tiêu).
+- **Xuất HAR** (không gửi gì) kèm trường `_jcrawl` (API #, nhánh, Thấy bởi, role, đánh giá).
+
+### 5. Làm việc nhóm an toàn với SOC
+
+| Cách | Mạng từ Burp | Ghi chú |
+|---|---|---|
+| **Thư mục chung** (khuyến nghị) — OneDrive / SharePoint / Google Drive / ổ mạng | **Không** | Mỗi người ghi `jcrawl-team/<tên>.jsonl`, đọc file của người khác mỗi 3 giây; tự nối lại khi mở Burp |
+| **Excel nhóm** 6 sheet (Tổng hợp, Ma trận Role, Test case & Bug, Phân công, Xung đột, Theo thành viên) | **Không** | Mỗi người xuất 1 file, một người **Gộp** lại; phát hiện xung đột kiểu Git |
+| Google Sheets (đã có) | HTTPS tới Google | Giới hạn Web App trong tổ chức |
+| Phòng LAN | Mở cổng | Mặc định chỉ `127.0.0.1`, bắt buộc passcode ≥ 8 ký tự; mở LAN phải bật riêng có cảnh báo |
+
+Chỉ chia sẻ metadata (method, host, path, trạng thái, tag, người tìm) — không bao giờ chia sẻ token / cookie.
+
+### 6. Bảo vệ dữ liệu (thay cho mục Action khó hiểu)
+
+![Bảo vệ dữ liệu](docs/images/v7-bao-ve-du-lieu.png)
+
+- **Câu 1** — khi trình duyệt gửi POST/PUT/PATCH/DELETE: *Cho đi bình thường* / *Hỏi tôi trước* / *Giữ lại, không gửi (200 giả)*;
+  thêm luật riêng cho method / nhánh / API. Luật hiển thị bằng câu tiếng Việt, đọc từ trên xuống.
+- **Thử luật**: nhập method + path + nhánh → biết ngay request sẽ bị xử lý ra sao (không gửi gì).
+- **Câu 2** — khi gửi lại mà ID đã bị xóa: *Gửi nguyên bản* / *Thay ID còn sống* / *Tạo bản ghi mới rồi gửi* / *Dùng lại kết quả 200 cũ* / *Tự động*;
+  cột **Cách gửi lại** trong bảng API cho biết lần gửi gần nhất đã làm gì.
+- Nút **Gộp vào danh sách luật** chuyển mọi công tắc chặn kiểu cũ (giữ ở Proxy, chặn chờ theo nhánh/API, luật Proxy cũ) thành luật — hành vi giữ nguyên, chỉ còn **một nơi** để xem.
+  Workbench cũ vẫn ở mục **Nâng cao**.
+
+### 7. Tab gọn hơn
+
+`Cây · API · Ma trận Role · Báo cáo (Lịch sử, Excel) · Roles · Cần xử lý · Cài đặt (Cấu hình, Log)` — `Alt+1..7`.
+Thanh trên cùng dùng chữ rõ nghĩa: `API 12 · 6 nhánh`, `Xử lý 7`, `Gửi 0`.
+
+## Giao diện (Light & Dark)
 
 | Tab API (FlatLaf Light) | Tab API (FlatLaf Dark) |
 |---|---|
@@ -80,7 +146,7 @@ Mọi thao tác chính đều hiển thị thông báo nổi không chặn (**To
 | `Ctrl+Shift+C` | Copy `STT. path` cho các API / nhánh đang chọn |
 | `Ctrl+Enter` | Gửi API / phạm vi đang chọn qua N Roles |
 | `Ctrl+R` | Đẩy API / phạm vi đang chọn sang Burp Repeater |
-| `Alt+1` .. `Alt+8` | Chuyển nhanh giữa 8 tab chính |
+| `Alt+1` .. `Alt+7` | Chuyển nhanh giữa 7 tab chính (Cây, API, Ma trận Role, Báo cáo, Roles, Cần xử lý, Cài đặt) |
 | `Delete` | Xóa các API đang chọn (có hộp thoại xác nhận, vẫn giữ chỗ) |
 
 ## Workspace - dữ liệu không mất khi tắt Burp / đổi project

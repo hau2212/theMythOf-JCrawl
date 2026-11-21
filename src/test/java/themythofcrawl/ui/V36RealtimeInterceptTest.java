@@ -104,13 +104,13 @@ final class V36RealtimeInterceptTest {
         try (InputStream in = Files.newInputStream(Path.of("version.properties"))) {
             props.load(in);
         }
-        assertEquals("5", props.getProperty("major"));
+        assertEquals("7", props.getProperty("major"));
         assertEquals("0", props.getProperty("minor"));
-        assertEquals("V_5.0_beta", props.getProperty("releaseTag"));
-        assertEquals("5.0-beta", props.getProperty("versionName"));
-        assertEquals("theMythOf-JCrawl_V_5.0_beta.jar", props.getProperty("jarName"));
-        assertEquals("5.0-beta", Extension.VERSION);
-        assertEquals("5.0-beta", Diagnostics.VERSION);
+        assertEquals("V_7.0_beta", props.getProperty("releaseTag"));
+        assertEquals("7.0-beta", props.getProperty("versionName"));
+        assertEquals("theMythOf-JCrawl_V_7.0_beta.jar", props.getProperty("jarName"));
+        assertEquals("7.0-beta", Extension.VERSION);
+        assertEquals("7.0-beta", Diagnostics.VERSION);
 
         String wf = Files.readString(Path.of(".github/workflows/build.yml"), StandardCharsets.UTF_8);
         assertTrue(wf.contains("IMMUTABLE GUARD"), "CI workflow must preserve immutable release guard");
@@ -132,7 +132,7 @@ final class V36RealtimeInterceptTest {
                 JTabbedPane tabs = findFirst(ui.root(), JTabbedPane.class);
                 assertNotNull(tabs);
                 // Switch to Cây tab once and stop there (NO further tab switches!)
-                tabs.setSelectedComponent(ui.treeTab.panel);
+                ui.selectTab(ui.treeTab.panel);
                 ui.treeTab.tree.rebuild(false);
 
                 // Collapse the target folder to verify auto-expansion on real-time intercept
@@ -204,7 +204,7 @@ final class V36RealtimeInterceptTest {
                 uiRef.set(ui);
                 JTabbedPane tabs = findFirst(ui.root(), JTabbedPane.class);
                 assertNotNull(tabs);
-                tabs.setSelectedComponent(ui.api.panel);
+                ui.selectTab(ui.api.panel);
                 ui.api.tree.rebuild(false);
             });
 

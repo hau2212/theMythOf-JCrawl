@@ -22,6 +22,7 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JComponent;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -58,6 +59,8 @@ import themythofcrawl.ui.theme.Theme;
 
 /** 'API' tab: branch tree / table, API list, the selected API's rows (API gốc + roles), grouped Repeater, viewers. */
 final class ApiTab {
+    /** Column-layout key of the flat API table; V_7.0 bumped it so every user gets the Burp-style layout once. */
+    static final String API_COLUMNS_ID = "api.v7";
     final JPanel panel = new JPanel(new BorderLayout());
     private final MainPanel ui;
     private final Engine engine;
@@ -125,6 +128,14 @@ final class ApiTab {
     private int lastKnownHeldCount;
     private JButton compactSummaryBtn;
     private JLabel compactMiniStats;
+    private JSplitPane topSplit;
+    private JSplitPane masterSplit;
+    private JPanel leftPane;
+    private JComponent detailPane;
+    private JComponent toolbarPane;
+    private JPanel restoreStrip;
+    private javax.swing.JScrollPane treeScroll;
+    private final java.util.EnumMap<Pane, Integer> lastDivider = new java.util.EnumMap<>(Pane.class);
     private boolean treeStale = true;
     private boolean branchStale = true;
     private boolean selecting;
@@ -143,7 +154,12 @@ final class ApiTab {
         respViewer = ui.host.responseViewer();
         initFilterPills();
         JPanel northWrap = new JPanel(new BorderLayout(0, 0));
-        northWrap.add(actionBar(), BorderLayout.NORTH);
+        toolbarPane = actionBar();
+        JPanel toolbarHost = new JPanel(new BorderLayout(0, 0));
+        toolbarHost.add(toolbarPane, BorderLayout.NORTH);
+        restoreStrip = buildRestoreStrip();
+        toolbarHost.add(restoreStrip, BorderLayout.SOUTH);
+        northWrap.add(toolbarHost, BorderLayout.NORTH);
         northWrap.add(buildFocusBanner(), BorderLayout.SOUTH);
         panel.add(northWrap, BorderLayout.NORTH);
 
@@ -169,11 +185,21 @@ final class ApiTab {
         Ui.widths(branchTable, 64, 165, 54, 165, 115);
         ColumnMemory.install(branchTable, "branches", ui.uiPrefs);
         Ui.onPopup(branchTable, e -> branchMenu().show(e.getComponent(), e.getX(), e.getY()));
-        leftTabs.addTab("Cây Sub-folder", MainPanel.scroll(tree.tree));
+        TreeColumns.enable(tree.tree);
+        treeScroll = MainPanel.scroll(tree.tree);
+        leftTabs.addTab("Cây Sub-folder", treeScroll);
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
         JPanel left = new JPanel(new BorderLayout(0, 0));
         left.add(leftTabs, BorderLayout.CENTER);
+        leftPane = left;
+        left.setPreferredSize(new Dimension(Theme.current().scaled(300), 0));
+        left.setMinimumSize(new Dimension(Theme.current().scaled(160), 0));
+        // V_7.0: the tree is a branch filter (Site-map style) by default; API rows live in the flat table.
+        tree.setShowApis("1".equals(ui.uiPrefs.get(KEY_TREE_SHOW_APIS)));
+        if (tree.showApis()) {
+            TreeColumns.installHeader(tree.tree, treeScroll);
+        }
 
         // right: the API table (filter & search merged into top actionBar)
         Ui.style(table);
@@ -199,7 +225,7 @@ final class ApiTab {
                 })
                 .numberCols(0, 8)
                 .timeCols(12);
-        int[] widths = {68, 62, 195, 205, 84, 130, 235, 58, 72, 95, 62, 62, 68, 220, 56, 115, 70};
+        int[] widths = {56, 62, 190, 210, 70, 150, 340, 58, 72, 95, 62, 62, 68, 220, 56, 96, 70, 150, 220};
         TableColumnModel cm = table.getColumnModel();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);   // keep readable widths, scroll sideways
         for (int i = 0; i < GroupTableModel.COLS.length; i++) {
@@ -218,11 +244,16 @@ final class ApiTab {
                 .tooltip(r -> groupModel.at(r) != null && groupModel.at(r).dupTotal() > 1 ? "API trùng: bấm để xem nhanh các bản" : null));
         pathEditor.setEditable(true);
         cm.getColumn(GroupTableModel.PATH_COL).setCellEditor(new DefaultCellEditor(pathEditor));
-        // 'Copy' first, 'Excel' and 'Trùng' right after Method (model indexes unchanged)
-        cm.moveColumn(GroupTableModel.COPY_COL, 0);
-        cm.moveColumn(GroupTableModel.EXCEL_COL, 6);
-        cm.moveColumn(GroupTableModel.DUP_COL, 7);
-        ColumnMemory.install(table, "api", ui.uiPrefs);
+        cm.getColumn(GroupTableModel.ROLES_COL).setCellRenderer(new RoleStripRenderer(groupModel));
+        // V_7.0: Burp HTTP History column order (model indexes unchanged):
+        //   # | Method | Host | Path | Status | Length | Kết quả Role | Nhánh | Đánh giá | Time | Excel | Trùng | (ẩn ...)
+        applyViewOrder(cm, GroupTableModel.GID_COL, GroupTableModel.METHOD_COL, GroupTableModel.HOST_COL,
+                GroupTableModel.URL_COL, GroupTableModel.STATUS_COL, GroupTableModel.LENGTH_COL,
+                GroupTableModel.ROLES_COL, GroupTableModel.PATH_COL, GroupTableModel.AUDIT_COL,
+                GroupTableModel.RESEND_COL, GroupTableModel.TIME_COL, GroupTableModel.EXCEL_COL, GroupTableModel.DUP_COL);
+        ColumnMemory.install(table, API_COLUMNS_ID, ui.uiPrefs,
+                GroupTableModel.COPY_COL, GroupTableModel.GROUP_COL, GroupTableModel.ROLES_TEXT_COL,
+                GroupTableModel.SENT_COL, GroupTableModel.SOURCE_COL, GroupTableModel.COPIED_COL);
         MouseAdapter cells = new MouseAdapter() {
             private int[] cell(MouseEvent e) {
                 int vr = table.rowAtPoint(e.getPoint());
@@ -257,7 +288,9 @@ final class ApiTab {
         JPanel groupPanel = new JPanel(new BorderLayout(0, 0));
         groupPanel.add(MainPanel.scroll(table), BorderLayout.CENTER);
         JSplitPane top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, groupPanel);
-        top.setResizeWeight(0.30);
+        top.setResizeWeight(0.22);
+        topSplit = top;
+        installTableDrag();
 
         // bottom: API gốc + roles, single compact Repeater/summary bar, viewers
         Ui.style(results);
@@ -303,8 +336,8 @@ final class ApiTab {
         });
         composerBtn.setToolTipText("Mở trình soạn thảo Request (Composer) để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
         JButton[] repActionRef = new JButton[1];
-        JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Action Workbench 6 tab: Chiến lược, Sổ cái CRUD, Dò Giao thức, Kho ID Sống, Chuỗi Tạo Mới, Khóa 200 OK", () -> {
+        JButton repActionBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+                "Bảo vệ dữ liệu: chặn / hỏi trước / giữ lại khi crawl, cách gửi lại khi ID đã bị xóa, Thử luật", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ApiGroup cur = currentGroup();
                     if (cur != null) {
@@ -493,8 +526,213 @@ final class ApiTab {
         JSplitPane detail = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resPanel, repeater);
         detail.setResizeWeight(0.30);
         JSplitPane master = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, detail);
-        master.setResizeWeight(0.38);
+        master.setResizeWeight(0.55);
+        masterSplit = master;
+        detailPane = detail;
         panel.add(master, BorderLayout.CENTER);
+        restoreLayout();
+    }
+
+    // =================================================================== V_7.0 hideable layout
+    /** Parts of the API tab that can be hidden to give the table the whole screen. */
+    enum Pane { TREE, DETAIL, TOOLBAR }
+
+    static final String KEY_LAYOUT = "tmoc.ui.layout.v7";
+    static final String KEY_TREE_SHOW_APIS = "tmoc.ui.tree.showApis.v7";
+
+    boolean paneVisible(Pane p) {
+        JComponent c = paneComponent(p);
+        return c != null && c.isVisible();
+    }
+
+    private JComponent paneComponent(Pane p) {
+        return switch (p) {
+            case TREE -> leftPane;
+            case DETAIL -> detailPane;
+            case TOOLBAR -> toolbarPane;
+        };
+    }
+
+    private JSplitPane paneSplit(Pane p) {
+        return switch (p) {
+            case TREE -> topSplit;
+            case DETAIL -> masterSplit;
+            case TOOLBAR -> null;
+        };
+    }
+
+    void togglePane(Pane p) {
+        setPaneVisible(p, !paneVisible(p));
+    }
+
+    void setPaneVisible(Pane p, boolean on) {
+        setPaneVisible(p, on, true);
+    }
+
+    private void setPaneVisible(Pane p, boolean on, boolean persist) {
+        JComponent c = paneComponent(p);
+        if (c == null || c.isVisible() == on) {
+            return;
+        }
+        JSplitPane sp = paneSplit(p);
+        if (sp != null && !on && sp.getDividerLocation() > 0) {
+            lastDivider.put(p, sp.getDividerLocation());
+        }
+        c.setVisible(on);
+        if (p == Pane.TOOLBAR && restoreStrip != null) {
+            restoreStrip.setVisible(!on);
+        }
+        if (sp != null && on) {
+            Integer loc = lastDivider.get(p);
+            if (loc != null && loc > 0) {
+                sp.setDividerLocation(loc);
+            } else {
+                sp.resetToPreferredSizes();
+            }
+        }
+        panel.revalidate();
+        panel.repaint();
+        if (persist) {
+            saveLayout();
+        }
+    }
+
+    /** Bố cục sẵn: crawl (cây + bảng), analyze (bảng + chi tiết), max (chỉ bảng), all (hiện hết). */
+    void applyPreset(String preset) {
+        switch (preset) {
+            case "crawl" -> {
+                setPaneVisible(Pane.TREE, true, false);
+                setPaneVisible(Pane.DETAIL, false, false);
+                setPaneVisible(Pane.TOOLBAR, true, false);
+            }
+            case "analyze" -> {
+                setPaneVisible(Pane.TREE, false, false);
+                setPaneVisible(Pane.DETAIL, true, false);
+                setPaneVisible(Pane.TOOLBAR, true, false);
+            }
+            case "max" -> {
+                setPaneVisible(Pane.TREE, false, false);
+                setPaneVisible(Pane.DETAIL, false, false);
+                setPaneVisible(Pane.TOOLBAR, false, false);
+                ui.setHeaderVisible(false);
+            }
+            default -> {
+                setPaneVisible(Pane.TREE, true, false);
+                setPaneVisible(Pane.DETAIL, true, false);
+                setPaneVisible(Pane.TOOLBAR, true, false);
+                ui.setHeaderVisible(true);
+            }
+        }
+        saveLayout();
+    }
+
+    /** True when everything but the API table is hidden. */
+    boolean maximized() {
+        return !paneVisible(Pane.TREE) && !paneVisible(Pane.DETAIL) && !paneVisible(Pane.TOOLBAR) && !ui.headerVisible();
+    }
+
+    void toggleMaximized() {
+        applyPreset(maximized() ? "all" : "max");
+    }
+
+    void saveLayout() {
+        ui.uiPrefs.set(KEY_LAYOUT, "tree=" + (paneVisible(Pane.TREE) ? 1 : 0)
+                + ";detail=" + (paneVisible(Pane.DETAIL) ? 1 : 0)
+                + ";toolbar=" + (paneVisible(Pane.TOOLBAR) ? 1 : 0)
+                + ";header=" + (ui.headerVisible() ? 1 : 0));
+    }
+
+    private void restoreLayout() {
+        String raw = ui.uiPrefs.get(KEY_LAYOUT);
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        for (String part : raw.split(";")) {
+            String[] kv = part.split("=", 2);
+            if (kv.length != 2) {
+                continue;
+            }
+            boolean on = !"0".equals(kv[1].trim());
+            switch (kv[0].trim()) {
+                case "tree" -> setPaneVisible(Pane.TREE, on, false);
+                case "detail" -> setPaneVisible(Pane.DETAIL, on, false);
+                case "toolbar" -> setPaneVisible(Pane.TOOLBAR, on, false);
+                default -> { }
+            }
+        }
+    }
+
+    void setTreeShowsApis(boolean on) {
+        tree.setShowApis(on);
+        if (treeScroll != null) {
+            if (on) {
+                TreeColumns.installHeader(tree.tree, treeScroll);
+            } else {
+                treeScroll.setColumnHeaderView(null);
+            }
+        }
+        ui.uiPrefs.set(KEY_TREE_SHOW_APIS, on ? "1" : "0");
+        treeStale = true;
+        refreshVisible(true);
+    }
+
+    JPopupMenu layoutMenu() {
+        JPopupMenu m = new JPopupMenu();
+        m.add(layoutCheck("Cây nhánh bên trái", "Ctrl+Alt+1", paneVisible(Pane.TREE), () -> togglePane(Pane.TREE)));
+        m.add(layoutCheck("Khung chi tiết (Role + Request/Response)", "Ctrl+Alt+2", paneVisible(Pane.DETAIL),
+                () -> togglePane(Pane.DETAIL)));
+        m.add(layoutCheck("Thanh công cụ tab API", "Ctrl+Alt+3", paneVisible(Pane.TOOLBAR), () -> togglePane(Pane.TOOLBAR)));
+        m.add(layoutCheck("Thanh trên cùng của extension", "Ctrl+Alt+H", ui.headerVisible(), () -> {
+            ui.setHeaderVisible(!ui.headerVisible());
+            saveLayout();
+        }));
+        m.addSeparator();
+        m.add(layoutCheck("Hiện từng API trong cây (kiểu cũ)", null, tree.showApis(), () -> setTreeShowsApis(!tree.showApis())));
+        m.addSeparator();
+        m.add(Ui.item("Bố cục Crawl: Cây + Bảng", Icons::folder, () -> applyPreset("crawl")));
+        m.add(Ui.item("Bố cục Phân tích: Bảng + Chi tiết", Icons::sliders, () -> applyPreset("analyze")));
+        m.add(Ui.item("Bố cục Tối đa: chỉ Bảng API (Ctrl+Alt+0)", Icons::window, () -> applyPreset("max")));
+        m.add(Ui.item("Hiện tất cả", Icons::undo, () -> applyPreset("all")));
+        return m;
+    }
+
+    /** Slim strip shown only while the toolbar is hidden, so the layout can always be restored with the mouse. */
+    private JPanel buildRestoreStrip() {
+        JPanel strip = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JButton[] ref = new JButton[1];
+        JButton layout = Ui.dropdown("Bố cục", t -> Icons.withChevron(Icons.window(t.fg, 12), t.fg),
+                "Đang ẩn thanh công cụ — bấm để hiện lại hoặc đổi bố cục (Ctrl+Alt+0 để thoát chế độ Tối đa)",
+                () -> layoutMenu().show(ref[0], 0, ref[0].getHeight()));
+        ref[0] = layout;
+        layout.setMargin(new Insets(0, 4, 0, 4));
+        strip.add(layout);
+        strip.add(Ui.muted("Ctrl+Alt+0: thoát Tối đa · Ctrl+Alt+1/2/3/H: ẩn/hiện Cây / Chi tiết / Công cụ / Thanh trên"));
+        strip.setVisible(false);
+        return strip;
+    }
+
+    private static javax.swing.JCheckBoxMenuItem layoutCheck(String text, String accel, boolean on, Runnable action) {
+        javax.swing.JCheckBoxMenuItem it = new javax.swing.JCheckBoxMenuItem(accel == null ? text : text + "   (" + accel + ")", on);
+        it.addActionListener(e -> action.run());
+        return it;
+    }
+
+    /** Drag API rows from the flat table onto a branch of the tree to move them (Undo toast as before). */
+    private void installTableDrag() {
+        table.setTransferHandler(new javax.swing.TransferHandler() {
+            @Override
+            public int getSourceActions(JComponent c) {
+                return COPY_OR_MOVE;
+            }
+
+            @Override
+            protected java.awt.datatransfer.Transferable createTransferable(JComponent c) {
+                return BranchTree.transferableFor(selectedGroups());
+            }
+        });
+        if (!java.awt.GraphicsEnvironment.isHeadless()) {
+            table.setDragEnabled(true);
+        }
     }
 
     private JPanel buildHeldStrip() {
@@ -650,7 +888,7 @@ final class ApiTab {
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
-        JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+        JButton actionMenuBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
                 "Mở Action Workbench 5 tab, Luật Chặn Proxy, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {
@@ -714,8 +952,14 @@ final class ApiTab {
         for (java.awt.Component comp : secondaryToolbarBtns) {
             leftActions.add(comp);
         }
+        JButton[] layoutRef = new JButton[1];
+        JButton layoutBtn = Ui.dropdown("Bố cục", t -> Icons.withChevron(Icons.window(t.fg), t.fg),
+                "Ẩn / hiện Cây, Khung chi tiết, Thanh công cụ, Thanh trên cùng · Bố cục Crawl / Phân tích / Tối đa",
+                () -> layoutMenu().show(layoutRef[0], 0, layoutRef[0].getHeight()));
+        layoutRef[0] = layoutBtn;
         JPanel rightMode = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 1));
         rightMode.setOpaque(false);
+        rightMode.add(layoutBtn);
         rightMode.add(search);
         rightMode.add(filterDropdownBtn);
         rightMode.add(filterCount);
@@ -2015,6 +2259,22 @@ final class ApiTab {
         }
         return "Bấm để mở dòng STT " + g.target().sttText() + " trong tab Excel (" + g.target().methodLabel() + " "
                 + g.target().path() + ") · đã gặp " + engine.hits().count(g.target()) + " lần";
+    }
+
+    /** Moves the given model columns to the front, in that order; the remaining columns keep their order. */
+    static void applyViewOrder(TableColumnModel cm, int... modelOrder) {
+        int pos = 0;
+        for (int mi : modelOrder) {
+            for (int v = pos; v < cm.getColumnCount(); v++) {
+                if (cm.getColumn(v).getModelIndex() == mi) {
+                    if (v != pos) {
+                        cm.moveColumn(v, pos);
+                    }
+                    pos++;
+                    break;
+                }
+            }
+        }
     }
 
     static List<ApiGroup> listOf(ApiGroup g) {

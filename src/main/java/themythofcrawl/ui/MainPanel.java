@@ -147,6 +147,9 @@ public final class MainPanel {
     private final JPanel main = new JPanel(new BorderLayout());
     final ToastPane toastPane = new ToastPane(main);
     final JTabbedPane tabs = new JTabbedPane();
+    /** V_7.0 grouped tabs: Báo cáo = Lịch sử + Excel; Cài đặt = Cấu hình + Log. */
+    final JTabbedPane reportTabs = new JTabbedPane();
+    final JTabbedPane settingsTabs = new JTabbedPane();
     private final Timer timer;
     private JFrame window;
     private JPanel headerPanel;
@@ -176,6 +179,7 @@ public final class MainPanel {
     final LogTab log;
     final ExcelTab excel;
     final AuditTab audit;
+    final AccessMatrixTab matrix;
 
     public MainPanel(Engine engine, Workspaces workspaces, UiHost host, String projectId) {
         this.engine = engine;
@@ -184,12 +188,17 @@ public final class MainPanel {
         this.projectId = projectId;
         this.uiPrefs = UiPrefs.resolve(workspaces, engine);
         UiPrefs.applyStartup(this.uiPrefs);
+        TreeColumns.load(this.uiPrefs);
         this.userTopCompact = UiPrefs.topCompact(this.uiPrefs);
         this.headerPanel = buildHeader();
         main.add(headerPanel, BorderLayout.NORTH);
         spotlight = new SpotlightDialog(this);
         toastPane.setModalOverlay(spotlight);
         api = new ApiTab(this);
+        String savedLayout = uiPrefs.get(ApiTab.KEY_LAYOUT);
+        if (savedLayout != null && savedLayout.contains("header=0")) {
+            headerPanel.setVisible(false);
+        }
         history = new HistoryTab(this);
         roles = new RolesTab(this);
         settings = new SettingsTab(this);
@@ -197,19 +206,26 @@ public final class MainPanel {
         excel = new ExcelTab(this);
         treeTab = new TreeTab(this);
         audit = new AuditTab(this);
+        matrix = new AccessMatrixTab(this);
+        // V_7.0 tab groups: Cây first (where most of the work happens), reports and settings grouped
+        reportTabs.addTab("Lịch sử", null, history.panel, "Cây lịch sử theo nhánh và báo cáo trực quan");
+        reportTabs.addTab("Excel", null, excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu");
+        settingsTabs.addTab("Cấu hình", null, settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace");
+        settingsTabs.addTab("Log", null, log.panel, "Nhật ký theo nhánh / API, xuất Excel");
         Object[][] t = {
-            {"API", api.panel, "Danh sách API đã bắt, kết quả từng role, Repeater gộp (Alt+1)"},
-            {"Lịch sử", history.panel, "Cây lịch sử theo nhánh và báo cáo (Alt+2)"},
-            {"Roles", roles.panel, "Các role / profile (header, cookie, JWT) và profile API gốc (Alt+3)"},
-            {"Cấu hình", settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace (Alt+4)"},
-            {"Log", log.panel, "Nhật ký theo nhánh / API, xuất Excel (Alt+5)"},
-            {"Excel", excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu (Alt+6)"},
-            {"Cây", treeTab.panel, "Cây nhánh cỡ lớn, mở được cửa sổ riêng, có Request / Response (Alt+7)"},
-            {"Audit", audit.panel, "Cần xử lý, giữ chỗ, API trùng & ẩn, nhật ký vị trí (Alt+8)"}};
+            {"Cây", treeTab.panel, "Cây nhánh dạng bảng thẳng hàng: Nhánh | Method | Path | Status | Length | Kết quả Role (Alt+1)"},
+            {"API", api.panel, "Bảng API kiểu Burp HTTP History, kết quả từng role, Repeater gộp (Alt+2)"},
+            {"Ma trận Role", matrix.panel, "Crawl N role không trùng: Thấy bởi x Gọi được -> NGHI BAC, test case (Alt+3)"},
+            {"Báo cáo", reportTabs, "Lịch sử trực quan và độ phủ Excel (Alt+4)"},
+            {"Roles", roles.panel, "Các role / profile (header, cookie, JWT) và profile API gốc (Alt+5)"},
+            {"Cần xử lý", audit.panel, "Xác nhận vị trí, giữ chỗ, API trùng & ẩn, nhật ký vị trí (Alt+6)"},
+            {"Cài đặt", settingsTabs, "Cấu hình và Log (Alt+7)"}};
         for (Object[] x : t) {
             tabs.addTab((String) x[0], null, (Component) x[1], (String) x[2]);
         }
         tabs.addChangeListener(e -> tick(true));
+        reportTabs.addChangeListener(e -> tick(true));
+        settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
         root.add(toastPane, BorderLayout.CENTER);
         root.addComponentListener(new java.awt.event.ComponentAdapter() {
@@ -232,8 +248,8 @@ public final class MainPanel {
         }
         proxyQueueListener = () -> javax.swing.SwingUtilities.invokeLater(() -> {
             syncProxyInterceptButton();
-            boolean treeActive = tabs.getSelectedComponent() == treeTab.panel;
-            boolean apiActive = tabs.getSelectedComponent() == api.panel;
+            boolean treeActive = selectedTab() == treeTab.panel;
+            boolean apiActive = selectedTab() == api.panel;
             treeTab.onProxyQueueChanged(treeActive);
             api.onProxyQueueChanged(apiActive);
             ProxyInterceptDialog.refreshIfOpen(this);
@@ -265,6 +281,56 @@ public final class MainPanel {
 
     JPanel headerPanel() {
         return headerPanel;
+    }
+
+    /** V_7.0: hide / show the whole extension header to give the tables more room (Ctrl+Alt+H). */
+    void setHeaderVisible(boolean on) {
+        if (headerPanel == null || headerPanel.isVisible() == on) {
+            return;
+        }
+        headerPanel.setVisible(on);
+        main.revalidate();
+        main.repaint();
+    }
+
+    boolean isTreeTabActive() {
+        return treeTab != null && isShowing(treeTab.panel);
+    }
+
+    /** True when {@code c} is the selected tab (directly or inside a grouped tab). */
+    boolean isShowing(Component c) {
+        return c != null && selectedTab() == c;
+    }
+
+    /** The leaf tab on screen: the selected top tab, or the selected page of a grouped tab. */
+    Component selectedTab() {
+        Component sel = tabs.getSelectedComponent();
+        if (sel instanceof JTabbedPane sub && (sub == reportTabs || sub == settingsTabs)) {
+            return sub.getSelectedComponent();
+        }
+        return sel;
+    }
+
+    /** Selects the tab showing {@code c}, opening its group (Báo cáo / Cài đặt) when needed. */
+    void selectTab(Component c) {
+        if (c == null) {
+            return;
+        }
+        if (tabs.indexOfComponent(c) >= 0) {
+            tabs.setSelectedComponent(c);
+            return;
+        }
+        for (JTabbedPane sub : new JTabbedPane[] {reportTabs, settingsTabs}) {
+            if (sub.indexOfComponent(c) >= 0) {
+                sub.setSelectedComponent(c);
+                tabs.setSelectedComponent(sub);
+                return;
+            }
+        }
+    }
+
+    boolean headerVisible() {
+        return headerPanel != null && headerPanel.isVisible();
     }
 
     public void dispose() {
@@ -356,14 +422,14 @@ public final class MainPanel {
         for (Pill chip : new Pill[] {rolesChip, branchChip, infoChip, hiddenChip, skippedChip, excelChip}) {
             chip.setPadding(1, 7, 1, 7);
         }
-        rolesChip.onClick(() -> tabs.setSelectedComponent(roles.panel));
-        branchChip.onClick(() -> tabs.setSelectedComponent(history.panel));
+        rolesChip.onClick(() -> selectTab(roles.panel));
+        branchChip.onClick(() -> selectTab(history.panel));
         infoChip.onClick(() -> {
-            tabs.setSelectedComponent(api.panel);
+            selectTab(api.panel);
             api.filterLevel(AuditLevel.INFO);
         });
         hiddenChip.onClick(() -> showAudit(2));
-        excelChip.onClick(() -> tabs.setSelectedComponent(excel.panel));
+        excelChip.onClick(() -> selectTab(excel.panel));
 
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
         spotlightBtn.setMargin(new Insets(0, 0, 0, 0));
@@ -388,7 +454,7 @@ public final class MainPanel {
         actionStatusBtn.addActionListener(e -> showActionQuickMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Trạng thái Action trực tiếp (Bấm để chọn chế độ)",
-                "Hiển thị chính xác tính năng Action đang bật (Nguyên bản / Chặn chờ duyệt / Giữ Proxy / Khóa 200 / Kho ID / Tạo->Xóa). Bấm để đổi chế độ nhanh, mở Hàng chờ chi tiết hoặc xem Hướng dẫn & Ví dụ.",
+                "Chế độ Bảo vệ dữ liệu đang bật (Nguyên bản / Hỏi trước / Giữ lại / Dùng lại kết quả cũ / Thay ID / Tạo mới). Bấm để đổi nhanh, mở Hàng chờ chi tiết hoặc Hướng dẫn.",
                 null,
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
@@ -823,7 +889,7 @@ public final class MainPanel {
             flash("Action -> " + engine.quickActionStatusLabel() + " (" + engine.interceptMethodsSummary() + ")");
         };
 
-        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Nhả)",
+        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Tắt chặn)",
                 t -> Icons.undo(t.success.text(), 13), () -> {
                     engine.toggleQuickActionFromHeader(false);
                     afterMode.run();
@@ -884,7 +950,7 @@ public final class MainPanel {
         m.add(Ui.item("Mở Hàng chờ Chặn chi tiết" + (pending > 0 ? " (" + pending + " đang đợi)" : "") + "...",
                 t -> Icons.strategyShield(pending > 0 ? t.danger.text() : t.fg, 13),
                 () -> ProxyInterceptDialog.showFloating(this)));
-        m.add(Ui.item("Mở Action Workbench & Sổ cái Luật" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
+        m.add(Ui.item("Mở Bảo vệ dữ liệu & Luật chặn" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
                 t -> Icons.workbench(t.accent.text(), 13),
                 () -> ActionWorkbenchDialog.show(root, engine,
                         api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
@@ -976,7 +1042,7 @@ public final class MainPanel {
         }
 
         Engine.Stats st = engine.stats();
-        todo.setText("Chờ:" + st.pending() + (st.dupWaiting() > 0 ? "(#" + st.dupWaiting() + ")" : ""));
+        todo.setText("Xử lý " + st.pending());
         todo.setActive(st.pending() > 0);
         todo.setTrailingDot(st.dupWaiting() > 0 ? t -> t.dup.base() : null);
         todo.setToolTipText(st.pending() > 0
@@ -990,8 +1056,8 @@ public final class MainPanel {
         } else if (waiting == 0) {
             queuePeak = 0;
         }
-        queue.setText(q.waitSeconds() > 0.5 ? String.format("Đợi:%d(%.0fs)", waiting, q.waitSeconds())
-                : "Đợi:" + waiting);
+        queue.setText(q.waitSeconds() > 0.5 ? String.format("Gửi %d (%.0fs)", waiting, q.waitSeconds())
+                : "Gửi " + waiting);
         queue.setEnabled(waiting > 0);
         queue.setActive(waiting > 0);
         queue.setToken(waiting > 0 ? (q.waitSeconds() > 0.5 ? t -> t.critical : t -> t.info) : t -> t.neutral);
@@ -1013,8 +1079,7 @@ public final class MainPanel {
 
         rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
-        status.setText("API " + st.apis() + "·" + st.branches() + "N·"
-                + engine.roles().enabledCount() + "/" + engine.roles().count() + "R");
+        status.setText("API " + st.apis() + " · " + st.branches() + " nhánh");
         status.setToolTipText(st.apis() + " API · " + st.branches() + " nhánh · "
                 + engine.roles().enabledCount() + "/" + engine.roles().count()
                 + " Roles — Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
@@ -1147,7 +1212,7 @@ public final class MainPanel {
         m.add(Ui.item("Không giữ " + dups.size() + " API trùng (ẩn, vẫn lưu ở Audit)", Icons::hide, !dups.isEmpty(),
                 () -> engine.hide(engine.pendingGroups().stream().filter(ApiGroup::dupPending).toList(), "không giữ")));
         m.add(Ui.item("Lọc bảng API: chỉ API đang chờ", Icons::search, n > 0, () -> {
-            tabs.setSelectedComponent(api.panel);
+            selectTab(api.panel);
             api.filterPending();
         }));
         m.addSeparator();
@@ -1197,7 +1262,7 @@ public final class MainPanel {
         helpMenu.add(Ui.item("Ý nghĩa Màu & Nhãn Audit", Icons::info, () -> Ui.popover(options, "Màu & nhãn", Help.COLORS)));
         helpMenu.add(Ui.item("Workspace & Lưu trữ", Icons::info, () -> Ui.popover(options, "Workspace", Help.WORKSPACE)));
         m.add(helpMenu);
-        m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> tabs.setSelectedComponent(settings.panel)));
+        m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> selectTab(settings.panel)));
         m.add(Ui.item("Reset Dedup Cache (Cho phép bắt lại API cũ)", Icons::refresh, engine::resetDedup));
         m.addSeparator();
         m.add(Ui.item(diagBadge.getText(), false, () -> { }));
@@ -1207,13 +1272,13 @@ public final class MainPanel {
     private void statusMenu() {
         Engine.Stats st = engine.stats();
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Tổng API đã bắt: " + st.apis() + "  (mở tab API)", Icons::api, () -> tabs.setSelectedComponent(api.panel)));
-        m.add(Ui.item("Nhánh Sub-folder: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> tabs.setSelectedComponent(history.panel)));
+        m.add(Ui.item("Tổng API đã bắt: " + st.apis() + "  (mở tab API)", Icons::api, () -> selectTab(api.panel)));
+        m.add(Ui.item("Nhánh Sub-folder: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> selectTab(history.panel)));
         m.add(Ui.item("Roles đang bật: " + engine.roles().enabledCount() + "/" + engine.roles().count() + "  (mở tab Roles)",
-                t -> Icons.role(t.fg, 12), () -> tabs.setSelectedComponent(roles.panel)));
+                t -> Icons.role(t.fg, 12), () -> selectTab(roles.panel)));
         if (st.info() > 0) {
             m.add(Ui.item("API lệch / lỗi quyền: " + st.info() + "  (lọc bảng API)", t -> Icons.warn(t.warning.text(), 12), () -> {
-                tabs.setSelectedComponent(api.panel);
+                selectTab(api.panel);
                 api.filterLevel(AuditLevel.INFO);
             }));
         }
@@ -1224,12 +1289,12 @@ public final class MainPanel {
         int sk = engine.skippedCount();
         if (sk > 0) {
             m.add(Ui.item("Đã bỏ qua: " + sk + " (" + engine.lastSkipReason() + ")", t -> Icons.filter(t.muted, 12),
-                    () -> tabs.setSelectedComponent(log.panel)));
+                    () -> selectTab(log.panel)));
         }
         if (engine.targets() != null) {
             int seen = engine.hits().rowsSeen();
             m.add(Ui.item("Độ phủ Excel: " + seen + "/" + engine.targets().size() + "  (mở tab Excel)",
-                    t -> Icons.excel(t.info.text(), 12), () -> tabs.setSelectedComponent(excel.panel)));
+                    t -> Icons.excel(t.info.text(), 12), () -> selectTab(excel.panel)));
         }
         m.addSeparator();
         m.add(Ui.item("Bảng chú giải Màu & Nhãn Audit...", Icons::info, () -> Ui.popover(status, "Màu & nhãn", Help.COLORS)));
@@ -1373,12 +1438,14 @@ public final class MainPanel {
             excel.stale = true;
             audit.stale = true;
             log.stale = true;
+            matrix.stale = true;
         }
         if (!b.dirty().isEmpty()) {
             treeTab.stale = true;
             treeTab.dirty(b.dirty());
             excel.stale |= b.dirty().stream().anyMatch(g -> g.target() != null);
             audit.stale = true;
+            matrix.stale = true;
         }
         api.refreshVisible(force);
         treeTab.refreshIfVisible();
@@ -1386,6 +1453,7 @@ public final class MainPanel {
         excel.refreshIfVisible();
         audit.refreshIfVisible();
         log.refreshIfVisible();
+        matrix.refreshIfVisible();
         boolean queueActive = queuePeak > 0 || engine.queue().queued() + engine.queue().inFlight() > 0;
         if (b.status() || b.structure() || force || !b.added().isEmpty()) {
             syncHeader();
@@ -1790,7 +1858,7 @@ public final class MainPanel {
             engine.show(List.of(g));
             tick(true);
         }
-        tabs.setSelectedComponent(treeTab.panel);
+        selectTab(treeTab.panel);
         treeTab.jumpTo(g, branchPath, focusOnBranch);
         String dest = g != null ? g.branch() : branchPath;
         if (!Text.blank(dest)) {
@@ -1810,7 +1878,7 @@ public final class MainPanel {
             engine.show(List.of(g));
             tick(true);
         }
-        tabs.setSelectedComponent(api.panel);
+        selectTab(api.panel);
         api.select(g, r);
     }
 
@@ -1818,12 +1886,12 @@ public final class MainPanel {
         if (branchPath == null || branchPath.isBlank()) {
             return;
         }
-        tabs.setSelectedComponent(api.panel);
+        selectTab(api.panel);
         api.selectBranch(branchPath);
     }
 
     void jumpToRole(int roleIndex) {
-        tabs.setSelectedComponent(roles.panel);
+        selectTab(roles.panel);
         if (roleIndex < 0) {
             roles.selectOriginal();
         } else {
@@ -1832,17 +1900,17 @@ public final class MainPanel {
     }
 
     void jumpToTarget(TargetEntry e) {
-        tabs.setSelectedComponent(excel.panel);
+        selectTab(excel.panel);
         excel.select(e);
     }
 
     void showAudit(int section) {
-        tabs.setSelectedComponent(audit.panel);
+        selectTab(audit.panel);
         audit.show(section, null);
     }
 
     void showPlaceOf(String key) {
-        tabs.setSelectedComponent(audit.panel);
+        selectTab(audit.panel);
         audit.show(1, key);
     }
 
@@ -1890,6 +1958,33 @@ public final class MainPanel {
                 tick(true);
             }
         });
+        // V_7.0 hideable layout
+        registerRootShortcut("ctrl alt 1", "tmoc.layout.tree", () -> api.togglePane(ApiTab.Pane.TREE));
+        registerRootShortcut("ctrl alt 2", "tmoc.layout.detail", () -> {
+            if (isTreeTabActive()) {
+                treeTab.toggleDetail();
+            } else {
+                api.togglePane(ApiTab.Pane.DETAIL);
+            }
+        });
+        registerRootShortcut("ctrl alt 3", "tmoc.layout.toolbar", () -> {
+            if (isTreeTabActive()) {
+                treeTab.setToolbarVisible(!treeTab.toolbarVisible());
+            } else {
+                api.togglePane(ApiTab.Pane.TOOLBAR);
+            }
+        });
+        registerRootShortcut("ctrl alt H", "tmoc.layout.header", () -> {
+            setHeaderVisible(!headerVisible());
+            api.saveLayout();
+        });
+        registerRootShortcut("ctrl alt 0", "tmoc.layout.max", () -> {
+            if (isTreeTabActive()) {
+                treeTab.toggleMaximized();
+            } else {
+                api.toggleMaximized();
+            }
+        });
         for (int i = 0; i < tabs.getTabCount() && i < 9; i++) {
             int idx = i;
             registerRootShortcut("alt " + (i + 1), "tmoc.tab." + (i + 1), () -> {
@@ -1916,7 +2011,7 @@ public final class MainPanel {
     }
 
     SearchField activeSearchField() {
-        Component sel = tabs.getSelectedComponent();
+        Component sel = selectedTab();
         if (sel == api.panel) {
             return api.searchField();
         }
@@ -1943,7 +2038,7 @@ public final class MainPanel {
     }
 
     private List<ApiGroup> shortcutTargetGroups() {
-        Component sel = tabs.getSelectedComponent();
+        Component sel = selectedTab();
         if (sel == api.panel) {
             List<ApiGroup> fromTable = api.selectedGroups();
             if (!fromTable.isEmpty()) {

@@ -388,7 +388,7 @@ final class V21BetaTest {
                     savePng(renderOffscreen(mp.root(), 1240, 720), outDir.resolve("04_audit_dup_light.png"));
 
                     // 5. Settings tab Light
-                    mp.tabs.setSelectedComponent(mp.settings.panel);
+                    mp.selectTab(mp.settings.panel);
                     mp.settings.load();
                     savePng(renderOffscreen(mp.root(), 1240, 720), outDir.resolve("05_settings_light.png"));
 
@@ -405,7 +405,7 @@ final class V21BetaTest {
 
                     // 8. Dark theme verification (Main + Action Workbench + RichHoverCard)
                     applyLaf(true);
-                    mp.tabs.setSelectedComponent(mp.api.panel);
+                    mp.selectTab(mp.api.panel);
                     savePng(renderOffscreen(mp.root(), 1240, 720), outDir.resolve("09_main_dark.png"));
                     JPanel wbDark = ActionWorkbenchDialog.buildWorkbenchPanel(null, engine, del, null, 0, null, null);
                     savePng(renderOffscreen(wbDark, 960, 620), outDir.resolve("10_action_workbench_dark.png"));
