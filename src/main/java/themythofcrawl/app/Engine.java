@@ -2778,11 +2778,14 @@ public final class Engine {
             byte[] resp = sent.response();
             Integer st = HttpBytes.statusCode(resp);
             if (resp != null && st != null && st >= 200 && st < 300) {
-                String createdId = actionEngine.extractCreatedId(resp);
+                String createdId = actionEngine.extractCreatedIdForFamily(resp, ActionEngine.familyKey(producer.path()));
+                if (createdId == null) {
+                    createdId = actionEngine.extractCreatedId(resp);
+                }
                 actionEngine.harvest(producer.method(), producer.path(), freshProdReq, resp, st, producer.gid());
                 if (createdId != null) {
-                    log("Phương pháp 4 (Producer #" + producer.gid() + " " + producer.method() + " " + producer.path()
-                            + "): Đã tạo bản ghi mới trên Server -> thu được ID tươi [" + createdId + "] cho API #" + consumerGid, consumerGid);
+                    log("Tạo mới rồi gửi: gọi API tạo mới #" + producer.gid() + " " + producer.method() + " " + producer.path()
+                            + " -> Server trả ID mới [" + createdId + "] cho API #" + consumerGid, consumerGid);
                     return createdId;
                 }
             }

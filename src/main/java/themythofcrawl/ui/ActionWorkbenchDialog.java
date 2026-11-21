@@ -916,7 +916,7 @@ public final class ActionWorkbenchDialog {
                 return;
             }
             focusGroup.setProducerGid(prod.gid());
-            engine.actionEngine().registerProducer(ActionEngine.extractResourceKey(focusGroup.path()), prod.gid());
+            engine.actionEngine().registerProducer(ActionEngine.familyKey(focusGroup.path()), prod.gid());
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
             JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã liên kết " + Text.apiLabel(prod.gid())
@@ -932,7 +932,7 @@ public final class ActionWorkbenchDialog {
                     }
                     if (prod != null) {
                         focusGroup.setProducerGid(prod.gid());
-                        engine.actionEngine().registerProducer(ActionEngine.extractResourceKey(focusGroup.path()), prod.gid());
+                        engine.actionEngine().registerProducer(ActionEngine.familyKey(focusGroup.path()), prod.gid());
                     }
                     engine.sendWithProducer(focusGroup, prod != null ? prod.gid() : null, targets);
                     refreshBanner.run();
