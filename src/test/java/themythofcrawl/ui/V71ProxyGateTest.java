@@ -79,6 +79,18 @@ class V71ProxyGateTest {
             assertEquals(ProxyGate.Scope.BRANCH, e.proxyGate().scope());
             assertFalse(blocked(e, SHOP, "POST", "/pay"));
 
+            // A specific rule (branch) always beats the catch-all gate, even a host-scoped one
+            e.setProxyGate(new ProxyGate.Settings(true, ProxyGate.Scope.HOST, "shop.test", "", "", Set.of("POST"),
+                    ProxyGate.Effect.FAKE_200));
+            e.actionEngine().policyLedger().upsert(themythofcrawl.core.DataProtection.rule(
+                    themythofcrawl.core.DataProtection.Scope.BRANCH, "Toppage > Home", List.of("POST"),
+                    themythofcrawl.core.DataProtection.Choice.ALLOW, null));
+            assertFalse(blocked(e, SHOP, "POST", "/pay"), "branch ALLOW rule wins over the gate");
+            e.setDestination("Toppage > Other");
+            assertTrue(blocked(e, SHOP, "POST", "/pay"), "outside that branch the gate applies");
+            List<themythofcrawl.model.ActionPolicy> all = e.actionEngine().policyLedger().all();
+            assertEquals(ProxyGate.ID, all.get(all.size() - 1).id(), "gate is always evaluated last");
+
             assertEquals("Chưa chọn host", new ProxyGate.Settings(true, ProxyGate.Scope.HOST, "", "", "", Set.of("POST"),
                     ProxyGate.Effect.ASK).problem());
             assertNull(ProxyGate.Settings.defaults().withOn(true).problem());
