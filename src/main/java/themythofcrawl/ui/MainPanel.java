@@ -240,6 +240,7 @@ public final class MainPanel {
         settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
         root.add(toastPane, BorderLayout.CENTER);
+        Ui.fastScroll(root);
         root.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
