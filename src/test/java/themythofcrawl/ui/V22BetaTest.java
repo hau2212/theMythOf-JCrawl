@@ -305,9 +305,10 @@ final class V22BetaTest {
                 ui.tick(true);
                 JTable roleTable = ui.roles.roleTable();
                 assertEquals(Theme.current().scaled(36), roleTable.getRowHeight());
-                assertEquals(JTable.AUTO_RESIZE_OFF, roleTable.getAutoResizeMode());
-                assertTrue(roleTable.getColumnModel().getColumn(1).getPreferredWidth() >= 82,
-                        "Status column width must fit full 'Trang thai' header");
+                // V_8.2: table fills the width (no empty gap on the right); "Bật" column is compact.
+                assertEquals(JTable.AUTO_RESIZE_LAST_COLUMN, roleTable.getAutoResizeMode());
+                assertTrue(roleTable.getColumnModel().getColumn(1).getPreferredWidth() >= 64,
+                        "Bật column width must fit the switch + label");
                 assertInstanceOf(RolesTab.SquareStatusRenderer.class,
                         roleTable.getColumnModel().getColumn(1).getCellRenderer());
             } finally {

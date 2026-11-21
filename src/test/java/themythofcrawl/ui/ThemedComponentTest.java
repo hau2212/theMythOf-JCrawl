@@ -222,11 +222,19 @@ class ThemedComponentTest {
             assertNotNull(ui[0].status.getToolTipText());
             assertTrue(ui[0].status.getToolTipText().contains("LAF:"));
 
-            List<String> labels = collect(ui[0].settings.panel, JLabel.class).stream().map(JLabel::getText).toList();
-            assertTrue(labels.stream().anyMatch(s -> s != null && s.contains("Panel.background=")),
-                    "Settings Section 8 should populate theme colors");
-            assertTrue(labels.stream().anyMatch(s -> s != null && s.contains("sun.java2d.uiScale=")),
-                    "Settings Section 8 should populate scale & font");
+            // V_8.2: human-readable values on screen, raw keys kept in the hover tooltip.
+            List<JLabel> diag = collect(ui[0].settings.panel, JLabel.class);
+            List<String> labels = diag.stream().map(JLabel::getText).toList();
+            assertTrue(labels.stream().anyMatch(s -> s != null && (s.startsWith("Sáng") || s.startsWith("Tối"))),
+                    "Settings Section 8 should show Sáng / Tối");
+            assertTrue(labels.stream().anyMatch(s -> s != null && s.startsWith("Màn hình ")),
+                    "Settings Section 8 should show screen zoom & font");
+            assertTrue(labels.stream().noneMatch(s -> s != null && s.contains("sun.java2d.uiScale=")),
+                    "raw keys must not be shown as text");
+            assertTrue(diag.stream().anyMatch(l -> l.getToolTipText() != null && l.getToolTipText().contains("Panel.background=")),
+                    "raw theme colours stay available on hover");
+            assertTrue(diag.stream().anyMatch(l -> l.getToolTipText() != null && l.getToolTipText().contains("sun.java2d.uiScale=")),
+                    "raw scale stays available on hover");
 
             ui[0].dispose();
         });

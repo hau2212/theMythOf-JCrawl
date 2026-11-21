@@ -109,9 +109,9 @@ final class RolesTab {
     private final Card profileCard = new Card(t -> t.orig, true);
     private final JLabel profileState = Ui.muted(" ");
     private final Pill profileBadge = new Pill("00_API GỐC", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
-    private final JLabel summaryTotal = makeSummaryCell("Tổng: 0", false);
-    private final JLabel summaryActive = makeSummaryCell("Đang bật: 0", false);
-    private final JLabel summaryWarn = makeSummaryCell("Hết hạn / Lỗi: 0", false);
+    private final JLabel summaryTotal = makeSummaryCell("0 vai trò", false);
+    private final JLabel summaryActive = makeSummaryCell("0 bật", false);
+    private final JLabel summaryWarn = makeSummaryCell("0 hết hạn", false);
 
     private final JLabel title = Ui.bold("Profile:");
     private final JTextField name = new JTextField(16);
@@ -156,7 +156,7 @@ final class RolesTab {
         this.engine = ui.engine;
         Ui.style(table);
         table.setRowHeight(Theme.current().scaled(36));
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -173,9 +173,9 @@ final class RolesTab {
         table.getColumnModel().getColumn(1).setCellEditor(new SquareStatusEditor());
         table.getColumnModel().getColumn(2).setCellRenderer(new AvatarNameRenderer());
         table.getColumnModel().getColumn(3).setCellRenderer(new RuleChipsRenderer());
-        Ui.widths(table, 38, 96, 205, 320);
+        Ui.widths(table, 34, 72, 210, 340);
         table.getColumnModel().getColumn(0).setMinWidth(34);
-        table.getColumnModel().getColumn(1).setMinWidth(90);
+        table.getColumnModel().getColumn(1).setMinWidth(64);
         table.getColumnModel().getColumn(2).setMinWidth(150);
         table.getColumnModel().getColumn(3).setMinWidth(200);
 
@@ -196,7 +196,7 @@ final class RolesTab {
 
         JPanel topLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         topLeft.setOpaque(false);
-        topLeft.add(Ui.solidPrimary("Thêm Role", t -> Icons.plus(t.accent.onSolid()), this::addRole));
+        topLeft.add(Ui.solidPrimary("Thêm vai trò", t -> Icons.plus(t.accent.onSolid()), this::addRole));
         topLeft.add(Ui.dangerBtn("Xóa", t -> Icons.trash(t.danger.text()), this::deleteRoles));
         topLeft.add(profileBadge);
 
@@ -211,7 +211,8 @@ final class RolesTab {
         top.add(topLeft, BorderLayout.WEST);
         top.add(topRight, BorderLayout.EAST);
 
-        JPanel summaryStrip = new JPanel(new GridLayout(1, 3, 6, 0));
+        // V_8.2: one calm row of small counters instead of 3 big coloured boxes.
+        JPanel summaryStrip = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         summaryStrip.setOpaque(false);
         summaryStrip.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
         summaryStrip.add(summaryTotal);
@@ -231,7 +232,19 @@ final class RolesTab {
         Ui.style(rulesTable);
         rulesTable.setRowHeight(Theme.current().scaled(32));
         rulesTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        rulesTable.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(new JComboBox<>(RuleMode.values())));
+        JComboBox<RuleMode> modeBox = new JComboBox<>(RuleMode.values());
+        modeBox.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof RuleMode m) {
+                    setText(m.label() + "  ·  " + m.hint);
+                }
+                return this;
+            }
+        });
+        rulesTable.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(modeBox));
         rulesTable.getColumnModel().getColumn(2).setCellRenderer(new ModeRenderer());
         Ui.widths(rulesTable, 175, 290, 128);
         Ui.onPopup(rulesTable, e -> ruleEditorMenu().show(e.getComponent(), e.getX(), e.getY()));
@@ -320,7 +333,7 @@ final class RolesTab {
 
         hc.gridx = 5;
         hc.insets = new java.awt.Insets(0, 0, 0, 0);
-        headCard.add(Ui.solidPrimary("Lưu Profile", t -> Icons.save(t.accent.onSolid()), this::save), hc);
+        headCard.add(Ui.solidPrimary("Lưu", t -> Icons.save(t.accent.onSolid()), this::save), hc);
 
         // Streamlined 3-group Rules Action Bar (no clutter)
         JButton[] quickRef = new JButton[1];
@@ -340,7 +353,7 @@ final class RolesTab {
 
         JPanel toolsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         toolsLeft.setOpaque(false);
-        toolsLeft.add(Ui.secondaryBtn("Thêm Rule", t -> Icons.plus(t.fg),
+        toolsLeft.add(Ui.secondaryBtn("Thêm luật", t -> Icons.plus(t.fg),
                 () -> rules.add(new HeaderRule("X-Header", "value", RuleMode.REPLACE))));
         toolsLeft.add(quickTemplatesBtn);
 
@@ -348,7 +361,7 @@ final class RolesTab {
         toolsRight.setOpaque(false);
         toolsRight.add(Ui.secondaryBtn("Lên", Icons::arrowUp, () -> moveRule(-1)));
         toolsRight.add(Ui.secondaryBtn("Xuống", Icons::arrowDown, () -> moveRule(1)));
-        toolsRight.add(Ui.dangerBtn("Xóa Rule", t -> Icons.trash(t.danger.text()), this::removeRules));
+        toolsRight.add(Ui.dangerBtn("Xóa luật", t -> Icons.trash(t.danger.text()), this::removeRules));
 
         JPanel tools = new JPanel(new BorderLayout(4, 0));
         tools.setOpaque(false);
@@ -387,8 +400,8 @@ final class RolesTab {
         JPanel jwtHeadLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         jwtHeadLeft.setOpaque(false);
         jwtHeadLeft.add(jwtToggleBtn);
-        jwtHeadLeft.add(Ui.bold("JWT / Token Inspector"));
-        jwtHeadLeft.add(Ui.muted("(Tự giải mã eyJ... & đếm ngược TTL)"));
+        jwtHeadLeft.add(Ui.bold("Token"));
+        jwtHeadLeft.add(Ui.muted("giải mã JWT, xem còn hạn bao lâu"));
         jwtHeader.add(jwtHeadLeft, BorderLayout.WEST);
         jwtHeader.add(expBadge, BorderLayout.EAST);
 
@@ -432,6 +445,11 @@ final class RolesTab {
         panel.repaint();
     }
 
+    private static javax.swing.border.Border summaryBorder(java.awt.Color line) {
+        return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line, 1),
+                BorderFactory.createEmptyBorder(1, 8, 1, 8));
+    }
+
     private static JLabel makeSummaryCell(String text, boolean warn) {
         JLabel l = new JLabel(text, SwingConstants.CENTER) {
             @Override
@@ -442,11 +460,10 @@ final class RolesTab {
                 setOpaque(true);
                 setBackground(t.surfaceAlt);
                 setForeground(t.fg);
-                setBorder(BorderFactory.createLineBorder(t.border, 1));
+                setBorder(summaryBorder(t.border));
             }
         };
-        l.setPreferredSize(new Dimension(0, 24));
-        l.setMinimumSize(new Dimension(60, 24));
+        l.setBorder(summaryBorder(Theme.current().border));
         return l;
     }
 
@@ -466,20 +483,23 @@ final class RolesTab {
             }
         }
         Theme t = Theme.current();
-        summaryTotal.setText("Tổng: " + total);
+        summaryTotal.setText(total + " vai trò");
+        summaryTotal.setToolTipText("Tổng số vai trò (tài khoản) dùng để gửi lại API");
         summaryTotal.setBackground(t.surfaceAlt);
         summaryTotal.setForeground(t.fg);
-        summaryTotal.setBorder(BorderFactory.createLineBorder(t.border, 1));
+        summaryTotal.setBorder(summaryBorder(t.border));
 
-        summaryActive.setText("Đang bật: " + active + "/" + total);
+        summaryActive.setText(active + " bật");
+        summaryActive.setToolTipText("Vai trò đang bật sẽ được gửi lại khi bấm Gửi");
         summaryActive.setBackground(active > 0 ? t.success.fill() : t.surfaceAlt);
         summaryActive.setForeground(active > 0 ? t.success.text() : t.muted);
-        summaryActive.setBorder(BorderFactory.createLineBorder(active > 0 ? t.success.border() : t.border, 1));
+        summaryActive.setBorder(summaryBorder(active > 0 ? t.success.border() : t.border));
 
-        summaryWarn.setText("Hết hạn / Lỗi: " + warnCount);
+        summaryWarn.setText(warnCount + " hết hạn");
+        summaryWarn.setToolTipText("Token hết hạn hoặc Ping trả 401: cần đăng nhập lại và dán token mới");
         summaryWarn.setBackground(warnCount > 0 ? t.danger.fill() : t.surfaceAlt);
         summaryWarn.setForeground(warnCount > 0 ? t.danger.text() : t.muted);
-        summaryWarn.setBorder(BorderFactory.createLineBorder(warnCount > 0 ? t.danger.border() : t.border, 1));
+        summaryWarn.setBorder(summaryBorder(warnCount > 0 ? t.danger.border() : t.border));
     }
 
     private void setEnabledState(boolean on) {
@@ -497,7 +517,7 @@ final class RolesTab {
     private record JwtTtl(boolean expired, long remainingSec) {
         String compactLabel() {
             if (expired) {
-                return "JWT HẾT HẠN";
+                return "Hết hạn";
             }
             if (remainingSec < 60) {
                 return "TTL " + remainingSec + "s";
@@ -711,7 +731,7 @@ final class RolesTab {
         Role p = engine.originalProfile();
         int n = p.rules().size();
         boolean active = p.enabled() && n > 0;
-        String badgeText = p.enabled() ? (n > 0 ? "API GỐC: " + n + " rule" : "API GỐC: Nguyên bản") : "API GỐC: Tắt";
+        String badgeText = p.enabled() ? (n > 0 ? "Tài khoản crawl: " + n + " luật" : "Tài khoản crawl: giữ nguyên") : "Tài khoản crawl: tắt";
         String stateText = !p.enabled() || n == 0 ? "Chưa có rule đang bật - API gốc được gửi đúng như lúc bắt"
                 : "Đang áp dụng " + n + " rule cho API gốc (API bắt từ giờ; API cũ: 'Rebuild Roles')";
         profileBadge.setToken(active ? t -> t.orig : t -> t.neutral)
@@ -724,7 +744,7 @@ final class RolesTab {
     private void load(int idx) {
         editing = idx;
         Role r = engine.roles().get(idx);
-        title.setText("Role:");
+        title.setText("Vai trò:");
         name.setText(r.name());
         name.setEditable(true);
         tierBox.setEnabled(true);
@@ -739,7 +759,7 @@ final class RolesTab {
         editing = -2;
         table.clearSelection();
         Role p = engine.originalProfile();
-        title.setText("API Gốc:");
+        title.setText("Tài khoản crawl:");
         name.setText(Role.ORIGINAL_PROFILE_NAME);
         name.setEditable(false);
         tierBox.setEnabled(false);
@@ -1511,7 +1531,7 @@ final class RolesTab {
     }
 
     private final class RoleModel extends AbstractTableModel {
-        private final String[] cols = {"#", "Trạng thái", "Role & Cấp quyền", "Rules · JWT TTL · Session"};
+        private final String[] cols = {"#", "Bật", "Vai trò", "Đăng nhập bằng · Phiên"};
 
         @Override
         public int getRowCount() {
@@ -1561,14 +1581,14 @@ final class RolesTab {
                 case 0 -> String.valueOf(r + 1);
                 case 1 -> role.enabled();
                 case 2 -> role.name();
-                default -> role.rules().isEmpty() ? "(không có rule - gửi giống API gốc)" : role.rulesSummary();
+                default -> role.rules().isEmpty() ? "(giống tài khoản crawl)" : role.rulesSummary();
             };
         }
     }
 
     private static final class RuleModel extends AbstractTableModel {
         final List<HeaderRule> list = new ArrayList<>();
-        private final String[] cols = {"Header / Cookie Key", "Value ([REMOVE] = xóa)", "Mode"};
+        private final String[] cols = {"Tên (header / cookie)", "Giá trị", "Cách"};
 
         void set(List<HeaderRule> r) {
             list.clear();
@@ -1820,7 +1840,7 @@ final class RolesTab {
             this.modelRow = t != null && row >= 0 ? t.convertRowIndexToModel(row) : row;
             this.role = modelRow >= 0 && modelRow < engine.roles().count() ? engine.roles().get(modelRow) : null;
             this.ruleList = role != null ? role.rules() : List.of();
-            setToolTipText(role != null && !role.rules().isEmpty() ? role.rulesSummary() : "(không có rule - gửi giống API gốc)");
+            setToolTipText(role != null && !role.rules().isEmpty() ? role.rulesSummary() : "Không đổi gì: gửi giống tài khoản crawl");
             return this;
         }
 
@@ -1875,15 +1895,14 @@ final class RolesTab {
                     FontMetrics ifm = g2.getFontMetrics();
                     g2.setColor(selected ? th.selectionFg : th.muted);
                     int ty = (h - ifm.getHeight()) / 2 + ifm.getAscent();
-                    g2.drawString("(chưa có rule - gửi giống API gốc)", x, ty);
+                    g2.drawString("(giống tài khoản crawl)", x, ty);
                     return;
                 }
 
                 g2.setFont(th.smallBoldFont);
                 for (int i = 0; i < ruleList.size(); i++) {
                     HeaderRule hr = ruleList.get(i);
-                    String modeLabel = compactModeName(hr.mode());
-                    int n = writeChipText(modeLabel, hr.name());
+                    int n = writeChipText(humanChip(hr), "");
                     int tw = fm.charsWidth(buf, 0, n);
                     int pw = ip * 2 + tw;
                     if (x + pw > maxRight - th.scaled(28) && i < ruleList.size() - 1) {
@@ -1929,17 +1948,27 @@ final class RolesTab {
             g2.drawChars(buf, 0, len, x + (w - fm.charsWidth(buf, 0, len)) / 2, ty);
         }
 
-        private static String compactModeName(RuleMode m) {
+        /** V_8.2: "Token", "Không token", "Cookie JSESSIONID", "X-Role"... instead of "REPLACE: Authorization". */
+        private static String humanChip(HeaderRule hr) {
+            String key = hr.name() == null ? "" : hr.name().trim();
+            String k = key.toLowerCase(Locale.ROOT);
+            RuleMode m = hr.mode();
             if (m == null) {
-                return "RULE";
+                return key;
             }
-            return switch (m) {
-                case REPLACE -> "REPLACE";
-                case ADD -> "ADD";
-                case REMOVE -> "REMOVE";
-                case COOKIE_SET -> "COOKIE";
-                case COOKIE_REMOVE -> "DEL_CK";
-            };
+            if (m == RuleMode.COOKIE_SET) {
+                return "Cookie " + key;
+            }
+            if (m == RuleMode.COOKIE_REMOVE) {
+                return "Bỏ cookie " + key;
+            }
+            if (k.equals("authorization")) {
+                return m == RuleMode.REMOVE ? "Không token" : "Token";
+            }
+            if (k.equals("cookie")) {
+                return m == RuleMode.REMOVE ? "Không cookie" : "Cookie";
+            }
+            return m == RuleMode.REMOVE ? "Bỏ " + key : key;
         }
 
         private int writeChipText(String prefix, String key) {
@@ -1973,6 +2002,10 @@ final class RolesTab {
             Theme th = Theme.of(t.getBackground(), t.getForeground());
             l.setHorizontalAlignment(CENTER);
             l.setFont(th.smallBoldFont);
+            if (v instanceof RuleMode rm) {
+                l.setText(rm.label());
+                l.setToolTipText(rm.hint);
+            }
             if (!sel) {
                 if (v instanceof RuleMode m) {
                     Theme.Token tok = th.mode(m);

@@ -90,30 +90,29 @@ final class ActionGuideTabBuilder {
         // =====================================================================
         // SECTION 1: 2-STAGE ARCHITECTURE DIAGRAM (ZERO HTML)
         // =====================================================================
-        content.add(sectionTitle("1. Kiến trúc Action gồm đúng 2 Chặng độc lập"));
+        content.add(sectionTitle("1. Hai lúc có thể can thiệp"));
         content.add(Box.createVerticalStrut(4));
 
         final int boxW = 79;
         String border = "+" + "-".repeat(boxW) + "+";
         JTextArea diagram = new JTextArea(
-                "[Trình duyệt / UI của bạn]  (VD: bấm nút Lưu / Xóa / Duyệt)\n"
+                "[Trình duyệt]  bạn bấm Lưu / Xóa / Duyệt trên web\n"
                 + "         |\n"
                 + "         v\n"
                 + border + "\n"
-                + boxLine(" CHẶNG 1 — CỔNG PROXY (Kiểm soát TRƯỚC khi request chạm tới Server)", boxW) + "\n"
-                + boxLine("  - Mode #5 Chặn chờ duyệt: Hiện NGAY trên Cây [CHỜ DUYỆT · CHƯA GỬI]", boxW) + "\n"
-                + boxLine("      -> Sửa trực tiếp dưới Cây rồi bấm 'Gửi Server' / 'Hủy (Drop)'.", boxW) + "\n"
-                + boxLine("  - Mode #1 Giữ ở Proxy: Trả 200 OK ảo về UI, lưu nháp vào Cây.", boxW) + "\n"
-                + boxLine("  - Luật ALLOW (Ưu tiên #1): Cho qua thẳng Server, bỏ qua luật chặn.", boxW) + "\n"
+                + boxLine(" LÚC 1 - KHI CRAWL (request đi qua Burp, trước khi tới server)", boxW) + "\n"
+                + boxLine("  - Chờ duyệt: dừng ở Burp, hiện trong Hàng chặn, bạn bấm Gửi mới đi.", boxW) + "\n"
+                + boxLine("  - Giữ lại: trình duyệt nhận 200 giả, server không đổi gì.", boxW) + "\n"
+                + boxLine("  - Cho qua: luật ưu tiên, đi thẳng server (login, telemetry...).", boxW) + "\n"
                 + border + "\n"
                 + "         |\n"
-                + "         v   (Đã lưu vào Cây nhánh trên Extension)\n"
+                + "         v   (API đã lưu vào Cây)\n"
                 + border + "\n"
-                + boxLine(" CHẶNG 2 — ĐỘNG CƠ REPLAY (Khi bấm 'Gửi API' / Test phân quyền N Roles)", boxW) + "\n"
-                + boxLine("  - Mode #0 Nguyên bản: Gửi nguyên xi (đã xóa rồi thì Server báo 400/404).", boxW) + "\n"
-                + boxLine("  - Mode #2 Khóa 200 OK: Bảo vệ bằng chứng 200 OK gốc đã chụp lúc crawl.", boxW) + "\n"
-                + boxLine("  - Mode #3 Kho ID Sống: Tự thay ID cũ bằng ID mới gom từ các API GET.", boxW) + "\n"
-                + boxLine("  - Mode #4 Tạo Mới -> Hành Động: Gọi POST tạo mới, rút ID rồi mới DELETE.", boxW) + "\n"
+                + boxLine(" LÚC 2 - KHI GỬI LẠI (bấm Gửi / test N vai trò)", boxW) + "\n"
+                + boxLine("  - Tắt: gửi y nguyên (đã xóa rồi thì server báo 400 / 404).", boxW) + "\n"
+                + boxLine("  - Bằng chứng 200: giữ response 200 đầu tiên để báo cáo.", boxW) + "\n"
+                + boxLine("  - Đổi ID: thay ID đã dùng bằng ID còn sống CÙNG họ API.", boxW) + "\n"
+                + boxLine("  - Tạo trước: gọi API tạo (POST cùng họ) lấy ID mới rồi mới gửi.", boxW) + "\n"
                 + border);
         diagram.setEditable(false);
         diagram.setFont(th.monoSmallFont);
@@ -130,35 +129,35 @@ final class ActionGuideTabBuilder {
         // =====================================================================
         // SECTION 2: 6 ACTION MODES EXPLAINED WITH REAL EXAMPLES
         // =====================================================================
-        content.add(sectionTitle("2. So sánh 6 chế độ Action — Mục đích & Ví dụ thực tế"));
+        content.add(sectionTitle("2. Sáu chế độ - dùng khi nào"));
         content.add(Box.createVerticalStrut(6));
 
         JPanel modesGrid = new JPanel(new GridLayout(3, 2, 8, 8));
         modesGrid.setOpaque(false);
         modesGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        modesGrid.add(modeCard("0. Nguyên bản (Tắt)", "Mặc định — An toàn", t -> t.neutral,
-                "Không chặn Proxy, không đổi ID, không giả lập 200 OK.",
+        modesGrid.add(modeCard("Tắt", "Mặc định", t -> t.neutral,
+                "Không chặn, không đổi ID, không 200 giả.",
                 "Ví dụ: Gửi DELETE /orders/10 lần 1 ra 200, gửi lại lần 2 ra 400/404 đúng thực tế Server."));
 
-        modesGrid.add(modeCard("5. Chặn chờ duyệt (Đợi tôi bấm Gửi)", "Chặng 1 — Khuyên dùng", t -> t.danger,
+        modesGrid.add(modeCard("Chờ duyệt", "Lúc crawl - khuyên dùng", t -> t.danger,
                 "Request từ trình duyệt dừng ngay trên Cây [CHỜ DUYỆT · CHƯA GỬI]. Bạn sửa xong mới bấm Gửi lên Server.",
                 "Ví dụ: Bấm nút 'Lưu cấu hình' trên web -> Request hiện trong nhánh Cây -> bạn đổi roleId=1 -> bấm Gửi."));
 
-        modesGrid.add(modeCard("1. Giữ ở Proxy (200 ảo)", "Chặng 1 — Crawl an toàn", t -> t.warning,
+        modesGrid.add(modeCard("Giữ lại", "Lúc crawl - an toàn", t -> t.warning,
                 "Khi bấm Xóa trên UI, trình duyệt nhận 200 OK ảo để không báo lỗi, còn bản ghi trên Server vẫn còn nguyên.",
                 "Ví dụ: Bạn muốn thu thập API DELETE /users/55 vào bảng nhưng chưa muốn user #55 bị xóa thật ngay lúc crawl."));
 
-        modesGrid.add(modeCard("2. Khóa 200 OK (Snapshot)", "Chặng 2 — Báo cáo", t -> t.info,
+        modesGrid.add(modeCard("Bằng chứng 200", "Lúc gửi lại - báo cáo", t -> t.info,
                 "Giữ nguyên kết quả 200 OK chụp được lúc đầu khi cần xuất báo cáo/bằng chứng, tránh bị ghi đè thành 404.",
                 "Ví dụ: Đã test xong API duyệt đơn 200 OK; khi chạy lại cả nhánh không muốn mất trạng thái 200 OK này."));
 
-        modesGrid.add(modeCard("3. Tự đổi Kho ID Sống", "Chặng 2 — Test nhiều Role", t -> t.success,
-                "Extension tự gom ID từ các API GET (VD: 101, 102, 103) và tự thay ID còn sống vào request Xóa/Sửa.",
+        modesGrid.add(modeCard("Đổi ID", "Lúc gửi lại - nhiều vai trò", t -> t.success,
+                "Lấy ID từ response 2xx CÙNG họ API (POST tạo, GET danh sách / chi tiết) rồi thay vào request Xóa / Sửa.",
                 "Ví dụ: Test DELETE /orders/{id} với 3 Role (Admin, Staff, User) -> mỗi Role tự nhận 1 ID tươi khác nhau."));
 
-        modesGrid.add(modeCard("4. Chuỗi Tạo Mới -> Hành Động", "Chặng 2 — Lặp vô hạn", t -> t.accent,
-                "Trước khi chạy DELETE/PUT, Extension tự gọi API POST tạo bản ghi mới, rút ID trả về rồi mới gọi Action.",
+        modesGrid.add(modeCard("Tạo trước", "Lúc gửi lại - gửi nhiều lần", t -> t.accent,
+                "Trước DELETE / PUT, tự gọi POST cùng họ API để tạo bản ghi mới, lấy ID trả về rồi mới gửi.",
                 "Ví dụ: Mỗi lần bấm Gửi DELETE /items/{id}, Extension tự gọi POST /items -> lấy $.data.id -> xóa đúng ID vừa tạo."));
 
         content.add(modesGrid);
@@ -203,7 +202,7 @@ final class ActionGuideTabBuilder {
                             200, null, null, "", now, now, "Hướng dẫn mẫu", 0L, "", 0);
                     engine.actionPolicyLedger().upsert(pol);
                     engine.saveActionPolicies();
-                    flashGuide.accept("Đã tạo & lưu luật Chặn chờ duyệt cho riêng nhánh \"" + curBranch + "\" vào Sổ cái (Tab 2)!");
+                    flashGuide.accept("Đã tạo luật Chờ duyệt cho nhánh \"" + curBranch + "\" (xem tab Luật).");
                     if (switchTab != null) switchTab.accept(ActionWorkbenchDialog.TAB_LEDGER);
                 }));
         content.add(Box.createVerticalStrut(6));
@@ -213,7 +212,7 @@ final class ActionGuideTabBuilder {
                 : "POST /api/auth/refresh";
         content.add(playbookCard(
                 "Kịch bản C — Đang chặn cả nhánh nhưng muốn 'Cho qua luôn (ALLOW)' 1 API ngoại lệ",
-                "Tạo luật ưu tiên #1 (nằm trên cùng Sổ cái) với Hành vi = Cho qua luôn cho " + allowTargetDesc
+                "Tạo luật ưu tiên cao nhất: Cho qua cho " + allowTargetDesc
                         + ". Request khớp API này sẽ đi thẳng lên Server dù luật chặn phía dưới đang bật.",
                 "Tạo luật Cho qua (ALLOW) cho " + Text.shortPath(allowTargetDesc, 26),
                 t -> t.success,
@@ -241,25 +240,25 @@ final class ActionGuideTabBuilder {
         content.add(Box.createVerticalStrut(6));
 
         content.add(playbookCard(
-                "Kịch bản D — Test phân quyền Xóa / Sửa qua nhiều Role bằng Kho ID Sống",
-                "Bật tự thu thập ID từ các API GET 2xx và đặt chế độ Replay = Tự đổi từ Kho ID Sống. Mỗi Role sẽ tự lấy 1 ID còn sống để kiểm thử chính xác.",
-                "Bật Kho ID Sống ngay",
+                "Kịch bản D - Test Xóa / Sửa qua nhiều vai trò bằng Đổi ID",
+                "Bật tự lấy ID từ response 2xx cùng họ API và chế độ Đổi ID. Mỗi vai trò nhận 1 ID còn sống khác nhau.",
+                "Bật Đổi ID",
                 t -> t.info,
                 () -> {
                     engine.actionEngine().setAutoHarvest(true);
                     engine.applyQuickActionMode(ActionMode.LIVE_ID_POOL);
-                    flashGuide.accept("Đã bật Tự thu thập ID Sống + chế độ Replay = Kho ID Sống!");
+                    flashGuide.accept("Đã bật Tự lấy ID + chế độ Đổi ID.");
                 }));
         content.add(Box.createVerticalStrut(6));
 
         content.add(playbookCard(
                 "Kịch bản E — Lỡ bật nhầm hoặc muốn dừng sạch mọi can thiệp Action",
-                "Đưa toàn bộ luật vào Thùng rác Hoàn tác (có thể khôi phục lại bất cứ lúc nào), tắt Chặn Proxy và đưa Extension về chế độ Nguyên bản.",
-                "Nhả sạch về Nguyên bản",
+                "Đưa mọi luật vào Thùng rác (khôi phục được), tắt chặn, về chế độ Tắt.",
+                "Đặt lại",
                 t -> t.warning,
                 () -> {
                     engine.resetAllActionControls();
-                    flashGuide.accept("Đã nhả toàn bộ về Nguyên bản (NONE). Mọi luật cũ đều được giữ an toàn trong Thùng rác Hoàn tác!");
+                    flashGuide.accept("Đã đặt lại: tắt mọi chặn. Luật cũ nằm trong Thùng rác, khôi phục được.");
                 }));
 
         JScrollPane scroll = new JScrollPane(content);

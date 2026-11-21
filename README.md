@@ -1,9 +1,27 @@
-# theMythOf-JCrawl (Java / Montoya) - V_7.2_beta
+# theMythOf-JCrawl (Java / Montoya) - V_8.2_beta
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_8.2_beta
+
+- **Đánh dấu lỗi (tab Lỗi, Alt+4)**: chuột phải API (Cây / API) hoặc ô trong tab Phân quyền -> *Đánh dấu lỗi...*. Loại lỗi theo
+  OWASP API Security Top 10 (2023) với tên ngắn: Dữ liệu người khác (API1 BOLA/IDOR), Vượt quyền (API5 BFLA), Trường cấm (API3 BOPLA),
+  Đăng nhập (API2), Không giới hạn (API4), Nghiệp vụ (API6), SSRF (API7), Cấu hình (API8), Lộ thông tin, Khác. Mức độ, trạng thái
+  (Nghi ngờ -> Đã xác nhận -> Đã báo -> Đã sửa / Bỏ qua), vai trò, ghi chú. Tab Lỗi có thống kê theo mức độ và loại, lọc, xuất Excel / JSON;
+  API có lỗi mang tag **BUG**.
+- **Kho ID theo họ API**: chỉ lấy ID từ response **2xx** của **cùng họ API** (`DELETE /api/a/b/c/15` dùng ID do `POST /api/a/b/c` tạo,
+  hoặc từ `GET /api/a/b/c` danh sách). DELETE thành công -> ID đánh dấu đã dùng. Bảng Kho ID hiện **Lấy từ** (tạo mới / danh sách /
+  đọc được / sửa được / nhập tay) và **API nguồn**.
+- **Thanh trên thu gọn được**: chỉ giữ Capture, Crawl/Gửi và Chặn; mọi thứ khác (Đích, Hàng đợi, Trạng thái, Tìm nhanh, Tùy chọn,
+  Workspace) vào nút **Menu**.
+- **Tên gọi ngắn, rê chuột để xem chi tiết**: chế độ thao tác = Tắt · Tự động · Giữ lại · Bằng chứng 200 · Đổi ID · Tạo trước · Chờ duyệt.
+  Cửa sổ "Action Workbench" đổi thành **Luật chặn** với 5 tab: Chế độ · Luật · Kiểm tra (Nhật ký / Thử luật) · ID & 200 · Hướng dẫn.
+- **Tab Vai trò mới**: cột *Đăng nhập bằng* hiện Token / Cookie / Không token / Hết hạn thay cho REPLACE: Authorization; thống kê gọn 1 hàng.
+- **Cài đặt mục 8**: hiện Sáng / Tối, Màn hình 100%... thay cho mã kỹ thuật (mã vẫn xem được khi rê chuột / Copy chẩn đoán).
+- Sửa lỗi: phần Thử luật bị chồng chữ khi cửa sổ hẹp.
 
 ## Điểm mới V_7.2_beta
 
