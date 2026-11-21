@@ -454,7 +454,7 @@ public final class MainPanel {
         actionStatusBtn.addActionListener(e -> showActionQuickMenu());
         themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Trạng thái Action trực tiếp (Bấm để chọn chế độ)",
-                "Hiển thị chính xác tính năng Action đang bật (Nguyên bản / Chặn chờ duyệt / Giữ Proxy / Khóa 200 / Kho ID / Tạo->Xóa). Bấm để đổi chế độ nhanh, mở Hàng chờ chi tiết hoặc xem Hướng dẫn & Ví dụ.",
+                "Chế độ Bảo vệ dữ liệu đang bật (Nguyên bản / Hỏi trước / Giữ lại / Dùng lại kết quả cũ / Thay ID / Tạo mới). Bấm để đổi nhanh, mở Hàng chờ chi tiết hoặc Hướng dẫn.",
                 null,
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
@@ -889,7 +889,7 @@ public final class MainPanel {
             flash("Action -> " + engine.quickActionStatusLabel() + " (" + engine.interceptMethodsSummary() + ")");
         };
 
-        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Nhả)",
+        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Tắt chặn)",
                 t -> Icons.undo(t.success.text(), 13), () -> {
                     engine.toggleQuickActionFromHeader(false);
                     afterMode.run();
@@ -950,7 +950,7 @@ public final class MainPanel {
         m.add(Ui.item("Mở Hàng chờ Chặn chi tiết" + (pending > 0 ? " (" + pending + " đang đợi)" : "") + "...",
                 t -> Icons.strategyShield(pending > 0 ? t.danger.text() : t.fg, 13),
                 () -> ProxyInterceptDialog.showFloating(this)));
-        m.add(Ui.item("Mở Action Workbench & Sổ cái Luật" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
+        m.add(Ui.item("Mở Bảo vệ dữ liệu & Luật chặn" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
                 t -> Icons.workbench(t.accent.text(), 13),
                 () -> ActionWorkbenchDialog.show(root, engine,
                         api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
@@ -1042,7 +1042,7 @@ public final class MainPanel {
         }
 
         Engine.Stats st = engine.stats();
-        todo.setText("Chờ:" + st.pending() + (st.dupWaiting() > 0 ? "(#" + st.dupWaiting() + ")" : ""));
+        todo.setText("Xử lý " + st.pending());
         todo.setActive(st.pending() > 0);
         todo.setTrailingDot(st.dupWaiting() > 0 ? t -> t.dup.base() : null);
         todo.setToolTipText(st.pending() > 0
@@ -1056,8 +1056,8 @@ public final class MainPanel {
         } else if (waiting == 0) {
             queuePeak = 0;
         }
-        queue.setText(q.waitSeconds() > 0.5 ? String.format("Đợi:%d(%.0fs)", waiting, q.waitSeconds())
-                : "Đợi:" + waiting);
+        queue.setText(q.waitSeconds() > 0.5 ? String.format("Gửi %d (%.0fs)", waiting, q.waitSeconds())
+                : "Gửi " + waiting);
         queue.setEnabled(waiting > 0);
         queue.setActive(waiting > 0);
         queue.setToken(waiting > 0 ? (q.waitSeconds() > 0.5 ? t -> t.critical : t -> t.info) : t -> t.neutral);
@@ -1079,8 +1079,7 @@ public final class MainPanel {
 
         rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
-        status.setText("API " + st.apis() + "·" + st.branches() + "N·"
-                + engine.roles().enabledCount() + "/" + engine.roles().count() + "R");
+        status.setText("API " + st.apis() + " · " + st.branches() + " nhánh");
         status.setToolTipText(st.apis() + " API · " + st.branches() + " nhánh · "
                 + engine.roles().enabledCount() + "/" + engine.roles().count()
                 + " Roles — Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);

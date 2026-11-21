@@ -52,7 +52,7 @@ public final class ActionMenus {
                                     Collection<RoleResult> explicitTargets, Runnable onAfterAction) {
         Theme th = Theme.current();
         String methodTag = g != null ? g.method() : "API";
-        JMenu root = new JMenu("Xử lý Action & Đổi ID [" + methodTag + "]");
+        JMenu root = new JMenu("Bảo vệ dữ liệu & Đổi ID [" + methodTag + "]");
         root.setIcon(Icons.workbench(th.accent.text(), 14));
         if (g == null) {
             JMenuItem none = new JMenuItem("(Chưa chọn API)");
@@ -90,9 +90,9 @@ public final class ActionMenus {
         addSep(menuContainer);
 
         // 1. Open visual 6-tab Action Workbench (Strategy + Ledger + Audit + Pool + Chain + Lock200)
-        JMenuItem openWb = new JMenuItem("Mở Action Workbench (6 tab: Chiến lược, Sổ cái, Dò Giao thức)...", Icons.workbench(th.accent.text(), 14));
-        openWb.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
-                ActionWorkbenchDialog.TAB_STRATEGY, onAfterAction));
+        JMenuItem openWb = new JMenuItem("Bảo vệ dữ liệu cho API này (Action Workbench ở mục Nâng cao)...",
+                Icons.workbench(th.accent.text(), 14));
+        openWb.addActionListener(e -> DataProtectionDialog.show(parent, engine, g, onAfterAction));
         addItem(menuContainer, openWb);
 
         // 2. Quick Request Composer & Live Replay
@@ -143,15 +143,15 @@ public final class ActionMenus {
         addItem(menuContainer, pickMenu);
 
         // 5. Producer Chain
-        JMenuItem chainItem = new JMenuItem("Chuỗi Tạo Mới -> Hành Động (Producer)...", Icons.strategyChain(th.accent.text(), 14));
+        JMenuItem chainItem = new JMenuItem("Chuỗi Tạo Mới -> Hành Động (API tạo mới)...", Icons.strategyChain(th.accent.text(), 14));
         chainItem.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_CHAIN, onAfterAction));
         addItem(menuContainer, chainItem);
 
         // 6. Lock 200 OK & Replay
         JMenuItem lockItem = new JMenuItem(
-                hasSnap ? "Khóa 200 OK & Chọn cách gửi lại (Snapshot " + g.firstOkStatus() + ")..."
-                        : "Khóa 200 OK & Chọn cách gửi lại...",
+                hasSnap ? "Dùng lại kết quả 200 cũ & Chọn cách gửi lại (Snapshot " + g.firstOkStatus() + ")..."
+                        : "Dùng lại kết quả 200 cũ & Chọn cách gửi lại...",
                 Icons.strategySnapshot(th.info.text(), 14));
         lockItem.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_LOCK200, onAfterAction));
@@ -186,7 +186,7 @@ public final class ActionMenus {
         proxyMenu.add(holdEpItem);
 
         proxyMenu.addSeparator();
-        JMenuItem releaseApiItem = new JMenuItem("Nhả API này về Nguyên bản (Tắt mọi can thiệp / Cho Server trả thật)",
+        JMenuItem releaseApiItem = new JMenuItem("Tắt chặn API này (Nguyên bản — Server trả thật)",
                 Icons.undo(th.success.text()));
         releaseApiItem.addActionListener(e -> {
             engine.releaseApiToNone(g, false);
@@ -194,7 +194,7 @@ public final class ActionMenus {
         });
         proxyMenu.add(releaseApiItem);
 
-        JMenuItem openLedgerItem = new JMenuItem("Mở Sổ cái Chính sách CRUD cho API này...", Icons.sliders(th.accent.text()));
+        JMenuItem openLedgerItem = new JMenuItem("Mở Luật chặn cho API này...", Icons.sliders(th.accent.text()));
         openLedgerItem.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_LEDGER, onAfterAction));
         proxyMenu.add(openLedgerItem);
@@ -214,13 +214,18 @@ public final class ActionMenus {
         Config cfg = engine.config();
         ApiGroup active = activeGroupSupplier != null ? activeGroupSupplier.get() : null;
 
-        JMenuItem openWorkbench = new JMenuItem("Mở Action Workbench (6 Tab trực quan)...", Icons.workbench(th.accent.text(), 14));
+        JMenuItem protect = new JMenuItem("Bảo vệ dữ liệu: 2 câu hỏi + danh sách luật + Thử luật...",
+                Icons.strategyShield(th.accent.text(), 14));
+        protect.addActionListener(e -> DataProtectionDialog.show(parent, engine, active, onAfterAction));
+        menu.add(protect);
+        JMenuItem openWorkbench = new JMenuItem("Nâng cao: Action Workbench (Kho ID sống, Chuỗi tạo mới, Dò giao thức)...",
+                Icons.workbench(th.accent.text(), 14));
         openWorkbench.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
                 ActionWorkbenchDialog.TAB_STRATEGY, onAfterAction));
         menu.add(openWorkbench);
 
         int ledgerActive = engine.actionEngine().policyLedger().activeCount();
-        JMenuItem openLedger = new JMenuItem("Sổ cái Chính sách CRUD (" + ledgerActive + " đang bật)...",
+        JMenuItem openLedger = new JMenuItem("Luật chặn (" + ledgerActive + " đang bật)...",
                 Icons.sliders(th.accent.text()));
         openLedger.addActionListener(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
                 ActionWorkbenchDialog.TAB_LEDGER, onAfterAction));
@@ -265,7 +270,7 @@ public final class ActionMenus {
         });
         menu.add(holdAll);
 
-        JMenuItem resetAllItem = new JMenuItem("Nhả toàn bộ cấu hình Action về Nguyên bản (Reset All)",
+        JMenuItem resetAllItem = new JMenuItem("Tắt chặn toàn bộ — về Nguyên bản (Reset All)",
                 Icons.undo(th.danger.text()));
         resetAllItem.addActionListener(e -> {
             engine.resetAllActionControls();

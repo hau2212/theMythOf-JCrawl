@@ -198,7 +198,7 @@ final class TeamCollabDialog {
         jc.anchor = GridBagConstraints.WEST;
 
         JTextField joinUrlField = new JTextField(sync.roomUrl().isEmpty() ? "http://192.168.1.10:18765" : sync.roomUrl(), 24);
-        JTextField joinPassField = new JTextField(sync.passcode().isEmpty() ? "team2026" : sync.passcode(), 14);
+        JTextField joinPassField = new JTextField(sync.passcode(), 14);
         JButton joinBtn = Ui.solidPrimary("Tham gia Phòng", t -> Icons.arrowRight(t.accent.onSolid()), null);
 
         jc.gridy = 0; jc.gridx = 0; jc.gridwidth = 2; joinCard.add(Ui.bold("Cách 2 — Tham gia Phòng của đồng đội (Client)"), jc);
@@ -268,14 +268,104 @@ final class TeamCollabDialog {
             }
         });
         stopBtn.addActionListener(e -> {
-            sync.stop();
+            engine.stopTeamSync();
             shareUrlField.setText("(Đã dừng)");
             refreshTeam.run();
         });
 
+        // V_7.0 Cách 0 (khuyến nghị): shared folder synced by the company's own client — no port, no network from Burp
+        JPanel folderCard = new JPanel(new BorderLayout(6, 4));
+        folderCard.setOpaque(true);
+        folderCard.setBackground(th.success.fill());
+        folderCard.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(th.success.border()),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+        String savedFolder = engine.teamFolder();
+        JTextField folderField = new JTextField(savedFolder == null ? "" : savedFolder, 30);
+        JButton pickFolder = Ui.secondaryBtn("Chọn thư mục...", t -> Icons.folder(t.fg), () -> {
+            javax.swing.JFileChooser fc = new javax.swing.JFileChooser(folderField.getText().isBlank() ? null : folderField.getText());
+            fc.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+            if (fc.showOpenDialog(parent) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                folderField.setText(fc.getSelectedFile().getAbsolutePath());
+            }
+        });
+        JButton startFolder = Ui.solidPrimary("Đồng bộ qua thư mục này", t -> Icons.playTest(t.accent.onSolid(), 13), null);
+        JButton readNow = Ui.secondaryBtn("Đọc ngay", t -> Icons.refresh(t.fg, 13), null);
+        folderCard.add(Ui.bold("Cách 0 (khuyến nghị, an toàn với SOC) — Thư mục chung OneDrive / SharePoint / Google Drive / ổ mạng"),
+                BorderLayout.NORTH);
+        folderCard.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Thư mục:"), folderField, pickFolder, startFolder, readNow),
+                BorderLayout.CENTER);
+        folderCard.add(Ui.muted("Burp KHÔNG mở cổng, KHÔNG gọi mạng: mỗi người ghi file riêng jcrawl-team/<tên>.jsonl, "
+                + "client đồng bộ của công ty lo phần còn lại. Chỉ chia sẻ metadata (không token / cookie)."),
+                BorderLayout.SOUTH);
+        startFolder.addActionListener(e -> {
+            try {
+                if (folderField.getText().isBlank()) {
+                    throw new IllegalArgumentException("Chưa chọn thư mục chung");
+                }
+                engine.startTeamFolder(java.nio.file.Path.of(folderField.getText().trim()));
+                refreshTeam.run();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parent, "Không dùng được thư mục: " + ex.getMessage(),
+                        "Lỗi thư mục nhóm", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        readNow.addActionListener(e -> {
+            try {
+                sync.pollFolderNow();
+            } catch (Exception ex) {
+                statusLbl.setText("Lỗi đọc: " + ex.getMessage());
+            }
+            refreshTeam.run();
+        });
+        // V_7.0 Cách B: Excel nhóm — offline workbook per member, merged by anyone (no network at all)
+        JButton exportWb = Ui.secondaryBtn("Xuất Excel nhóm (6 sheet)...", t -> Icons.excel(t.fg, 13), () -> {
+            javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+            fc.setSelectedFile(new java.io.File("JCrawl_team_" + TeamSyncService.safeMemberFile(engine.inventoryCatalog().memberName())
+                    + ".xlsx"));
+            if (fc.showSaveDialog(parent) != javax.swing.JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            try {
+                java.nio.file.Files.write(fc.getSelectedFile().toPath(), themythofcrawl.collab.TeamWorkbook.export(engine));
+                statusLbl.setText("Đã xuất Excel nhóm: " + fc.getSelectedFile().getName());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parent, "Xuất lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        JButton mergeWb = Ui.secondaryBtn("Gộp Excel của đồng đội...", t -> Icons.dup(t.fg, 13), () -> {
+            javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+            fc.setMultiSelectionEnabled(true);
+            fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Excel nhóm (.xlsx)", "xlsx"));
+            if (fc.showOpenDialog(parent) != javax.swing.JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            try {
+                java.util.List<java.nio.file.Path> files = new java.util.ArrayList<>();
+                for (java.io.File f : fc.getSelectedFiles()) {
+                    files.add(f.toPath());
+                }
+                var rep = themythofcrawl.collab.TeamWorkbook.merge(engine, files);
+                statusLbl.setText(rep.summary());
+                refreshTeam.run();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parent, "Gộp lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        JPanel wbRow = Ui.flow(FlowLayout.LEFT, Ui.bold("Cách B — Excel nhóm (không cần mạng):"), exportWb, mergeWb,
+                Ui.muted("Mỗi người xuất 1 file, một người gộp lại: trạng thái, người tìm, tag, ghi chú, xung đột."));
+        JPanel folderAndWb = new JPanel(new BorderLayout(0, 4));
+        folderAndWb.setOpaque(false);
+        folderAndWb.add(folderCard, BorderLayout.NORTH);
+        folderAndWb.add(wbRow, BorderLayout.SOUTH);
+        JPanel cardsWrap = new JPanel(new BorderLayout(0, Theme.SPACE_2));
+        cardsWrap.setOpaque(false);
+        cardsWrap.add(folderAndWb, BorderLayout.NORTH);
+        cardsWrap.add(cards, BorderLayout.CENTER);
+
         JPanel center = new JPanel(new BorderLayout(0, Theme.SPACE_2));
         center.setOpaque(false);
-        center.add(cards, BorderLayout.NORTH);
+        center.add(cardsWrap, BorderLayout.NORTH);
         center.add(peerScroll, BorderLayout.CENTER);
         p.add(center, BorderLayout.CENTER);
         refreshTeam.run();

@@ -225,7 +225,7 @@ final class ApiTab {
                 })
                 .numberCols(0, 8)
                 .timeCols(12);
-        int[] widths = {56, 62, 190, 210, 70, 150, 340, 58, 72, 95, 62, 62, 68, 220, 56, 96, 70, 150};
+        int[] widths = {56, 62, 190, 210, 70, 150, 340, 58, 72, 95, 62, 62, 68, 220, 56, 96, 70, 150, 220};
         TableColumnModel cm = table.getColumnModel();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);   // keep readable widths, scroll sideways
         for (int i = 0; i < GroupTableModel.COLS.length; i++) {
@@ -250,7 +250,7 @@ final class ApiTab {
         applyViewOrder(cm, GroupTableModel.GID_COL, GroupTableModel.METHOD_COL, GroupTableModel.HOST_COL,
                 GroupTableModel.URL_COL, GroupTableModel.STATUS_COL, GroupTableModel.LENGTH_COL,
                 GroupTableModel.ROLES_COL, GroupTableModel.PATH_COL, GroupTableModel.AUDIT_COL,
-                GroupTableModel.TIME_COL, GroupTableModel.EXCEL_COL, GroupTableModel.DUP_COL);
+                GroupTableModel.RESEND_COL, GroupTableModel.TIME_COL, GroupTableModel.EXCEL_COL, GroupTableModel.DUP_COL);
         ColumnMemory.install(table, API_COLUMNS_ID, ui.uiPrefs,
                 GroupTableModel.COPY_COL, GroupTableModel.GROUP_COL, GroupTableModel.ROLES_TEXT_COL,
                 GroupTableModel.SENT_COL, GroupTableModel.SOURCE_COL, GroupTableModel.COPIED_COL);
@@ -336,8 +336,8 @@ final class ApiTab {
         });
         composerBtn.setToolTipText("Mở trình soạn thảo Request (Composer) để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
         JButton[] repActionRef = new JButton[1];
-        JButton repActionBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Action Workbench 6 tab: Chiến lược, Sổ cái CRUD, Dò Giao thức, Kho ID Sống, Chuỗi Tạo Mới, Khóa 200 OK", () -> {
+        JButton repActionBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+                "Bảo vệ dữ liệu: chặn / hỏi trước / giữ lại khi crawl, cách gửi lại khi ID đã bị xóa, Thử luật", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ApiGroup cur = currentGroup();
                     if (cur != null) {
@@ -888,7 +888,7 @@ final class ApiTab {
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
-        JButton actionMenuBtn = Ui.dropdown("Action / ID", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+        JButton actionMenuBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
                 "Mở Action Workbench 5 tab, Luật Chặn Proxy, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {

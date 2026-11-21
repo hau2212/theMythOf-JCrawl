@@ -84,7 +84,7 @@ final class AccessMatrixTab {
         for (AccessMatrix.Verdict v : new AccessMatrix.Verdict[] {AccessMatrix.Verdict.SEEN_OK, AccessMatrix.Verdict.DENIED_OK,
             AccessMatrix.Verdict.BAC, AccessMatrix.Verdict.VIOLATION, AccessMatrix.Verdict.DIFF, AccessMatrix.Verdict.SEEN_DENIED,
             AccessMatrix.Verdict.UNKNOWN_OK}) {
-            JLabel l = new JLabel(" " + v.label + " ");
+            JLabel l = new JLabel(" " + v.shortLabel + " = " + v.label + " ");
             l.setOpaque(true);
             Theme th = Theme.current();
             l.setBackground(th.audit(v.level).fill());
@@ -207,7 +207,7 @@ final class AccessMatrixTab {
         model.set(matrix.roles(), rows);
         int[] widths = {56, 64, 280, 200, 150};
         for (int i = 0; i < table.getColumnCount(); i++) {
-            table.getColumnModel().getColumn(i).setPreferredWidth(i < widths.length ? widths[i] : 118);
+            table.getColumnModel().getColumn(i).setPreferredWidth(i < widths.length ? widths[i] : 96);
         }
     }
 
@@ -388,7 +388,8 @@ final class AccessMatrixTab {
         @Override
         public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int row, int col) {
             Theme th = Theme.current();
-            Object shown = value instanceof AccessMatrix.Cell c ? c.verdict().label + (c.status() != null ? " · " + c.status() : "")
+            Object shown = value instanceof AccessMatrix.Cell c
+                    ? c.verdict().shortLabel + (c.status() != null && c.verdict() != AccessMatrix.Verdict.NOT_SENT ? " " + c.status() : "")
                     : value;
             super.getTableCellRendererComponent(t, shown, sel, focus, row, col);
             setFont(col == 2 ? th.monoFont : (value instanceof AccessMatrix.Cell c && c.verdict().finding
@@ -399,7 +400,7 @@ final class AccessMatrixTab {
                     setBackground(tok.fill());
                     setForeground(tok.text());
                 }
-                setToolTipText(c.verdict().explain);
+                setToolTipText(c.verdict().label + " — " + c.verdict().explain);
             } else {
                 if (!sel) {
                     setBackground(t.getBackground());

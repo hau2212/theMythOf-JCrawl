@@ -26,13 +26,15 @@ import themythofcrawl.place.Decisions;
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
     public static final String[] COLS = {"API #", "Group", "Group Path", "Đánh giá (Info)",
         "Method", "Host", "Path", "Status", "Length", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
-        "Excel", "Trùng", "Kết quả Role"};
+        "Excel", "Trùng", "Kết quả Role", "Cách gửi lại"};
     public static final int PATH_COL = 2;
     public static final int COPY_COL = 14;
     public static final int EXCEL_COL = 15;
     public static final int DUP_COL = 16;
     /** V_7.0: per-role heatmap strip (painted by {@link RoleStripRenderer}). */
     public static final int ROLES_COL = 17;
+    /** V_7.0: how a POST/PUT/PATCH/DELETE is resent when its ID is gone + what happened last time. */
+    public static final int RESEND_COL = 18;
     public static final int GID_COL = 0;
     public static final int GROUP_COL = 1;
     public static final int AUDIT_COL = 3;
@@ -372,6 +374,14 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                         : "#" + g.dupNo() + "/" + g.dupTotal();
             }
             case 17 -> roleStripText(g);
+            case 18 -> {
+                if (!themythofcrawl.core.ActionEngine.isActionMethod(g.method())) {
+                    yield "";
+                }
+                String how = themythofcrawl.core.DataProtection.Resend.of(engine.effectiveActionMode(g)).label;
+                String note = g.activeIdNote();
+                yield note == null || note.isBlank() ? how : how + " · " + note;
+            }
             default -> "";
         };
     }

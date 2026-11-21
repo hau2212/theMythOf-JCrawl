@@ -168,8 +168,8 @@ final class TreeTab {
         resetApiBtn.addActionListener(e -> restoreOriginalRequest());
 
         JButton[] qaRef = new JButton[1];
-        quickActionBtn = Ui.secondaryBtn("Action", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
-        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Nhả về Nguyên bản hoặc mở Sổ cái cho API này");
+        quickActionBtn = Ui.secondaryBtn("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
+        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Tắt chặn hoặc mở Luật chặn cho API này");
         quickActionBtn.addActionListener(e -> {
             JPopupMenu m = new JPopupMenu();
             if (shownGroup != null) {

@@ -256,6 +256,19 @@ public final class UiPreview {
         });
         javax.swing.JTabbedPane tabs = find(ui[0].root(), javax.swing.JTabbedPane.class);
         String only = System.getProperty("only");
+        if ("dp".equals(only)) {
+            SwingUtilities.invokeAndWait(() -> {
+                JFrame f = new JFrame("dp");
+                f.getContentPane().add(DataProtectionDialog.build(f, e, e.groups().get(e.groups().size() > 5 ? 5 : 0), null));
+                f.setSize(new Dimension(1000, 740));
+                f.setVisible(true);
+                fr[0].dispose();
+                fr[0] = f;
+            });
+            Thread.sleep(900);
+            shot(fr[0], out.resolve("only_dp.png").toFile());
+            System.exit(0);
+        }
         if (only != null) {
             // Quick mode: -Donly=<tab title> shoots just that tab with every folder expanded, then exits
             for (int i = 0; i < tabs.getTabCount(); i++) {
@@ -264,6 +277,7 @@ public final class UiPreview {
                     SwingUtilities.invokeAndWait(() -> {
                         tabs.setSelectedIndex(idx);
                         ui[0].tick(true);
+                        ui[0].matrix.rebuild();
                         ui[0].treeTab.tree.expandFolders(true);
                         List<ApiGroup> gs = e.groups();
                         if (!gs.isEmpty() && Boolean.getBoolean("expandFirst")) {

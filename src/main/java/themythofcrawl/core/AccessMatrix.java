@@ -32,25 +32,28 @@ public final class AccessMatrix {
     public static final double SAME_CONTENT = 0.75;
 
     public enum Verdict {
-        SEEN_OK("Thấy · Gọi được", "Role thấy chức năng trong UI và gọi được — hợp lệ", AuditLevel.OK, false),
-        DENIED_OK("Không thấy · Bị chặn", "Role không thấy chức năng và server chặn — hợp lệ", AuditLevel.OK, false),
-        BAC("NGHI BAC", "Role KHÔNG thấy chức năng trong UI nhưng gọi được 2xx với cùng nội dung", AuditLevel.WARN, true),
-        VIOLATION("VI PHẠM quyền", "Theo Quyền mong đợi role này không được dùng nhánh này nhưng vẫn gọi được", AuditLevel.WARN, true),
-        DIFF("2xx · nội dung khác", "Gọi được 2xx nhưng nội dung khác bản gốc (trang lỗi/login/dữ liệu riêng) — xem lại",
+        SEEN_OK("OK", "Thấy · Gọi được", "Role thấy chức năng trong UI và gọi được — hợp lệ", AuditLevel.OK, false),
+        DENIED_OK("Chặn", "Không thấy · Bị chặn", "Role không thấy chức năng và server chặn — hợp lệ", AuditLevel.OK, false),
+        BAC("NGHI BAC", "NGHI BAC", "Role KHÔNG thấy chức năng trong UI nhưng gọi được 2xx với cùng nội dung", AuditLevel.WARN, true),
+        VIOLATION("VI PHẠM", "VI PHẠM quyền", "Theo Quyền mong đợi role này không được dùng nhánh này nhưng vẫn gọi được", AuditLevel.WARN, true),
+        DIFF("2xx khác", "2xx · nội dung khác", "Gọi được 2xx nhưng nội dung khác bản gốc (trang lỗi/login/dữ liệu riêng) — xem lại",
                 AuditLevel.INFO, false),
-        SEEN_DENIED("Thấy nhưng bị chặn", "Role thấy/được phép nhưng bị chặn — token hết hạn hoặc thiếu quyền?",
+        SEEN_DENIED("Thấy·bị chặn", "Thấy nhưng bị chặn", "Role thấy/được phép nhưng bị chặn — token hết hạn hoặc thiếu quyền?",
                 AuditLevel.INFO, false),
-        UNKNOWN_OK("Gọi được (role chưa crawl)", "Role chưa crawl nên chưa biết UI có cho thấy không — crawl role này để kết luận",
+        UNKNOWN_OK("2xx ?", "Gọi được (role chưa crawl)", "Role chưa crawl nên chưa biết UI có cho thấy không — crawl role này để kết luận",
                 AuditLevel.REDIRECT, false),
-        ERROR("Lỗi", "Lỗi gọi API / 5xx", AuditLevel.ERROR, false),
-        NOT_SENT("Chưa gửi", "Chưa gửi request của role này", AuditLevel.NONE, false);
+        ERROR("Lỗi", "Lỗi", "Lỗi gọi API / 5xx", AuditLevel.ERROR, false),
+        NOT_SENT("-", "Chưa gửi", "Chưa gửi request của role này", AuditLevel.NONE, false);
 
+        /** Compact text for matrix cells. */
+        public final String shortLabel;
         public final String label;
         public final String explain;
         public final AuditLevel level;
         public final boolean finding;
 
-        Verdict(String label, String explain, AuditLevel level, boolean finding) {
+        Verdict(String shortLabel, String label, String explain, AuditLevel level, boolean finding) {
+            this.shortLabel = shortLabel;
             this.label = label;
             this.explain = explain;
             this.level = level;

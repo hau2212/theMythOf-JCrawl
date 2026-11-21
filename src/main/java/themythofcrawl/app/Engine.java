@@ -78,6 +78,7 @@ public final class Engine {
     public static final String PREF_COLLAB_TAGS = "tmoc.collab.tags.v1";
     public static final String PREF_GSHEETS_URL = "tmoc.collab.gsheets_url.v1";
     public static final String PREF_CRAWL_ROLE = "tmoc.crawl_role.v1";
+    public static final String PREF_TEAM_FOLDER = "tmoc.collab.folder.v7";
     public static final String PREF_EXPECTED_ACCESS = "tmoc.expected_access.v1";
     /** "Thấy bởi" label of requests whose account matches no role (the crawl account / API gốc). */
     public static final String CRAWL_ACCOUNT = "Acc Crawl";
@@ -213,6 +214,14 @@ public final class Engine {
         String savedMember = prefs.get(PREF_COLLAB_MEMBER);
         if (savedMember != null && !savedMember.isBlank()) {
             inventoryCatalog.setMemberName(savedMember);
+        }
+        String folder = prefs.get(PREF_TEAM_FOLDER);
+        if (folder != null && !folder.isBlank() && java.nio.file.Files.isDirectory(java.nio.file.Path.of(folder))) {
+            try {
+                teamSync.startFolder(java.nio.file.Path.of(folder));
+            } catch (Exception ignored) {
+                // folder unavailable (sync client offline): stay independent
+            }
         }
         inventoryCatalog.importTagsJson(prefs.get(PREF_COLLAB_TAGS));
         String savedGSheets = prefs.get(PREF_GSHEETS_URL);
@@ -438,6 +447,22 @@ public final class Engine {
 
     public themythofcrawl.collab.TeamSyncService teamSync() {
         return teamSync;
+    }
+
+    /** Shared team folder (OneDrive / SharePoint / SMB...) remembered for automatic re-join, or null. */
+    public String teamFolder() {
+        return prefs.get(PREF_TEAM_FOLDER);
+    }
+
+    public void startTeamFolder(java.nio.file.Path folder) throws java.io.IOException {
+        teamSync.startFolder(folder);
+        prefs.set(PREF_TEAM_FOLDER, folder.toString());
+        log("Đồng bộ nhóm qua thư mục chung: " + teamSync.folderDir() + " (không mở cổng mạng)", null);
+    }
+
+    public void stopTeamSync() {
+        teamSync.stop();
+        prefs.set(PREF_TEAM_FOLDER, null);
     }
 
     public themythofcrawl.collab.GoogleSheetsBridge googleSheets() {
@@ -1617,6 +1642,37 @@ public final class Engine {
      * Phương pháp 1 (HOLD_AT_PROXY): Kiểm tra xem request từ trình duyệt đi qua Proxy có cần được
      * chặn lại trước khi tới Server (để giữ nguyên trạng thái ID trên Server) hay không.
      */
+    /**
+     * V_7.0 "Thử luật": what the Proxy gate WOULD do with this request, in one Vietnamese sentence.
+     * Dry run — records no hit, no audit line, sends nothing.
+     */
+    public String explainProtection(String method, String host, String path, String branch) {
+        Config c = config;
+        String m = Text.nz(method).trim().toUpperCase(java.util.Locale.ROOT);
+        String b = Text.blank(branch) ? activeBranch().name() : branch;
+        ActionPolicyLedger.EvaluationResult ev = actionEngine.policyLedger().evaluateProxy(b, Text.nz(host), m, path, null);
+        if (ev.matched()) {
+            ActionPolicy win = ev.winningPolicy();
+            return themythofcrawl.core.DataProtection.Choice.of(win.proxyEffect()).label + " — theo luật: \""
+                    + themythofcrawl.core.DataProtection.sentence(win) + "\""
+                    + (ev.allMatched().size() > 1 ? " (thắng " + (ev.allMatched().size() - 1) + " luật khác khớp nhưng ưu tiên thấp hơn)" : "");
+        }
+        ActionEngine.InterceptDecision d = actionEngine.evaluateInterceptRules(b, Text.nz(host), m, path);
+        if (d.matched()) {
+            return (d.effect() == ActionInterceptRule.Effect.ALLOW ? "Cho đi" : "Chặn") + " — theo luật Proxy kiểu cũ \""
+                    + d.rule().name() + "\" (nên bấm Gộp cấu hình cũ)";
+        }
+        String wait = actionEngine.matchInterceptWaitReason(b, m, path);
+        if (wait != null) {
+            return "Hỏi tôi trước — theo cấu hình chặn chờ kiểu cũ: " + wait + " (nên bấm Gộp cấu hình cũ)";
+        }
+        if (ActionEngine.isActionMethod(m) && (c.holdActionAtProxy || c.actionMode == ActionEngine.ActionMode.HOLD_AT_PROXY
+                || actionEngine.isHoldAllActionAtProxy() || actionEngine.isEndpointProxyHold(m, path))) {
+            return "Giữ lại, không gửi — theo công tắc giữ ở Proxy kiểu cũ (nên bấm Gộp cấu hình cũ)";
+        }
+        return "Cho đi bình thường — không luật nào khớp " + m + " " + path + " ở nhánh " + b;
+    }
+
     public boolean shouldHoldAtProxy(Service svc, byte[] request, String url) {
         ProxyInterceptOutcome outcome = evaluateProxyIntercept(svc, request, url);
         return outcome != null && outcome.shouldBlock();

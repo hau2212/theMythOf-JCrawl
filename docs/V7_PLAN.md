@@ -5,7 +5,7 @@
 > Website có **N roles**, mỗi role chỉ thấy một phần tính năng → cần crawl theo từng role mà **không bị trùng**,
 > và phát hiện **BAC** (Broken Access Control) khi role truy cập được thứ nó không được thấy.
 
-Trạng thái: ✅ đã làm trong đợt này · ⏳ chờ duyệt / đợt sau
+Trạng thái: ✅ đã hoàn thành trong V_7.0_beta
 
 ---
 
@@ -31,7 +31,7 @@ Trạng thái: ✅ đã làm trong đợt này · ⏳ chờ duyệt / đợt sau
 - 3 bố cục sẵn: **Crawl** (cây + bảng), **Phân tích** (bảng + chi tiết), **Tối đa** (chỉ bảng). Nút `Bố cục ▾` trên toolbar.
 - Trạng thái ẩn/hiện được nhớ (`tmoc.ui.layout.v7`).
 
-## 3. Crawl N roles không trùng & phát hiện BAC ⏳ (đề xuất trọng tâm)
+## 3. Crawl N roles không trùng & phát hiện BAC ✅ (đề xuất trọng tâm)
 
 ### 3.1 Vấn đề
 Crawl role A thu được tập API(A); crawl role B thu được API(B). Phần giao nhau bị bắt 2 lần; phần riêng thì không biết
@@ -65,7 +65,7 @@ role kia *có gọi được không* (UI giấu ≠ server chặn). BAC = **serv
 Mỗi ô **NGHI BAC** sinh 1 test case: `API # · Method · Path · Role tấn công · Role sở hữu · Bằng chứng (status, độ giống %)`
 → xuất Excel/JSON và đẩy sang Logger++ (mục 4).
 
-## 4. Luồng Logger++ → server quản lý ⏳
+## 4. Luồng Logger++ → server quản lý ✅
 
 - Logger++ ghi được request do extension gửi khi bật log tool **Extensions**. Vì vậy thêm nút **"Đẩy sang Logger++"**:
   - Chọn API (hoặc "mọi API có response gốc 2xx", đã dedup) → gửi lại **1 lần** qua HTTP client của Burp.
@@ -75,7 +75,7 @@ Mỗi ô **NGHI BAC** sinh 1 test case: `API # · Method · Path · Role tấn c
   - Dùng chung hàng đợi chống 429.
 - Phương án không cần replay: xuất **JSON/HAR/CSV** (request + response gốc 2xx + trường test case) để nạp thẳng vào server quản lý.
 
-## 5. Làm việc nhóm an toàn (không bị SOC đánh giá là bất thường) ⏳ + ✅ một phần
+## 5. Làm việc nhóm an toàn (không bị SOC đánh giá là bất thường) ✅ + ✅ một phần
 
 ### 5.1 Vì sao LAN Host hiện tại rủi ro
 - Mở cổng nghe trên `0.0.0.0` từ trong Burp + client poll mỗi 700 ms → giống **beaconing / C2** dưới góc nhìn EDR/SOC.
@@ -96,11 +96,11 @@ Mỗi ô **NGHI BAC** sinh 1 test case: `API # · Method · Path · Role tấn c
 **Dữ liệu chia sẻ**: chỉ metadata (method, host, mẫu path, trạng thái, nhánh, role thấy/gọi được, tag, người tìm, ghi chú bug).
 **Không bao giờ** chia sẻ token/cookie/raw request mặc định; nếu cần chia sẻ request thì tự che `Authorization`/`Cookie`.
 
-### 5.3 Tính năng Excel cho nhóm ⏳
+### 5.3 Tính năng Excel cho nhóm ✅
 Team Workbook 6 sheet: `Tổng hợp` · `Ma trận Role` (Thấy/Gọi được/BAC) · `Test case & Bug` (ID, mức độ, trạng thái, người làm)
 · `Phân công` (thành viên ↔ nhánh/role) · `Xung đột` · `Theo thành viên`. Nhập ngược để cập nhật trạng thái/phân công.
 
-## 6. Làm lại mục Action → "Bảo vệ dữ liệu" ⏳ (đổi kiến trúc lõi)
+## 6. Làm lại mục Action → "Bảo vệ dữ liệu" ✅ (đổi kiến trúc lõi)
 - Gộp 6 cơ chế chặn (cờ Config, ActionMode/API, endpoint hold, cờ chặn chờ 4 mức, luật Proxy cũ, Sổ cái) về **một danh sách luật**,
   tự chuyển đổi luật cũ khi mở workspace.
 - Câu hỏi 1 (khi trình duyệt gửi POST/PUT/PATCH/DELETE): *Cho đi bình thường* / *Hỏi tôi trước* / *Giữ lại, không gửi (200 giả)*
@@ -108,7 +108,7 @@ Team Workbook 6 sheet: `Tổng hợp` · `Ma trận Role` (Thấy/Gọi được
 - Câu hỏi 2 (khi gửi lại mà ID đã bị xóa): cột "Cách gửi lại" = *Nguyên bản* / *Thay ID còn sống* / *Tạo mới rồi gửi* / *Dùng lại 200 cũ*.
 - Giải thích sau mỗi lần gửi: "ID 15 đã bị xóa → thay bằng 18 (từ GET /orders) → Admin 200, Guest 403".
 
-## 7. Làm gọn tổng thể ⏳
+## 7. Làm gọn tổng thể ✅
 - Thanh trên 1 hàng, chữ rõ nghĩa (bỏ `Đợi:0`, `API 12·6N·10/10R`, `Chờ:7(#1)`).
 - 8 tab → 5: **API** (gộp Cây) · **Báo cáo** (Lịch sử + Ma trận Role + Excel) · **Roles** · **Cần xử lý** · **Cài đặt** (+ Log).
 - Thuật ngữ: Nhả → *Tắt chặn* · Producer → *API tạo mới* · Sổ cái → *Luật chặn* · Khóa 200 → *Dùng lại kết quả cũ* · một mã `#12` duy nhất.
@@ -117,7 +117,19 @@ Team Workbook 6 sheet: `Tổng hợp` · `Ma trận Role` (Thấy/Gọi được
 | Đợt | Nội dung | Trạng thái |
 |---|---|---|
 | 7.0-a | Bảng kiểu Burp, cây lọc nhánh, ẩn/hiện bố cục, vá bảo mật TeamSync, nâng version | ✅ |
-| 7.0-b | Crawl N roles (Thấy bởi / Gọi được), Ma trận Truy cập, so sánh body, test case BAC | ⏳ |
-| 7.0-c | Đẩy sang Logger++ + xuất JSON/HAR | ⏳ |
-| 7.0-d | Đồng bộ thư mục chung (A) + Team Workbook Excel (B) | ⏳ |
-| 7.0-e | "Bảo vệ dữ liệu" (gộp Action) + gộp tab + thuật ngữ | ⏳ |
+| 7.0-t | Tab Cây dạng bảng thẳng hàng (lưới cột cố định + header kéo độ rộng), ẩn khung chi tiết / tối đa | ✅ |
+| 7.0-b | Crawl N roles (Thấy bởi / Gọi được), Ma trận Truy cập, so sánh body, test case BAC | ✅ |
+| 7.0-c | Đẩy sang Logger++ + xuất JSON/HAR | ✅ |
+| 7.0-d | Đồng bộ thư mục chung (A) + Team Workbook Excel (B) | ✅ |
+| 7.0-e | "Bảo vệ dữ liệu" (gộp Action) + gộp tab + thuật ngữ | ✅ |
+
+## 9. Ghi chú triển khai (đã làm)
+
+- **Cây thẳng hàng**: `ui/TreeColumns` (lưới cột + header) · `TreeRenderer.layout*Grid` vẽ cột theo x tuyệt đối,
+  hiệu chỉnh bằng vị trí thật của dòng khi vẽ · test `V70MultiRoleTeamTest.treeTabRowsLineUpOnTheColumnGrid`.
+- **Crawl N roles**: `rolereq/CrawlRoleDetector` · `ApiGroup.seenBy` (lưu trong workspace) · `core/AccessMatrix` · `core/ExpectedAccess` · tab `ui/AccessMatrixTab`.
+- **Logger++ / HAR**: `Engine.pushToLogger` (luồng riêng, giãn cách, mặc định chỉ GET/HEAD) · `export/HarExport` · `ui/LoggerPushDialog`.
+- **Nhóm**: `TeamSyncService` chế độ `FOLDER` (chỉ đọc/ghi file local) · `collab/TeamWorkbook` (xuất 6 sheet + gộp).
+- **Bảo vệ dữ liệu**: `core/DataProtection` (2 câu hỏi, câu tiếng Việt, gộp cấu hình cũ) · `Engine.explainProtection` (Thử luật, không ghi log) · `ui/DataProtectionDialog`.
+  Gộp cấu hình cũ là **thao tác chủ động** (nút trong dialog), không tự chạy khi mở workspace để không đổi hành vi ngầm.
+- **Tab**: `MainPanel.selectTab/selectedTab` cho tab nhóm Báo cáo / Cài đặt.
