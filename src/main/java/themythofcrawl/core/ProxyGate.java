@@ -216,7 +216,7 @@ public final class ProxyGate {
             }
             default -> st = ScopeType.GLOBAL;
         }
-        return new ActionPolicy(ID, SOURCE + ": " + s.sentence(), "Thiết lập từ " + SOURCE, s.on(), -1, st, branches, true, host,
+        return new ActionPolicy(ID, "Chặn chính: " + s.sentence(), "Thiết lập ở nút Chặn trên thanh trên", s.on(), -1, st, branches, true, host,
                 pmt, path, null, s.methods(), Stage.PROXY_GATE, s.effect().effect, ActionEngine.ActionMode.NONE, 200, null,
                 null, "", now, now, SOURCE, 0L, "", 0);
     }

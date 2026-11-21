@@ -44,7 +44,7 @@ public final class ActionPolicyLedger {
                 "Chặn chờ duyệt mọi Action (POST/PUT/PATCH/DELETE)",
                 "Tạo luật Toàn cục chặn chờ duyệt mọi POST/PUT/PATCH/DELETE để bấm Gửi thủ công"),
         ALLOW_AUTH_TELEMETRY(
-                "Cho qua Auth / Login / Telemetry (ALLOW ưu tiên đầu)",
+                "Cho qua Auth / Login / Telemetry (luôn ưu tiên)",
                 "Chèn ngoại lệ Cho qua ở độ ưu tiên cao nhất cho login, refresh, logout, analytics, health"),
         HOLD_ALL_DELETES(
                 "Giữ ở Proxy mọi lệnh Xóa (DELETE -> 200 ảo)",
@@ -217,7 +217,7 @@ public final class ActionPolicyLedger {
         if (c.get(ScopeType.BRANCH) > 0) parts.add(c.get(ScopeType.BRANCH) + " Nhánh");
         if (c.get(ScopeType.PATH_PATTERN) > 0) parts.add(c.get(ScopeType.PATH_PATTERN) + " Path");
         if (c.get(ScopeType.API_EXACT) > 0) parts.add(c.get(ScopeType.API_EXACT) + " API");
-        return parts.isEmpty() ? "0 chính sách bật (Nguyên bản)" : String.join(" · ", parts);
+        return parts.isEmpty() ? "0 luật bật" : String.join(" · ", parts);
     }
 
     public synchronized String exportJson(Collection<String> onlyIds) {
@@ -602,7 +602,7 @@ public final class ActionPolicyLedger {
                     }
                 }
                 if (drop) {
-                    pushTrashLocked(p, "Nhả phạm vi " + scopeType.label);
+                    pushTrashLocked(p, "Bỏ luật phạm vi " + scopeType.label);
                     removed++;
                 } else {
                     keep.add(p);
@@ -626,7 +626,7 @@ public final class ActionPolicyLedger {
         synchronized (this) {
             count = policies.size();
             for (ActionPolicy p : policies) {
-                pushTrashLocked(p, "Nhả toàn bộ (Reset All)");
+                pushTrashLocked(p, "Đặt lại tất cả");
             }
             policies.clear();
         }
@@ -795,7 +795,7 @@ public final class ActionPolicyLedger {
         return new EvaluationResult(
                 null, List.of(), ProxyEffect.PASS_NONE, fb,
                 fb == ActionEngine.ActionMode.NONE
-                        ? "Mặc định Nguyên bản (Không can thiệp)"
+                        ? "Không luật (đi thẳng)"
                         : "Mặc định toàn cục: " + fb.shortTitle());
     }
 

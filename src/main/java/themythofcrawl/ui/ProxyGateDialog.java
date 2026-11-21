@@ -46,7 +46,7 @@ final class ProxyGateDialog {
 
     static void show(MainPanel ui) {
         Window owner = SwingUtilities.getWindowAncestor(ui.root());
-        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Cổng chặn Proxy", java.awt.Dialog.ModalityType.MODELESS);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Thiết lập chặn", java.awt.Dialog.ModalityType.MODELESS);
         Gate gate = new Gate(ui.engine, ui.api != null ? ui.api.currentGroup() : null, () -> {
             ui.syncHeader();
             ui.tick(true);

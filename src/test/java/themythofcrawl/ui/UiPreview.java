@@ -279,14 +279,44 @@ public final class UiPreview {
             }
             System.exit(0);
         }
+        if ("top".equals(only)) {
+            SwingUtilities.invokeAndWait(() -> {
+                fr[0].setSize(new Dimension(1500, 130));
+                ui[0].setTopCompact(false);
+                fr[0].validate();
+            });
+            Thread.sleep(700);
+            shot(fr[0], out.resolve("only_top_full.png").toFile());
+            SwingUtilities.invokeAndWait(() -> {
+                ui[0].setTopCompact(true);
+                fr[0].validate();
+            });
+            Thread.sleep(700);
+            shot(fr[0], out.resolve("only_top_compact.png").toFile());
+            System.exit(0);
+        }
         if ("wb".equals(only)) {
             SwingUtilities.invokeAndWait(() -> {
                 JFrame f = new JFrame("wb");
-                f.getContentPane().add(ActionWorkbenchDialog.buildWorkbenchPanel(null, e, null, null, 1, null, null));
-                f.setSize(new Dimension(1120, 730));
+                f.getContentPane().add(ActionWorkbenchDialog.buildWorkbenchPanel(null, e, null, null, Integer.getInteger("wbTab", 1), null, null));
+                f.setSize(new Dimension(Integer.getInteger("wbW", 1120), 730));
                 f.setVisible(true);
                 fr[0].dispose();
                 fr[0] = f;
+                if (Boolean.getBoolean("wbSim")) {
+                    f.validate();
+                    java.util.ArrayDeque<Component> dq = new java.util.ArrayDeque<>(List.of(f.getContentPane()));
+                    while (!dq.isEmpty()) {
+                        Component cc = dq.poll();
+                        if (cc instanceof themythofcrawl.ui.kit.SegmentedToggle st && st.isShowing()) {
+                            st.setSelectedIndex(1, true);
+                            break;
+                        }
+                        if (cc instanceof java.awt.Container ct) {
+                            dq.addAll(List.of(ct.getComponents()));
+                        }
+                    }
+                }
             });
             Thread.sleep(900);
             shot(fr[0], out.resolve("only_wb.png").toFile());

@@ -79,9 +79,11 @@ final class ActionProtocolAuditTabBuilder {
                 BorderFactory.createEmptyBorder(6, 10, 6, 10)));
 
         SegmentedToggle modeToggle = new SegmentedToggle(
-                "Nhật ký Cổng Action trực tiếp (Live Proxy)",
-                "Bộ Dò Hàng loạt trước khi chạy (Batch Simulator)");
-        JLabel hintLbl = Ui.muted("Dò chính xác request Action nào đang bị Chặn hay Cho qua và căn chỉnh chỉ bằng 1 bấm.");
+                "Nhật ký",
+                "Thử luật");
+        modeToggle.setOptionTooltip(0, "Request thật vừa đi qua Burp: bị chặn hay cho qua, vì luật nào");
+        modeToggle.setOptionTooltip(1, "Chạy thử luật trên các API đã bắt, không gửi gì lên mạng");
+        JLabel hintLbl = Ui.muted("Xem request nào bị chặn / cho qua và sửa luật bằng 1 bấm.");
         topBar.add(modeToggle, BorderLayout.WEST);
         topBar.add(hintLbl, BorderLayout.CENTER);
         root.add(topBar, BorderLayout.NORTH);
@@ -99,14 +101,15 @@ final class ActionProtocolAuditTabBuilder {
         JPanel liveFilterRow = new JPanel(new BorderLayout(8, 0));
         liveFilterRow.setOpaque(false);
 
-        JPanel liveLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        JPanel liveLeft = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
         liveLeft.setOpaque(false);
-        JCheckBox actionOnlyChk = new JCheckBox("Chỉ Action (POST/PUT/PATCH/DELETE)", true);
+        JCheckBox actionOnlyChk = new JCheckBox("Chỉ API thao tác", true);
         actionOnlyChk.setOpaque(false);
-        JComboBox<String> verdictCombo = new JComboBox<>(new String[] {"Tất cả phán quyết", "Chỉ Đã Chặn", "Chỉ Cho Qua"});
+        actionOnlyChk.setToolTipText("Chỉ POST / PUT / PATCH / DELETE");
+        JComboBox<String> verdictCombo = new JComboBox<>(new String[] {"Mọi kết quả", "Bị chặn", "Cho qua"});
         JComboBox<String> methodCombo = new JComboBox<>(new String[] {"Mọi Method", "POST", "PUT", "PATCH", "DELETE", "GET"});
         JTextField liveSearch = new JTextField(12);
-        liveSearch.setToolTipText("Lọc theo path, host, nhánh hoặc tên chính sách...");
+        liveSearch.setToolTipText("Tìm theo path, host, nhánh hoặc tên luật");
         liveLeft.add(actionOnlyChk);
         liveLeft.add(verdictCombo);
         liveLeft.add(methodCombo);
@@ -120,13 +123,13 @@ final class ActionProtocolAuditTabBuilder {
         liveStats.add(livePassedPill);
         liveStats.add(clearLogBtn);
 
-        liveFilterRow.add(liveLeft, BorderLayout.WEST);
-        liveFilterRow.add(liveSearch, BorderLayout.CENTER);
+        liveLeft.add(liveSearch);
+        liveFilterRow.add(liveLeft, BorderLayout.CENTER);
         liveFilterRow.add(liveStats, BorderLayout.EAST);
         livePanel.add(liveFilterRow, BorderLayout.NORTH);
 
         DefaultTableModel liveModel = new DefaultTableModel(
-                new String[] {"Lúc", "Method", "Host", "Path", "Nhánh", "Phán quyết", "Chính sách thắng", "Kết quả cuối"}, 0) {
+                new String[] {"Lúc", "Method", "Host", "Path", "Nhánh", "Kết quả", "Luật khớp", "Cuối cùng"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable liveTable = new ThemedTable(liveModel);
@@ -143,15 +146,15 @@ final class ActionProtocolAuditTabBuilder {
 
         final List<Entry> displayedAudit = new ArrayList<>();
 
-        JPanel liveCalibrateBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        JPanel liveCalibrateBar = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 4));
         liveCalibrateBar.setOpaque(true);
         liveCalibrateBar.setBackground(th.surfaceAlt);
         liveCalibrateBar.setBorder(BorderFactory.createLineBorder(th.border));
-        JButton calWaitBtn = Ui.solidPrimary("+ Chặn chờ duyệt (Đợi tôi bấm Gửi)", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
-        JButton calHoldBtn = Ui.secondaryBtn("+ Giữ ở Proxy (200 ảo)", t -> Icons.strategyShield(t.warning.text(), 13));
-        JButton calAllowBtn = Ui.secondaryBtn("+ Cho qua luôn (ALLOW ưu tiên đầu)", t -> Icons.check(t.success.text()));
-        JButton openQueueBtn = Ui.secondaryBtn("Mở Hàng chờ Chặn", t -> Icons.strategyShield(t.danger.text(), 13));
-        liveCalibrateBar.add(Ui.bold("Căn chỉnh dòng đang chọn:"));
+        JButton calWaitBtn = Ui.solidPrimary("+ Chờ duyệt", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
+        JButton calHoldBtn = Ui.secondaryBtn("+ Giữ lại", t -> Icons.strategyShield(t.warning.text(), 13));
+        JButton calAllowBtn = Ui.secondaryBtn("+ Cho qua", t -> Icons.check(t.success.text()));
+        JButton openQueueBtn = Ui.secondaryBtn("Hàng chặn", t -> Icons.strategyShield(t.danger.text(), 13));
+        liveCalibrateBar.add(Ui.bold("Tạo luật cho dòng chọn:"));
         liveCalibrateBar.add(calWaitBtn);
         liveCalibrateBar.add(calHoldBtn);
         liveCalibrateBar.add(calAllowBtn);
@@ -210,13 +213,13 @@ final class ActionProtocolAuditTabBuilder {
             ActionPolicy pol = new ActionPolicy(
                     null,
                     (effect == ProxyEffect.ALLOW_EXPLICIT ? "Cho qua " : "Chặn ") + en.method() + " " + Text.shortPath(tpl, 36),
-                    "Tạo từ Dò Giao thức trực tiếp",
+                    "Tạo từ Nhật ký",
                     true, 0,
                     ScopeType.PATH_PATTERN, List.of(), true, en.host(),
                     PathMatchType.TEMPLATE, tpl, null,
                     List.of(en.method()),
                     Stage.PROXY_GATE, effect, ActionEngine.ActionMode.NONE,
-                    200, null, null, "", now, now, "Dò Giao thức", 0L, "", 0);
+                    200, null, null, "", now, now, "Nhật ký", 0L, "", 0);
             if (effect == ProxyEffect.ALLOW_EXPLICIT) {
                 ledger.createAtTop(pol);
             } else {
@@ -238,41 +241,44 @@ final class ActionProtocolAuditTabBuilder {
         JPanel simPanel = new JPanel(new BorderLayout(0, Theme.SPACE_2));
         simPanel.setOpaque(false);
 
-        JPanel simTop = new JPanel(new BorderLayout(6, 4));
+        JPanel simTop = new JPanel(new BorderLayout(0, 2));
         simTop.setOpaque(false);
 
-        JPanel simControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        JPanel simControls = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
         simControls.setOpaque(false);
         JComboBox<String> simBranchCombo = new JComboBox<>();
-        simBranchCombo.addItem("Toàn bộ API đã bắt (" + engine.groups().size() + ")");
+        simBranchCombo.addItem("Mọi API (" + engine.groups().size() + ")");
         for (Branch b : engine.branches()) {
             simBranchCombo.addItem(b.name());
         }
-        JCheckBox simActionOnlyChk = new JCheckBox("Chỉ lọc Action API (POST/PUT/PATCH/DELETE)", true);
+        JCheckBox simActionOnlyChk = new JCheckBox("Chỉ API thao tác", true);
         simActionOnlyChk.setOpaque(false);
-        JButton runSimBtn = Ui.solidPrimary("Chạy Dò ngay (Không gửi mạng)", t -> Icons.playTest(t.accent.onSolid(), 14), null);
-        simControls.add(Ui.bold("Phạm vi dò:"));
+        simActionOnlyChk.setToolTipText("Chỉ POST / PUT / PATCH / DELETE");
+        JButton runSimBtn = Ui.solidPrimary("Chạy thử", t -> Icons.playTest(t.accent.onSolid(), 14), null);
+        runSimBtn.setToolTipText("Chạy luật trên các API đã bắt. Không gửi gì lên mạng.");
+        simControls.add(Ui.bold("Phạm vi:"));
         simControls.add(simBranchCombo);
         simControls.add(simActionOnlyChk);
         simControls.add(runSimBtn);
 
-        JPanel simSummary = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        JPanel simSummary = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 2));
         simSummary.setOpaque(false);
         Pill simWaitPill = new Pill("Chờ duyệt: 0", t -> t.danger, t -> Icons.strategyShield(t.danger.text(), 12));
-        Pill simHoldPill = new Pill("Giữ Proxy: 0", t -> t.warning, t -> Icons.strategyShield(t.warning.text(), 12));
-        Pill simAllowPill = new Pill("Cho qua (ALLOW): 0", t -> t.info, t -> Icons.check(t.info.text(), 12));
-        Pill simPassPill = new Pill("Nguyên bản: 0", t -> t.success, t -> Icons.check(t.success.text(), 12));
+        Pill simHoldPill = new Pill("Giữ lại: 0", t -> t.warning, t -> Icons.strategyShield(t.warning.text(), 12));
+        Pill simAllowPill = new Pill("Cho qua: 0", t -> t.info, t -> Icons.check(t.info.text(), 12));
+        Pill simPassPill = new Pill("Không luật: 0", t -> t.success, t -> Icons.check(t.success.text(), 12));
         simSummary.add(simWaitPill);
         simSummary.add(simHoldPill);
         simSummary.add(simAllowPill);
         simSummary.add(simPassPill);
 
-        simTop.add(simControls, BorderLayout.WEST);
-        simTop.add(simSummary, BorderLayout.EAST);
+        // V_8.2 fix: controls and result pills on their OWN rows (they used to overlap on narrow dialogs).
+        simTop.add(simControls, BorderLayout.NORTH);
+        simTop.add(simSummary, BorderLayout.SOUTH);
         simPanel.add(simTop, BorderLayout.NORTH);
 
         DefaultTableModel simModel = new DefaultTableModel(
-                new String[] {"API #", "Method", "Path", "Nhánh", "Loại", "Dự báo Cổng Proxy", "Dự báo Replay", "Chính sách thắng"}, 0) {
+                new String[] {"API #", "Method", "Path", "Nhánh", "Loại", "Khi crawl", "Khi gửi lại", "Luật khớp"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable simTable = new ThemedTable(simModel);
@@ -289,16 +295,16 @@ final class ActionProtocolAuditTabBuilder {
 
         final List<SimulationRow> displayedSim = new ArrayList<>();
 
-        JPanel simFoot = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        JPanel simFoot = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 4));
         simFoot.setOpaque(true);
         simFoot.setBackground(th.surfaceAlt);
         simFoot.setBorder(BorderFactory.createLineBorder(th.border));
-        JButton simSetWaitBtn = Ui.solidPrimary("Chuyển -> Chặn chờ duyệt", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
-        JButton simSetHoldBtn = Ui.secondaryBtn("Chuyển -> Giữ Proxy", t -> Icons.strategyShield(t.warning.text(), 13));
-        JButton simSetAllowBtn = Ui.secondaryBtn("Chuyển -> Cho qua (ALLOW)", t -> Icons.check(t.success.text()));
-        JButton simReleaseBtn = Ui.secondaryBtn("Nhả về Nguyên bản", t -> Icons.undo(t.fg));
-        JButton simComposeBtn = Ui.secondaryBtn("Sửa & Gửi lại (Composer)", t -> Icons.edit(t.accent.text()));
-        simFoot.add(Ui.bold("Căn chỉnh API đã chọn:"));
+        JButton simSetWaitBtn = Ui.solidPrimary("Chờ duyệt", t -> Icons.strategyShield(t.accent.onSolid(), 13), null);
+        JButton simSetHoldBtn = Ui.secondaryBtn("Giữ lại", t -> Icons.strategyShield(t.warning.text(), 13));
+        JButton simSetAllowBtn = Ui.secondaryBtn("Cho qua", t -> Icons.check(t.success.text()));
+        JButton simReleaseBtn = Ui.secondaryBtn("Bỏ luật", t -> Icons.undo(t.fg));
+        JButton simComposeBtn = Ui.secondaryBtn("Sửa request", t -> Icons.edit(t.accent.text()));
+        simFoot.add(Ui.bold("Đặt luật cho API chọn:"));
         simFoot.add(simSetWaitBtn);
         simFoot.add(simSetHoldBtn);
         simFoot.add(simSetAllowBtn);
@@ -323,22 +329,22 @@ final class ActionProtocolAuditTabBuilder {
             for (SimulationRow row : rep.rows()) {
                 String winName = row.proxyEval().winningPolicy() != null
                         ? row.proxyEval().winningPolicy().name()
-                        : "(Mặc định — Nguyên bản)";
+                        : "(không luật)";
                 simModel.addRow(new Object[] {
                         Text.apiLabel(row.gid()),
                         row.method(),
                         row.path(),
                         row.branch(),
-                        row.actionProtocol() ? "Action" : "Read",
+                        row.actionProtocol() ? "Thao tác" : "Đọc",
                         row.proxyEval().effectiveProxyEffect().label,
                         row.replayEval().effectiveReplayMode().shortTitle(),
                         winName
                 });
             }
             simWaitPill.setText("Chờ duyệt: " + rep.willWait());
-            simHoldPill.setText("Giữ Proxy: " + (rep.willHoldSpoof() + rep.willDrop()));
-            simAllowPill.setText("Cho qua (ALLOW): " + rep.willAllowExplicit());
-            simPassPill.setText("Nguyên bản: " + rep.willPassDefault());
+            simHoldPill.setText("Giữ lại: " + (rep.willHoldSpoof() + rep.willDrop()));
+            simAllowPill.setText("Cho qua: " + rep.willAllowExplicit());
+            simPassPill.setText("Không luật: " + rep.willPassDefault());
         };
 
         runSimBtn.addActionListener(Ui.safe(e -> runSim.run()));
@@ -362,15 +368,15 @@ final class ActionProtocolAuditTabBuilder {
                     long now = System.currentTimeMillis();
                     ledger.upsert(new ActionPolicy(
                             null,
-                            (eff == ProxyEffect.INTERCEPT_WAIT ? "Chặn chờ duyệt " : "Giữ Proxy ")
+                            (eff == ProxyEffect.INTERCEPT_WAIT ? "Chờ duyệt " : "Giữ lại ")
                                     + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(tpl, 30),
-                            "Căn chỉnh từ Bộ Dò hàng loạt",
+                            "Tạo từ Thử luật",
                             true, 0,
                             ScopeType.API_EXACT, List.of(), true, g.host(),
                             PathMatchType.TEMPLATE, tpl, g.gid(),
                             List.of(g.method()),
                             Stage.PROXY_GATE, eff, ActionEngine.ActionMode.NONE,
-                            200, null, null, "", now, now, "Bộ Dò hàng loạt", 0L, "", 0));
+                            200, null, null, "", now, now, "Thử luật", 0L, "", 0));
                     engine.saveActionPolicies();
                 }
             }

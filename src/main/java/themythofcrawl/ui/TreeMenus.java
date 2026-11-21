@@ -150,7 +150,7 @@ final class TreeMenus {
                         ui.flash("Đã hủy bỏ (Drop): " + pr.method() + " " + Text.shortPath(pr.path(), 40));
                     }));
                     m.addSeparator();
-                    m.add(Ui.item("+ Cho qua luôn Endpoint này (ALLOW ưu tiên đầu) & Gửi", t -> Icons.check(t.success.text(), 13), () -> {
+                    m.add(Ui.item("+ Cho API này đi thẳng & Gửi", t -> Icons.check(t.success.text(), 13), () -> {
                         String host = pr.service() != null ? pr.service().host() : "";
                         engine.actionEngine().policyLedger().createAtTop(
                                 themythofcrawl.model.ActionPolicy.quickAllowPath(host, pr.path(), List.of(pr.method()), "Cây chính"));

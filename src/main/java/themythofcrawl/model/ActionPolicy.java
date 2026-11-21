@@ -104,7 +104,7 @@ public final class ActionPolicy {
     }
 
     public enum ProxyEffect {
-        PASS_NONE("Nguyên bản (Không can thiệp)", "Cho request đi thẳng lên Server bình thường, không chặn hay giả lập"),
+        PASS_NONE("Đi thẳng", "Cho request đi thẳng lên Server bình thường, không chặn hay giả lập"),
         ALLOW_EXPLICIT("Cho qua luôn (ALLOW)", "Cho phép đi thẳng lên Server ngay lập tức, cắt ngang mọi luật chặn bên dưới"),
         INTERCEPT_WAIT("Chặn chờ duyệt (Đợi tôi bấm Gửi)", "Dừng request tại Proxy và đưa vào Hàng chờ Chặn để bạn xem/sửa rồi bấm Gửi hoặc Hủy"),
         HOLD_SPOOF("Giữ ở Proxy (Trả 200 ảo)", "Chặn trước khi tới Server, lưu vào Extension và trả 200 ảo về trình duyệt"),
@@ -535,7 +535,7 @@ public final class ActionPolicy {
                 case HOLD_SPOOF -> "Giữ Proxy 200 ảo";
                 case BLOCK_DROP -> "Chặn Drop";
                 case ALLOW_EXPLICIT -> "Cho qua (ALLOW)";
-                case PASS_NONE -> "Nguyên bản";
+                case PASS_NONE -> "Đi thẳng";
             };
         }
         return actionTxt + " [" + methodsLabel() + "] " + targetSummary();

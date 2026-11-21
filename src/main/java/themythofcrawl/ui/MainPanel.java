@@ -140,6 +140,8 @@ public final class MainPanel {
     private JPanel headerLeftZone;
     private JPanel headerRightFull;
     private JPanel headerRightCompact;
+    /** V_8.2: breadcrumb (Đích) zone — hidden when the top bar is collapsed. */
+    private JPanel headerCenterZone;
     private JPanel rightWrapper;
     private boolean userTopCompact;
     private boolean effectiveHeaderCompact;
@@ -469,7 +471,7 @@ public final class MainPanel {
         actionStatusBtn.setFont(Theme.current().smallBoldFont);
         actionStatusBtn.addActionListener(Ui.safe(e -> ProxyGateDialog.show(this)));
         themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Cổng chặn Proxy (bấm để thiết lập)",
+                "Chặn (bấm để thiết lập)",
                 "Chọn rõ: chặn request nào (mọi host / 1 host / host + path / nhánh), method nào, và làm gì với request bị chặn"
                         + " (Hỏi tôi trước / Giữ lại + trả 200 giả cho trình duyệt / Chặn hẳn). Có sơ đồ và ô Thử với 1 URL.",
                 null,
@@ -486,7 +488,7 @@ public final class MainPanel {
                 () -> engine.proxyGate().sentence()));
 
         actionQuickSwitch.onToken(t -> engine.proxyQueue().pendingCount() > 0 ? t.danger : t.accent);
-        actionQuickSwitch.setToolTipText("Bật / Tắt Cổng chặn Proxy (BẬT = dùng thiết lập đã lưu; TẮT = tắt mọi chặn, request đi thẳng)");
+        actionQuickSwitch.setToolTipText("Bật / tắt chặn. Bật: dùng thiết lập đã lưu. Tắt: mọi request đi thẳng.");
         actionQuickSwitch.onChange(on -> {
             if (syncingActionSwitch) {
                 return;
@@ -589,20 +591,20 @@ public final class MainPanel {
         topChromeToggleBtn.setMaximumSize(new Dimension(h24, h24));
         topChromeToggleBtn.addActionListener(Ui.safe(e -> setTopCompact(!effectiveHeaderCompact)));
         themythofcrawl.ui.kit.RichHoverCard.install(topChromeToggleBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Thu gọn / Mở rộng thanh công cụ phía trên",
-                "Rút gọn các nút điều khiển vào menu thả xuống để tối ưu diện tích làm việc (hữu ích cho cả màn hình thường và chia đôi màn hình).",
+                "Thu gọn thanh trên",
+                "Thu gọn: chỉ giữ Capture, Crawl/Gửi và Chặn. Mọi thứ khác vào nút Menu. Bấm lại để mở rộng.",
                 null,
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.accent.text(), 12) : Icons.chevronUp(t.accent.text(), 12),
                 t -> t.accent,
                 () -> effectiveHeaderCompact ? "Đang ở chế độ thu gọn (bấm để mở rộng)" : "Đang hiện đầy đủ (bấm để thu gọn)"));
 
-        compactControlsBtn.setText("Điều khiển");
+        compactControlsBtn.setText("Menu");
         compactControlsBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.sliders(t.fg), t.fg)));
         compactControlsBtn.setHorizontalTextPosition(SwingConstants.LEADING);
         compactControlsBtn.setMargin(new Insets(0, 5, 0, 5));
-        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(96), h24));
-        compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(104), h24));
-        compactControlsBtn.setToolTipText("Mở menu điều khiển nhanh (Trạng thái, Action Workbench, Tùy chọn, Workspace...)");
+        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(88), h24));
+        compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(96), h24));
+        compactControlsBtn.setToolTipText("Menu: Đích, Trạng thái, Hàng đợi, Tìm nhanh, Luật chặn, Tùy chọn, Workspace");
         compactControlsBtn.addActionListener(Ui.safe(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight())));
 
         // Strict single-row horizontal BoxLayout — NEVER wraps onto 2-3 broken lines on Burp!
@@ -656,6 +658,7 @@ public final class MainPanel {
         destPrefix.add(Box.createHorizontalStrut(2));
 
         JPanel centerZone = new JPanel(new BorderLayout(0, 0));
+        headerCenterZone = centerZone;
         centerZone.setOpaque(false);
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
@@ -744,42 +747,43 @@ public final class MainPanel {
         Engine.Stats st = engine.stats();
         SendDispatcher.Snapshot q = engine.queue();
         int waiting = q.queued() + q.inFlight();
+        m.add(Ui.item("Đích: " + engine.activeBranch().name() + "...", Icons::folder, this::destinationMenu));
         m.add(Ui.item("Trạng thái: " + status.getText() + " · " + todo.getText()
                 + (waiting > 0 ? " · Đợi: " + waiting : ""), Icons::api, this::statusMenu));
         if (st.pending() > 0) {
-            m.add(Ui.item("Mở danh sách chờ xử lý (" + st.pending() + ")", Icons::hourglass, this::todoMenu));
+            m.add(Ui.item("Việc chờ (" + st.pending() + ")", Icons::hourglass, this::todoMenu));
         }
         if (waiting > 0) {
-            m.add(Ui.item("Hủy hàng đợi gửi (" + waiting + ")", Icons::stop, () -> engine.cancelPending("Đã hủy")));
+            m.add(Ui.item("Hủy hàng đợi (" + waiting + ")", Icons::stop, () -> engine.cancelPending("Đã hủy")));
         }
         m.addSeparator();
-        m.add(Ui.item("Tìm kiếm toàn cục (Spotlight · Ctrl+K)", Icons::search, () -> spotlight.open()));
+        m.add(Ui.item("Tìm nhanh (Ctrl+K)", Icons::search, () -> spotlight.open()));
         int pendingIntercept = engine.proxyQueue().pendingCount();
         boolean waitOn = engine.actionEngine().isInterceptWaitEnabled();
         String waitLabel = pendingIntercept > 0
-                ? "Hàng chờ Chặn Proxy trực tiếp (" + pendingIntercept + " đang đợi)..."
-                : (waitOn ? "Hàng chờ Chặn Proxy trực tiếp (Đang BẬT)..." : "Hàng chờ Chặn Proxy trực tiếp (Đang TẮT)...");
+                ? "Hàng chặn (" + pendingIntercept + " đang chờ)..."
+                : (waitOn ? "Hàng chặn (bật)..." : "Hàng chặn (tắt)...");
         m.add(Ui.item(waitLabel,
                 t -> Icons.strategyShield(pendingIntercept > 0 ? t.danger.text() : (waitOn ? t.success.text() : t.fg), 14),
                 () -> ProxyInterceptDialog.showFloating(this)));
         int blockRules = engine.actionEngine().activeBlockRuleCount();
-        m.add(Ui.item("Action Workbench & Luật Chặn Proxy" + (blockRules > 0 ? " (" + blockRules + " luật bật)" : "") + "...",
+        m.add(Ui.item("Luật chặn" + (blockRules > 0 ? " (" + blockRules + " bật)" : "") + "...",
                 Icons::workbench, () -> ActionWorkbenchDialog.show(root, engine,
                         api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                             syncHeader();
                             if (settings != null) settings.load();
                         })));
-        m.add(Ui.item("Chế độ nút công cụ: " + UiDisplayMode.current().label + " (Đổi)", Icons::displayMode, () -> {
+        m.add(Ui.item("Kiểu nút: " + UiDisplayMode.current().label, Icons::displayMode, () -> {
             UiDisplayMode next = UiDisplayMode.cycle();
             UiPrefs.setDisplayMode(uiPrefs, next);
             if (settings != null) settings.load();
             flash("Chế độ nút công cụ: " + next.label);
         }));
-        m.add(Ui.item("Tùy chọn nhanh & Danh mục...", Icons::gear, this::optionsMenu));
+        m.add(Ui.item("Tùy chọn...", Icons::gear, this::optionsMenu));
         m.add(Ui.item("Workspace: " + engine.workspaceName() + "...", Icons::folder, this::workspaceMenu));
         m.add(Ui.item(window != null ? "Gắn lại vào tab Burp" : "Tách cửa sổ riêng", Icons::window, this::toggleDetach));
         m.addSeparator();
-        m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh công cụ phía trên" : "Thu gọn thanh công cụ phía trên",
+        m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh trên" : "Thu gọn thanh trên",
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12),
                 () -> setTopCompact(!effectiveHeaderCompact)));
         return m;
@@ -845,17 +849,22 @@ public final class MainPanel {
                 dest.setMaxSegments(1);
                 dest.setCellWidth(Math.max(48, Math.min(72, (w - 360) / 2)));
             } else {
-                // Collapsed compact mode (split-screen default OR user collapsed): crisp 1-row bar keeping Action unit visible!
+                // V_8.2 collapsed bar: ONLY the live status controls stay (Capture, Crawl/Gửi, Chặn) + Menu + expand.
+                // Everything else (Đích, Hàng đợi, Trạng thái, Spotlight, Tùy chọn, Workspace...) folds into Menu.
                 headerDrawerRow.setVisible(false);
-                if (queue.getParent() != headerLeftZone && !narrow) {
-                    headerLeftZone.add(queue);
-                } else if (narrow && queue.getParent() == headerLeftZone) {
+                if (queue.getParent() == headerLeftZone) {
                     headerLeftZone.remove(queue);
                 }
                 headerRightFull.setVisible(false);
                 headerRightCompact.setVisible(true);
+                if (headerCenterZone != null) {
+                    headerCenterZone.setVisible(false);
+                }
                 dest.setMaxSegments(narrow ? 1 : 2);
                 dest.setCellWidth(narrow ? 54 : 68);
+            }
+            if (headerCenterZone != null && !compact) {
+                headerCenterZone.setVisible(true);
             }
             topChromeToggleBtn.setIcon(Icons.themed(t -> effectiveHeaderCompact
                     ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12)));
@@ -1078,7 +1087,8 @@ public final class MainPanel {
                 m.add(Ui.item("   " + p, t -> Icons.nodeIcon(engine.nodeTypeOf(p), t, 12), () -> setDestination(p)));
             }
         }
-        m.show(dest, 0, dest.getHeight());
+        java.awt.Component anchor = dest.isShowing() ? dest : (compactControlsBtn.isShowing() ? compactControlsBtn : root);
+        m.show(anchor, 0, anchor.getHeight());
     }
 
     void setDestination(String path) {

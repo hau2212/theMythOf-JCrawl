@@ -28,14 +28,14 @@ import themythofcrawl.model.ActionInterceptRule;
 public final class ActionEngine {
 
     public enum ActionMode {
-        NONE("0. Nguyên bản (Không can thiệp — Tắt xử lý Action)",
-                "Cho request đi thẳng nguyên bản lên Server, không chặn Proxy, không tự đổi ID hay kế thừa 200 ảo (200 -> 400/404 hiển thị trung thực)"),
-        AUTO_SMART("Tự động thông minh (Kết hợp cả 4)", "Ưu tiên giữ 2xx, tự thay ID sống hoặc gọi Producer khi gặp 4xx"),
-        HOLD_AT_PROXY("1. Chặn ở Proxy (Giữ trạng thái Server)", "Trình duyệt nhận 200 ảo; Server giữ nguyên ID cho tới khi bấm Gửi"),
-        LOCK_2XX("2. Khóa bảo vệ 200 OK (Snapshot & 3 tùy chọn)", "Lưu bản sao 200 OK gốc; cho phép Kế thừa 200 OK, Đổi ID đẩy thật, hoặc Gửi cưỡng bức"),
-        LIVE_ID_POOL("3. Giỏ ID sống (Tự động nạp & Đổi ID)", "Thu thập ID từ API danh sách/chi tiết để thay thế ID đã bị xóa"),
-        PRODUCER_RECREATE("4. Gọi API Tạo mới (Producer -> ID mới)", "Gọi POST tạo bản ghi mới lấy ID tươi trước khi gửi DELETE/PUT/POST"),
-        INTERCEPT_WAIT("5. Chặn chờ duyệt trực tiếp (Đợi tôi bấm Gửi)", "Chặn đứng request tại Proxy và hiện ngay trong Hàng chờ Chặn để bạn xem/sửa rồi bấm Gửi lên Server");
+        // V_8.2: short noun names (label) + one human sentence (description) shown on hover.
+        NONE("Tắt", "Không can thiệp: request đi thẳng lên server, kết quả thật (200 -> 400 vẫn hiện đúng)."),
+        AUTO_SMART("Tự động", "Giữ bằng chứng 200 nếu có; gặp 4xx thì đổi ID cùng họ API hoặc tạo trước rồi gửi."),
+        HOLD_AT_PROXY("Giữ lại", "Không gửi lên server lúc crawl: trình duyệt nhận 200 giả. Chỉ gửi thật khi bạn bấm Gửi."),
+        LOCK_2XX("Bằng chứng 200", "Lưu response 2xx đầu tiên. Gửi lại ra 4xx vẫn còn bằng chứng 200 để báo cáo."),
+        LIVE_ID_POOL("Đổi ID", "Thay ID đã dùng / đã xóa bằng ID còn sống của CÙNG họ API (lấy từ response 2xx)."),
+        PRODUCER_RECREATE("Tạo trước", "Gọi API tạo (POST cùng họ) để có ID mới, rồi mới gửi DELETE / PUT."),
+        INTERCEPT_WAIT("Chờ duyệt", "Request dừng ở Burp, hiện trong Hàng chặn; bạn xem / sửa rồi bấm Gửi.");
 
         public final String label;
         public final String description;
@@ -46,22 +46,14 @@ public final class ActionEngine {
         }
 
         public String shortTitle() {
-            return switch (this) {
-                case NONE -> "Nguyên bản (Tắt)";
-                case AUTO_SMART -> "Tự động thông minh";
-                case HOLD_AT_PROXY -> "Giữ ở Proxy";
-                case LOCK_2XX -> "Khóa 200 OK";
-                case LIVE_ID_POOL -> "Kho ID Sống";
-                case PRODUCER_RECREATE -> "Gọi API Tạo mới";
-                case INTERCEPT_WAIT -> "Chặn chờ duyệt";
-            };
+            return label;
         }
     }
 
     public enum Lock2xxStrategy {
-        INHERIT_200("Cách 1A: Kế thừa kết quả 200 OK ban đầu (Không gửi lại ID đã xóa lên Server)"),
-        REAL_SEND_FRESH_ID("Cách 1B: Đẩy thật lên Server kèm Tự đổi ID sống / Gọi API Tạo mới (Đạt 200 OK mới)"),
-        FORCE_RAW_SEND("Cách 2: Cưỡng bức gửi lại nguyên bản lên Server (Chấp nhận rủi ro 4xx, có thể Khôi phục 200 OK)");
+        INHERIT_200("Dùng 200 cũ: không gửi, trả lại response 200 đã lưu"),
+        REAL_SEND_FRESH_ID("Gửi với ID mới: đổi ID cùng họ API hoặc tạo trước, gửi thật"),
+        FORCE_RAW_SEND("Gửi y nguyên: chấp nhận 4xx, vẫn khôi phục được 200 cũ");
 
         public final String label;
 

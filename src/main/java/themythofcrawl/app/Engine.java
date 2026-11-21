@@ -274,7 +274,7 @@ public final class Engine {
         themythofcrawl.core.ProxyGate.write(actionEngine.policyLedger(), s);
         saveActionPolicies();
         changes.structure();
-        log("Cổng chặn Proxy: " + s.sentence(), null);
+        log("Chặn: " + s.sentence(), null);
     }
 
     /** Header pill text: what the Proxy does RIGHT NOW, in two or three words. */
@@ -360,7 +360,7 @@ public final class Engine {
             actionEngine.setInterceptWaitEnabled(false);
             actionEngine.clearAllProxyControls();
             changes.structure();
-            log("Top Bar: Đã TẮT Action -> trở về Nguyên bản (Không can thiệp).", null);
+            log("Thanh trên: đã TẮT chặn, request đi thẳng.", null);
             return;
         }
         ActionEngine.ActionMode target = lastActiveQuickMode != null && lastActiveQuickMode != ActionEngine.ActionMode.NONE
@@ -1746,7 +1746,7 @@ public final class Engine {
         // 5. No blocking policy matched: record Action protocol requests as PASSED (Nguyên bản) so user can probe & calibrate!
         if (isActionProto && !(c.ignoreStatic && Text.isStaticPath(path, staticExts))) {
             auditLog.record(method, svc.host(), path, activeBranchName, true,
-                    ActionPolicy.ProxyEffect.PASS_NONE, "", "(Mặc định — Nguyên bản)", "Mặc định",
+                    ActionPolicy.ProxyEffect.PASS_NONE, "", "(không luật)", "Mặc định",
                     "Không có chính sách chặn khớp -> Đi thẳng lên Server", null);
         }
         return null;
@@ -2411,17 +2411,17 @@ public final class Engine {
             long now = System.currentTimeMillis();
             actionEngine.policyLedger().createAtTop(new ActionPolicy(
                     null, "Cho qua nguyên bản " + Text.apiLabel(g.gid()) + " " + g.method() + " " + Text.shortPath(g.path(), 32),
-                    "Nhả riêng API này về Nguyên bản (vượt qua các luật chặn bên dưới)", true, 0,
+                    "API này đi thẳng (bỏ qua các luật chặn khác)", true, 0,
                     ActionPolicy.ScopeType.API_EXACT, List.of(), true, g.host(),
                     ActionPolicy.PathMatchType.TEMPLATE, ActionEngine.normalizePathTemplate(g.path()), g.gid(),
                     List.of(g.method()), ActionPolicy.Stage.BOTH, ActionPolicy.ProxyEffect.ALLOW_EXPLICIT,
                     ActionEngine.ActionMode.NONE, 200, null, null, "",
-                    now, now, "Nhả API #" + g.gid(), 0L, "", 0));
+                    now, now, "Đi thẳng API #" + g.gid(), 0L, "", 0));
         }
         saveActionPolicies();
         touch(g);
         changes.structure();
-        log("Đã nhả API #" + g.gid() + " về Nguyên bản (Không can thiệp)"
+        log("API #" + g.gid() + " đi thẳng (không can thiệp)"
                 + (addExplicitAllowOverride ? " + thêm ngoại lệ Cho qua (ALLOW)." : "."), g.gid());
     }
 
@@ -2447,7 +2447,7 @@ public final class Engine {
         saveInterceptRules();
         saveActionPolicies();
         changes.structure();
-        log("ĐÃ NHẢ TOÀN BỘ về Nguyên bản (NONE): đã đưa " + clearedPolicies
+        log("ĐÃ ĐẶT LẠI: tắt mọi chặn; đã đưa " + clearedPolicies
                 + " chính sách vào Thùng rác Undo và tắt sạch mọi chặn Proxy.", null);
         return clearedPolicies;
     }
@@ -2807,7 +2807,7 @@ public final class Engine {
             }
         }
         if (producer == null) {
-            log("Phương pháp 4: Không tìm thấy API POST Tạo mới (Producer) cho tài nguyên '"
+            log("Tạo trước: không thấy API tạo (POST cùng họ) cho '"
                     + ActionEngine.extractResourceKey(g.path()) + "'. Tiến hành làm mới các trường Unique và gửi.", g.gid());
             sendWithUniqueRefresh(g, targets);
             return;
@@ -2869,7 +2869,7 @@ public final class Engine {
                 }
             }
         } catch (RuntimeException e) {
-            log("Gọi Producer #" + producer.gid() + " thất bại: " + e, consumerGid);
+            log("Gọi API tạo #" + producer.gid() + " thất bại: " + e, consumerGid);
         }
         return null;
     }
@@ -2974,7 +2974,7 @@ public final class Engine {
             if (prod != null && currentId != null) {
                 String newId = executeProducerForNewId(prod, g.gid());
                 if (newId != null) {
-                    g.setActiveIdNote("Producer ID: " + currentId + " -> " + newId);
+                    g.setActiveIdNote("Tạo trước: " + currentId + " -> " + newId);
                     return ActionEngine.replaceIdInRequest(request, currentId, newId);
                 }
             }
@@ -3030,7 +3030,7 @@ public final class Engine {
             if (prod != null) {
                 String createdId = executeProducerForNewId(prod, g.gid());
                 if (createdId != null) {
-                    g.setActiveIdNote("Producer (" + statusCode + "): " + deadId + " -> " + createdId);
+                    g.setActiveIdNote("Tạo trước (" + statusCode + "): " + deadId + " -> " + createdId);
                     return ActionEngine.replaceIdInRequest(sentRequest, deadId, createdId);
                 }
             }

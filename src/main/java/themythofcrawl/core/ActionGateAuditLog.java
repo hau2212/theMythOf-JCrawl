@@ -92,7 +92,7 @@ public final class ActionGateAuditLog {
                     case HOLD_SPOOF -> "Đã giữ & trả 200 ảo";
                     case BLOCK_DROP -> "Đã ngắt kết nối";
                     case ALLOW_EXPLICIT -> "Đã đi thẳng (ALLOW)";
-                    case PASS_NONE -> "Đã đi thẳng (Nguyên bản)";
+                    case PASS_NONE -> "Đi thẳng";
                 }
                 : initialOutcome;
         Entry entry = new Entry(
@@ -106,7 +106,7 @@ public final class ActionGateAuditLog {
                 verdict,
                 eff,
                 Text.nz(policyId),
-                Text.blank(policyName) ? "(Mặc định — Nguyên bản)" : policyName,
+                Text.blank(policyName) ? "(không luật)" : policyName,
                 Text.blank(policyScopeLabel) ? "Mặc định" : policyScopeLabel,
                 Text.nz(reason),
                 outcome);
