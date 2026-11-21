@@ -165,12 +165,12 @@ final class SettingsTab {
                 queryMode, copyFallback, uiFontBox, monoFontBox, displayModeBox, fontScaleBox)) {
             cb.setPrototypeDisplayValue("Chế độ tiêu chuẩn (mặc định)");
             cb.setMinimumSize(new Dimension(150, 26));
-            cb.addActionListener(ev -> {
+            cb.addActionListener(Ui.safe(ev -> {
                 Object sel = cb.getSelectedItem();
                 if (sel != null) {
                     cb.setToolTipText(sel.toString());
                 }
-            });
+            }));
         }
         for (JTextField nf : List.of(delay, jitter, concurrency, retries, threads, pathLen)) {
             nf.setMinimumSize(new Dimension(76, 26));
@@ -272,7 +272,10 @@ final class SettingsTab {
         topBar.add(search, BorderLayout.CENTER);
         JPanel rightBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         rightBtns.setOpaque(false);
-        rightBtns.add(Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, this::apply));
+        rightBtns.add(Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> {
+            apply();
+            ui.flash("Đã áp dụng cấu hình.");
+        }));
         rightBtns.add(Ui.button("Khôi phục mặc định", t -> Icons.undo(t.fg), () -> {
             if (ui.confirmDialog("Đưa mọi tùy chọn về mặc định?")) {
                 Config d = new Config();
@@ -313,17 +316,17 @@ final class SettingsTab {
 
         for (JCheckBox b : new JCheckBox[] {scope, ignoreStatic, regexOn, options, dedup, dedupIds, dedupBranch, confirmNew, restore, dupNew,
             ghosts, autoDetectRefreshChk, sendOriginal, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
-            b.addActionListener(e -> apply());
+            b.addActionListener(Ui.safe(e -> apply()));
             b.setOpaque(false);
         }
         animationsBox.setOpaque(false);
-        animationsBox.addActionListener(e -> {
+        animationsBox.addActionListener(Ui.safe(e -> {
             if (!loading) {
                 UiPrefs.setAnimationsEnabled(ui.uiPrefs, animationsBox.isSelected());
                 saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             }
-        });
-        fontScaleBox.addActionListener(e -> {
+        }));
+        fontScaleBox.addActionListener(Ui.safe(e -> {
             if (!loading) {
                 Object sel = fontScaleBox.getSelectedItem();
                 int pct = UiPrefs.fontScalePercent(null);
@@ -339,8 +342,8 @@ final class SettingsTab {
                 relayoutSections();
                 saved.setText("Đã lưu lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             }
-        });
-        uiFontBox.addActionListener(e -> {
+        }));
+        uiFontBox.addActionListener(Ui.safe(e -> {
             if (!loading) {
                 int idx = uiFontBox.getSelectedIndex();
                 var choices = themythofcrawl.ui.theme.FontManager.UiFontChoice.values();
@@ -352,8 +355,8 @@ final class SettingsTab {
                     saved.setText("Đã đổi font giao diện lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
                 }
             }
-        });
-        monoFontBox.addActionListener(e -> {
+        }));
+        monoFontBox.addActionListener(Ui.safe(e -> {
             if (!loading) {
                 int idx = monoFontBox.getSelectedIndex();
                 var choices = themythofcrawl.ui.theme.FontManager.MonoFontChoice.values();
@@ -364,8 +367,8 @@ final class SettingsTab {
                     saved.setText("Đã đổi font Monospace lúc " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
                 }
             }
-        });
-        displayModeBox.addActionListener(e -> {
+        }));
+        displayModeBox.addActionListener(Ui.safe(e -> {
             if (!loading) {
                 int idx = displayModeBox.getSelectedIndex();
                 UiDisplayMode[] modes = UiDisplayMode.values();
@@ -375,9 +378,9 @@ final class SettingsTab {
                     saved.setText("Chế độ nút: " + modes[idx].label);
                 }
             }
-        });
+        }));
         for (JComboBox<?> c : new JComboBox<?>[] {refreshPolicyBox, profile, actionModeBox, lock2xxStrategyBox, queryMode, copyFallback}) {
-            c.addActionListener(e -> apply());
+            c.addActionListener(Ui.safe(e -> apply()));
         }
         regex.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -388,7 +391,7 @@ final class SettingsTab {
             public void changedUpdate(DocumentEvent e) { validateRegexOutline(); }
         });
         for (JTextField f : new JTextField[] {staticExt, regex, delay, jitter, concurrency, retries, threads, pathLen, copyFormat}) {
-            f.addActionListener(e -> apply());
+            f.addActionListener(Ui.safe(e -> apply()));
             f.addFocusListener(new java.awt.event.FocusAdapter() {
                 @Override
                 public void focusLost(java.awt.event.FocusEvent e) {

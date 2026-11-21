@@ -264,6 +264,41 @@ public final class Engine {
                 || proxyQueue.pendingCount() > 0;
     }
 
+    // =================================================================== V_7.1 Cổng chặn Proxy
+    public themythofcrawl.core.ProxyGate.Settings proxyGate() {
+        return themythofcrawl.core.ProxyGate.read(actionEngine.policyLedger());
+    }
+
+    /** Saves the main Proxy gate (scope + methods + effect + on/off) as one persisted rule. */
+    public void setProxyGate(themythofcrawl.core.ProxyGate.Settings s) {
+        themythofcrawl.core.ProxyGate.write(actionEngine.policyLedger(), s);
+        saveActionPolicies();
+        changes.structure();
+        log("Cổng chặn Proxy: " + s.sentence(), null);
+    }
+
+    /** Header pill text: what the Proxy does RIGHT NOW, in two or three words. */
+    public String proxyGateHeaderLabel() {
+        int pending = proxyQueue.pendingCount();
+        if (pending > 0) {
+            return "Chặn: " + pending + " chờ duyệt";
+        }
+        themythofcrawl.core.ProxyGate.Settings g = proxyGate();
+        if (g.on()) {
+            return switch (g.effect()) {
+                case ASK -> "Chặn: Hỏi trước";
+                case FAKE_200 -> "Chặn: 200 giả";
+                case DROP -> "Chặn: Cắt";
+            };
+        }
+        int blocking = actionEngine.policyLedger().activeBlockingCount();
+        if (blocking > 0 || actionEngine.isInterceptWaitEnabled() || config.holdActionAtProxy
+                || actionEngine.isHoldAllActionAtProxy()) {
+            return "Chặn: " + Math.max(1, blocking) + " luật";
+        }
+        return "Chặn: TẮT";
+    }
+
     /** Short human-readable label for the Top Bar live Action indicator pill. */
     public String quickActionStatusLabel() {
         int pending = proxyQueue.pendingCount();

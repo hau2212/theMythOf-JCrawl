@@ -127,7 +127,7 @@ public final class RequestComposerDialog {
                 ? " [" + initialRole.roleName() + "]" : "";
         String title = "Sửa & Gửi lại Request — " + Text.apiLabel(api.gid()) + " "
                 + api.method() + " " + Text.shortPath(api.path(), 44) + roleSuffix;
-        JDialog dlg = new JDialog(owner, title, JDialog.ModalityType.MODELESS);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), title, JDialog.ModalityType.MODELESS);
         dlg.setResizable(true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
@@ -246,11 +246,11 @@ public final class RequestComposerDialog {
         pinBtn.setIcon(Icons.pin(th.muted, 13));
         pinBtn.setFocusable(false);
         pinBtn.setMargin(new Insets(3, 8, 3, 8));
-        pinBtn.addActionListener(e -> {
+        pinBtn.addActionListener(Ui.safe(e -> {
             if (onPinToggle != null) {
                 onPinToggle.accept(pinBtn.isSelected());
             }
-        });
+        }));
         headerRight.add(statusPill);
         headerRight.add(pinBtn);
         headerBar.add(headerRight, BorderLayout.EAST);
@@ -396,10 +396,10 @@ public final class RequestComposerDialog {
             }
             responseArea.setCaretPosition(0);
         };
-        prettyRespBtn.addActionListener(e -> {
+        prettyRespBtn.addActionListener(Ui.safe(e -> {
             prettyRespMode[0] = prettyRespBtn.isSelected();
             renderResponseText.run();
-        });
+        }));
 
         JPanel respTop = new JPanel(new BorderLayout(0, 4));
         respTop.setOpaque(false);
@@ -479,18 +479,18 @@ public final class RequestComposerDialog {
         });
 
         // ---- Utility button handlers
-        formatJsonBtn.addActionListener(e -> {
+        formatJsonBtn.addActionListener(Ui.safe(e -> {
             String formatted = formatHttpWithPrettyJson(requestArea.getText().getBytes(StandardCharsets.UTF_8));
             if (formatted != null && !formatted.isEmpty()) {
                 requestArea.setText(formatted);
                 requestArea.setCaretPosition(0);
             }
-        });
+        }));
 
-        diffBtn.addActionListener(e -> {
+        diffBtn.addActionListener(Ui.safe(e -> {
             String cur = requestArea.getText();
             if (cur.equals(originalReqText)) {
-                JOptionPane.showMessageDialog(root,
+                JOptionPane.showMessageDialog(Ui.ownerWindow(root),
                         "Request hiện tại giống hệt bản gốc ban đầu (chưa có thay đổi).",
                         "So sánh với Bản gốc", JOptionPane.INFORMATION_MESSAGE);
                 return;
@@ -511,17 +511,17 @@ public final class RequestComposerDialog {
                     diffCount++;
                 }
             }
-            JOptionPane.showMessageDialog(root, sb.toString(), "So sánh với Bản gốc (" + diffCount + " dòng khác)",
+            JOptionPane.showMessageDialog(Ui.ownerWindow(root), sb.toString(), "So sánh với Bản gốc (" + diffCount + " dòng khác)",
                     JOptionPane.INFORMATION_MESSAGE);
-        });
+        }));
 
-        resetOrigBtn.addActionListener(e -> {
+        resetOrigBtn.addActionListener(Ui.safe(e -> {
             requestArea.setText(originalReqText);
             requestArea.setCaretPosition(0);
             protoCombo.setSelectedItem(api.service().secure() ? "https" : "http");
             hostField.setText(api.service().host());
             portSpinner.setValue(api.service().port());
-        });
+        }));
 
         // Helper to resolve current target Service & normalized request bytes
         java.util.function.Supplier<Service> currentService = () -> {
@@ -556,9 +556,9 @@ public final class RequestComposerDialog {
         JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         rightActions.setOpaque(false);
         JButton closeBtn = Ui.secondaryBtn("Đóng", null);
-        closeBtn.addActionListener(e -> {
+        closeBtn.addActionListener(Ui.safe(e -> {
             if (onClose != null) onClose.run();
-        });
+        }));
         rightActions.add(closeBtn);
 
         footer.add(leftActions, BorderLayout.WEST);
@@ -566,7 +566,7 @@ public final class RequestComposerDialog {
         root.add(footer, BorderLayout.SOUTH);
 
         // ---- Send Handler (runs on background thread, never blocks EDT)
-        sendBtn.addActionListener(e -> {
+        sendBtn.addActionListener(Ui.safe(e -> {
             if (sendingNow[0]) return;
             Service svc = currentService.get();
             byte[] reqBytes = currentRequestBytes.get();
@@ -646,10 +646,10 @@ public final class RequestComposerDialog {
             }, "JCrawl-composer-send");
             worker.setDaemon(true);
             worker.start();
-        });
+        }));
 
         // ---- CRUD Save Overwrite (Update)
-        saveOverwriteBtn.addActionListener(e -> {
+        saveOverwriteBtn.addActionListener(Ui.safe(e -> {
             Service svc = currentService.get();
             byte[] reqBytes = currentRequestBytes.get();
             boolean ok = engine.updateApiRequestFromComposer(api, initialRole, svc, reqBytes, lastResponseHolder[0]);
@@ -661,10 +661,10 @@ public final class RequestComposerDialog {
                 statusPill.setText("Đã lưu đè vào " + Text.apiLabel(api.gid()));
                 statusPill.setToken(t -> t.success);
             }
-        });
+        }));
 
         // ---- CRUD Clone as New API (Create)
-        cloneApiBtn.addActionListener(e -> {
+        cloneApiBtn.addActionListener(Ui.safe(e -> {
             Service svc = currentService.get();
             byte[] reqBytes = currentRequestBytes.get();
             ApiGroup created = engine.cloneApiFromComposer(svc, reqBytes, lastResponseHolder[0], api.branchId(), "Nhân bản từ #" + api.gid());
@@ -676,10 +676,10 @@ public final class RequestComposerDialog {
                 statusPill.setText("Đã tạo API mới " + Text.apiLabel(created.gid()));
                 statusPill.setToken(t -> t.success);
             }
-        });
+        }));
 
         // ---- Push to Burp Repeater
-        repeaterBtn.addActionListener(e -> {
+        repeaterBtn.addActionListener(Ui.safe(e -> {
             Service svc = currentService.get();
             byte[] reqBytes = currentRequestBytes.get();
             String tabTitle = Text.groupId(api.gid()) + " Composer " + Text.shortPath(api.path(), 20);
@@ -687,7 +687,7 @@ public final class RequestComposerDialog {
             if (ownerUi != null) {
                 ownerUi.flash("Đã đẩy Request vừa sửa sang Burp Repeater");
             }
-        });
+        }));
 
         return new View(root, requestArea, responseArea, historyTable, sendBtn,
                 saveOverwriteBtn, cloneApiBtn, statusPill, roleCombo, actionModeCombo, refreshHistory);

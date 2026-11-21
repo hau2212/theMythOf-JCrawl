@@ -58,7 +58,7 @@ final class NodeEditorDialog {
         String base = Text.blank(basePath) ? engine.activeBranch().name() : Hierarchy.normalize(basePath);
         String parentOfBase = Hierarchy.depth(base) > 1 ? Hierarchy.parent(base) : "";
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, "Thêm mục vào cấu trúc Crawl", JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Thêm mục vào cấu trúc Crawl", JDialog.ModalityType.APPLICATION_MODAL);
 
         final AddResult[] out = {null};
         final String[] selectedType = {NodeTypeCatalog.DEFAULT_ID};
@@ -272,7 +272,7 @@ final class NodeEditorDialog {
         String norm = Hierarchy.normalize(existingPath);
         String leaf = Hierarchy.leaf(norm);
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, "Đổi loại & Icon nhánh", JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Đổi loại & Icon nhánh", JDialog.ModalityType.APPLICATION_MODAL);
 
         final String[] selectedType = {engine.nodeTypeOf(norm).id()};
         final boolean[] customMode = {false};

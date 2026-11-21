@@ -187,19 +187,19 @@ final class ActionProtocolAuditTabBuilder {
             livePassedPill.setText("Cho qua: " + (st.passedExplicit() + st.passedDefault()));
         };
 
-        actionOnlyChk.addActionListener(e -> refreshLive.run());
-        verdictCombo.addActionListener(e -> refreshLive.run());
-        methodCombo.addActionListener(e -> refreshLive.run());
+        actionOnlyChk.addActionListener(Ui.safe(e -> refreshLive.run()));
+        verdictCombo.addActionListener(Ui.safe(e -> refreshLive.run()));
+        methodCombo.addActionListener(Ui.safe(e -> refreshLive.run()));
         liveSearch.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { refreshLive.run(); }
             @Override public void removeUpdate(DocumentEvent e) { refreshLive.run(); }
             @Override public void changedUpdate(DocumentEvent e) { refreshLive.run(); }
         });
-        clearLogBtn.addActionListener(e -> {
+        clearLogBtn.addActionListener(Ui.safe(e -> {
             auditLog.clear();
             refreshLive.run();
-        });
-        openQueueBtn.addActionListener(e -> MainPanel.openInterceptQueue(engine));
+        }));
+        openQueueBtn.addActionListener(Ui.safe(e -> MainPanel.openInterceptQueue(engine)));
 
         java.util.function.Consumer<ProxyEffect> calibrateSelectedAudit = effect -> {
             int r = liveTable.getSelectedRow();
@@ -226,9 +226,9 @@ final class ActionProtocolAuditTabBuilder {
             if (refreshBanner != null) refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
         };
-        calWaitBtn.addActionListener(e -> calibrateSelectedAudit.accept(ProxyEffect.INTERCEPT_WAIT));
-        calHoldBtn.addActionListener(e -> calibrateSelectedAudit.accept(ProxyEffect.HOLD_SPOOF));
-        calAllowBtn.addActionListener(e -> calibrateSelectedAudit.accept(ProxyEffect.ALLOW_EXPLICIT));
+        calWaitBtn.addActionListener(Ui.safe(e -> calibrateSelectedAudit.accept(ProxyEffect.INTERCEPT_WAIT)));
+        calHoldBtn.addActionListener(Ui.safe(e -> calibrateSelectedAudit.accept(ProxyEffect.HOLD_SPOOF)));
+        calAllowBtn.addActionListener(Ui.safe(e -> calibrateSelectedAudit.accept(ProxyEffect.ALLOW_EXPLICIT)));
 
         auditLog.addListener(() -> SwingUtilities.invokeLater(refreshLive));
 
@@ -341,9 +341,9 @@ final class ActionProtocolAuditTabBuilder {
             simPassPill.setText("Nguyên bản: " + rep.willPassDefault());
         };
 
-        runSimBtn.addActionListener(e -> runSim.run());
-        simBranchCombo.addActionListener(e -> runSim.run());
-        simActionOnlyChk.addActionListener(e -> runSim.run());
+        runSimBtn.addActionListener(Ui.safe(e -> runSim.run()));
+        simBranchCombo.addActionListener(Ui.safe(e -> runSim.run()));
+        simActionOnlyChk.addActionListener(Ui.safe(e -> runSim.run()));
 
         java.util.function.Consumer<ProxyEffect> applySimCalibration = eff -> {
             int[] rows = simTable.getSelectedRows();
@@ -379,11 +379,11 @@ final class ActionProtocolAuditTabBuilder {
             if (onAfterAction != null) onAfterAction.run();
         };
 
-        simSetWaitBtn.addActionListener(e -> applySimCalibration.accept(ProxyEffect.INTERCEPT_WAIT));
-        simSetHoldBtn.addActionListener(e -> applySimCalibration.accept(ProxyEffect.HOLD_SPOOF));
-        simSetAllowBtn.addActionListener(e -> applySimCalibration.accept(ProxyEffect.ALLOW_EXPLICIT));
-        simReleaseBtn.addActionListener(e -> applySimCalibration.accept(ProxyEffect.PASS_NONE));
-        simComposeBtn.addActionListener(e -> {
+        simSetWaitBtn.addActionListener(Ui.safe(e -> applySimCalibration.accept(ProxyEffect.INTERCEPT_WAIT)));
+        simSetHoldBtn.addActionListener(Ui.safe(e -> applySimCalibration.accept(ProxyEffect.HOLD_SPOOF)));
+        simSetAllowBtn.addActionListener(Ui.safe(e -> applySimCalibration.accept(ProxyEffect.ALLOW_EXPLICIT)));
+        simReleaseBtn.addActionListener(Ui.safe(e -> applySimCalibration.accept(ProxyEffect.PASS_NONE)));
+        simComposeBtn.addActionListener(Ui.safe(e -> {
             int r = simTable.getSelectedRow();
             if (r >= 0 && r < displayedSim.size()) {
                 ApiGroup g = engine.group(displayedSim.get(r).gid());
@@ -391,7 +391,7 @@ final class ActionProtocolAuditTabBuilder {
                     RequestComposerDialog.open(dialogParent, engine, g, null, null);
                 }
             }
-        });
+        }));
 
         cardHost.add(livePanel, "LIVE");
         cardHost.add(simPanel, "SIM");

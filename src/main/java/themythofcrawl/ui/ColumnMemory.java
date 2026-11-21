@@ -407,7 +407,7 @@ public final class ColumnMemory {
             if (vis && visibleCount <= 1) {
                 item.setEnabled(false);
             }
-            item.addActionListener(ev -> setColumnVisible(mi, item.isSelected()));
+            item.addActionListener(Ui.safe(ev -> setColumnVisible(mi, item.isSelected())));
             menu.add(item);
         }
         menu.addSeparator();

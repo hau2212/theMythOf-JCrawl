@@ -53,7 +53,7 @@ final class TagManagerDialog {
             return;
         }
         Engine engine = ui.engine;
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(ui.root()),
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(ui.root())),
                 "Quản lý API Tag & Chính sách REFRESH (GET sau Action)", JDialog.ModalityType.APPLICATION_MODAL);
 
         // --- North: Refresh Policy (M1-M4) + Auto-Detect toggle
@@ -84,8 +84,8 @@ final class TagManagerDialog {
             ui.settings.load();
             ui.flash("Đã lưu chính sách REFRESH: " + c.refreshPolicy.name());
         };
-        policyBox.addActionListener(e -> savePolicy.run());
-        autoDetectChk.addActionListener(e -> savePolicy.run());
+        policyBox.addActionListener(Ui.safe(e -> savePolicy.run()));
+        autoDetectChk.addActionListener(Ui.safe(e -> savePolicy.run()));
 
         JPanel policyPanel = new JPanel(new BorderLayout(6, 4)) {
             @Override
@@ -127,11 +127,11 @@ final class TagManagerDialog {
             }
             taggedModel.reload(String.valueOf(filterBox.getSelectedItem()));
         };
-        filterBox.addActionListener(e -> {
+        filterBox.addActionListener(Ui.safe(e -> {
             if (filterBox.getSelectedItem() != null) {
                 taggedModel.reload(String.valueOf(filterBox.getSelectedItem()));
             }
-        });
+        }));
 
         JButton openLineageBtn = Ui.button("Xem Lineage...", Icons::dup, () -> {
             TaggedRow tr = taggedModel.rowAt(taggedTable.getSelectedRow());
@@ -226,7 +226,7 @@ final class TagManagerDialog {
                 ui.info("Không thể xóa Tag hệ thống [REFRESH].");
                 return;
             }
-            if (JOptionPane.showConfirmDialog(dlg, "Xóa Tag [" + td.id() + "]?", "Xóa Tag", JOptionPane.YES_NO_OPTION)
+            if (JOptionPane.showConfirmDialog(Ui.ownerWindow(dlg), "Xóa Tag [" + td.id() + "]?", "Xóa Tag", JOptionPane.YES_NO_OPTION)
                     == JOptionPane.YES_OPTION) {
                 engine.tagCatalog().remove(td.id());
                 engine.saveTagCatalog();
@@ -236,7 +236,7 @@ final class TagManagerDialog {
             }
         });
         JButton resetTagBtn = Ui.button("Khôi phục mặc định", Icons::undo, () -> {
-            if (JOptionPane.showConfirmDialog(dlg, "Khôi phục danh mục Tag về 4 tag mặc định (REFRESH, INIT, POLLING, ACTION-CORE)?",
+            if (JOptionPane.showConfirmDialog(Ui.ownerWindow(dlg), "Khôi phục danh mục Tag về 4 tag mặc định (REFRESH, INIT, POLLING, ACTION-CORE)?",
                     "Khôi phục", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                 engine.tagCatalog().resetDefaults();
                 engine.saveTagCatalog();

@@ -120,7 +120,7 @@ final class LineageDialog {
 
         Prefs prefs = UiPrefs.resolve(null, ui.engine);
         Window owner = SwingUtilities.getWindowAncestor(ui.root());
-        JDialog dlg = new JDialog(owner, "", JDialog.ModalityType.MODELESS);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "", JDialog.ModalityType.MODELESS);
         dlg.setResizable(true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
@@ -220,12 +220,12 @@ final class LineageDialog {
         pinBtn.setName("lineagePinBtn");
         pinBtn.setFocusable(false);
         pinBtn.setToolTipText("Ghim cửa sổ nổi trên cùng để vừa xem vừa thao tác bảng chính");
-        pinBtn.addActionListener(e -> {
+        pinBtn.addActionListener(Ui.safe(e -> {
             if (onPinChanged != null) {
                 onPinChanged.accept(pinBtn.isSelected());
             }
             stylePinButton(pinBtn);
-        });
+        }));
         stylePinButton(pinBtn);
 
         JPanel headerRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.SPACE_2, 0));
@@ -350,21 +350,21 @@ final class LineageDialog {
             }
         });
 
-        keepOrigBtn.addActionListener(e -> {
+        keepOrigBtn.addActionListener(Ui.safe(e -> {
             int n = ui.engine.keepOnlyOriginAndHideOthers(keyRef[0]);
             ui.flash("Đã giữ Bản Gốc (#1) và ẩn " + n + " bản trùng");
             ui.tick(true);
             reloadRef[0].run();
-        });
-        promoteBtn.addActionListener(e -> {
+        }));
+        promoteBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel != null && ui.engine.promoteToOrigin(sel)) {
                 ui.flash("Đã đặt " + Text.apiLabel(sel.gid()) + " làm Bản Gốc (#1)");
                 ui.tick(true);
                 reloadRef[0].run();
             }
-        });
-        keepCopyBtn.addActionListener(e -> {
+        }));
+        keepCopyBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel != null) {
                 ui.engine.keepDuplicates(List.of(sel));
@@ -372,27 +372,27 @@ final class LineageDialog {
                 ui.tick(true);
                 reloadRef[0].run();
             }
-        });
-        toggleRefreshBtn.addActionListener(e -> {
+        }));
+        toggleRefreshBtn.addActionListener(Ui.safe(e -> {
             boolean next = !ui.engine.book().hasTag(keyRef[0], ApiTagCatalog.TAG_REFRESH);
             ui.engine.toggleEndpointTag(keyRef[0], ApiTagCatalog.TAG_REFRESH, next);
             ui.flash(next ? "Đã gắn nhãn Tự tải lại (REFRESH)" : "Đã gỡ nhãn Tự tải lại");
             ui.tick(true);
             reloadRef[0].run();
-        });
-        openBtn.addActionListener(e -> {
+        }));
+        openBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel != null) {
                 ui.jumpToGroup(sel);
             }
-        });
-        editSttBtn.addActionListener(e -> {
+        }));
+        editSttBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel == null) {
                 return;
             }
             String cur = sel.copyStt() != null ? String.valueOf(sel.copyStt()) : "";
-            String input = JOptionPane.showInputDialog(dialogParent,
+            String input = JOptionPane.showInputDialog(Ui.ownerWindow(dialogParent),
                     "Nhập số thứ tự (STT) cho " + Text.apiLabel(sel.gid()) + " (để trống để tự động):", cur);
             if (input == null) {
                 return;
@@ -409,24 +409,24 @@ final class LineageDialog {
             ui.engine.setApiCopyStt(sel, val);
             ui.tick(true);
             reloadRef[0].run();
-        });
-        moveBtn.addActionListener(e -> {
+        }));
+        moveBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel != null) {
                 ui.moveDialog(List.of(sel));
                 ui.tick(true);
                 reloadRef[0].run();
             }
-        });
-        moveOrigBtn.addActionListener(e -> {
+        }));
+        moveOrigBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel != null && ui.engine.moveCopyToOrigin(sel)) {
                 ui.flash("Đã chuyển " + Text.apiLabel(sel.gid()) + " về cùng nhánh với Bản Gốc (#1)");
                 ui.tick(true);
                 reloadRef[0].run();
             }
-        });
-        toggleVisBtn.addActionListener(e -> {
+        }));
+        toggleVisBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel == null) {
                 return;
@@ -440,8 +440,8 @@ final class LineageDialog {
             }
             ui.tick(true);
             reloadRef[0].run();
-        });
-        deleteBtn.addActionListener(e -> {
+        }));
+        deleteBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sel = selectedFn.get();
             if (sel == null) {
                 return;
@@ -451,7 +451,7 @@ final class LineageDialog {
                 ui.tick(true);
                 reloadRef[0].run();
             }
-        });
+        }));
 
         JButton closeBtn = Ui.button("Đóng", onClose != null ? onClose : () -> { });
 

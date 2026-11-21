@@ -50,7 +50,7 @@ final class LoggerPushDialog {
         p.add(marker);
         p.add(Ui.flow(java.awt.FlowLayout.LEFT, new JLabel("Giãn cách giữa 2 request (ms):"), delay));
         Object[] options = {"Đẩy sang Logger++", "Xuất HAR (không gửi)", "Hủy"};
-        int choice = JOptionPane.showOptionDialog(ui.root(), p, "Đẩy sang Logger++ / Xuất HAR", JOptionPane.DEFAULT_OPTION,
+        int choice = JOptionPane.showOptionDialog(Ui.ownerWindow(ui.root()), p, "Đẩy sang Logger++ / Xuất HAR", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
         ui.uiPrefs.set(PREF_MARKER, marker.isSelected() ? "1" : "0");
         if (choice == 0) {

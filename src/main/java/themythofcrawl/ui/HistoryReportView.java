@@ -968,7 +968,7 @@ public final class HistoryReportView extends JPanel {
             int[] step = {0};
             final int totalSteps = 8; // 8 * 15 ms = 120 ms <= 150 ms
             javax.swing.Timer anim = new javax.swing.Timer(15, null);
-            anim.addActionListener(e -> {
+            anim.addActionListener(Ui.safe(e -> {
                 step[0]++;
                 double p = Math.min(1.0, (double) step[0] / totalSteps);
                 double eased = 1.0 - (1.0 - p) * (1.0 - p);
@@ -984,7 +984,7 @@ public final class HistoryReportView extends JPanel {
                     cardList.ensureVisibleCards(true);
                 }
                 cardList.repaint();
-            });
+            }));
             anim.start();
         }
 

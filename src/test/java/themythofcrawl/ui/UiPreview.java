@@ -256,6 +256,29 @@ public final class UiPreview {
         });
         javax.swing.JTabbedPane tabs = find(ui[0].root(), javax.swing.JTabbedPane.class);
         String only = System.getProperty("only");
+        if ("gate".equals(only)) {
+            SwingUtilities.invokeAndWait(() -> {
+                e.setProxyGate(new themythofcrawl.core.ProxyGate.Settings(true, themythofcrawl.core.ProxyGate.Scope.HOST_PATH,
+                        "api.example.test", "/api/v1/orders", "", java.util.Set.of("POST", "PUT", "PATCH", "DELETE"),
+                        themythofcrawl.core.ProxyGate.Effect.FAKE_200));
+                ui[0].syncHeader();
+                JFrame f = new JFrame("gate");
+                ProxyGateDialog.Gate gate = new ProxyGateDialog.Gate(e, e.groups().get(0), null);
+                f.getContentPane().add(new javax.swing.JScrollPane(gate.panel));
+                f.setSize(new Dimension(940, 1060));
+                f.setVisible(true);
+                fr[0].setSize(new Dimension(1500, 120));
+                fr[0].validate();
+            });
+            Thread.sleep(900);
+            shot(fr[0], out.resolve("only_header.png").toFile());
+            for (java.awt.Window w : java.awt.Window.getWindows()) {
+                if (w instanceof JFrame jf && "gate".equals(jf.getTitle())) {
+                    shot(jf, out.resolve("only_gate.png").toFile());
+                }
+            }
+            System.exit(0);
+        }
         if ("dp".equals(only)) {
             SwingUtilities.invokeAndWait(() -> {
                 JFrame f = new JFrame("dp");

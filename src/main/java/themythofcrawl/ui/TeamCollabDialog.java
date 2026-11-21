@@ -61,7 +61,7 @@ final class TeamCollabDialog {
 
     static void show(Component parent, Engine engine, int initialTab, Runnable onChanged) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog dlg = new JDialog(owner, "Đồng bộ Nhóm · Google Sheets · Tag & Xung đột (V_5.0_beta)",
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Đồng bộ Nhóm · Google Sheets · Tag & Xung đột (V_5.0_beta)",
                 JDialog.ModalityType.MODELESS);
         dlg.setLayout(new BorderLayout());
         dlg.add(buildPanel(dlg, engine, initialTab, onChanged, dlg::dispose), BorderLayout.CENTER);
@@ -127,18 +127,18 @@ final class TeamCollabDialog {
         Pill modePill = new Pill(sync.mode().label, t -> sync.mode() == TeamSyncService.Mode.OFFLINE ? t.neutral : t.success);
         JLabel statusLbl = Ui.muted(sync.lastStatus());
 
-        saveMemberBtn.addActionListener(e -> {
+        saveMemberBtn.addActionListener(Ui.safe(e -> {
             String nm = memberField.getText().trim();
             if (!nm.isEmpty()) {
                 catalog.setMemberName(nm);
                 engine.saveCollabPrefs();
                 sync.updateLocalPresence(engine.activeBranch().name(), "");
                 if (onChanged != null) onChanged.run();
-                JOptionPane.showMessageDialog(parent, "Đã đặt tên thành viên: " + nm
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã đặt tên thành viên: " + nm
                         + " (các API bạn tìm sẽ hiện Done (" + nm + ") / Info (" + nm + ")).",
                         "Định danh thành viên", JOptionPane.INFORMATION_MESSAGE);
             }
-        });
+        }));
 
         idCard.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Tên viết tắt của bạn (hiện trên Excel):"), memberField, saveMemberBtn), BorderLayout.WEST);
         idCard.add(Ui.flow(FlowLayout.RIGHT, statusLbl, modePill), BorderLayout.EAST);
@@ -239,10 +239,10 @@ final class TeamCollabDialog {
             if (onChanged != null) onChanged.run();
         };
 
-        startHostBtn.addActionListener(e -> {
+        startHostBtn.addActionListener(Ui.safe(e -> {
             try {
                 int port = Integer.parseInt(portField.getText().trim());
-                if (lanBox.isSelected() && JOptionPane.showConfirmDialog(parent,
+                if (lanBox.isSelected() && JOptionPane.showConfirmDialog(Ui.ownerWindow(parent),
                         "Mở cổng " + port + " cho toàn mạng LAN?\n\n"
                                 + "Một dịch vụ lạ nghe kết nối từ trong Burp + đồng đội hỏi dữ liệu liên tục\n"
                                 + "có thể bị SOC / EDR đánh giá là bất thường (giống beaconing).\n"
@@ -254,24 +254,24 @@ final class TeamCollabDialog {
                 sync.startHost(port, hostPassField.getText().trim(), lanBox.isSelected());
                 refreshTeam.run();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(parent, "Không mở được phòng: " + ex.getMessage(),
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Không mở được phòng: " + ex.getMessage(),
                         "Lỗi mở phòng", JOptionPane.ERROR_MESSAGE);
             }
-        });
-        joinBtn.addActionListener(e -> {
+        }));
+        joinBtn.addActionListener(Ui.safe(e -> {
             try {
                 sync.connectClient(joinUrlField.getText().trim(), joinPassField.getText().trim());
                 refreshTeam.run();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(parent, "Không kết nối được phòng: " + ex.getMessage(),
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Không kết nối được phòng: " + ex.getMessage(),
                         "Lỗi kết nối", JOptionPane.ERROR_MESSAGE);
             }
-        });
-        stopBtn.addActionListener(e -> {
+        }));
+        stopBtn.addActionListener(Ui.safe(e -> {
             engine.stopTeamSync();
             shareUrlField.setText("(Đã dừng)");
             refreshTeam.run();
-        });
+        }));
 
         // V_7.0 Cách 0 (khuyến nghị): shared folder synced by the company's own client — no port, no network from Burp
         JPanel folderCard = new JPanel(new BorderLayout(6, 4));
@@ -298,7 +298,7 @@ final class TeamCollabDialog {
         folderCard.add(Ui.muted("Burp KHÔNG mở cổng, KHÔNG gọi mạng: mỗi người ghi file riêng jcrawl-team/<tên>.jsonl, "
                 + "client đồng bộ của công ty lo phần còn lại. Chỉ chia sẻ metadata (không token / cookie)."),
                 BorderLayout.SOUTH);
-        startFolder.addActionListener(e -> {
+        startFolder.addActionListener(Ui.safe(e -> {
             try {
                 if (folderField.getText().isBlank()) {
                     throw new IllegalArgumentException("Chưa chọn thư mục chung");
@@ -306,18 +306,18 @@ final class TeamCollabDialog {
                 engine.startTeamFolder(java.nio.file.Path.of(folderField.getText().trim()));
                 refreshTeam.run();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(parent, "Không dùng được thư mục: " + ex.getMessage(),
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Không dùng được thư mục: " + ex.getMessage(),
                         "Lỗi thư mục nhóm", JOptionPane.ERROR_MESSAGE);
             }
-        });
-        readNow.addActionListener(e -> {
+        }));
+        readNow.addActionListener(Ui.safe(e -> {
             try {
                 sync.pollFolderNow();
             } catch (Exception ex) {
                 statusLbl.setText("Lỗi đọc: " + ex.getMessage());
             }
             refreshTeam.run();
-        });
+        }));
         // V_7.0 Cách B: Excel nhóm — offline workbook per member, merged by anyone (no network at all)
         JButton exportWb = Ui.secondaryBtn("Xuất Excel nhóm (6 sheet)...", t -> Icons.excel(t.fg, 13), () -> {
             javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
@@ -330,7 +330,7 @@ final class TeamCollabDialog {
                 java.nio.file.Files.write(fc.getSelectedFile().toPath(), themythofcrawl.collab.TeamWorkbook.export(engine));
                 statusLbl.setText("Đã xuất Excel nhóm: " + fc.getSelectedFile().getName());
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(parent, "Xuất lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Xuất lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
             }
         });
         JButton mergeWb = Ui.secondaryBtn("Gộp Excel của đồng đội...", t -> Icons.dup(t.fg, 13), () -> {
@@ -349,7 +349,7 @@ final class TeamCollabDialog {
                 statusLbl.setText(rep.summary());
                 refreshTeam.run();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(parent, "Gộp lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Gộp lỗi: " + ex.getMessage(), "Excel nhóm", JOptionPane.ERROR_MESSAGE);
             }
         });
         JPanel wbRow = Ui.flow(FlowLayout.LEFT, Ui.bold("Cách B — Excel nhóm (không cần mạng):"), exportWb, mergeWb,
@@ -404,13 +404,13 @@ final class TeamCollabDialog {
             stLbl.setText("Đã copy mã Apps Script! Dán vào Google Sheet -> Tiện ích mở rộng -> Apps Script -> Deploy Web App.");
         });
 
-        saveBtn.addActionListener(e -> {
+        saveBtn.addActionListener(Ui.safe(e -> {
             gsheets.configure(urlField.getText().trim(), autoChk.isSelected(), engine);
             engine.saveCollabPrefs();
             stLbl.setText(gsheets.lastStatus());
             if (onChanged != null) onChanged.run();
-        });
-        pushBtn.addActionListener(e -> {
+        }));
+        pushBtn.addActionListener(Ui.safe(e -> {
             gsheets.configure(urlField.getText().trim(), autoChk.isSelected(), engine);
             engine.saveCollabPrefs();
             stLbl.setText("Đang đẩy dữ liệu & tô màu lên Google Sheets...");
@@ -427,8 +427,8 @@ final class TeamCollabDialog {
             }, "JCrawl-gsheets-push");
             t.setDaemon(true);
             t.start();
-        });
-        pullBtn.addActionListener(e -> {
+        }));
+        pullBtn.addActionListener(Ui.safe(e -> {
             gsheets.configure(urlField.getText().trim(), autoChk.isSelected(), engine);
             stLbl.setText("Đang kéo dữ liệu từ Google Sheets...");
             Thread t = new Thread(() -> {
@@ -444,7 +444,7 @@ final class TeamCollabDialog {
             }, "JCrawl-gsheets-pull");
             t.setDaemon(true);
             t.start();
-        });
+        }));
 
         gc.gridy = 0; gc.gridx = 0; cfg.add(Ui.bold("Web App URL:"), gc);
         gc.gridx = 1; gc.weightx = 1; cfg.add(urlField, gc);
@@ -495,7 +495,9 @@ final class TeamCollabDialog {
         tagList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         JButton delBtn = Ui.dangerBtn("Xóa Tag chọn", t -> Icons.trash(t.danger.text()), () -> {
             String sel = tagList.getSelectedValue();
-            if (sel != null && catalog.removeCustomTag(sel)) {
+            if (sel == null) {
+                Ui.hint(tagList, "Chọn 1 tag trong danh sách trước");
+            } else if (catalog.removeCustomTag(sel)) {
                 engine.saveCollabPrefs();
                 reload.run();
                 if (onChanged != null) onChanged.run();
@@ -557,7 +559,10 @@ final class TeamCollabDialog {
         tbl.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
             int r = tbl.getSelectedRow();
-            if (r < 0 || r >= displayed.size()) return;
+            if (r < 0 || r >= displayed.size()) {
+                Ui.hint(tbl, displayed.isEmpty() ? "Không có xung đột nào cần xử lý" : "Chọn 1 xung đột trong bảng trước");
+                return;
+            }
             ConflictRecord cr = displayed.get(r);
             localArea.setText("Thành viên : " + cr.localSide().member() + "\n"
                     + "Trạng thái : " + cr.localSide().status().shortLabel + " (HTTP " + cr.localSide().httpStatus() + ")\n"

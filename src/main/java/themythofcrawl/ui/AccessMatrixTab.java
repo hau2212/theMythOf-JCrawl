@@ -60,7 +60,10 @@ final class AccessMatrixTab {
         JPanel top = new JPanel(new BorderLayout(6, 0));
         top.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
         JPanel left = Ui.flow(FlowLayout.LEFT, Ui.bold("Đang crawl bằng:"), crawlRoleCombo(engine),
-                Ui.button("Tính lại", t -> Icons.refresh(t.fg, 13), "Tính lại ma trận từ kết quả hiện có", this::rebuild),
+                Ui.button("Tính lại", t -> Icons.refresh(t.fg, 13), "Tính lại ma trận từ kết quả hiện có", () -> {
+                    rebuild();
+                    ui.flash("Đã tính lại: " + matrix.rows().size() + " API, " + matrix.findings().size() + " nghi BAC / vi phạm");
+                }),
                 Ui.button("Gửi role chưa gửi", t -> Icons.sendAll(t.fg), "Gửi mọi role còn 'Chưa gửi' để có cột Gọi được",
                         () -> {
                             int n = engine.sendAllUnsent();
@@ -68,7 +71,7 @@ final class AccessMatrixTab {
                         }),
                 onlyFindings);
         onlyFindings.setOpaque(false);
-        onlyFindings.addActionListener(e -> applyFilter());
+        onlyFindings.addActionListener(Ui.safe(e -> applyFilter()));
         JPanel right = Ui.flow(FlowLayout.RIGHT,
                 Ui.button("Quyền mong đợi...", t -> Icons.sliders(t.fg), "Khai báo nhánh nào chỉ dành cho role nào",
                         this::editExpected),
@@ -151,7 +154,7 @@ final class AccessMatrixTab {
             public void popupMenuCanceled(PopupMenuEvent e) {
             }
         });
-        box.addActionListener(e -> {
+        box.addActionListener(Ui.safe(e -> {
             if (filling[0]) {
                 return;
             }
@@ -160,7 +163,7 @@ final class AccessMatrixTab {
             if (!java.util.Objects.equals(next, engine.crawlRoleOverride())) {
                 engine.setCrawlRoleOverride(next);
             }
-        });
+        }));
         return box;
     }
 
@@ -258,7 +261,7 @@ final class AccessMatrixTab {
                 BorderLayout.CENTER);
         form.add(new JScrollPane(roleList), BorderLayout.SOUTH);
         p.add(form, BorderLayout.CENTER);
-        int ok = JOptionPane.showConfirmDialog(panel, p, "Quyền mong đợi theo nhánh", JOptionPane.OK_CANCEL_OPTION,
+        int ok = JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), p, "Quyền mong đợi theo nhánh", JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
         if (ok != JOptionPane.OK_OPTION || branchBox.getSelectedItem() == null) {
             return;

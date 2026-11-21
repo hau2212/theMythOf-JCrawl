@@ -135,7 +135,7 @@ final class LogTab {
                     for (LogKind k : LogKind.values()) {
                         javax.swing.JRadioButtonMenuItem item = new javax.swing.JRadioButtonMenuItem(
                                 "Lọc: " + k.label, k == activeKind);
-                        item.addActionListener(e -> setFilter(k));
+                        item.addActionListener(Ui.safe(e -> setFilter(k)));
                         bg.add(item);
                         fm.add(item);
                     }

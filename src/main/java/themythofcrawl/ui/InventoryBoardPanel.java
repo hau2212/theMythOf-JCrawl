@@ -126,18 +126,18 @@ final class InventoryBoardPanel extends JPanel {
 
         // ---- Row 3: Search + Status Filter + Tag Filter + Stats
         searchField.putClientProperty("JTextField.placeholderText", "Tìm theo Path, Method, Nhánh, Tag, Người tìm (Enter để đi tới Cây)...");
-        searchField.addActionListener(e -> jumpFirstOrSelected());
+        searchField.addActionListener(Ui.safe(e -> jumpFirstOrSelected()));
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { reload(); }
             @Override public void removeUpdate(DocumentEvent e) { reload(); }
             @Override public void changedUpdate(DocumentEvent e) { reload(); }
         });
-        statusCombo.addActionListener(e -> reload());
-        tagCombo.addActionListener(e -> {
+        statusCombo.addActionListener(Ui.safe(e -> reload()));
+        tagCombo.addActionListener(Ui.safe(e -> {
             if (!refreshingTags) {
                 reload();
             }
-        });
+        }));
 
         JPanel filterRow = new JPanel(new BorderLayout(6, 0));
         filterRow.setOpaque(false);
@@ -333,7 +333,7 @@ final class InventoryBoardPanel extends JPanel {
         }
         tagMenu.addSeparator();
         tagMenu.add(Ui.item("+ Tạo Tag mới...", Icons::plus, () -> {
-            String nt = JOptionPane.showInputDialog(this, "Nhập tên Tag mới:", "Tạo Tag mới", JOptionPane.PLAIN_MESSAGE);
+            String nt = JOptionPane.showInputDialog(Ui.ownerWindow(this), "Nhập tên Tag mới:", "Tạo Tag mới", JOptionPane.PLAIN_MESSAGE);
             if (nt != null && !nt.isBlank()) {
                 catalog.addCustomTag(nt.trim());
                 catalog.toggleTagOnEndpoint(row.key(), row.method(), row.host(), row.pathTemplate(), nt.trim());
@@ -347,7 +347,7 @@ final class InventoryBoardPanel extends JPanel {
         m.add(tagMenu);
 
         m.add(Ui.item("Sửa ghi chú...", Icons::edit, () -> {
-            String note = JOptionPane.showInputDialog(this, "Ghi chú cho " + row.method() + " " + row.pathTemplate() + ":", row.note());
+            String note = JOptionPane.showInputDialog(Ui.ownerWindow(this), "Ghi chú cho " + row.method() + " " + row.pathTemplate() + ":", row.note());
             if (note != null) {
                 var updated = catalog.setNote(row.key(), row.method(), row.host(), row.pathTemplate(), note);
                 engine.teamSync().broadcastEndpoint(updated);
@@ -379,11 +379,11 @@ final class InventoryBoardPanel extends JPanel {
             byte[] xlsx = catalog.exportFinalColoredXlsx(engine);
             Files.write(f.toPath(), xlsx);
             ui.flash("Đã xuất file Excel Final 4 sheet có màu: " + f.getName());
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(Ui.ownerWindow(this),
                     "Đã xuất thành công file Excel Final (4 Sheet có tô màu sẵn cho Microsoft Excel Online):\n" + f.getAbsolutePath(),
                     Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Không xuất được file Excel: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(Ui.ownerWindow(this), "Không xuất được file Excel: " + ex.getMessage(),
                     Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
         }
     }

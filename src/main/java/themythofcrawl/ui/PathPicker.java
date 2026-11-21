@@ -32,7 +32,7 @@ public final class PathPicker {
 
     public static String pick(Component parent, String title, Collection<String> paths, String initial, String hint) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, title, JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), title, JDialog.ModalityType.APPLICATION_MODAL);
         d.setLayout(new BorderLayout(6, 6));
         List<String> all = new ArrayList<>(paths);
         all.sort((a, b) -> Hierarchy.key(a).compareTo(Hierarchy.key(b)));
@@ -67,7 +67,7 @@ public final class PathPicker {
             }
         });
         Ui.onDoubleClick(list, ok);
-        field.addActionListener(e -> ok.run());
+        field.addActionListener(Ui.safe(e -> ok.run()));
         JPanel head = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         String subtitle = hint != null && !hint.isBlank() ? hint : "Chọn đường dẫn đích có sẵn hoặc nhập đường dẫn mới ngăn cách bởi '>'";
         head.add(Ui.dialogHeader(title, subtitle), BorderLayout.NORTH);

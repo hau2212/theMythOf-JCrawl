@@ -108,7 +108,7 @@ public final class ActionWorkbenchDialog {
                 : (prefillBranch != null && !prefillBranch.isBlank()
                         ? "Action Workbench — Luật & Phạm vi cho " + prefillBranch
                         : "Action Workbench — Trung tâm Kiểm soát Action");
-        JDialog dlg = new JDialog(owner, title, JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), title, JDialog.ModalityType.APPLICATION_MODAL);
 
         JPanel content = buildWorkbenchPanel(dlg, engine, focusGroup, explicitTargets, prefillBranch, initialTab, () -> {
             if (onAfterAction != null) {
@@ -176,11 +176,11 @@ public final class ActionWorkbenchDialog {
         JPanel quickRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         quickRight.setOpaque(false);
         JButton openGuideBtn = Ui.secondaryBtn("Hướng dẫn & Ví dụ", t -> Icons.info(t.info.text()));
-        openGuideBtn.addActionListener(e -> tabs.setSelectedIndex(TAB_GUIDE));
+        openGuideBtn.addActionListener(Ui.safe(e -> tabs.setSelectedIndex(TAB_GUIDE)));
         quickRight.add(openGuideBtn);
         if (focusGroup != null) {
             JButton openComposerBtn = Ui.secondaryBtn("Sửa & Gửi lại...", t -> Icons.edit(t.accent.text()));
-            openComposerBtn.addActionListener(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null));
+            openComposerBtn.addActionListener(Ui.safe(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null)));
             quickRight.add(openComposerBtn);
         }
         statusStrip.add(pillsLeft, BorderLayout.CENTER);
@@ -414,7 +414,7 @@ public final class ActionWorkbenchDialog {
             if (onAfterAction != null) onAfterAction.run();
         };
 
-        noneReleaseBtn.addActionListener(e -> {
+        noneReleaseBtn.addActionListener(Ui.safe(e -> {
             if (perApiScope[0] && focusGroup != null) {
                 engine.releaseApiToNone(focusGroup, false);
             } else {
@@ -423,10 +423,10 @@ public final class ActionWorkbenchDialog {
             refreshCards.run();
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        }));
 
-        resetAllBtn.addActionListener(e -> {
-            int ok = JOptionPane.showConfirmDialog(dialogParent,
+        resetAllBtn.addActionListener(Ui.safe(e -> {
+            int ok = JOptionPane.showConfirmDialog(Ui.ownerWindow(dialogParent),
                     "Nhả toàn bộ cấu hình Action về Nguyên bản (NONE)?\n"
                             + "Mọi chính sách hiện có sẽ được chuyển vào Thùng rác Undo để khôi phục khi cần.",
                     "Nhả toàn bộ về Nguyên bản", JOptionPane.YES_NO_OPTION);
@@ -436,7 +436,7 @@ public final class ActionWorkbenchDialog {
                 refreshBanner.run();
                 if (onAfterAction != null) onAfterAction.run();
             }
-        });
+        }));
 
         waitMasterSwitch.onChange(on -> {
             if (syncingBanner[0]) {
@@ -496,7 +496,7 @@ public final class ActionWorkbenchDialog {
             perApiScope[0] = (idx == 0 && focusGroup != null);
             refreshCards.run();
         });
-        smartAutoBtn.addActionListener(e -> refreshCards.run());
+        smartAutoBtn.addActionListener(Ui.safe(e -> refreshCards.run()));
 
         // Bottom quick toggles
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
@@ -504,7 +504,7 @@ public final class ActionWorkbenchDialog {
         bottom.setBackground(Theme.current().surfaceAlt);
         bottom.setBorder(BorderFactory.createLineBorder(Theme.current().border, 1));
 
-        holdAllChk.addActionListener(e -> {
+        holdAllChk.addActionListener(Ui.safe(e -> {
             Config next = engine.config().copy();
             next.holdActionAtProxy = holdAllChk.isSelected();
             if (!next.holdActionAtProxy && next.actionMode == ActionMode.HOLD_AT_PROXY) {
@@ -514,11 +514,11 @@ public final class ActionWorkbenchDialog {
             refreshCards.run();
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        }));
         bottom.add(holdAllChk);
 
         if (holdEpChk != null && focusGroup != null) {
-            holdEpChk.addActionListener(e -> {
+            holdEpChk.addActionListener(Ui.safe(e -> {
                 engine.toggleEndpointProxyHold(focusGroup, holdEpChk.isSelected());
                 if (!holdEpChk.isSelected() && focusGroup.actionModeOverride() == ActionMode.HOLD_AT_PROXY) {
                     engine.setApiActionMode(focusGroup, ActionMode.NONE);
@@ -526,7 +526,7 @@ public final class ActionWorkbenchDialog {
                 refreshCards.run();
                 refreshBanner.run();
                 if (onAfterAction != null) onAfterAction.run();
-            });
+            }));
             bottom.add(holdEpChk);
         }
 
@@ -577,7 +577,7 @@ public final class ActionWorkbenchDialog {
         resBox.setEditable(true);
         JCheckBox autoHarvestChk = new JCheckBox("Tự thu thập ID sống từ API 2xx", engine.actionEngine().isAutoHarvest());
         autoHarvestChk.setOpaque(false);
-        autoHarvestChk.addActionListener(e -> engine.actionEngine().setAutoHarvest(autoHarvestChk.isSelected()));
+        autoHarvestChk.addActionListener(Ui.safe(e -> engine.actionEngine().setAutoHarvest(autoHarvestChk.isSelected())));
 
         DefaultTableModel tm = new DefaultTableModel(new Object[] {"Tài nguyên", "Giá trị ID", "Trạng thái"}, 0) {
             @Override
@@ -620,7 +620,7 @@ public final class ActionWorkbenchDialog {
             refreshBanner.run();
         };
 
-        resBox.addActionListener(e -> {
+        resBox.addActionListener(Ui.safe(e -> {
             if (resBox.getItemCount() == 0) {
                 return;
             }
@@ -636,12 +636,14 @@ public final class ActionWorkbenchDialog {
                     tm.addRow(new Object[] {en.getKey(), id, consumed ? "Đã tiêu thụ (4xx)" : "Còn sống (Sẵn sàng)"});
                 }
             }
-        });
+        }));
 
         JButton useAndSendBtn = Ui.accent("Dùng ID đang chọn & Gửi ngay",
                 t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     int vr = poolTable.getSelectedRow();
                     if (focusGroup == null || vr < 0) {
+                        Ui.hint(poolTable, focusGroup == null ? "Mở Workbench từ 1 API cụ thể để gửi"
+                                : "Chọn 1 ID trong bảng Kho ID sống trước");
                         return;
                     }
                     String chosenId = String.valueOf(tm.getValueAt(poolTable.convertRowIndexToModel(vr), 1));
@@ -654,6 +656,7 @@ public final class ActionWorkbenchDialog {
         JButton restoreBtn = Ui.button("Khôi phục còn sống", Icons::refresh, () -> {
             int vr = poolTable.getSelectedRow();
             if (vr < 0) {
+                Ui.hint(poolTable, "Chọn 1 ID trong bảng Kho ID sống trước");
                 return;
             }
             String id = String.valueOf(tm.getValueAt(poolTable.convertRowIndexToModel(vr), 1));
@@ -664,6 +667,7 @@ public final class ActionWorkbenchDialog {
         JButton removeBtn = Ui.button("Xóa ID", t -> Icons.trash(t.danger.text()), () -> {
             int vr = poolTable.getSelectedRow();
             if (vr < 0) {
+                Ui.hint(poolTable, "Chọn 1 ID trong bảng Kho ID sống trước");
                 return;
             }
             int mr = poolTable.convertRowIndexToModel(vr);
@@ -681,9 +685,9 @@ public final class ActionWorkbenchDialog {
                     String csv = Files.readString(fc.getSelectedFile().toPath(), StandardCharsets.UTF_8);
                     int n = engine.actionEngine().importPoolCsv(csv);
                     reloadPool.run();
-                    JOptionPane.showMessageDialog(parent, "Đã nạp " + n + " ID từ file CSV.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã nạp " + n + " ID từ file CSV.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(parent, "Không đọc được file CSV: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Không đọc được file CSV: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -695,9 +699,9 @@ public final class ActionWorkbenchDialog {
             if (fc.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION && fc.getSelectedFile() != null) {
                 try {
                     Files.writeString(fc.getSelectedFile().toPath(), engine.actionEngine().exportPoolCsv(), StandardCharsets.UTF_8);
-                    JOptionPane.showMessageDialog(parent, "Đã xuất Kho ID Sống ra CSV.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã xuất Kho ID Sống ra CSV.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(parent, "Không xuất được file CSV: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Không xuất được file CSV: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -852,21 +856,21 @@ public final class ActionWorkbenchDialog {
             updateLivePreview.run();
         };
 
-        producerBox.addActionListener(e -> reloadSuggestions.run());
-        suggestBox.addActionListener(e -> {
+        producerBox.addActionListener(Ui.safe(e -> reloadSuggestions.run()));
+        suggestBox.addActionListener(Ui.safe(e -> {
             Object sel = suggestBox.getSelectedItem();
             if (sel instanceof SuggestedPath sp) {
                 exprField.setText(sp.expr());
                 updateLivePreview.run();
             }
-        });
+        }));
         exprField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { updateLivePreview.run(); }
             @Override public void removeUpdate(DocumentEvent e) { updateLivePreview.run(); }
             @Override public void changedUpdate(DocumentEvent e) { updateLivePreview.run(); }
         });
         for (JCheckBox c : List.of(swapPathChk, swapQueryChk, swapBodyChk, swapHeaderChk)) {
-            c.addActionListener(e -> updateLivePreview.run());
+            c.addActionListener(Ui.safe(e -> updateLivePreview.run()));
         }
 
         // 3 stacked sharp step boxes
@@ -913,7 +917,7 @@ public final class ActionWorkbenchDialog {
             engine.actionEngine().registerProducer(ActionEngine.extractResourceKey(focusGroup.path()), prod.gid());
             refreshBanner.run();
             if (onAfterAction != null) onAfterAction.run();
-            JOptionPane.showMessageDialog(parent, "Đã liên kết " + Text.apiLabel(prod.gid())
+            JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã liên kết " + Text.apiLabel(prod.gid())
                     + " làm API Tạo Mới cho " + Text.apiLabel(focusGroup.gid()) + ".", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
         });
         saveLinkBtn.setEnabled(focusGroup != null && !producers.isEmpty());
@@ -954,7 +958,7 @@ public final class ActionWorkbenchDialog {
             stratBox.addItem(ls.label);
         }
         stratBox.setSelectedIndex(engine.config().lock2xxStrategy.ordinal());
-        stratBox.addActionListener(e -> {
+        stratBox.addActionListener(Ui.safe(e -> {
             int idx = stratBox.getSelectedIndex();
             if (idx >= 0 && idx < Lock2xxStrategy.values().length) {
                 Config next = engine.config().copy();
@@ -962,7 +966,7 @@ public final class ActionWorkbenchDialog {
                 engine.applyConfig(next);
                 if (onAfterAction != null) onAfterAction.run();
             }
-        });
+        }));
         p.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Cách xử lý mặc định khi gửi lại ở chế độ Khóa 200 OK:"), stratBox), BorderLayout.NORTH);
 
         // Side-by-side comparison

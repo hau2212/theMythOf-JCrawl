@@ -59,7 +59,7 @@ public final class ExcelPlaceholderDialog {
 
     public static void show(Component parent, Engine engine, TargetEntry focusEntry, Runnable onChanged) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog dlg = new JDialog(owner, "Quản lý {Placeholder} & Xác minh khớp Excel",
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Quản lý {Placeholder} & Xác minh khớp Excel",
                 JDialog.ModalityType.APPLICATION_MODAL);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.setContentPane(buildPanel(dlg, engine, focusEntry, onChanged, dlg::dispose));
@@ -206,12 +206,12 @@ public final class ExcelPlaceholderDialog {
                     segBtn.setToolTipText(isPlaceholder
                             ? "Đoạn động " + segText + " — bấm để đổi sang placeholder khác hoặc giữ chữ cố định"
                             : "Đoạn cố định \"" + segText + "\" — bấm để chuyển thành {placeholder}");
-                    segBtn.addActionListener(e -> showSegmentPopup(
+                    segBtn.addActionListener(Ui.safe(e -> showSegmentPopup(
                             segBtn, dialogParent, engine, templateField, segs, segIndex, catalogModel,
                             () -> {
                                 rebuildSegmentsRef[0].run();
                                 runVerifyRef[0].run();
-                            }));
+                            })));
                     segmentsBar.add(segBtn);
                 }
             }
@@ -259,7 +259,7 @@ public final class ExcelPlaceholderDialog {
                     "Cập nhật đường dẫn mẫu mới vào dòng Excel đang chọn và đối chiếu lại ngay", null, () -> {
                         String np = templateField.getText().trim();
                         if (np.isEmpty()) {
-                            JOptionPane.showMessageDialog(dialogParent, "Đường dẫn mẫu không được để trống.",
+                            JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Đường dẫn mẫu không được để trống.",
                                     Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
                             return;
                         }
@@ -267,7 +267,7 @@ public final class ExcelPlaceholderDialog {
                             if (onChanged != null) {
                                 onChanged.run();
                             }
-                            JOptionPane.showMessageDialog(dialogParent,
+                            JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent),
                                     "Đã cập nhật dòng Excel #" + focusEntry.sttText() + " thành:\n" + np
                                             + "\nĐã tự động đối chiếu lại toàn bộ API đã bắt.",
                                     Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
@@ -348,13 +348,13 @@ public final class ExcelPlaceholderDialog {
                 regexField.setText(k.defaultRegex);
             }
         };
-        kindBox.addActionListener(e -> syncRegexField.run());
+        kindBox.addActionListener(Ui.safe(e -> syncRegexField.run()));
         syncRegexField.run();
 
         JButton saveDefBtn = Ui.accent("Lưu Placeholder", th -> Icons.save(th.accent.onSolid()), th -> th.accent, () -> {
             String clean = PlaceholderCatalog.sanitizeName(nameField.getText());
             if (clean.isEmpty()) {
-                JOptionPane.showMessageDialog(dialogParent,
+                JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent),
                         "Vui lòng nhập tên hợp lệ (chỉ gồm chữ cái, chữ số, '_' hoặc '-').",
                         Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
                 return;
@@ -363,14 +363,14 @@ public final class ExcelPlaceholderDialog {
             String rx = regexField.getText().trim();
             if (k == MatchKind.CUSTOM_REGEX) {
                 if (rx.isEmpty()) {
-                    JOptionPane.showMessageDialog(dialogParent, "Vui lòng nhập biểu thức Regex cho kiểu tùy chỉnh.",
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Vui lòng nhập biểu thức Regex cho kiểu tùy chỉnh.",
                             Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
                     return;
                 }
                 try {
                     java.util.regex.Pattern.compile(rx);
                 } catch (RuntimeException ex) {
-                    JOptionPane.showMessageDialog(dialogParent, "Regex không hợp lệ: " + ex.getMessage(),
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Regex không hợp lệ: " + ex.getMessage(),
                             Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
                     return;
                 }
@@ -401,7 +401,7 @@ public final class ExcelPlaceholderDialog {
             }
             PlaceholderDef d = catalogModel.at(row);
             if (d == null || d.builtIn()) {
-                JOptionPane.showMessageDialog(dialogParent,
+                JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent),
                         "Placeholder mặc định không thể xóa (nhưng bạn có thể sửa Kiểu khớp / Mô tả).",
                         Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
                 return;
@@ -556,8 +556,8 @@ public final class ExcelPlaceholderDialog {
             @Override public void changedUpdate(DocumentEvent e) { runVerifyRef[0].run(); }
         };
         sampleField.getDocument().addDocumentListener(smpListener);
-        prefixChk.addActionListener(e -> runVerifyRef[0].run());
-        idsAsParamsChk.addActionListener(e -> runVerifyRef[0].run());
+        prefixChk.addActionListener(Ui.safe(e -> runVerifyRef[0].run()));
+        idsAsParamsChk.addActionListener(Ui.safe(e -> runVerifyRef[0].run()));
 
         // Initial render
         rebuildSegmentsRef[0].run();
@@ -579,7 +579,7 @@ public final class ExcelPlaceholderDialog {
         }
         pm.addSeparator();
         pm.add(Ui.item("Tạo tên {placeholder} mới cho đoạn này...", th -> Icons.plus(th.success.text(), 13), () -> {
-            String rawName = JOptionPane.showInputDialog(dialogParent,
+            String rawName = JOptionPane.showInputDialog(Ui.ownerWindow(dialogParent),
                     "Nhập tên placeholder cho đoạn \"" + current + "\" (VD: session, tenantId):",
                     Text.EXT_NAME, JOptionPane.QUESTION_MESSAGE);
             String clean = PlaceholderCatalog.sanitizeName(rawName);
@@ -595,7 +595,7 @@ public final class ExcelPlaceholderDialog {
             }
         }));
         pm.add(Ui.item("Sửa đoạn này thành chữ cố định...", th -> Icons.edit(th.fg, 13), () -> {
-            String literal = JOptionPane.showInputDialog(dialogParent,
+            String literal = JOptionPane.showInputDialog(Ui.ownerWindow(dialogParent),
                     "Nhập giá trị cố định cho đoạn #" + (segIndex + 1) + ":",
                     current);
             if (literal != null && !literal.trim().isEmpty()) {

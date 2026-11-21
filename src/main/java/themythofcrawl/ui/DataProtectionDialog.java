@@ -46,7 +46,7 @@ final class DataProtectionDialog {
 
     static void show(Component parent, Engine engine, ApiGroup focus, Runnable onChanged) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog dlg = new JDialog(owner, "Bảo vệ dữ liệu khi crawl", java.awt.Dialog.ModalityType.MODELESS);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Bảo vệ dữ liệu khi crawl", java.awt.Dialog.ModalityType.MODELESS);
         dlg.setContentPane(build(dlg, engine, focus, onChanged));
         dlg.setSize(new Dimension(980, 720));
         dlg.setLocationRelativeTo(parent);
@@ -78,25 +78,20 @@ final class DataProtectionDialog {
         banner.add(bannerText, BorderLayout.CENTER);
         banner.add(migrate, BorderLayout.EAST);
 
-        // ---------------------------------------------------------------- question 1
-        JPanel q1 = section("1. Khi trình duyệt gửi request THAY ĐỔI dữ liệu (POST / PUT / PATCH / DELETE) — với mọi API:");
-        ButtonGroup bg = new ButtonGroup();
-        JPanel radios = new JPanel(new GridLayout(1, 3, 8, 0));
-        radios.setOpaque(false);
-        List<JRadioButton> radioList = new ArrayList<>();
-        for (DataProtection.Choice c : new DataProtection.Choice[] {DataProtection.Choice.PASS, DataProtection.Choice.ASK,
-            DataProtection.Choice.HOLD}) {
-            JRadioButton rb = new JRadioButton(c.label);
-            rb.setOpaque(false);
-            rb.putClientProperty("choice", c);
-            bg.add(rb);
-            radios.add(rb);
-            radioList.add(rb);
-        }
-        q1.add(radios, BorderLayout.CENTER);
-        q1.add(Ui.muted("Muốn khác đi cho một nhánh / method / API cụ thể: thêm luật bên dưới (luật cụ thể luôn thắng luật chung)."),
-                BorderLayout.SOUTH);
-
+        // ---------------------------------------------------------------- question 1 = Cổng chặn Proxy
+        JPanel q1 = section("1. Khi trình duyệt gửi request — chặn ở Proxy hay cho đi? (Cổng chặn Proxy)");
+        JLabel gateLine = Ui.bold(" ");
+        JButton openGate = Ui.solidPrimary("Thiết lập Cổng chặn Proxy (host / path / method / cách chặn)...",
+                t -> Icons.strategyShield(t.accent.onSolid(), 12));
+        openGate.addActionListener(Ui.safe(e -> {
+            MainPanel mp = MainPanel.forEngine(engine);
+            if (mp != null) {
+                ProxyGateDialog.show(mp);
+            }
+        }));
+        q1.add(gateLine, BorderLayout.CENTER);
+        q1.add(Ui.flow(FlowLayout.LEFT, openGate,
+                Ui.muted("Luật riêng bên dưới (theo nhánh / API) luôn thắng cổng chặn chung.")), BorderLayout.SOUTH);
         // ---------------------------------------------------------------- rules
         JPanel rulesSec = section("Danh sách luật (đọc từ trên xuống — luật đầu tiên khớp sẽ được áp dụng):");
         DefaultListModel<ActionPolicy> rulesModel = new DefaultListModel<>();
@@ -139,7 +134,7 @@ final class DataProtectionDialog {
         JButton tRun = Ui.secondaryBtn("Thử", t -> Icons.playTest(t.fg, 12));
         Runnable runTest = () -> tResult.setText(engine.explainProtection(String.valueOf(tMethod.getSelectedItem()),
                 focus != null ? focus.host() : "", tPath.getText().trim(), String.valueOf(tBranch.getSelectedItem())));
-        tRun.addActionListener(e -> runTest.run());
+        tRun.addActionListener(Ui.safe(e -> runTest.run()));
         testSec.add(Ui.flow(FlowLayout.LEFT, tMethod, tPath, Ui.muted("ở nhánh"), tBranch, tRun), BorderLayout.CENTER);
         testSec.add(tResult, BorderLayout.SOUTH);
 
@@ -147,14 +142,29 @@ final class DataProtectionDialog {
         JPanel q2 = section("2. Khi GỬI LẠI theo role mà ID trong request đã bị xóa / dùng hết:");
         JComboBox<DataProtection.Resend> defResend = new JComboBox<>(DataProtection.Resend.values());
         defResend.setSelectedItem(DataProtection.Resend.of(engine.config().actionMode));
-        defResend.addActionListener(e -> {
+        defResend.addActionListener(Ui.safe(e -> {
             Config c = engine.config().copy();
             c.actionMode = ((DataProtection.Resend) defResend.getSelectedItem()).mode;
             engine.applyConfig(c);
             if (onChanged != null) {
                 onChanged.run();
             }
-        });
+        }));
+        JLabel ioIn = new JLabel(" ");
+        JLabel ioOut = new JLabel(" ");
+        Runnable showIo = () -> {
+            DataProtection.Resend r = (DataProtection.Resend) defResend.getSelectedItem();
+            ioIn.setText("Đầu vào:  " + r.input);
+            ioOut.setText("Đầu ra:   " + r.output);
+        };
+        defResend.addActionListener(Ui.safe(e -> showIo.run()));
+        showIo.run();
+        JPanel ioCard = new JPanel(new GridLayout(0, 1, 0, 2));
+        ioCard.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(th.info.border()),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+        ioCard.setBackground(th.info.fill());
+        ioCard.add(ioIn);
+        ioCard.add(ioOut);
         JPanel q2rows = new JPanel(new GridLayout(0, 1, 0, 4));
         q2rows.setOpaque(false);
         q2rows.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Mặc định cho mọi API:"), defResend,
@@ -162,12 +172,12 @@ final class DataProtectionDialog {
         if (focus != null) {
             JComboBox<DataProtection.Resend> apiResend = new JComboBox<>(DataProtection.Resend.values());
             apiResend.setSelectedItem(DataProtection.Resend.of(engine.effectiveActionMode(focus)));
-            apiResend.addActionListener(e -> {
+            apiResend.addActionListener(Ui.safe(e -> {
                 engine.setApiActionMode(focus, ((DataProtection.Resend) apiResend.getSelectedItem()).mode);
                 if (onChanged != null) {
                     onChanged.run();
                 }
-            });
+            }));
             q2rows.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Riêng API #" + focus.gid() + " " + focus.method() + " "
                     + focus.path() + ":"), apiResend));
             if (focus.activeIdNote() != null && !focus.activeIdNote().isBlank()) {
@@ -175,6 +185,7 @@ final class DataProtectionDialog {
             }
         }
         q2.add(q2rows, BorderLayout.CENTER);
+        q2.add(ioCard, BorderLayout.SOUTH);
 
         // ---------------------------------------------------------------- refresh + wiring
         Runnable reload = () -> {
@@ -182,10 +193,7 @@ final class DataProtectionDialog {
             banner.setVisible(legacy > 0);
             bannerText.setText("Còn " + legacy + " cấu hình chặn kiểu cũ nằm ngoài danh sách luật (công tắc giữ ở Proxy, chặn chờ"
                     + " theo nhánh/API, luật Proxy cũ). Gộp vào để chỉ còn MỘT nơi cần xem.");
-            DataProtection.Choice g = DataProtection.globalChoice(ledger);
-            for (JRadioButton rb : radioList) {
-                rb.setSelected(rb.getClientProperty("choice") == g);
-            }
+            gateLine.setText(engine.proxyGate().sentence());
             ActionPolicy keep = rulesList.getSelectedValue();
             rulesModel.clear();
             for (ActionPolicy p : ledger.all()) {
@@ -202,67 +210,68 @@ final class DataProtectionDialog {
             }
             runTest.run();
         };
-        for (JRadioButton rb : radioList) {
-            rb.addActionListener(e -> {
-                DataProtection.setGlobalChoice(ledger, (DataProtection.Choice) rb.getClientProperty("choice"));
-                changed.run();
-                reload.run();
-            });
-        }
-        migrate.addActionListener(e -> {
+        migrate.addActionListener(Ui.safe(e -> {
             Config c = engine.config().copy();
             int n = DataProtection.migrateLegacy(engine.actionEngine(), c);
             engine.applyConfig(c);
             changed.run();
             reload.run();
-            JOptionPane.showMessageDialog(parent, "Đã gộp " + n + " cấu hình cũ thành luật. Hành vi chặn giữ nguyên.",
+            JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã gộp " + n + " cấu hình cũ thành luật. Hành vi chặn giữ nguyên.",
                     "Bảo vệ dữ liệu", JOptionPane.INFORMATION_MESSAGE);
-        });
-        add.addActionListener(e -> {
+        }));
+        add.addActionListener(Ui.safe(e -> {
             ActionPolicy p = askRule(parent, engine, focus);
             if (p != null) {
                 ledger.upsert(p);
                 changed.run();
                 reload.run();
             }
-        });
-        toggle.addActionListener(e -> {
+        }));
+        toggle.addActionListener(Ui.safe(e -> {
             ActionPolicy p = rulesList.getSelectedValue();
-            if (p != null) {
+            if (p == null) {
+                Ui.hint((Component) e.getSource(), "Chọn 1 luật trong danh sách trước");
+            } else {
                 ledger.setEnabled(p.id(), !p.enabled());
                 changed.run();
                 reload.run();
             }
-        });
-        up.addActionListener(e -> {
+        }));
+        up.addActionListener(Ui.safe(e -> {
             ActionPolicy p = rulesList.getSelectedValue();
-            if (p != null) {
+            if (p == null) {
+                Ui.hint((Component) e.getSource(), "Chọn 1 luật trong danh sách trước");
+            } else {
                 ledger.movePriority(p.id(), -1);
                 changed.run();
                 reload.run();
             }
-        });
-        down.addActionListener(e -> {
+        }));
+        down.addActionListener(Ui.safe(e -> {
             ActionPolicy p = rulesList.getSelectedValue();
-            if (p != null) {
+            if (p == null) {
+                Ui.hint((Component) e.getSource(), "Chọn 1 luật trong danh sách trước");
+            } else {
                 ledger.movePriority(p.id(), 1);
                 changed.run();
                 reload.run();
             }
-        });
-        del.addActionListener(e -> {
+        }));
+        del.addActionListener(Ui.safe(e -> {
             ActionPolicy p = rulesList.getSelectedValue();
-            if (p != null) {
+            if (p == null) {
+                Ui.hint((Component) e.getSource(), "Chọn 1 luật trong danh sách trước");
+            } else {
                 ledger.delete(p.id(), "Xóa trong " + DataProtection.SOURCE);
                 changed.run();
                 reload.run();
             }
-        });
-        undo.addActionListener(e -> {
+        }));
+        undo.addActionListener(Ui.safe(e -> {
             ledger.undoLastDelete();
             changed.run();
             reload.run();
-        });
+        }));
 
         JPanel top = new JPanel(new BorderLayout(0, 8));
         top.add(banner, BorderLayout.NORTH);
@@ -314,7 +323,7 @@ final class DataProtectionDialog {
         p.add(path);
         p.add(new JLabel("Thì:"));
         p.add(choice);
-        if (JOptionPane.showConfirmDialog(parent, p, "Thêm luật bảo vệ dữ liệu", JOptionPane.OK_CANCEL_OPTION,
+        if (JOptionPane.showConfirmDialog(Ui.ownerWindow(parent), p, "Thêm luật bảo vệ dữ liệu", JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
             return null;
         }

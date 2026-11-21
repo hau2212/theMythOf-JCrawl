@@ -99,6 +99,17 @@ public final class MainPanel {
     private static final java.util.WeakHashMap<Engine, java.lang.ref.WeakReference<MainPanel>> BY_ENGINE =
             new java.util.WeakHashMap<>();
 
+    /** The panel showing {@code engine}, or null (headless / not built yet). */
+    static MainPanel forEngine(Engine engine) {
+        if (engine == null) {
+            return null;
+        }
+        synchronized (BY_ENGINE) {
+            var ref = BY_ENGINE.get(engine);
+            return ref != null ? ref.get() : null;
+        }
+    }
+
     static void openInterceptQueue(Engine engine) {
         if (engine == null) {
             return;
@@ -189,6 +200,7 @@ public final class MainPanel {
         this.uiPrefs = UiPrefs.resolve(workspaces, engine);
         UiPrefs.applyStartup(this.uiPrefs);
         TreeColumns.load(this.uiPrefs);
+        Ui.errorSink = msg -> engine.log("Lỗi giao diện: " + msg, null);
         this.userTopCompact = UiPrefs.topCompact(this.uiPrefs);
         this.headerPanel = buildHeader();
         main.add(headerPanel, BorderLayout.NORTH);
@@ -434,7 +446,7 @@ public final class MainPanel {
         spotlightBtn.setIcon(Icons.themed(t -> Icons.search(t.fg)));
         spotlightBtn.setMargin(new Insets(0, 0, 0, 0));
         spotlightBtn.setPreferredSize(new Dimension(h24, h24));
-        spotlightBtn.addActionListener(e -> spotlight.open());
+        spotlightBtn.addActionListener(Ui.safe(e -> spotlight.open()));
         themythofcrawl.ui.kit.RichHoverCard.install(spotlightBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tìm kiếm toàn cục (Spotlight)",
                 "Nhảy nhanh tới bất kỳ API (#, method, path), Nhánh hoặc Role nào trong toàn bộ workspace.",
@@ -451,10 +463,11 @@ public final class MainPanel {
         actionStatusBtn.setContentAreaFilled(false);
         actionStatusBtn.setMargin(new Insets(0, 2, 0, 1));
         actionStatusBtn.setFont(Theme.current().smallBoldFont);
-        actionStatusBtn.addActionListener(e -> showActionQuickMenu());
+        actionStatusBtn.addActionListener(Ui.safe(e -> ProxyGateDialog.show(this)));
         themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Trạng thái Action trực tiếp (Bấm để chọn chế độ)",
-                "Chế độ Bảo vệ dữ liệu đang bật (Nguyên bản / Hỏi trước / Giữ lại / Dùng lại kết quả cũ / Thay ID / Tạo mới). Bấm để đổi nhanh, mở Hàng chờ chi tiết hoặc Hướng dẫn.",
+                "Cổng chặn Proxy (bấm để thiết lập)",
+                "Chọn rõ: chặn request nào (mọi host / 1 host / host + path / nhánh), method nào, và làm gì với request bị chặn"
+                        + " (Hỏi tôi trước / Giữ lại + trả 200 giả cho trình duyệt / Chặn hẳn). Có sơ đồ và ô Thử với 1 URL.",
                 null,
                 t -> {
                     int n = engine.proxyQueue().pendingCount();
@@ -466,21 +479,25 @@ public final class MainPanel {
                     boolean on = engine.isAnyActionControlActive();
                     return n > 0 ? t.danger : (on ? t.warning : t.neutral);
                 },
-                () -> engine.quickActionStatusLabel() + " · " + engine.actionEngine().policyLedger().activeSummaryText()));
+                () -> engine.proxyGate().sentence()));
 
         actionQuickSwitch.onToken(t -> engine.proxyQueue().pendingCount() > 0 ? t.danger : t.accent);
-        actionQuickSwitch.setToolTipText("Bật / Tắt nhanh tính năng Action ngay trên thanh trên cùng (Tắt = nhả sạch về Nguyên bản)");
+        actionQuickSwitch.setToolTipText("Bật / Tắt Cổng chặn Proxy (BẬT = dùng thiết lập đã lưu; TẮT = tắt mọi chặn, request đi thẳng)");
         actionQuickSwitch.onChange(on -> {
             if (syncingActionSwitch) {
                 return;
             }
-            engine.toggleQuickActionFromHeader(on);
+            if (on) {
+                engine.setProxyGate(engine.proxyGate().withOn(true));
+            } else {
+                engine.toggleQuickActionFromHeader(false);
+            }
             syncHeader();
             if (settings != null) {
                 settings.load();
             }
-            flash(on ? "Đã BẬT Action: " + engine.quickActionStatusLabel()
-                    : "Đã TẮT Action — trở về Nguyên bản (Không can thiệp)");
+            flash(on ? "Đã BẬT cổng chặn: " + engine.proxyGate().sentence()
+                    : "Đã TẮT chặn — mọi request đi thẳng lên Server");
         });
 
         actionControlBar = new JPanel() {
@@ -509,12 +526,12 @@ public final class MainPanel {
         displayModeBtn.setMargin(new Insets(0, 0, 0, 0));
         displayModeBtn.setPreferredSize(new Dimension(h24, h24));
         displayModeBtn.setMaximumSize(new Dimension(h24, h24));
-        displayModeBtn.addActionListener(e -> {
+        displayModeBtn.addActionListener(Ui.safe(e -> {
             UiDisplayMode next = UiDisplayMode.cycle();
             UiPrefs.setDisplayMode(uiPrefs, next);
             if (settings != null) settings.load();
             flash("Chế độ nút công cụ: " + next.label);
-        });
+        }));
         themythofcrawl.ui.kit.RichHoverCard.install(displayModeBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Đổi chế độ hiển thị nút (3 trạng thái)",
                 "Chuyển nhanh giữa: Chỉ Icon (+ Thẻ mô tả khi rê chuột), Icon + Chữ (mặc định), hoặc Chỉ Chữ (tối giản).",
@@ -527,7 +544,7 @@ public final class MainPanel {
         options.setMargin(new Insets(0, 1, 0, 1));
         options.setPreferredSize(new Dimension(Theme.current().scaled(26), h24));
         options.setMaximumSize(new Dimension(Theme.current().scaled(26), h24));
-        options.addActionListener(e -> optionsMenu());
+        options.addActionListener(Ui.safe(e -> optionsMenu()));
         themythofcrawl.ui.kit.RichHoverCard.install(options, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tùy chọn nhanh & Danh mục",
                 "Bật/tắt nhanh bộ lọc bắt, giữ chỗ, quản lý Loại Node & Icon, quản lý API Tag [REFRESH] và trợ giúp.",
@@ -540,7 +557,7 @@ public final class MainPanel {
         detach.setMargin(new Insets(0, 0, 0, 0));
         detach.setPreferredSize(new Dimension(h24, h24));
         detach.setMaximumSize(new Dimension(h24, h24));
-        detach.addActionListener(e -> toggleDetach());
+        detach.addActionListener(Ui.safe(e -> toggleDetach()));
         themythofcrawl.ui.kit.RichHoverCard.install(detach, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Tách cửa sổ riêng",
                 "Mở toàn bộ theMythOf-JCrawl ra cửa sổ độc lập để xem toàn màn hình hoặc kéo sang màn hình thứ hai.",
@@ -554,7 +571,7 @@ public final class MainPanel {
         workspace.setMargin(new Insets(0, 1, 0, 1));
         workspace.setPreferredSize(new Dimension(Theme.current().scaled(42), h24));
         workspace.setMaximumSize(new Dimension(Theme.current().scaled(54), h24));
-        workspace.addActionListener(e -> workspaceMenu());
+        workspace.addActionListener(Ui.safe(e -> workspaceMenu()));
         themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Workspace (Phiên làm việc)",
                 "Tạo mới, chuyển đổi hoặc mở thư mục lưu dữ liệu crawl & roles của dự án hiện tại.",
@@ -566,7 +583,7 @@ public final class MainPanel {
         topChromeToggleBtn.setMargin(new Insets(0, 0, 0, 0));
         topChromeToggleBtn.setPreferredSize(new Dimension(h24, h24));
         topChromeToggleBtn.setMaximumSize(new Dimension(h24, h24));
-        topChromeToggleBtn.addActionListener(e -> setTopCompact(!effectiveHeaderCompact));
+        topChromeToggleBtn.addActionListener(Ui.safe(e -> setTopCompact(!effectiveHeaderCompact)));
         themythofcrawl.ui.kit.RichHoverCard.install(topChromeToggleBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Thu gọn / Mở rộng thanh công cụ phía trên",
                 "Rút gọn các nút điều khiển vào menu thả xuống để tối ưu diện tích làm việc (hữu ích cho cả màn hình thường và chia đôi màn hình).",
@@ -582,7 +599,7 @@ public final class MainPanel {
         compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(96), h24));
         compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(104), h24));
         compactControlsBtn.setToolTipText("Mở menu điều khiển nhanh (Trạng thái, Action Workbench, Tùy chọn, Workspace...)");
-        compactControlsBtn.addActionListener(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight()));
+        compactControlsBtn.addActionListener(Ui.safe(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight())));
 
         // Strict single-row horizontal BoxLayout — NEVER wraps onto 2-3 broken lines on Burp!
         headerLeftZone = new JPanel();
@@ -870,104 +887,6 @@ public final class MainPanel {
         }
     }
 
-    /** Opens the Top-Bar Quick Action Mode Switcher menu (6 modes + Queue + Workbench + Integrated Guide). */
-    private void showActionQuickMenu() {
-        JPopupMenu m = new JPopupMenu();
-        ActionEngine.ActionMode cur = engine.config().actionMode != null
-                ? engine.config().actionMode : ActionEngine.ActionMode.NONE;
-        boolean waitOn = engine.actionEngine().isInterceptWaitEnabled();
-        int pending = engine.proxyQueue().pendingCount();
-        int activePolicies = engine.actionEngine().policyLedger().activeCount();
-
-        m.add(Ui.item("Chế độ Action hiện tại: " + engine.quickActionStatusLabel(), false, () -> { }));
-        m.add(Ui.item("Method chặn nhanh: " + engine.interceptMethodsSummary(), false, () -> { }));
-        m.addSeparator();
-
-        Runnable afterMode = () -> {
-            syncHeader();
-            if (settings != null) settings.load();
-            flash("Action -> " + engine.quickActionStatusLabel() + " (" + engine.interceptMethodsSummary() + ")");
-        };
-
-        m.add(Ui.item((!engine.isAnyActionControlActive() ? "[Đang bật] " : "") + "0. Nguyên bản — Tắt toàn bộ can thiệp (Tắt chặn)",
-                t -> Icons.undo(t.success.text(), 13), () -> {
-                    engine.toggleQuickActionFromHeader(false);
-                    afterMode.run();
-                }));
-        m.add(Ui.item((waitOn ? "[Đang bật] " : "") + "5. Chặn chờ duyệt tại Proxy (Hiện ngay trên Cây)",
-                t -> Icons.strategyShield(t.danger.text(), 13), () -> {
-                    engine.applyQuickActionMode(ActionEngine.ActionMode.INTERCEPT_WAIT);
-                    afterMode.run();
-                }));
-        m.add(Ui.item((cur == ActionEngine.ActionMode.HOLD_AT_PROXY ? "[Đang bật] " : "") + "1. Giữ ở Proxy (200 ảo — không xóa Server)",
-                t -> Icons.strategyShield(t.warning.text(), 13), () -> {
-                    engine.applyQuickActionMode(ActionEngine.ActionMode.HOLD_AT_PROXY);
-                    afterMode.run();
-                }));
-        m.add(Ui.item((cur == ActionEngine.ActionMode.LOCK_2XX ? "[Đang bật] " : "") + "2. Khóa kết quả 200 OK (Snapshot)",
-                t -> Icons.lock(t.info.text(), 13), () -> {
-                    engine.applyQuickActionMode(ActionEngine.ActionMode.LOCK_2XX);
-                    afterMode.run();
-                }));
-        m.add(Ui.item((cur == ActionEngine.ActionMode.LIVE_ID_POOL ? "[Đang bật] " : "") + "3. Tự đổi từ Kho ID Sống",
-                t -> Icons.idPool(t.success.text(), 13), () -> {
-                    engine.applyQuickActionMode(ActionEngine.ActionMode.LIVE_ID_POOL);
-                    afterMode.run();
-                }));
-        m.add(Ui.item((cur == ActionEngine.ActionMode.PRODUCER_RECREATE ? "[Đang bật] " : "") + "4. Chuỗi Tạo Mới -> Hành Động",
-                t -> Icons.strategyChain(t.accent.text(), 13), () -> {
-                    engine.applyQuickActionMode(ActionEngine.ActionMode.PRODUCER_RECREATE);
-                    afterMode.run();
-                }));
-
-        m.addSeparator();
-        boolean getOn = engine.actionEngine().getInterceptWaitMethods().contains("GET");
-        m.add(Ui.item((getOn ? "[Đang bật] " : "") + "Chặn cả GET (tải trang / API đọc)",
-                t -> Icons.check(getOn ? t.danger.text() : t.muted, 13), () -> {
-                    engine.toggleInterceptGetFromHeader(!getOn);
-                    afterMode.run();
-                }));
-        m.add(Ui.item("Chỉ chặn Action (POST, PUT, PATCH, DELETE)",
-                t -> Icons.sliders(t.warning.text(), 13), () -> {
-                    engine.setInterceptMethodsFromHeader(ActionEngine.ACTION_METHODS, true);
-                    afterMode.run();
-                }));
-        m.add(Ui.item("Chặn TẤT CẢ Method (GET, POST, PUT, PATCH, DELETE...)",
-                t -> Icons.strategyShield(t.danger.text(), 13), () -> {
-                    engine.setInterceptMethodsFromHeader(themythofcrawl.model.ActionInterceptRule.ALL_METHODS, true);
-                    afterMode.run();
-                }));
-
-        m.addSeparator();
-        String curBranch = engine.activeBranch().name();
-        m.add(Ui.item("+ Chặn chờ duyệt riêng nhánh '" + Hierarchy.leaf(curBranch) + "'",
-                t -> Icons.branch(t.danger.text()), () -> {
-                    engine.actionEngine().policyLedger().upsert(themythofcrawl.model.ActionPolicy.quickBranchWait(
-                            curBranch, new ArrayList<>(engine.actionEngine().getInterceptWaitMethods()), "Top Bar"));
-                    engine.saveActionPolicies();
-                    afterMode.run();
-                }));
-        m.add(Ui.item("Mở Hàng chờ Chặn chi tiết" + (pending > 0 ? " (" + pending + " đang đợi)" : "") + "...",
-                t -> Icons.strategyShield(pending > 0 ? t.danger.text() : t.fg, 13),
-                () -> ProxyInterceptDialog.showFloating(this)));
-        m.add(Ui.item("Mở Bảo vệ dữ liệu & Luật chặn" + (activePolicies > 0 ? " (" + activePolicies + " luật)" : "") + "...",
-                t -> Icons.workbench(t.accent.text(), 13),
-                () -> ActionWorkbenchDialog.show(root, engine,
-                        api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
-                            syncHeader();
-                            if (settings != null) settings.load();
-                        })));
-        m.add(Ui.item("Hướng dẫn & Ví dụ thực chiến Action...",
-                t -> Icons.info(t.info.text(), 13),
-                () -> ActionWorkbenchDialog.show(root, engine,
-                        api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_GUIDE, () -> {
-                            syncHeader();
-                            if (settings != null) settings.load();
-                        })));
-
-        m.show(actionControlBar, 0, actionControlBar.getHeight());
-    }
-
     void syncProxyInterceptButton() {
         if (actionControlBar == null) {
             return;
@@ -976,7 +895,7 @@ public final class MainPanel {
         int h24 = th.scaled(24);
         int pending = engine.proxyQueue().pendingCount();
         boolean active = engine.isAnyActionControlActive();
-        String label = engine.quickActionStatusLabel();
+        String label = engine.proxyGateHeaderLabel();
 
         actionStatusBtn.setText(label);
         actionStatusBtn.setFont(th.smallBoldFont);
@@ -1249,7 +1168,7 @@ public final class MainPanel {
             JCheckBoxMenuItem it = new JCheckBoxMenuItem((String) t[0], (Boolean) t[1]);
             @SuppressWarnings("unchecked")
             java.util.function.BiConsumer<Config, Boolean> set = (java.util.function.BiConsumer<Config, Boolean>) t[2];
-            it.addActionListener(e -> update(x -> set.accept(x, it.isSelected())));
+            it.addActionListener(Ui.safe(e -> update(x -> set.accept(x, it.isSelected()))));
             m.add(it);
         }
         m.addSeparator();
@@ -1349,7 +1268,7 @@ public final class MainPanel {
                 info("Không có workspace nào khác.");
                 return;
             }
-            Object pick = JOptionPane.showInputDialog(root, "Xóa workspace (không xóa được workspace đang mở):", Text.EXT_NAME,
+            Object pick = JOptionPane.showInputDialog(Ui.ownerWindow(root), "Xóa workspace (không xóa được workspace đang mở):", Text.EXT_NAME,
                     JOptionPane.WARNING_MESSAGE, null, list.stream().map(i -> i.project() + " / " + i.name()).toArray(), null);
             if (pick != null) {
                 Workspaces.Info i = list.stream().filter(x -> (x.project() + " / " + x.name()).equals(pick)).findFirst().get();
@@ -1532,6 +1451,8 @@ public final class MainPanel {
         }
         if (!gs.isEmpty()) {
             flash("Xếp hàng gửi " + gs.size() + " API");
+        } else {
+            flash("Không có API nào để gửi — chọn API (bảng / cây) hoặc 1 nhánh trước.");
         }
     }
 
@@ -1555,6 +1476,10 @@ public final class MainPanel {
     }
 
     void push(Collection<ApiGroup> gs) {
+        if (gs == null || gs.isEmpty()) {
+            flash("Không có API nào để đẩy sang Repeater — chọn API (bảng / cây) hoặc 1 nhánh trước.");
+            return;
+        }
         for (ApiGroup g : gs) {
             push(g);
         }
@@ -1790,12 +1715,12 @@ public final class MainPanel {
         for (themythofcrawl.model.ApiTagCatalog.TagDef def : engine.tagCatalog().all()) {
             boolean allHave = gs.stream().allMatch(g -> g.hasTag(def.id()));
             JCheckBoxMenuItem item = new JCheckBoxMenuItem(def.id() + " — " + def.label(), allHave);
-            item.addActionListener(e -> {
+            item.addActionListener(Ui.safe(e -> {
                 boolean present = item.isSelected();
                 engine.setApiTag(gs, def.id(), present);
                 tick(true);
                 flash((present ? "Đã gắn" : "Đã gỡ") + " Tag [" + def.id() + "] cho " + gs.size() + " API");
-            });
+            }));
             sub.add(item);
         }
         sub.addSeparator();
@@ -1829,7 +1754,7 @@ public final class MainPanel {
         }
         int n = engine.groupsUnder(prefix).size();
         Object[] opts = {"Chỉ xóa Nhánh (Chuyển API lên cấp cha)", "Xóa cả Nhánh lẫn " + n + " API", "Hủy"};
-        int c = JOptionPane.showOptionDialog(root, "Bạn muốn xóa nhánh Sub-folder '" + prefix + "' (" + n + " API bên trong) như thế nào?",
+        int c = JOptionPane.showOptionDialog(Ui.ownerWindow(root), "Bạn muốn xóa nhánh Sub-folder '" + prefix + "' (" + n + " API bên trong) như thế nào?",
                 Text.EXT_NAME, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, opts, opts[0]);
         if (c == 0 || c == 1) {
             engine.deletePrefix(prefix, c == 1);
@@ -2177,7 +2102,7 @@ public final class MainPanel {
 
     // =================================================================== dialogs
     String ask(String question, String initial) {
-        Object v = JOptionPane.showInputDialog(root, question, initial);
+        Object v = JOptionPane.showInputDialog(Ui.ownerWindow(root), question, initial);
         return v == null ? null : v.toString();
     }
 
@@ -2189,15 +2114,15 @@ public final class MainPanel {
         if (confirmHook != null) {
             return confirmHook.test(q);
         }
-        return JOptionPane.showConfirmDialog(root, q, Text.EXT_NAME, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
+        return JOptionPane.showConfirmDialog(Ui.ownerWindow(root), q, Text.EXT_NAME, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
 
     void info(String msg) {
-        JOptionPane.showMessageDialog(root, msg, Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(Ui.ownerWindow(root), msg, Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
     }
 
     void error(String msg) {
-        JOptionPane.showMessageDialog(root, msg, Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(Ui.ownerWindow(root), msg, Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
     }
 
     static JScrollPane scroll(JComponent c) {

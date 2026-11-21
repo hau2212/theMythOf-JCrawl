@@ -103,8 +103,10 @@ public final class ActionPolicyLedger {
             int willPassDefault) {
     }
 
+    /** The main Proxy gate ({@link ProxyGate#ID}) is the catch-all: every specific rule is evaluated before it. */
     private static final Comparator<ActionPolicy> ORDER = Comparator
-            .comparingInt(ActionPolicy::priority)
+            .comparing((ActionPolicy p) -> ProxyGate.ID.equals(p.id()))
+            .thenComparingInt(ActionPolicy::priority)
             .thenComparingInt(p -> p.scopeType().specificityRank)
             .thenComparingLong(ActionPolicy::createdAt);
 
