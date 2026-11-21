@@ -255,6 +255,29 @@ public final class UiPreview {
             fr[0] = f;
         });
         javax.swing.JTabbedPane tabs = find(ui[0].root(), javax.swing.JTabbedPane.class);
+        String only = System.getProperty("only");
+        if (only != null) {
+            // Quick mode: -Donly=<tab title> shoots just that tab with every folder expanded, then exits
+            for (int i = 0; i < tabs.getTabCount(); i++) {
+                if (tabs.getTitleAt(i).equalsIgnoreCase(only) || String.valueOf(i).equals(only)) {
+                    int idx = i;
+                    SwingUtilities.invokeAndWait(() -> {
+                        tabs.setSelectedIndex(idx);
+                        ui[0].tick(true);
+                        ui[0].treeTab.tree.expandFolders(true);
+                        List<ApiGroup> gs = e.groups();
+                        if (!gs.isEmpty() && Boolean.getBoolean("expandFirst")) {
+                            ui[0].treeTab.tree.expandApi(gs.get(0).gid());
+                            ui[0].treeTab.tree.rebuild(false);
+                            ui[0].treeTab.tree.expandFolders(true);
+                        }
+                    });
+                    Thread.sleep(900);
+                    shot(fr[0], out.resolve("only_" + only.replaceAll("[^\\p{L}0-9]+", "_") + ".png").toFile());
+                }
+            }
+            System.exit(0);
+        }
         for (int i = 0; i < tabs.getTabCount(); i++) {
             int idx = i;
             SwingUtilities.invokeAndWait(() -> {

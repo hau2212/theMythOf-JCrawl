@@ -112,6 +112,15 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         Color tailColor;
         int tailX;
 
+        // V_7.0 tree-table grid
+        boolean grid;
+        int colGen;
+        int estNodeX;
+        int alignFrom = -1;
+        Color[] roleColors;
+        int roleCount;
+        int roleX = -1;
+
         Chip[] chips;
         int chipCount;
         int excelX0 = -1;
@@ -146,6 +155,10 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             fill = null;
             edge = null;
             dashedEdge = false;
+            grid = false;
+            alignFrom = -1;
+            roleCount = 0;
+            roleX = -1;
         }
     }
 
@@ -190,6 +203,12 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (nl.copyX0 >= 0 && relX >= nl.copyX0 - 2 && relX <= nl.copyX1 + 2) {
             return BranchTree.Chip.COPY;
         }
+        if (nl.grid && nl.alignFrom >= 0) {
+            java.awt.Rectangle b = tree.getRowBounds(row);
+            if (b != null) {
+                relX -= nl.estNodeX - b.x;
+            }
+        }
         if (nl.excelX0 >= 0 && relX >= nl.excelX0 - 2 && relX <= nl.excelX1 + 2) {
             return BranchTree.Chip.EXCEL;
         }
@@ -227,8 +246,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
 
     private NodeLayout ensureLayout(JTree tree, Node n, Theme th) {
         int gen = Theme.generation();
+        boolean grid = gridKind(n) && TreeColumns.enabled(tree);
+        int est = grid ? TreeColumns.nodeX(tree, n.getLevel()) : 0;
         if (n.renderCache instanceof NodeLayout cached && cached.theme == th && cached.gen == gen
-                && n.renderStamp == gen && cached.nodeLevel == n.level && !groupChanged(n, cached)) {
+                && n.renderStamp == gen && cached.nodeLevel == n.level && !groupChanged(n, cached)
+                && cached.grid == grid && (!grid || (cached.colGen == TreeColumns.generation() && cached.estNodeX == est))) {
             return cached;
         }
         NodeLayout nl = n.renderCache instanceof NodeLayout existing ? existing : new NodeLayout();
@@ -236,6 +258,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         n.renderCache = nl;
         n.renderStamp = gen;
         return nl;
+    }
+
+    private static boolean gridKind(Node n) {
+        return n.kind == Node.Kind.GROUP || n.kind == Node.Kind.ROLE || n.kind == Node.Kind.ORIG
+                || n.kind == Node.Kind.HELD_PENDING;
     }
 
     private boolean groupChanged(Node n, NodeLayout nl) {
@@ -283,6 +310,9 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             nl.nodeTypeSig = null;
         }
 
+        nl.grid = gridKind(n) && TreeColumns.enabled(tree);
+        nl.colGen = TreeColumns.generation();
+        nl.estNodeX = nl.grid ? TreeColumns.nodeX(tree, n.getLevel()) : 0;
         int rowH = Math.max(Theme.ROW_TREE, tree != null && tree.getRowHeight() > 0 ? tree.getRowHeight() : th.scaled(Theme.ROW_TREE));
         int padL = th.scaled(6);
         int padR = th.scaled(8);
@@ -294,11 +324,11 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             case ROOT -> x = layoutRoot(n, th, nl, x, gap);
             case APIS -> x = layoutApis(n, th, nl, x, gap);
             case CLUSTER -> x = layoutCluster(n, th, nl, x, gap);
-            case HELD_PENDING -> x = layoutHeldPending(n, th, nl, x, gap);
+            case HELD_PENDING -> x = nl.grid ? layoutHeldGrid(n, th, nl, x, gap) : layoutHeldPending(n, th, nl, x, gap);
             case LOGSYS -> x = layoutLogSys(n, th, nl, x, gap);
-            case GROUP -> x = layoutGroup(n, th, nl, x, gap);
+            case GROUP -> x = nl.grid ? layoutGroupGrid(n, th, nl, x, gap) : layoutGroup(n, th, nl, x, gap);
             case LOGAPI -> x = layoutLogApi(n, th, nl, x, gap);
-            case ORIG, ROLE -> x = layoutRole(n, th, nl, x, gap);
+            case ORIG, ROLE -> x = nl.grid ? layoutRoleGrid(n, th, nl, x, gap) : layoutRole(n, th, nl, x, gap);
             case GHOST, GHOSTS -> x = layoutGhost(n, th, nl, x, gap);
             case PLACE -> x = layoutPlace(n, th, nl, x, gap);
             case LOGLINE -> x = layoutLogLine(n, th, nl, x, gap);
@@ -544,6 +574,222 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         String meta = (host.isEmpty() ? "" : host + " · ") + pr.timeHms();
         x = addTail(nl, th, meta, x, gap);
         return x;
+    }
+
+    // =================================================================== V_7.0 grid (tree-table) layouts
+    /** Relative x of grid column {@code c} for this row; never moves left of {@code x}. */
+    private static int col(Theme th, NodeLayout nl, TreeColumns.Col c, int x) {
+        int rel = TreeColumns.start(th, c) - nl.estNodeX;
+        if (nl.alignFrom < 0) {
+            nl.alignFrom = Math.max(x, rel);
+        }
+        return Math.max(x, rel);
+    }
+
+    /** Right edge (relative) of the TREE column: primary text is clipped to stay inside it. */
+    private static int treeColEnd(Theme th, NodeLayout nl) {
+        return TreeColumns.start(th, TreeColumns.Col.METHOD) - nl.estNodeX - th.scaled(6);
+    }
+
+    private String clip(String text, Font f, int maxW) {
+        if (text == null || maxW <= 0) {
+            return "";
+        }
+        FontMetrics fm = getFontMetrics(f);
+        if (fm.stringWidth(text) <= maxW) {
+            return text;
+        }
+        String t = text;
+        while (t.length() > 1 && fm.stringWidth(t + "...") > maxW) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t.length() <= 1 ? "" : t + "...";
+    }
+
+    private void putPath(Theme th, NodeLayout nl, String path, Font f, int x, int colW) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        FontMetrics fm = getFontMetrics(f);
+        int cw = Math.max(1, fm.charWidth('m'));
+        int maxChars = Math.max(8, (colW - th.scaled(10)) / cw);
+        String shortP = Text.shortPath(path, maxChars);
+        nl.monoPathX = x;
+        nl.monoFont = f;
+        nl.monoPath = shortP.toCharArray();
+        nl.monoPathLen = nl.monoPath.length;
+    }
+
+    private int layoutGroupGrid(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        if (!(n.payload instanceof ApiGroup g)) {
+            return layoutGroup(n, th, nl, x, gap);
+        }
+        Color dotCol = n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base();
+        x = addLeadIcon(nl, Icons.dot(dotCol, false), x, th.scaled(3));
+        Icon cp = Icons.copy(th.muted);
+        nl.copyIcon = cp;
+        nl.copyX0 = x;
+        nl.copyX1 = x + cp.getIconWidth();
+        x = nl.copyX1 + gap;
+        String label = clip(Text.apiLabel(g.gid()), th.boldFont, treeColEnd(th, nl) - x);
+        x = addPrimary(nl, label, th.boldFont, th.fg, x, gap);
+
+        x = col(th, nl, TreeColumns.Col.METHOD, x);
+        Theme.Token mt = th.method(g.method());
+        addChip(th, nl, g.method(), th.smallBoldFont, mt.fill(), mt.border(), mt.text(), null, true, x, gap);
+
+        x = col(th, nl, TreeColumns.Col.PATH, x);
+        putPath(th, nl, g.path(), th.monoFont, x, TreeColumns.scaledWidth(th, TreeColumns.Col.PATH));
+
+        x = col(th, nl, TreeColumns.Col.STATUS, x);
+        Integer st = g.origStatus();
+        if (st != null) {
+            nl.statusText = String.valueOf(st);
+            nl.statusFont = th.boldFont;
+            nl.statusColor = th.statusColor(st);
+        } else {
+            nl.statusText = g.heldAtProxy() ? "giữ" : "-";
+            nl.statusFont = th.smallFont;
+            nl.statusColor = th.muted;
+        }
+        nl.statusX = x;
+
+        x = col(th, nl, TreeColumns.Col.LENGTH, x);
+        nl.tailText = g.origLength() != null ? String.valueOf(g.origLength()) : "-";
+        nl.tailFont = th.monoSmallFont;
+        nl.tailColor = th.muted;
+        nl.tailX = x;
+
+        x = col(th, nl, TreeColumns.Col.ROLES, x);
+        List<RoleResult> rs = g.results();
+        int sq = Math.max(8, th.scaled(10));
+        int sqGap = Math.max(2, th.scaled(3));
+        int fit = Math.max(1, (TreeColumns.scaledWidth(th, TreeColumns.Col.ROLES) - th.scaled(10)) / (sq + sqGap));
+        int count = Math.min(rs.size(), fit);
+        if (nl.roleColors == null || nl.roleColors.length < count) {
+            nl.roleColors = new Color[Math.max(count, 8)];
+        }
+        for (int i = 0; i < count; i++) {
+            nl.roleColors[i] = RoleStripRenderer.colorOf(th, g, rs.get(i));
+        }
+        nl.roleCount = count;
+        nl.roleX = x;
+
+        x = col(th, nl, TreeColumns.Col.VERDICT, x);
+        int vx = x;
+        // Clickable Excel badge
+        if (g.target() != null && !g.target().sttText().isBlank()) {
+            nl.excelX0 = x;
+            x = addChip(th, nl, "#" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
+                    th.info.text(), Icons.excel(th.info.text(), 11), true, x, th.scaled(4));
+            nl.excelX1 = x - th.scaled(4);
+        }
+        if (g.dupTotal() > 1) {
+            nl.dupX0 = x;
+            if (nl.originFlag) {
+                x = addChip(th, nl, "GỐC · " + g.dupTotal(), th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                        th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
+            } else {
+                x = addChip(th, nl, "#" + g.dupNo() + "/" + g.dupTotal(), th.smallBoldFont, th.dup.fill(), th.dup.border(),
+                        th.dup.text(), Icons.dup(th.dup.text(), 11), true, x, th.scaled(4));
+            }
+            nl.dupX1 = x - th.scaled(4);
+        }
+        if (g.pending()) {
+            x = addChip(th, nl, compactPending(g), th.smallBoldFont, th.pending.fillStrong(), th.pending.border(),
+                    th.pending.text(), Icons.hourglass(th.pending.text(), 11), true, x, th.scaled(4));
+        }
+        String summary = Audit.summary(g);
+        if (summary != null && !summary.isEmpty()) {
+            AuditLevel auditLvl = Audit.level(g);
+            Theme.Token at = g.results().isEmpty() ? th.orig : th.audit(auditLvl);
+            Icon ic = g.results().isEmpty() ? Icons.pin(at.text(), 11) : Icons.forAudit(auditLvl, at.text());
+            x = addChip(th, nl, compactVerdict(summary), th.smallBoldFont, at.fill(), at.border(), at.text(), ic, true, x,
+                    th.scaled(4));
+        }
+        if (g.activeIdNote() != null && !g.activeIdNote().isBlank()) {
+            x = addChip(th, nl, Text.shortPath(g.activeIdNote(), 22), th.smallBoldFont,
+                    th.accent.fill(), th.accent.border(), th.accent.text(), null, true, x, th.scaled(4));
+        }
+        int shownTags = 0;
+        for (String tagId : g.tags()) {
+            if (shownTags >= 2) {
+                break;
+            }
+            ApiTagCatalog.TagDef def = engine != null ? engine.tagCatalog().byId(tagId) : null;
+            Theme.Token ttok = Icons.tokenForKey(th, def != null ? def.colorKey() : "warn");
+            x = addChip(th, nl, tagId, th.smallBoldFont, ttok.fill(), ttok.border(), ttok.text(),
+                    Icons.tag(ttok.text(), 10), true, x, th.scaled(4));
+            shownTags++;
+        }
+        return Math.max(x, vx + th.scaled(20));
+    }
+
+    private int layoutRoleGrid(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        boolean isOrig = n.kind == Node.Kind.ORIG;
+        if (!(n.payload instanceof Object[] arr) || arr.length < 2 || !(arr[0] instanceof ApiGroup g)
+                || !(arr[1] instanceof RoleResult r)) {
+            return layoutRole(n, th, nl, x, gap);
+        }
+        Color dotCol = isOrig ? th.orig.base() : (n.level == AuditLevel.NONE ? th.dotNone : th.audit(n.level).base());
+        x = addLeadIcon(nl, Icons.dot(dotCol, false), x, th.scaled(5));
+        if (isOrig) {
+            Icon pin = Icons.pin(th.orig.text(), 12);
+            nl.pinIcon = pin;
+            nl.pinX = x;
+            x += pin.getIconWidth() + th.scaled(4);
+        }
+        Font pf = isOrig ? th.boldFont : th.baseFont;
+        x = addPrimary(nl, clip(r.roleName(), pf, treeColEnd(th, nl) - x), pf, isOrig ? th.orig.text() : th.fg, x, gap);
+
+        x = col(th, nl, TreeColumns.Col.STATUS, x);
+        Integer stCode = r.status();
+        String st = stCode != null ? String.valueOf(stCode) : Text.nz(r.state());
+        nl.statusText = st.isEmpty() ? "-" : st;
+        nl.statusFont = stCode != null ? th.boldFont : th.smallFont;
+        nl.statusColor = stCode != null ? th.statusColor(stCode) : th.muted;
+        nl.statusX = x;
+
+        x = col(th, nl, TreeColumns.Col.LENGTH, x);
+        nl.tailText = r.length() != null ? String.valueOf(r.length()) : "-";
+        nl.tailFont = th.monoSmallFont;
+        nl.tailColor = th.muted;
+        nl.tailX = x;
+
+        x = col(th, nl, TreeColumns.Col.ROLES, x);
+        String badge = Audit.badge(g, r);
+        if (badge != null && !badge.isEmpty()) {
+            Theme.Token tok = isOrig ? th.orig : th.audit(n.level);
+            Icon ic = isOrig ? Icons.pin(tok.text(), 11)
+                    : (n.level != AuditLevel.NONE ? Icons.forAudit(n.level, tok.text()) : null);
+            x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
+                    ic, false, x, th.scaled(4));
+        }
+        return x;
+    }
+
+    private int layoutHeldGrid(Node n, Theme th, NodeLayout nl, int x, int gap) {
+        if (!(n.payload instanceof themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr)) {
+            return layoutHeldPending(n, th, nl, x, gap);
+        }
+        nl.fill = th.danger.fill();
+        nl.edge = th.danger.border();
+        nl.dashedEdge = true;
+        x = addLeadIcon(nl, Icons.strategyShield(th.danger.text(), 13), x, th.scaled(4));
+        x = addPrimary(nl, clip("CHỜ DUYỆT", th.boldFont, treeColEnd(th, nl) - x), th.boldFont, th.danger.text(), x, gap);
+        x = col(th, nl, TreeColumns.Col.METHOD, x);
+        Theme.Token mt = th.method(pr.method());
+        addChip(th, nl, pr.method(), th.smallBoldFont, mt.fill(), mt.border(), mt.text(), null, true, x, gap);
+        x = col(th, nl, TreeColumns.Col.PATH, x);
+        putPath(th, nl, pr.path(), th.monoBoldFont, x, TreeColumns.scaledWidth(th, TreeColumns.Col.PATH));
+        x = col(th, nl, TreeColumns.Col.STATUS, x);
+        nl.statusText = "chưa gửi";
+        nl.statusFont = th.smallBoldFont;
+        nl.statusColor = th.danger.text();
+        nl.statusX = x;
+        x = col(th, nl, TreeColumns.Col.ROLES, x);
+        String host = pr.service() != null ? pr.service().hostLabel() : "";
+        return addTail(nl, th, (host.isEmpty() ? "" : host + " · ") + pr.timeHms(), x, gap);
     }
 
     private int layoutGroup(Node n, Theme th, NodeLayout nl, int x, int gap) {
@@ -832,7 +1078,21 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             g2.setColor(th.grid);
             g2.drawLine(0, h - 1, w - 1, h - 1);
             int divPad = th.scaled(3);
-            if (nl.monoPathLen > 0 && nl.monoPathX > divPad) {
+            // V_7.0 grid rows: correct the estimated node x with the real painted x so columns line up exactly
+            int shift = nl.grid && nl.alignFrom >= 0 && getParent() instanceof javax.swing.CellRendererPane
+                    ? nl.estNodeX - getX() : 0;
+            int af = nl.grid ? nl.alignFrom : Integer.MAX_VALUE;
+            if (nl.grid) {
+                for (TreeColumns.Col c : TreeColumns.Col.values()) {
+                    if (c == TreeColumns.Col.TREE) {
+                        continue;
+                    }
+                    int cx = TreeColumns.start(th, c) - nl.estNodeX + shift - 1;
+                    if (cx > 0 && cx < w) {
+                        g2.drawLine(cx, 2, cx, h - 3);
+                    }
+                }
+            } else if (nl.monoPathLen > 0 && nl.monoPathX > divPad) {
                 g2.drawLine(nl.monoPathX - divPad, 2, nl.monoPathX - divPad, h - 3);
             }
             if (nl.statusText != null && !nl.statusText.isEmpty() && nl.statusX > divPad) {
@@ -874,7 +1134,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
                 Color baseCol = activeSelected ? th.selectionFg : th.fg;
                 Color mutedCol = activeSelected ? th.selectionFg : th.muted;
-                AuditRenderer.drawPathBuffer(g2, fm, nl.monoPath, nl.monoPathLen, -1, nl.monoPathX, ty, baseCol, mutedCol);
+                AuditRenderer.drawPathBuffer(g2, fm, nl.monoPath, nl.monoPathLen, -1,
+                        nl.monoPathX + (nl.monoPathX >= af ? shift : 0), ty, baseCol, mutedCol);
             }
 
             if (nl.statusText != null && !nl.statusText.isEmpty()) {
@@ -882,7 +1143,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 FontMetrics fm = g2.getFontMetrics(nl.statusFont);
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
                 g2.setColor(activeSelected ? th.selectionFg : nl.statusColor);
-                drawStringZeroAlloc(g2, nl.statusText, nl.statusX, ty);
+                drawStringZeroAlloc(g2, nl.statusText, nl.statusX + (nl.statusX >= af ? shift : 0), ty);
             }
 
             if (nl.tailText != null && !nl.tailText.isEmpty()) {
@@ -890,7 +1151,23 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 FontMetrics fm = g2.getFontMetrics(nl.tailFont);
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
                 g2.setColor(activeSelected ? th.selectionFg : nl.tailColor);
-                drawStringZeroAlloc(g2, nl.tailText, nl.tailX, ty);
+                drawStringZeroAlloc(g2, nl.tailText, nl.tailX + (nl.tailX >= af ? shift : 0), ty);
+            }
+
+            if (nl.roleCount > 0 && nl.roleX >= 0) {
+                int sq = Math.max(8, th.scaled(10));
+                int sqGap = Math.max(2, th.scaled(3));
+                int rx = nl.roleX + (nl.roleX >= af ? shift : 0);
+                int ry = (h - sq) / 2;
+                for (int i = 0; i < nl.roleCount; i++) {
+                    g2.setColor(nl.roleColors[i]);
+                    g2.fillRect(rx, ry, sq, sq);
+                    if (activeSelected) {
+                        g2.setColor(th.selectionFg);
+                        g2.drawRect(rx, ry, sq - 1, sq - 1);
+                    }
+                    rx += sq + sqGap;
+                }
             }
 
             int pillH = Math.max(th.scaled(15), h - th.scaled(7));
@@ -898,11 +1175,12 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             int ip = th.scaled(6);
             for (int i = 0; i < nl.chipCount; i++) {
                 Chip ch = nl.chips[i];
+                int chx = ch.x + (ch.x >= af ? shift : 0);
                 g2.setColor(ch.fill);
-                g2.fillRect(ch.x, pillY, ch.w - 1, pillH - 1);
+                g2.fillRect(chx, pillY, ch.w - 1, pillH - 1);
                 g2.setColor(ch.border);
-                g2.drawRect(ch.x, pillY, ch.w - 1, pillH - 1);
-                int cx = ch.x + ip;
+                g2.drawRect(chx, pillY, ch.w - 1, pillH - 1);
+                int cx = chx + ip;
                 if (ch.icon != null) {
                     ch.icon.paintIcon(this, g2, cx, pillY + (pillH - ch.icon.getIconHeight()) / 2);
                     cx += ch.icon.getIconWidth() + (ch.text.isEmpty() ? 0 : th.scaled(3));

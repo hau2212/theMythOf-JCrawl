@@ -200,7 +200,7 @@ final class V22BetaTest {
                 ui.tick(true);
                 for (int w : new int[] {900, 1100, 1440}) {
                     ui.root().setSize(w, 820);
-                    ui.tabs.setSelectedComponent(ui.settings.panel);
+                    ui.selectTab(ui.settings.panel);
                     layoutTree(ui.root());
                     ui.settings.panel.setSize(w, 720);
                     ui.settings.relayoutSections();
@@ -430,7 +430,7 @@ final class V22BetaTest {
                 ui.updateResponsiveChrome(1280);
 
                 // 5 & 6. SettingsTab 1100px (2-col) and 900px (1-col)
-                ui.tabs.setSelectedComponent(ui.settings.panel);
+                ui.selectTab(ui.settings.panel);
                 ui.root().setSize(1100, 860);
                 layoutTree(ui.root());
                 ui.settings.panel.setSize(1100, 780);
@@ -444,7 +444,7 @@ final class V22BetaTest {
                 savePng(outDir.resolve("06_settings_900_1col.png"), renderOffscreen(ui.root(), 900, 860));
 
                 // 7. RolesTab Light 1280
-                ui.tabs.setSelectedComponent(ui.roles.panel);
+                ui.selectTab(ui.roles.panel);
                 ui.roles.roleTable().setRowSelectionInterval(0, 0);
                 savePng(outDir.resolve("07_roles_light_1280.png"), renderOffscreen(ui.root(), 1280, 760));
 
@@ -470,7 +470,7 @@ final class V22BetaTest {
                 uiDark.updateResponsiveChrome(1280);
                 savePng(outDir.resolve("02_main_dark_1280.png"), renderOffscreen(uiDark.root(), 1280, 760));
 
-                uiDark.tabs.setSelectedComponent(uiDark.roles.panel);
+                uiDark.selectTab(uiDark.roles.panel);
                 uiDark.roles.roleTable().setRowSelectionInterval(0, 0);
                 savePng(outDir.resolve("08_roles_dark_1280.png"), renderOffscreen(uiDark.root(), 1280, 760));
             } finally {

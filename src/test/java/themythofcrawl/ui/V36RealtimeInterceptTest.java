@@ -132,7 +132,7 @@ final class V36RealtimeInterceptTest {
                 JTabbedPane tabs = findFirst(ui.root(), JTabbedPane.class);
                 assertNotNull(tabs);
                 // Switch to Cây tab once and stop there (NO further tab switches!)
-                tabs.setSelectedComponent(ui.treeTab.panel);
+                ui.selectTab(ui.treeTab.panel);
                 ui.treeTab.tree.rebuild(false);
 
                 // Collapse the target folder to verify auto-expansion on real-time intercept
@@ -204,7 +204,7 @@ final class V36RealtimeInterceptTest {
                 uiRef.set(ui);
                 JTabbedPane tabs = findFirst(ui.root(), JTabbedPane.class);
                 assertNotNull(tabs);
-                tabs.setSelectedComponent(ui.api.panel);
+                ui.selectTab(ui.api.panel);
                 ui.api.tree.rebuild(false);
             });
 

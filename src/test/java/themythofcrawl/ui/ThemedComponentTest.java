@@ -599,7 +599,7 @@ class ThemedComponentTest {
             assertSame(hitRole, ui.api.selectedResult());
 
             // 4. Mode switching (Ma trận + Văn bản) & Burp renderer retention
-            ui.tabs.setSelectedComponent(ui.history.panel);
+            ui.selectTab(ui.history.panel);
             rv.setViewMode(HistoryReportView.MODE_MATRIX);
             UiPreview.PlainHost.simulateBurpTheme(rv);
             ThemedTable mat = rv.matrixTable();
@@ -932,22 +932,23 @@ class ThemedComponentTest {
                     assertTrue(pref.height <= 64, "header height must stay <= 64, was " + pref.height);
                     assertTrue(pref.width <= 1100, "header width must fit 1100px, was " + pref.width);
 
-                    // 2. Tab tooltips + Alt+1..8 tab switching
+                    // 2. Tab tooltips + Alt+1..7 tab switching (V_7.0: Cây first, Báo cáo / Cài đặt grouped)
                     assertTrue(ui.tabs.getToolTipTextAt(0).contains("Alt+1"));
-                    assertTrue(ui.tabs.getToolTipTextAt(7).contains("Alt+8"));
-                    assertTrue(ui.dispatchShortcut("alt 4"));
-                    assertSame(ui.settings.panel, ui.tabs.getSelectedComponent());
+                    assertTrue(ui.tabs.getToolTipTextAt(6).contains("Alt+7"));
+                    assertTrue(ui.dispatchShortcut("alt 7"));
+                    ui.settingsTabs.setSelectedComponent(ui.settings.panel);
+                    assertSame(ui.settings.panel, ui.selectedTab());
                     assertSame(ui.settings.searchField(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 5"));
-                    assertSame(ui.log.panel, ui.tabs.getSelectedComponent());
+                    ui.settingsTabs.setSelectedComponent(ui.log.panel);
+                    assertSame(ui.log.panel, ui.selectedTab());
                     assertSame(ui.log.searchField(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 8"));
+                    assertTrue(ui.dispatchShortcut("alt 6"));
                     assertSame(ui.audit.panel, ui.tabs.getSelectedComponent());
                     ui.audit.tabs().setSelectedIndex(1);
                     assertSame(ui.audit.placeSearch(), ui.activeSearchField());
                     ui.audit.tabs().setSelectedIndex(3);
                     assertSame(ui.audit.logSearch(), ui.activeSearchField());
-                    assertTrue(ui.dispatchShortcut("alt 1"));
+                    assertTrue(ui.dispatchShortcut("alt 2"));
                     assertSame(ui.api.panel, ui.tabs.getSelectedComponent());
                     assertSame(ui.api.searchField(), ui.activeSearchField());
 

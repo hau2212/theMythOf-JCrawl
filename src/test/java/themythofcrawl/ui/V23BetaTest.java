@@ -308,7 +308,7 @@ final class V23BetaTest {
                 savePng(outDir.resolve("01_workbench_tab1_light.png"), renderOffscreen(wbL, 1020, 660));
 
                 // 3. RolesTab Light (with row 1 OFF selected, row 0 ON, row 2 ON)
-                uiLight.tabs.setSelectedComponent(uiLight.roles.panel);
+                uiLight.selectTab(uiLight.roles.panel);
                 uiLight.roles.roleTable().setRowSelectionInterval(1, 1);
                 savePng(outDir.resolve("03_roles_switch_light.png"), renderOffscreen(uiLight.roles.panel, 1180, 680));
 
@@ -342,7 +342,7 @@ final class V23BetaTest {
                 savePng(outDir.resolve("02_workbench_tab1_dark.png"), renderOffscreen(wbD, 1020, 660));
 
                 // 4. RolesTab Dark
-                uiDark.tabs.setSelectedComponent(uiDark.roles.panel);
+                uiDark.selectTab(uiDark.roles.panel);
                 uiDark.roles.roleTable().setRowSelectionInterval(1, 1);
                 savePng(outDir.resolve("04_roles_switch_dark.png"), renderOffscreen(uiDark.roles.panel, 1180, 680));
 

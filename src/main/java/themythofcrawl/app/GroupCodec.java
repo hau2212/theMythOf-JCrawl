@@ -83,6 +83,7 @@ public final class GroupCodec {
         m.put("hidden", g.hidden());
         m.put("captured_at_branch", g.capturedAtBranch());
         m.put("tags", new ArrayList<>(g.tags()));
+        m.put("seen_by", new ArrayList<>(g.seenBy()));
         m.put("suspected_refresh", g.suspectedRefresh());
         m.put("triggered_by_action", g.triggeredByAction());
         PlaceHint h = g.placeHint();
@@ -162,6 +163,13 @@ public final class GroupCodec {
                 g.addTag(String.valueOf(t));
             }
         }
+        List<String> seen = new ArrayList<>();
+        for (Object t : Json.list(m, "seen_by")) {
+            if (t != null) {
+                seen.add(String.valueOf(t));
+            }
+        }
+        g.setSeenBy(seen);
         g.setSuspectedRefresh(Json.bool(m, "suspected_refresh", false));
         g.setTriggeredByAction(Json.str(m, "triggered_by_action", null));
         Map<String, Object> hm = Json.obj(m, "hint");

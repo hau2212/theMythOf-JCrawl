@@ -333,7 +333,7 @@ final class ExcelTab {
                 + "(Không: vẫn bắt mọi API, danh sách chỉ để theo dõi độ phủ)", Text.EXT_NAME, JOptionPane.YES_NO_OPTION)
                 == JOptionPane.YES_OPTION;
         setTargetOnly(only);
-        ui.tabs.setSelectedComponent(panel);
+        ui.selectTab(panel);
     }
 
     private void clear() {

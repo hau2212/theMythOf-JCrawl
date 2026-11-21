@@ -134,6 +134,7 @@ final class ApiTab {
     private JComponent detailPane;
     private JComponent toolbarPane;
     private JPanel restoreStrip;
+    private javax.swing.JScrollPane treeScroll;
     private final java.util.EnumMap<Pane, Integer> lastDivider = new java.util.EnumMap<>(Pane.class);
     private boolean treeStale = true;
     private boolean branchStale = true;
@@ -184,7 +185,9 @@ final class ApiTab {
         Ui.widths(branchTable, 64, 165, 54, 165, 115);
         ColumnMemory.install(branchTable, "branches", ui.uiPrefs);
         Ui.onPopup(branchTable, e -> branchMenu().show(e.getComponent(), e.getX(), e.getY()));
-        leftTabs.addTab("Cây Sub-folder", MainPanel.scroll(tree.tree));
+        TreeColumns.enable(tree.tree);
+        treeScroll = MainPanel.scroll(tree.tree);
+        leftTabs.addTab("Cây Sub-folder", treeScroll);
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
         JPanel left = new JPanel(new BorderLayout(0, 0));
@@ -194,6 +197,9 @@ final class ApiTab {
         left.setMinimumSize(new Dimension(Theme.current().scaled(160), 0));
         // V_7.0: the tree is a branch filter (Site-map style) by default; API rows live in the flat table.
         tree.setShowApis("1".equals(ui.uiPrefs.get(KEY_TREE_SHOW_APIS)));
+        if (tree.showApis()) {
+            TreeColumns.installHeader(tree.tree, treeScroll);
+        }
 
         // right: the API table (filter & search merged into top actionBar)
         Ui.style(table);
@@ -658,6 +664,13 @@ final class ApiTab {
 
     void setTreeShowsApis(boolean on) {
         tree.setShowApis(on);
+        if (treeScroll != null) {
+            if (on) {
+                TreeColumns.installHeader(tree.tree, treeScroll);
+            } else {
+                treeScroll.setColumnHeaderView(null);
+            }
+        }
         ui.uiPrefs.set(KEY_TREE_SHOW_APIS, on ? "1" : "0");
         treeStale = true;
         refreshVisible(true);

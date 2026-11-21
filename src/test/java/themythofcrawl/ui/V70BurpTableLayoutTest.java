@@ -139,6 +139,7 @@ class V70BurpTableLayoutTest {
         SwingUtilities.invokeAndWait(() -> {
             MainPanel ui = new MainPanel(e, ws, new UiSmokeTest.HeadlessHost(), "v70-layout");
             try {
+                ui.selectTab(ui.api.panel);
                 assertTrue(ui.api.paneVisible(ApiTab.Pane.TREE));
                 assertTrue(ui.dispatchShortcut("ctrl alt 1"));
                 assertFalse(ui.api.paneVisible(ApiTab.Pane.TREE));
