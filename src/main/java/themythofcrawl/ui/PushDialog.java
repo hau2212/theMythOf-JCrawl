@@ -45,7 +45,7 @@ public final class PushDialog {
 
     public static Choice show(Component parent, List<ApiGroup> groups, String label, Choice memory, boolean send) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, "Đẩy / Gửi có chọn Role - " + label, JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Đẩy / Gửi có chọn Role - " + label, JDialog.ModalityType.APPLICATION_MODAL);
         d.setLayout(new BorderLayout(6, 6));
         Theme th = Theme.current();
         Choice mem = memory != null ? memory : new Choice(false, false, Set.of(), Set.of(), false, true);
@@ -123,10 +123,10 @@ public final class PushDialog {
             full.setEnabled(push.isSelected());
         };
         for (Object[] b : boxes) {
-            ((JCheckBox) b[1]).addActionListener(e -> update.run());
+            ((JCheckBox) b[1]).addActionListener(Ui.safe(e -> update.run()));
         }
         for (javax.swing.AbstractButton b : new javax.swing.AbstractButton[] {orig, flagged, push, sendRb}) {
-            b.addActionListener(e -> update.run());
+            b.addActionListener(Ui.safe(e -> update.run()));
         }
         java.util.function.BiConsumer<Boolean, Boolean> setAll = (o, r) -> {
             orig.setSelected(o);

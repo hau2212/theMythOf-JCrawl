@@ -318,7 +318,7 @@ final class ApiTab {
         }
         pill.setIcon(Icons.themed(t -> Icons.pair(Icons.folder(t.fg),
                 Icons.chevronDown(t.fg, 10), 4)));
-        pill.addActionListener(e -> pillMenu());
+        pill.addActionListener(Ui.safe(e -> pillMenu()));
         JScrollPane tabsScroll = new JScrollPane(roleTabs, JScrollPane.VERTICAL_SCROLLBAR_NEVER, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         tabsScroll.setBorder(BorderFactory.createEmptyBorder());
         tabsScroll.setPreferredSize(new Dimension(240, 26));
@@ -390,7 +390,7 @@ final class ApiTab {
         collapseInspectorBtn.setMargin(new Insets(0, 0, 0, 0));
         collapseInspectorBtn.setPreferredSize(new Dimension(22, 22));
         collapseInspectorBtn.setToolTipText("Thu gọn thanh Request / Response thành 1 đường ngang tối giản");
-        collapseInspectorBtn.addActionListener(e -> setInspectorExpanded(false));
+        collapseInspectorBtn.addActionListener(Ui.safe(e -> setInspectorExpanded(false)));
         barLeft.add(collapseInspectorBtn);
         barLeft.add(pill);
         barLeft.add(resOkPill);
@@ -418,7 +418,7 @@ final class ApiTab {
         expandInspectorBtn.setMargin(new Insets(0, 0, 0, 0));
         expandInspectorBtn.setPreferredSize(new Dimension(20, 20));
         expandInspectorBtn.setToolTipText("Mở rộng đầy đủ thanh Request / Response & Tab Role");
-        expandInspectorBtn.addActionListener(e -> setInspectorExpanded(true));
+        expandInspectorBtn.addActionListener(Ui.safe(e -> setInspectorExpanded(true)));
 
         compactSummaryBtn = new JButton("Chưa chọn API") {
             @Override
@@ -434,7 +434,7 @@ final class ApiTab {
         compactSummaryBtn.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         compactSummaryBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         compactSummaryBtn.setToolTipText("Bấm để chọn nhanh Role / chuyển API Group");
-        compactSummaryBtn.addActionListener(e -> pillMenu(compactSummaryBtn));
+        compactSummaryBtn.addActionListener(Ui.safe(e -> pillMenu(compactSummaryBtn)));
 
         compactMiniStats = Ui.muted("");
         compactMiniStats.setFont(Theme.current().smallFont);
@@ -450,7 +450,7 @@ final class ApiTab {
         compactMoreBtn.setMargin(new Insets(0, 4, 0, 4));
         compactMoreBtn.setPreferredSize(new Dimension(Theme.current().scaled(32), 20));
         compactMoreBtn.setToolTipText("Mở menu đầy đủ (Action/ID, Send Group, Repeater, Tab Role, Khôi phục)");
-        compactMoreBtn.addActionListener(e -> buildCompactInspectorMenu().show(compactMoreRef[0], 0, compactMoreRef[0].getHeight()));
+        compactMoreBtn.addActionListener(Ui.safe(e -> buildCompactInspectorMenu().show(compactMoreRef[0], 0, compactMoreRef[0].getHeight())));
         compactMoreRef[0] = compactMoreBtn;
 
         JPanel compactLeft = new JPanel(new BorderLayout(2, 0));
@@ -713,7 +713,7 @@ final class ApiTab {
 
     private static javax.swing.JCheckBoxMenuItem layoutCheck(String text, String accel, boolean on, Runnable action) {
         javax.swing.JCheckBoxMenuItem it = new javax.swing.JCheckBoxMenuItem(accel == null ? text : text + "   (" + accel + ")", on);
-        it.addActionListener(e -> action.run());
+        it.addActionListener(Ui.safe(e -> action.run()));
         return it;
     }
 
@@ -858,6 +858,7 @@ final class ApiTab {
     private void formatInlineRequestJson() {
         byte[] cur = reqViewer.edited();
         if (cur == null || cur.length == 0) {
+            ui.flash("Chọn 1 API / Role để hiện Request trước rồi bấm Format JSON.");
             return;
         }
         String raw = new String(cur, java.nio.charset.StandardCharsets.ISO_8859_1);
@@ -943,7 +944,7 @@ final class ApiTab {
         filterRef[0] = filterDropdownBtn;
 
         viewMode.setToolTipText("Chế độ hiển thị bảng API: Tất cả API hoặc chỉ Nhánh đang chọn");
-        viewMode.addActionListener(e -> applyViewMode());
+        viewMode.addActionListener(Ui.safe(e -> applyViewMode()));
 
         JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 1));
         leftActions.setOpaque(false);
@@ -1175,7 +1176,7 @@ final class ApiTab {
     private JPopupMenu filterPopupMenu() {
         JPopupMenu m = new JPopupMenu();
         javax.swing.JCheckBoxMenuItem allItem = new javax.swing.JCheckBoxMenuItem("Hiển thị Tất cả trạng thái (Bỏ lọc)", activeFilters.isEmpty());
-        allItem.addActionListener(e -> clearAuditFilters());
+        allItem.addActionListener(Ui.safe(e -> clearAuditFilters()));
         m.add(allItem);
         m.addSeparator();
         Object[][] defs = {
@@ -1190,47 +1191,47 @@ final class ApiTab {
             AuditLevel lvl = (AuditLevel) d[0];
             String label = (String) d[1];
             javax.swing.JCheckBoxMenuItem item = new javax.swing.JCheckBoxMenuItem(label, activeFilters.contains(lvl));
-            item.addActionListener(e -> toggleAuditFilter(lvl));
+            item.addActionListener(Ui.safe(e -> toggleAuditFilter(lvl)));
             m.add(item);
         }
         m.addSeparator();
         String curTag = groupModel.tagFilter();
         javax.swing.JRadioButtonMenuItem allTags = new javax.swing.JRadioButtonMenuItem("Tag: Tất cả API", curTag == null);
-        allTags.addActionListener(e -> {
+        allTags.addActionListener(Ui.safe(e -> {
             groupModel.setTagFilter(null);
             updateFilterStrip();
-        });
+        }));
         m.add(allTags);
         javax.swing.JRadioButtonMenuItem suspected = new javax.swing.JRadioButtonMenuItem(
                 "Tag: ? Gợi ý REFRESH / Đã gắn REFRESH", GroupTableModel.TAG_FILTER_SUSPECTED.equals(curTag));
-        suspected.addActionListener(e -> {
+        suspected.addActionListener(Ui.safe(e -> {
             groupModel.setTagFilter(GroupTableModel.TAG_FILTER_SUSPECTED);
             updateFilterStrip();
-        });
+        }));
         m.add(suspected);
         for (ApiTagCatalog.TagDef td : engine.tagCatalog().all()) {
             javax.swing.JRadioButtonMenuItem tItem = new javax.swing.JRadioButtonMenuItem(
                     "Tag: [" + td.label() + "]", td.id().equalsIgnoreCase(curTag));
-            tItem.addActionListener(e -> {
+            tItem.addActionListener(Ui.safe(e -> {
                 groupModel.setTagFilter(td.id());
                 updateFilterStrip();
-            });
+            }));
             m.add(tItem);
         }
         m.add(Ui.item("Quản lý Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
         m.addSeparator();
         javax.swing.JRadioButtonMenuItem allBranches = new javax.swing.JRadioButtonMenuItem(
                 "Phạm vi: Tất cả API (Mặc định)", focusPath == null && viewMode.getSelectedIndex() == 0);
-        allBranches.addActionListener(e -> {
+        allBranches.addActionListener(Ui.safe(e -> {
             clearFocusBranch();
             viewMode.setSelectedIndex(0);
-        });
+        }));
         javax.swing.JRadioButtonMenuItem selectedBranchOnly = new javax.swing.JRadioButtonMenuItem(
                 "Phạm vi: Chỉ theo Nhánh đang chọn", focusPath == null && viewMode.getSelectedIndex() == 1);
-        selectedBranchOnly.addActionListener(e -> {
+        selectedBranchOnly.addActionListener(Ui.safe(e -> {
             clearFocusBranch();
             viewMode.setSelectedIndex(1);
-        });
+        }));
         m.add(allBranches);
         m.add(selectedBranchOnly);
         return m;
@@ -1908,6 +1909,9 @@ final class ApiTab {
         if (g != null && r != null) {
             engine.setCustomRequest(g, r, null);
             showResult(r);
+            ui.flash("Đã khôi phục Request ban đầu của " + r.roleName() + ".");
+        } else {
+            ui.flash("Chọn 1 API và 1 Role trước rồi bấm Khôi phục.");
         }
     }
 
@@ -1968,7 +1972,7 @@ final class ApiTab {
                         Color pinCol = r == cur ? th.critical.onSolid() : th.orig.text();
                         b.setIcon(Icons.pin(pinCol, 12));
                     }
-                    b.addActionListener(e -> MainPanel.selectRow(results, resultModel.rowOf(r)));
+                    b.addActionListener(Ui.safe(e -> MainPanel.selectRow(results, resultModel.rowOf(r))));
                     roleTabs.add(b);
                 }
             }

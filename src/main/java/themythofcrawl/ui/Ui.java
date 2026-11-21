@@ -43,6 +43,117 @@ import themythofcrawl.ui.theme.Theme;
 
 /** Small Swing helpers shared by every tab, including live 3-mode button display &amp; rich hover cards. */
 public final class Ui {
+    // =================================================================== V_7.1 click safety & feedback
+    /** Where click errors are also written (MainPanel wires it to the extension Log). */
+    static volatile Consumer<String> errorSink;
+
+    /**
+     * Wraps a click handler: an exception no longer disappears silently on the Swing thread (in Burp that
+     * looks like "bấm không ra gì") — it is shown next to the clicked control and written to the Log.
+     */
+    public static java.awt.event.ActionListener safe(java.awt.event.ActionListener l) {
+        if (l == null) {
+            return null;
+        }
+        return e -> {
+            try {
+                l.actionPerformed(e);
+            } catch (VirtualMachineError fatal) {
+                throw fatal;
+            } catch (Throwable ex) {
+                reportClickError(e == null ? null : e.getSource(), ex);
+            }
+        };
+    }
+
+    static void runSafe(Object source, Runnable action) {
+        try {
+            action.run();
+        } catch (VirtualMachineError fatal) {
+            throw fatal;
+        } catch (Throwable ex) {
+            reportClickError(source, ex);
+        }
+    }
+
+    static void reportClickError(Object source, Throwable ex) {
+        String what = source instanceof AbstractButton b && b.getText() != null && !b.getText().isBlank()
+                ? "\"" + b.getText().trim() + "\"" : "thao tác này";
+        String msg = "Không thực hiện được " + what + ": " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+        Consumer<String> sink = errorSink;
+        if (sink != null) {
+            try {
+                sink.accept(msg + " (" + ex + ")");
+            } catch (RuntimeException ignored) {
+                // logging must never break the UI
+            }
+        }
+        ex.printStackTrace();
+        hint(source instanceof Component c ? c : null, msg);
+    }
+
+    /**
+     * Small message bubble next to {@code anchor} for ~3.5 s (e.g. "Chọn 1 dòng trước"), so a click that
+     * cannot do anything still answers the user. Falls back to the active window when the anchor is hidden.
+     */
+    public static void hint(Component anchor, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        Runnable show = () -> {
+            Component owner = anchor;
+            if (owner == null || !owner.isShowing()) {
+                owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+            }
+            if (owner == null || !owner.isShowing() || java.awt.GraphicsEnvironment.isHeadless()) {
+                return;
+            }
+            Theme th = Theme.current();
+            JLabel l = new JLabel(text);
+            l.setOpaque(true);
+            l.setBackground(th.warning.fill());
+            l.setForeground(th.warning.text());
+            l.setFont(th.boldFont);
+            l.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(th.warning.border()),
+                    BorderFactory.createEmptyBorder(5, 9, 5, 9)));
+            java.awt.Point p = owner.getLocationOnScreen();
+            int y = owner == anchor ? p.y + owner.getHeight() + 4 : p.y + 60;
+            int x = owner == anchor ? p.x : p.x + 40;
+            javax.swing.Popup popup = javax.swing.PopupFactory.getSharedInstance().getPopup(owner, l, x, y);
+            popup.show();
+            javax.swing.Timer t = new javax.swing.Timer(3500, ev -> popup.hide());
+            t.setRepeats(false);
+            t.start();
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            show.run();
+        } else {
+            SwingUtilities.invokeLater(show);
+        }
+    }
+
+    /**
+     * Owner for a dialog opened from {@code c}: its window when that window is on screen, otherwise the
+     * window the user is working in — so a dialog never opens hidden behind Burp.
+     */
+    public static java.awt.Window ownerWindow(Component c) {
+        java.awt.Window w = c instanceof java.awt.Window win ? win : (c == null ? null : SwingUtilities.getWindowAncestor(c));
+        if (w != null && w.isShowing() && !(w.getClass().getName().contains("Popup"))) {
+            return w;
+        }
+        java.awt.Window active = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+        if (active != null && active.isShowing()) {
+            return active;
+        }
+        for (java.awt.Frame f : java.awt.Frame.getFrames()) {
+            if (f.isShowing()) {
+                return f;
+            }
+        }
+        return w;
+    }
+
+
     private record ManagedButton(
             WeakReference<AbstractButton> ref,
             String label,
@@ -151,7 +262,7 @@ public final class Ui {
 
     public static JButton button(String text, Runnable action) {
         JButton b = new JButton(text);
-        b.addActionListener(e -> action.run());
+        b.addActionListener(e -> runSafe(e.getSource(), action));
         return b;
     }
 
@@ -185,7 +296,7 @@ public final class Ui {
 
     public static JButton dropdown(String text, Function<Theme, Icon> iconFn, String tip, Runnable action) {
         JButton b = new JButton(text);
-        b.addActionListener(e -> action.run());
+        b.addActionListener(e -> runSafe(e.getSource(), action));
         return bindDisplayMode(b, text, iconFn, true, tip, null, t -> t.accent, null);
     }
 
@@ -216,7 +327,7 @@ public final class Ui {
                         bg.getRed(), bg.getGreen(), bg.getBlue(), fg.getRed(), fg.getGreen(), fg.getBlue()));
             }
         };
-        b.addActionListener(e -> action.run());
+        b.addActionListener(e -> runSafe(e.getSource(), action));
         if (iconFn != null) {
             bindDisplayMode(b, text, iconFn, false, description, shortcut, fn, null);
         } else if (description != null && !description.isBlank()) {
@@ -237,7 +348,7 @@ public final class Ui {
     public static JButton solidPrimary(String text, Function<Theme, Icon> iconFn, Runnable action) {
         JButton b = solidPrimary(text, iconFn);
         if (action != null) {
-            b.addActionListener(e -> action.run());
+            b.addActionListener(e -> runSafe(e.getSource(), action));
         }
         return b;
     }
@@ -250,7 +361,7 @@ public final class Ui {
     public static JButton dangerBtn(String text, Function<Theme, Icon> iconFn, Runnable action) {
         JButton b = dangerBtn(text, iconFn);
         if (action != null) {
-            b.addActionListener(e -> action.run());
+            b.addActionListener(e -> runSafe(e.getSource(), action));
         }
         return b;
     }
@@ -263,7 +374,7 @@ public final class Ui {
     public static JButton tonalBtn(String text, Function<Theme, Icon> iconFn, Function<Theme, Theme.Token> tokenFn, Runnable action) {
         JButton b = tonalBtn(text, iconFn, tokenFn);
         if (action != null) {
-            b.addActionListener(e -> action.run());
+            b.addActionListener(e -> runSafe(e.getSource(), action));
         }
         return b;
     }
@@ -302,7 +413,7 @@ public final class Ui {
     public static JButton secondaryBtn(String text, Function<Theme, Icon> iconFn, Runnable action) {
         JButton b = secondaryBtn(text, iconFn);
         if (action != null) {
-            b.addActionListener(e -> action.run());
+            b.addActionListener(e -> runSafe(e.getSource(), action));
         }
         return b;
     }
@@ -366,7 +477,7 @@ public final class Ui {
 
     public static JMenuItem item(String text, Runnable action) {
         JMenuItem i = new JMenuItem(text);
-        i.addActionListener(e -> action.run());
+        i.addActionListener(e -> runSafe(e.getSource(), action));
         return i;
     }
 

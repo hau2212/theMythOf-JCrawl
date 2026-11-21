@@ -31,7 +31,7 @@ final class LevelsDialog {
     static void show(Component parent, Engine engine) {
         Branch b = engine.activeBranch();
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, "Các cấp của đích: " + b.name(), JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Các cấp của đích: " + b.name(), JDialog.ModalityType.APPLICATION_MODAL);
         DefaultListModel<String> model = new DefaultListModel<>();
         for (String p : Hierarchy.split(b.name())) {
             model.addElement(p);
@@ -55,7 +55,7 @@ final class LevelsDialog {
             }
         });
         Runnable add = () -> {
-            Object v = JOptionPane.showInputDialog(d, "Tên cấp mới (thêm sau cấp đang chọn):", "Subfolder_mới");
+            Object v = JOptionPane.showInputDialog(Ui.ownerWindow(d), "Tên cấp mới (thêm sau cấp đang chọn):", "Subfolder_mới");
             if (v != null && !v.toString().isBlank()) {
                 int i = list.getSelectedIndex();
                 model.add(i < 0 ? model.size() : i + 1, v.toString().trim());
@@ -64,7 +64,7 @@ final class LevelsDialog {
         Runnable edit = () -> {
             int i = list.getSelectedIndex();
             if (i >= 0) {
-                Object v = JOptionPane.showInputDialog(d, "Sửa tên cấp " + (i + 1) + ":", model.get(i));
+                Object v = JOptionPane.showInputDialog(Ui.ownerWindow(d), "Sửa tên cấp " + (i + 1) + ":", model.get(i));
                 if (v != null && !v.toString().isBlank()) {
                     model.set(i, v.toString().trim());
                 }

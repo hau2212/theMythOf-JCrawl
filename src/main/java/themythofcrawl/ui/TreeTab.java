@@ -103,7 +103,7 @@ final class TreeTab {
         });
 
         windowBtn = Ui.secondaryBtn("Mở cửa sổ riêng", t -> Icons.window(t.fg));
-        windowBtn.addActionListener(e -> toggleWindow());
+        windowBtn.addActionListener(Ui.safe(e -> toggleWindow()));
         more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg), "Thao tác nhánh / API", this::menu);
 
         headerBreadcrumb.setMaxSegments(4);
@@ -111,11 +111,11 @@ final class TreeTab {
 
         JButton sendSelBtn = Ui.solidPrimary("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()));
         sendSelBtn.setToolTipText("Gửi lên Server các mục đang chọn (gồm cả [CHỜ DUYỆT] và API đã lưu)");
-        sendSelBtn.addActionListener(e -> sendSelectedItems());
+        sendSelBtn.addActionListener(Ui.safe(e -> sendSelectedItems()));
 
         JButton focusTreeBtn = Ui.secondaryBtn("Tập trung", t -> Icons.focus(t.accent.text(), 13));
         focusTreeBtn.setToolTipText("Tập trung vào nhánh đang chọn (mặc định hiển thị cả nhánh con bên dưới)");
-        focusTreeBtn.addActionListener(e -> {
+        focusTreeBtn.addActionListener(Ui.safe(e -> {
             if (tree.focusPath() != null) {
                 clearFocusBranch();
             } else {
@@ -125,7 +125,7 @@ final class TreeTab {
                 }
                 setFocusBranch(target, true);
             }
-        });
+        }));
 
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
         javax.swing.JComboBox<String> crawlRole = AccessMatrixTab.crawlRoleCombo(engine);
@@ -153,24 +153,24 @@ final class TreeTab {
         // ---- Card 1: Normal API / Role inline quick-edit & quick-send bar
         quickSendBtn = Ui.solidPrimary("Gửi ngay", t -> Icons.send(t.accent.onSolid(), 12));
         quickSendBtn.setToolTipText("Gửi trực tiếp nội dung Request đang hiển thị (kể cả phần bạn vừa sửa tại chỗ)");
-        quickSendBtn.addActionListener(e -> quickSendCurrent());
+        quickSendBtn.addActionListener(Ui.safe(e -> quickSendCurrent()));
 
         quickSaveBtn = Ui.tonalBtn("Lưu sửa vào API", t -> Icons.check(t.success.text(), 12), t -> t.success);
         quickSaveBtn.setToolTipText("Lưu nội dung Request vừa chỉnh sửa tại chỗ đè vào API này");
-        quickSaveBtn.addActionListener(e -> quickSaveEdit());
+        quickSaveBtn.addActionListener(Ui.safe(e -> quickSaveEdit()));
 
         JButton fmtJsonApiBtn = Ui.secondaryBtn("Format JSON", null);
         fmtJsonApiBtn.setToolTipText("Định dạng đẹp JSON Body và cập nhật Content-Length");
-        fmtJsonApiBtn.addActionListener(e -> formatCurrentRequestJson());
+        fmtJsonApiBtn.addActionListener(Ui.safe(e -> formatCurrentRequestJson()));
 
         JButton resetApiBtn = Ui.secondaryBtn("Khôi phục", t -> Icons.undo(t.muted, 12));
         resetApiBtn.setToolTipText("Khôi phục lại Request gốc chưa chỉnh sửa");
-        resetApiBtn.addActionListener(e -> restoreOriginalRequest());
+        resetApiBtn.addActionListener(Ui.safe(e -> restoreOriginalRequest()));
 
         JButton[] qaRef = new JButton[1];
         quickActionBtn = Ui.secondaryBtn("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
         quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Tắt chặn hoặc mở Luật chặn cho API này");
-        quickActionBtn.addActionListener(e -> {
+        quickActionBtn.addActionListener(Ui.safe(e -> {
             JPopupMenu m = new JPopupMenu();
             if (shownGroup != null) {
                 ActionMenus.populateApiActionItems(m, panel, engine, shownGroup,
@@ -182,12 +182,12 @@ final class TreeTab {
                 ActionMenus.populateToolbarDropdown(m, panel, engine, () -> shownGroup, ui::syncHeader);
             }
             m.show(qaRef[0], 0, qaRef[0].getHeight());
-        });
+        }));
         qaRef[0] = quickActionBtn;
 
         quickComposerBtn = Ui.secondaryBtn("Chi tiết (Composer)...", t -> Icons.edit(t.info.text(), 12));
         quickComposerBtn.setToolTipText("Mở trình sửa chi tiết (chọn nhiều Role, đổi Host/Port, So với Gốc, Lịch sử phiên)");
-        quickComposerBtn.addActionListener(e -> {
+        quickComposerBtn.addActionListener(Ui.safe(e -> {
             if (shownGroup != null) {
                 RequestComposerDialog.showFloating(panel, engine, shownGroup, shown, () -> {
                     ui.syncHeader();
@@ -196,7 +196,7 @@ final class TreeTab {
                     }
                 });
             }
-        });
+        }));
 
         JPanel apiQuickCard = new JPanel(new BorderLayout(6, 0)) {
             @Override
@@ -220,24 +220,24 @@ final class TreeTab {
         // ---- Card 2: Live HELD_PENDING inline quick-resolve bar (NO popup needed!)
         JButton heldForwardBtn = Ui.solidPrimary("Gửi Server", t -> Icons.send(t.accent.onSolid(), 12));
         heldForwardBtn.setToolTipText("Gửi lên Server (Forward) — đẩy ngay request này kèm mọi chỉnh sửa bên dưới lên Server thật");
-        heldForwardBtn.addActionListener(e -> resolveShownHeld(ResolutionKind.FORWARD));
+        heldForwardBtn.addActionListener(Ui.safe(e -> resolveShownHeld(ResolutionKind.FORWARD)));
 
         JButton heldSaveDraftBtn = Ui.tonalBtn("Lưu nháp",
                 t -> Icons.strategyShield(t.warning.text(), 12), t -> t.warning);
         heldSaveDraftBtn.setToolTipText("Lưu request vào Cây để xem/gửi sau, KHÔNG gửi lên Server ngay");
-        heldSaveDraftBtn.addActionListener(e -> resolveShownHeld(ResolutionKind.HOLD_AND_SPOOF));
+        heldSaveDraftBtn.addActionListener(Ui.safe(e -> resolveShownHeld(ResolutionKind.HOLD_AND_SPOOF)));
 
         JButton heldDropBtn = Ui.dangerBtn("Hủy (Drop)", t -> Icons.stop(t.danger.text(), 12));
         heldDropBtn.setToolTipText("Hủy bỏ request tại Proxy — không gửi lên Server và không lưu");
-        heldDropBtn.addActionListener(e -> resolveShownHeld(ResolutionKind.DROP));
+        heldDropBtn.addActionListener(Ui.safe(e -> resolveShownHeld(ResolutionKind.DROP)));
 
         JButton heldFmtBtn = Ui.secondaryBtn("JSON", null);
         heldFmtBtn.setToolTipText("Định dạng đẹp JSON Body và cập nhật Content-Length");
-        heldFmtBtn.addActionListener(e -> formatCurrentRequestJson());
+        heldFmtBtn.addActionListener(Ui.safe(e -> formatCurrentRequestJson()));
 
         JButton heldQueueBtn = Ui.secondaryBtn("Hàng chờ...", t -> Icons.strategyShield(t.muted, 12));
         heldQueueBtn.setToolTipText("Mở cửa sổ Hàng chờ Chặn Proxy chi tiết");
-        heldQueueBtn.addActionListener(e -> ProxyInterceptDialog.showFloating(ui));
+        heldQueueBtn.addActionListener(Ui.safe(e -> ProxyInterceptDialog.showFloating(ui)));
 
         JPanel heldQuickCard = new JPanel(new BorderLayout(8, 0)) {
             @Override
@@ -305,7 +305,7 @@ final class TreeTab {
         }
         placeholder.add(new JLabel("Cây Sub-folder đang mở ở cửa sổ riêng."));
         placeholder.add(Ui.secondaryBtn("Gắn lại vào tab", null));
-        ((JButton) placeholder.getComponent(1)).addActionListener(e -> closeWindow());
+        ((JButton) placeholder.getComponent(1)).addActionListener(Ui.safe(e -> closeWindow()));
         panel.add(content, BorderLayout.CENTER);
         syncHeaderBreadcrumb();
         syncQuickButtons();
@@ -559,6 +559,8 @@ final class TreeTab {
             String pretty = RequestComposerDialog.formatHttpWithPrettyJson(cur);
             req.show(shownGroup.service(), RequestComposerDialog.recalculateContentLength(
                     pretty.getBytes(StandardCharsets.ISO_8859_1)));
+        } else {
+            ui.flash("Chọn 1 API / Role (hoặc mục [CHỜ DUYỆT]) trong cây trước rồi bấm Format JSON.");
         }
     }
 
@@ -570,6 +572,8 @@ final class TreeTab {
             RoleResult r = shown != null ? shown : shownGroup.origResult();
             req.show(shownGroup.service(), engine.requestOf(shownGroup, r));
             ui.flash("Đã khôi phục Request gốc của " + Text.apiLabel(shownGroup.gid()) + ".");
+        } else {
+            ui.flash("Chọn 1 API / Role trong cây trước rồi bấm Khôi phục.");
         }
     }
 
@@ -835,7 +839,7 @@ final class TreeTab {
         panel.revalidate();
         panel.repaint();
         JCheckBox onTop = new JCheckBox("Luôn nằm trên các cửa sổ khác");
-        onTop.addActionListener(e -> window.setAlwaysOnTop(onTop.isSelected()));
+        onTop.addActionListener(Ui.safe(e -> window.setAlwaysOnTop(onTop.isSelected())));
         JPanel rootPanel = new JPanel(new BorderLayout());
         rootPanel.add(Ui.flow(FlowLayout.LEFT, onTop), BorderLayout.NORTH);
         rootPanel.add(content, BorderLayout.CENTER);

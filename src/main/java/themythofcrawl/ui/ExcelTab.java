@@ -88,7 +88,7 @@ final class ExcelTab {
         clear = Ui.button("Bỏ danh sách", t -> Icons.trash(t.danger.text()), this::clear);
         targetOnly.setOpaque(false);
         targetOnly.setToolTipText("Chỉ bắt các API có trong danh sách Excel đã nạp");
-        targetOnly.addActionListener(e -> setTargetOnly(targetOnly.isSelected()));
+        targetOnly.addActionListener(Ui.safe(e -> setTargetOnly(targetOnly.isSelected())));
 
         JPanel filterStrip = Ui.flow(FlowLayout.LEFT,
                 Ui.accent("Nạp Excel (.xlsx)...", t -> Icons.excel(t.accent.onSolid()), t -> t.accent, this::load));
@@ -305,7 +305,7 @@ final class ExcelTab {
             List<String> sheets = Xlsx.sheetNames(f.toPath());
             int index = 0;
             if (sheets.size() > 1) {
-                Object pick = JOptionPane.showInputDialog(ui.root(), "File có " + sheets.size()
+                Object pick = JOptionPane.showInputDialog(Ui.ownerWindow(ui.root()), "File có " + sheets.size()
                         + " sheet. Chọn sheet chứa danh sách API:", Text.EXT_NAME, JOptionPane.QUESTION_MESSAGE, null,
                         sheets.toArray(), sheets.get(0));
                 if (pick == null) {
@@ -320,7 +320,7 @@ final class ExcelTab {
             return;
         }
         if (t.size() == 0) {
-            JOptionPane.showMessageDialog(ui.root(), "Không tìm thấy dòng API nào. File cần có cột PATH (hoặc URL / Endpoint) "
+            JOptionPane.showMessageDialog(Ui.ownerWindow(ui.root()), "Không tìm thấy dòng API nào. File cần có cột PATH (hoặc URL / Endpoint) "
                     + "chứa đường dẫn bắt đầu bằng '/'.", Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -328,7 +328,7 @@ final class ExcelTab {
         long already = Reports.coverage(t, engine.groups()).values().stream().filter(l -> !l.isEmpty()).count();
         engine.log("Đã nạp " + t.size() + " API từ file Excel " + t.source() + " (sheet " + t.sheet() + "); khớp sẵn " + already
                 + " API đã bắt.", null);
-        boolean only = JOptionPane.showConfirmDialog(ui.root(), "Đã nạp " + t.size() + " API từ " + t.source() + ".\n" + already
+        boolean only = JOptionPane.showConfirmDialog(Ui.ownerWindow(ui.root()), "Đã nạp " + t.size() + " API từ " + t.source() + ".\n" + already
                 + " API trong danh sách đã được bắt từ trước.\n\nBật chế độ 'Chỉ bắt API có trong danh sách'?\n"
                 + "(Không: vẫn bắt mọi API, danh sách chỉ để theo dõi độ phủ)", Text.EXT_NAME, JOptionPane.YES_NO_OPTION)
                 == JOptionPane.YES_OPTION;

@@ -22,6 +22,9 @@ Bấm nút **Chặn: ...** trên thanh trên cùng (hoặc menu *Bảo vệ dữ
 - **Sơ đồ luồng** Trình duyệt → Burp + JCrawl → Server vẽ lại ngay khi bạn đổi lựa chọn; câu tóm tắt cho biết chính xác cái gì bị chặn, cái gì đi thẳng.
 - **Thử với 1 request**: nhập method + URL → biết ngay request đó sẽ bị xử lý ra sao (không gửi gì).
 - Công tắc trên thanh trên cùng: BẬT = dùng thiết lập đã lưu · TẮT = tắt mọi chặn, request đi thẳng.
+- **Nút bấm luôn có phản hồi**: bấm nút cần chọn dòng trước (Lên / Xuống / Xóa / Bật-Tắt / Format JSON / Gửi / Repeater…) khi chưa chọn
+  sẽ hiện nhắc "Chọn … trước"; nếu thao tác gặp lỗi, lỗi hiện ngay cạnh nút và ghi vào tab Cài đặt → Log (trước đây lỗi bị nuốt, trông như
+  "bấm không ra gì"); mọi dialog luôn mở trên cửa sổ Burp đang dùng, không bị khuất phía sau.
 - Dialog **Bảo vệ dữ liệu**: câu 1 trỏ về Cổng chặn; câu 2 (gửi lại khi ID đã bị xóa) có thẻ **Đầu vào → Đầu ra** cho từng cách
   (Tự động / Gửi nguyên bản / Thay ID còn sống / Tạo bản ghi mới rồi gửi / Dùng lại kết quả 200 cũ).
 

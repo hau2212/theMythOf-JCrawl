@@ -94,7 +94,8 @@ jobs:
           2. **Sơ đồ luồng** Trình duyệt -> Burp + JCrawl -> Server vẽ đúng điều sẽ xảy ra, câu tóm tắt tiếng Việt, ô **Thử với 1 request** (không gửi gì).
           3. Thanh trên cùng hiện đúng trạng thái: \`Chặn: TẮT\` / \`Chặn: Hỏi trước\` / \`Chặn: 200 giả\` / \`Chặn: N chờ duyệt\`.
           4. **Bảo vệ dữ liệu**: câu 1 trỏ về Cổng chặn; câu 2 có thẻ **Đầu vào -> Đầu ra** cho từng cách gửi lại khi ID đã bị xóa.
-          5. Kế thừa toàn bộ V_7.0_beta: tab Cây thẳng hàng, bảng API kiểu Burp History, Ma trận Role / NGHI BAC, Đẩy sang Logger++ / HAR, nhóm qua thư mục chung & Excel nhóm.
+          5. **Nút bấm luôn có phản hồi**: thiếu lựa chọn thì nhắc "Chọn … trước"; lỗi khi bấm hiện cạnh nút + ghi Log (không còn bị nuốt); dialog luôn mở trên cửa sổ Burp đang dùng.
+          6. Kế thừa toàn bộ V_7.0_beta: tab Cây thẳng hàng, bảng API kiểu Burp History, Ma trận Role / NGHI BAC, Đẩy sang Logger++ / HAR, nhóm qua thư mục chung & Excel nhóm.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

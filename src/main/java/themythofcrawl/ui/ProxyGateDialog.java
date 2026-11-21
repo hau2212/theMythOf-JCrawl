@@ -47,7 +47,7 @@ final class ProxyGateDialog {
 
     static void show(MainPanel ui) {
         Window owner = SwingUtilities.getWindowAncestor(ui.root());
-        JDialog dlg = new JDialog(owner, "Cổng chặn Proxy", java.awt.Dialog.ModalityType.MODELESS);
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Cổng chặn Proxy", java.awt.Dialog.ModalityType.MODELESS);
         Gate gate = new Gate(ui.engine, ui.api != null ? ui.api.currentGroup() : null, () -> {
             ui.syncHeader();
             ui.tick(true);
@@ -106,7 +106,7 @@ final class ProxyGateDialog {
                 JRadioButton rb = new JRadioButton(s.label);
                 sg.add(rb);
                 scopeButtons.put(s, rb);
-                rb.addActionListener(e -> changed());
+                rb.addActionListener(Ui.safe(e -> changed()));
             }
             Set<String> hosts = new TreeSet<>();
             for (ApiGroup g : engine.groups()) {
@@ -129,8 +129,8 @@ final class ProxyGateDialog {
             scope.add(Ui.flow(FlowLayout.LEFT, scopeButtons.get(ProxyGate.Scope.HOST_PATH), Ui.muted("path:"), pathField,
                     Ui.muted("(host ở dòng trên · * = bất kỳ)")));
             scope.add(Ui.flow(FlowLayout.LEFT, scopeButtons.get(ProxyGate.Scope.BRANCH), branchBox));
-            hostBox.addActionListener(e -> changed());
-            branchBox.addActionListener(e -> changed());
+            hostBox.addActionListener(Ui.safe(e -> changed()));
+            branchBox.addActionListener(Ui.safe(e -> changed()));
             pathField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
                 @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { changed(); }
                 @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { changed(); }
@@ -143,7 +143,7 @@ final class ProxyGateDialog {
             for (String m : List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")) {
                 JCheckBox cb = new JCheckBox(m);
                 methodBoxes.put(m, cb);
-                cb.addActionListener(e -> changed());
+                cb.addActionListener(Ui.safe(e -> changed()));
                 methods.add(cb);
             }
             methods.add(Ui.secondaryBtn("Chỉ request thay đổi dữ liệu", null, () -> setMethods(Set.of("POST", "PUT", "PATCH", "DELETE"))));
@@ -161,7 +161,7 @@ final class ProxyGateDialog {
                 rb.setFont(th.boldFont);
                 eg.add(rb);
                 effectButtons.put(ef, rb);
-                rb.addActionListener(e -> changed());
+                rb.addActionListener(Ui.safe(e -> changed()));
                 JPanel card = new JPanel(new BorderLayout(0, 0));
                 card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(th.border),
                         BorderFactory.createEmptyBorder(4, 6, 4, 6)));
@@ -191,7 +191,7 @@ final class ProxyGateDialog {
                         load();
                         notifyChanged();
                     }));
-            apply.addActionListener(e -> applyNow());
+            apply.addActionListener(Ui.safe(e -> applyNow()));
             add(Ui.flow(FlowLayout.LEFT, apply, dirty, problem));
             add(Ui.flow(FlowLayout.LEFT, offAll, queue, more));
 

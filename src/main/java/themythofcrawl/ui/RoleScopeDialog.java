@@ -74,7 +74,7 @@ final class RoleScopeDialog {
         this.groups = new ArrayList<>(engine.groups());
         groups.sort(Comparator.comparingInt(ApiGroup::gid));
         java.awt.Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        dialog = new JDialog(owner, "Bật / Tắt Role theo phạm vi", JDialog.ModalityType.APPLICATION_MODAL);
+        dialog = new JDialog(Ui.ownerWindow(owner), "Bật / Tắt Role theo phạm vi", JDialog.ModalityType.APPLICATION_MODAL);
         dialog.setLayout(new BorderLayout(6, 6));
         ok = Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> {
             result = choice();
@@ -95,8 +95,8 @@ final class RoleScopeDialog {
         g1.add(off);
         g1.add(on);
         (enable ? on : off).setSelected(true);
-        on.addActionListener(e -> update());
-        off.addActionListener(e -> update());
+        on.addActionListener(Ui.safe(e -> update()));
+        off.addActionListener(Ui.safe(e -> update()));
         JPanel acts = Ui.flow(FlowLayout.LEFT, new JLabel("Thao tác:"), off, on);
         acts.setAlignmentX(0f);
         controls.add(acts);
@@ -105,7 +105,7 @@ final class RoleScopeDialog {
         for (int i = 0; i < 3; i++) {
             scopes[i] = new JRadioButton(SCOPE_LABELS[i], RoleScopes.Scope.values()[i] == (scope == null ? RoleScopes.Scope.GLOBAL : scope));
             g2.add(scopes[i]);
-            scopes[i].addActionListener(e -> onScope());
+            scopes[i].addActionListener(Ui.safe(e -> onScope()));
             sc.add(scopes[i]);
         }
         sc.setAlignmentX(0f);
@@ -154,7 +154,7 @@ final class RoleScopeDialog {
 
         JPanel bottom = new JPanel(new BorderLayout(4, 4));
         bottom.setBorder(BorderFactory.createEmptyBorder(4, 12, 10, 12));
-        existing.addActionListener(e -> update());
+        existing.addActionListener(Ui.safe(e -> update()));
         bottom.add(existing, BorderLayout.NORTH);
         summary.setFont(summary.getFont().deriveFont(Font.BOLD));
         bottom.add(summary, BorderLayout.CENTER);

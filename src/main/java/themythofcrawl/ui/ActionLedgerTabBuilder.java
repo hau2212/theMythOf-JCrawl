@@ -264,7 +264,7 @@ final class ActionLedgerTabBuilder {
         JCheckBox subBranchChk = new JCheckBox("Gồm nhánh con", true);
         subBranchChk.setOpaque(false);
 
-        branchPicker.addActionListener(e -> {
+        branchPicker.addActionListener(Ui.safe(e -> {
             if (branchPicker.getSelectedIndex() <= 0) return;
             String picked = String.valueOf(branchPicker.getSelectedItem());
             String cur = branchesField.getText().trim();
@@ -274,7 +274,7 @@ final class ActionLedgerTabBuilder {
                 branchesField.setText(cur + "; " + picked);
             }
             branchPicker.setSelectedIndex(0);
-        });
+        }));
 
         JComboBox<PathMatchType> pathTypeCombo = new JComboBox<>(PathMatchType.values());
         pathTypeCombo.setRenderer((list, val, idx, sel, foc) -> {
@@ -286,11 +286,11 @@ final class ActionLedgerTabBuilder {
         pathField.putClientProperty("JTextField.placeholderText", "VD: /api/v1/orders/{id}");
         JButton insertIdBtn = Ui.secondaryBtn("+ {id}", null);
         insertIdBtn.setToolTipText("Chèn placeholder {id} vào mẫu đường dẫn");
-        insertIdBtn.addActionListener(e -> {
+        insertIdBtn.addActionListener(Ui.safe(e -> {
             String t = pathField.getText();
             pathField.setText(t.endsWith("/") ? t + "{id}" : t + "/{id}");
             pathTypeCombo.setSelectedItem(PathMatchType.TEMPLATE);
-        });
+        }));
         JTextField hostField = new JTextField(12);
         hostField.putClientProperty("JTextField.placeholderText", "Mọi Host");
         hostField.setToolTipText("Để trống = mọi Host (hỗ trợ wildcard *)");
@@ -387,8 +387,8 @@ final class ActionLedgerTabBuilder {
             grid.repaint();
             formCard.revalidate();
         };
-        scopeCombo.addActionListener(e -> syncProgressiveFields.run());
-        stageCombo.addActionListener(e -> syncProgressiveFields.run());
+        scopeCombo.addActionListener(Ui.safe(e -> syncProgressiveFields.run()));
+        stageCombo.addActionListener(Ui.safe(e -> syncProgressiveFields.run()));
 
         // ---- Unmistakable Save / Update Footer + Green Feedback Label
         JLabel saveFeedbackLbl = new JLabel(" ");
@@ -458,17 +458,17 @@ final class ActionLedgerTabBuilder {
             explainerPanel.add(explainerBtns, BorderLayout.EAST);
             root.add(explainerPanel, BorderLayout.SOUTH);
 
-            releaseApiBtn.addActionListener(e -> {
+            releaseApiBtn.addActionListener(Ui.safe(e -> {
                 engine.releaseApiToNone(focusGroup, false);
                 if (refreshBanner != null) refreshBanner.run();
                 if (onAfterAction != null) onAfterAction.run();
-            });
-            allowApiBtn.addActionListener(e -> {
+            }));
+            allowApiBtn.addActionListener(Ui.safe(e -> {
                 engine.releaseApiToNone(focusGroup, true);
                 if (refreshBanner != null) refreshBanner.run();
                 if (onAfterAction != null) onAfterAction.run();
-            });
-            composerBtn.addActionListener(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null));
+            }));
+            composerBtn.addActionListener(Ui.safe(e -> RequestComposerDialog.open(dialogParent, engine, focusGroup, null, null)));
         }
 
         // ---- Refresh Logic
@@ -544,8 +544,8 @@ final class ActionLedgerTabBuilder {
         };
 
         // Wire filters
-        scopeFilterCombo.addActionListener(e -> refreshAll.run());
-        stateFilterCombo.addActionListener(e -> refreshAll.run());
+        scopeFilterCombo.addActionListener(Ui.safe(e -> refreshAll.run()));
+        stateFilterCombo.addActionListener(Ui.safe(e -> refreshAll.run()));
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { refreshAll.run(); }
             @Override public void removeUpdate(DocumentEvent e) { refreshAll.run(); }
@@ -657,8 +657,8 @@ final class ActionLedgerTabBuilder {
             if (onAfterAction != null) onAfterAction.run();
         };
 
-        createBtn.addActionListener(e -> doCreate.run());
-        updateBtn.addActionListener(e -> doUpdate.run());
+        createBtn.addActionListener(Ui.safe(e -> doCreate.run()));
+        updateBtn.addActionListener(Ui.safe(e -> doUpdate.run()));
 
         // Ctrl+S shortcut on formCard saves immediately
         formCard.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
@@ -674,7 +674,7 @@ final class ActionLedgerTabBuilder {
             }
         });
 
-        clearFormBtn.addActionListener(e -> {
+        clearFormBtn.addActionListener(Ui.safe(e -> {
             editingPolicyId[0] = null;
             ledgerTable.clearSelection();
             updateBtn.setVisible(false);
@@ -694,7 +694,7 @@ final class ActionLedgerTabBuilder {
             hostField.setText("");
             methodBar.setSelectedMethods(ActionEngine.ACTION_METHODS);
             syncProgressiveFields.run();
-        });
+        }));
 
         // Bulk & Table button actions
         java.util.function.Supplier<List<String>> selectedIds = () -> {
@@ -707,9 +707,12 @@ final class ActionLedgerTabBuilder {
             return ids;
         };
 
-        toggleSelBtn.addActionListener(e -> {
+        toggleSelBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.isEmpty()) return;
+            if (ids.isEmpty()) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn ít nhất 1 luật trong bảng trước");
+                return;
+            }
             boolean anyDisabled = false;
             for (String id : ids) {
                 ActionPolicy p = ledger.findById(id);
@@ -722,53 +725,71 @@ final class ActionLedgerTabBuilder {
             engine.saveActionPolicies();
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        }));
 
-        dupBtn.addActionListener(e -> {
+        dupBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.isEmpty()) return;
+            if (ids.isEmpty()) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn ít nhất 1 luật trong bảng trước");
+                return;
+            }
             for (String id : ids) {
                 ledger.duplicate(id);
             }
             engine.saveActionPolicies();
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        }));
 
-        upBtn.addActionListener(e -> {
+        upBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.size() == 1 && ledger.movePriority(ids.get(0), -1)) {
+            if (ids.size() != 1) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn đúng 1 luật trong bảng để di chuyển");
+                return;
+            }
+            if (ledger.movePriority(ids.get(0), -1)) {
                 engine.saveActionPolicies();
                 refreshAll.run();
             }
-        });
+        }));
 
-        downBtn.addActionListener(e -> {
+        downBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.size() == 1 && ledger.movePriority(ids.get(0), 1)) {
+            if (ids.size() != 1) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn đúng 1 luật trong bảng để di chuyển");
+                return;
+            }
+            if (ledger.movePriority(ids.get(0), 1)) {
                 engine.saveActionPolicies();
                 refreshAll.run();
             }
-        });
+        }));
 
-        topBtn.addActionListener(e -> {
+        topBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.size() == 1 && ledger.moveToTop(ids.get(0))) {
+            if (ids.size() != 1) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn đúng 1 luật trong bảng để di chuyển");
+                return;
+            }
+            if (ledger.moveToTop(ids.get(0))) {
                 engine.saveActionPolicies();
                 refreshAll.run();
             }
-        });
+        }));
 
-        deleteBtn.addActionListener(e -> {
+        deleteBtn.addActionListener(Ui.safe(e -> {
             List<String> ids = selectedIds.get();
-            if (ids.isEmpty()) return;
+            if (ids.isEmpty()) {
+                Ui.hint((java.awt.Component) e.getSource(), "Chọn ít nhất 1 luật trong bảng trước");
+                return;
+            }
             ledger.bulkDelete(ids, "Xóa từ Sổ cái");
             engine.saveActionPolicies();
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
-        });
+        }));
 
-        presetBtn.addActionListener(e -> {
+        presetBtn.addActionListener(Ui.safe(e -> {
             JPopupMenu pm = new JPopupMenu();
             for (Preset pr : Preset.values()) {
                 pm.add(Ui.item(pr.label, null, () -> {
@@ -781,15 +802,15 @@ final class ActionLedgerTabBuilder {
                 }));
             }
             pm.show(presetBtn, 0, presetBtn.getHeight());
-        });
+        }));
 
-        importBtn.addActionListener(e -> {
+        importBtn.addActionListener(Ui.safe(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setFileFilter(new FileNameExtensionFilter("JSON Policy (*.json)", "json"));
             if (fc.showOpenDialog(dialogParent) == JFileChooser.APPROVE_OPTION) {
                 try {
                     String json = Files.readString(fc.getSelectedFile().toPath(), StandardCharsets.UTF_8);
-                    int choice = JOptionPane.showOptionDialog(dialogParent,
+                    int choice = JOptionPane.showOptionDialog(Ui.ownerWindow(dialogParent),
                             "Chọn cách nhập bộ Chính sách Action từ file JSON:",
                             "Import JSON Chính sách",
                             JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
@@ -800,15 +821,15 @@ final class ActionLedgerTabBuilder {
                         engine.saveActionPolicies();
                         refreshAll.run();
                         if (onAfterAction != null) onAfterAction.run();
-                        JOptionPane.showMessageDialog(dialogParent, "Đã nhập " + n + " chính sách thành công.");
+                        JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Đã nhập " + n + " chính sách thành công.");
                     }
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dialogParent, "Lỗi đọc file JSON: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Lỗi đọc file JSON: " + ex.getMessage());
                 }
             }
-        });
+        }));
 
-        exportBtn.addActionListener(e -> {
+        exportBtn.addActionListener(Ui.safe(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setSelectedFile(new File("jcrawl_action_policies.json"));
             fc.setFileFilter(new FileNameExtensionFilter("JSON Policy (*.json)", "json"));
@@ -817,22 +838,22 @@ final class ActionLedgerTabBuilder {
                     List<String> ids = selectedIds.get();
                     String json = ledger.exportJson(ids.isEmpty() ? null : ids);
                     Files.writeString(fc.getSelectedFile().toPath(), json, StandardCharsets.UTF_8);
-                    JOptionPane.showMessageDialog(dialogParent,
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent),
                             "Đã xuất " + (ids.isEmpty() ? ledger.size() : ids.size()) + " chính sách ra file JSON.");
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dialogParent, "Lỗi ghi file JSON: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(dialogParent), "Lỗi ghi file JSON: " + ex.getMessage());
                 }
             }
-        });
+        }));
 
-        clearHitsBtn.addActionListener(e -> {
+        clearHitsBtn.addActionListener(Ui.safe(e -> {
             ledger.resetAllHitCounts();
             engine.saveActionPolicies();
             refreshAll.run();
-        });
+        }));
 
-        resetAllBtn.addActionListener(e -> {
-            int ok = JOptionPane.showConfirmDialog(dialogParent,
+        resetAllBtn.addActionListener(Ui.safe(e -> {
+            int ok = JOptionPane.showConfirmDialog(Ui.ownerWindow(dialogParent),
                     "Nhả toàn bộ cấu hình Action về Nguyên bản (NONE)?\n"
                             + "Mọi chính sách hiện có sẽ được chuyển an toàn vào Thùng rác Hoàn tác để khôi phục khi cần.",
                     "Xác nhận Nhả toàn bộ (Reset All)", JOptionPane.YES_NO_OPTION);
@@ -841,9 +862,9 @@ final class ActionLedgerTabBuilder {
                 refreshAll.run();
                 if (onAfterAction != null) onAfterAction.run();
             }
-        });
+        }));
 
-        trashBtn.addActionListener(e -> showTrashDialog(dialogParent, engine, refreshAll, onAfterAction));
+        trashBtn.addActionListener(Ui.safe(e -> showTrashDialog(dialogParent, engine, refreshAll, onAfterAction)));
 
         // Live sync when ledger changes from other tabs (e.g. Gate Auditor, Guide Playbooks, or Quick Strategy)
         ledger.addListener(() -> SwingUtilities.invokeLater(refreshAll));
@@ -855,10 +876,10 @@ final class ActionLedgerTabBuilder {
         ActionPolicyLedger ledger = engine.actionPolicyLedger();
         List<DeletedEntry> items = ledger.trash();
         if (items.isEmpty()) {
-            JOptionPane.showMessageDialog(parent, "Thùng rác Hoàn tác đang trống.");
+            JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Thùng rác Hoàn tác đang trống.");
             return;
         }
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(parent),
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(parent)),
                 "Thùng rác Hoàn tác Chính sách (" + items.size() + " mục)", JDialog.ModalityType.APPLICATION_MODAL);
         Theme th = Theme.current();
         JPanel p = new JPanel(new BorderLayout(8, 8));
@@ -892,7 +913,7 @@ final class ActionLedgerTabBuilder {
         JButton restoreAllBtn = Ui.secondaryBtn("Khôi phục tất cả", null);
         JButton closeBtn = Ui.secondaryBtn("Đóng", null);
 
-        restoreBtn.addActionListener(e -> {
+        restoreBtn.addActionListener(Ui.safe(e -> {
             int row = tbl.getSelectedRow();
             if (row >= 0 && row < items.size()) {
                 ledger.restoreFromTrash(items.get(row).policy().id());
@@ -901,8 +922,8 @@ final class ActionLedgerTabBuilder {
                 if (onAfterAction != null) onAfterAction.run();
                 dlg.dispose();
             }
-        });
-        restoreAllBtn.addActionListener(e -> {
+        }));
+        restoreAllBtn.addActionListener(Ui.safe(e -> {
             for (DeletedEntry d : items) {
                 ledger.restoreFromTrash(d.policy().id());
             }
@@ -910,8 +931,8 @@ final class ActionLedgerTabBuilder {
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
             dlg.dispose();
-        });
-        closeBtn.addActionListener(e -> dlg.dispose());
+        }));
+        closeBtn.addActionListener(Ui.safe(e -> dlg.dispose()));
 
         foot.add(restoreAllBtn);
         foot.add(restoreBtn);

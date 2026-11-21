@@ -50,7 +50,7 @@ final class NodeTypeManagerDialog {
 
     static boolean show(Component parent, Engine engine) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(owner, "Quản lý Loại Node & Biểu tượng (Icon Pack v2.1)", JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Quản lý Loại Node & Biểu tượng (Icon Pack v2.1)", JDialog.ModalityType.APPLICATION_MODAL);
         final boolean[] modified = {false};
 
         DefaultListModel<NodeType> model = new DefaultListModel<>();
@@ -205,11 +205,11 @@ final class NodeTypeManagerDialog {
                 return;
             }
             if (NodeTypeCatalog.DEFAULT_ID.equals(nt.id())) {
-                JOptionPane.showMessageDialog(d, "Không thể xóa loại mặc định 'folder'.",
+                JOptionPane.showMessageDialog(Ui.ownerWindow(d), "Không thể xóa loại mặc định 'folder'.",
                         Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            if (JOptionPane.showConfirmDialog(d, "Xóa loại node '" + nt.label() + "' (" + nt.id() + ")?",
+            if (JOptionPane.showConfirmDialog(Ui.ownerWindow(d), "Xóa loại node '" + nt.label() + "' (" + nt.id() + ")?",
                     Text.EXT_NAME, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                 if (engine.nodeTypes().remove(nt.id())) {
                     engine.saveNodeTypes();
@@ -227,9 +227,9 @@ final class NodeTypeManagerDialog {
             if (fc.showSaveDialog(d) == JFileChooser.APPROVE_OPTION && fc.getSelectedFile() != null) {
                 try {
                     Files.writeString(fc.getSelectedFile().toPath(), engine.nodeTypes().toJson(), StandardCharsets.UTF_8);
-                    JOptionPane.showMessageDialog(d, "Đã xuất bộ Loại Node & Icon thành công.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(d), "Đã xuất bộ Loại Node & Icon thành công.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(d, "Không xuất được file: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(d), "Không xuất được file: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -245,15 +245,15 @@ final class NodeTypeManagerDialog {
                     Icons.clearCache();
                     modified[0] = true;
                     reloadList.run();
-                    JOptionPane.showMessageDialog(d, "Đã nhập bộ Loại Node & Icon thành công.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(d), "Đã nhập bộ Loại Node & Icon thành công.", Text.EXT_NAME, JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(d, "File JSON không hợp lệ: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(Ui.ownerWindow(d), "File JSON không hợp lệ: " + ex.getMessage(), Text.EXT_NAME, JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
 
         JButton resetBtn = Ui.button("Mặc định", Icons::refresh, () -> {
-            if (JOptionPane.showConfirmDialog(d, "Khôi phục toàn bộ 7 loại node mặc định (xóa loại tùy chỉnh)?",
+            if (JOptionPane.showConfirmDialog(Ui.ownerWindow(d), "Khôi phục toàn bộ 7 loại node mặc định (xóa loại tùy chỉnh)?",
                     Text.EXT_NAME, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                 engine.nodeTypes().resetDefaults();
                 engine.saveNodeTypes();
@@ -306,7 +306,7 @@ final class NodeTypeManagerDialog {
             String rawId = idField.getText().trim();
             String rawLbl = labelField.getText().trim();
             if (rawId.isEmpty() || rawLbl.isEmpty()) {
-                JOptionPane.showMessageDialog(d, "Nhập đủ Mã (ID) và Tên hiển thị.", Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(Ui.ownerWindow(d), "Nhập đủ Mã (ID) và Tên hiển thị.", Text.EXT_NAME, JOptionPane.WARNING_MESSAGE);
                 return;
             }
             NodeType saved = buildDraft.get();

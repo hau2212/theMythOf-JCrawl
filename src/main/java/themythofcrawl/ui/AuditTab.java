@@ -225,13 +225,17 @@ final class AuditTab {
         cardDelete = Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete"));
         JButton cardLineage = Ui.button("Bản Gốc & Trùng...", Icons::lineageGraph, () -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
-            if (!gs.isEmpty()) {
+            if (gs.isEmpty()) {
+                Ui.hint(decideTable, "Chọn 1 dòng trong bảng Cần xử lý trước");
+            } else {
                 LineageDialog.show(ui, gs.get(0));
             }
         });
         JButton cardTagRefresh = Ui.button("Nhãn Tự tải lại", Icons::refresh, () -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
-            if (!gs.isEmpty()) {
+            if (gs.isEmpty()) {
+                Ui.hint(decideTable, "Chọn ít nhất 1 dòng trong bảng Cần xử lý trước");
+            } else {
                 engine.setApiTag(gs, themythofcrawl.model.ApiTagCatalog.TAG_REFRESH, true);
                 ui.flash("Đã gắn nhãn Tự tải lại cho " + gs.size() + " API");
                 stale = true;
@@ -368,7 +372,7 @@ final class AuditTab {
     private JPanel placesPanel() {
         placeFilter.setToolTipText("Lọc theo method, path, vị trí...");
         onText(placeFilter, this::reload);
-        placeView.addActionListener(e -> reload());
+        placeView.addActionListener(Ui.safe(e -> reload()));
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ, Lineage & Tag REFRESH", () -> {
             PlacementBook.Record r = selectedPlace();
@@ -424,7 +428,9 @@ final class AuditTab {
                 Ui.button("Sửa chỗ...", Icons::edit, () -> editPlace(selectedPlace())),
                 Ui.button("Lineage...", Icons::lineageGraph, () -> {
                     PlacementBook.Record r = selectedPlace();
-                    if (r != null) {
+                    if (r == null) {
+                        Ui.hint(placeTable, "Chọn 1 dòng trong bảng Giữ chỗ trước");
+                    } else {
                         LineageDialog.showByKey(ui, r.key, null);
                     }
                 }),
@@ -473,6 +479,7 @@ final class AuditTab {
     /** 'Sửa vị trí giữ chỗ' (also from the ghost rows of the trees). */
     void editPlace(PlacementBook.Record rec) {
         if (rec == null) {
+            Ui.hint(placeTable, "Chọn 1 dòng trong bảng Giữ chỗ trước");
             return;
         }
         String p = PathPicker.pick(ui.root(), "Vị trí giữ chỗ cho " + rec.method + " " + rec.path, engine.knownPaths(),
@@ -487,7 +494,7 @@ final class AuditTab {
 
     private void addPlace() {
         List<ApiGroup> all = engine.groups();
-        Object raw = javax.swing.JOptionPane.showInputDialog(ui.root(),
+        Object raw = javax.swing.JOptionPane.showInputDialog(Ui.ownerWindow(ui.root()),
                 "Endpoint cần giữ chỗ, dạng 'METHOD host /path'\nVD: POST api.example.com /contact/send",
                 "GET " + (all.isEmpty() ? "host" : all.get(0).host()) + " /");
         if (raw == null) {
@@ -556,7 +563,7 @@ final class AuditTab {
 
     // ================================================================== API trùng & ẩn
     private JPanel dupsPanel() {
-        dupView.addActionListener(e -> reload());
+        dupView.addActionListener(Ui.safe(e -> reload()));
         Ui.onDoubleClick(dupTable, () -> {
             List<ApiGroup> gs = selected(dupTable, dupModel);
             if (!gs.isEmpty()) {
@@ -647,6 +654,7 @@ final class AuditTab {
     private void dupAction(String action) {
         List<ApiGroup> gs = selected(dupTable, dupModel);
         if (gs.isEmpty()) {
+            Ui.hint(dupTable, "Chọn ít nhất 1 dòng trong bảng API trùng & ẩn trước");
             return;
         }
         switch (action) {
@@ -688,10 +696,10 @@ final class AuditTab {
         onText(logFilter, this::reload);
         logScope.setToolTipText("Đang xem nhật ký của 1 endpoint - bấm để xem tất cả");
         logScope.setHorizontalTextPosition(SwingConstants.LEADING);
-        logScope.addActionListener(e -> {
+        logScope.addActionListener(Ui.safe(e -> {
             logKey = null;
             reload();
-        });
+        }));
         Ui.onDoubleClick(logTable, this::revertLog);
         Ui.onPopup(logTable, e -> {
             List<PlacementBook.Event> evs = selected(logTable, logModel);
@@ -740,6 +748,7 @@ final class AuditTab {
     private void revertLog() {
         int v = logTable.getSelectedRow();
         if (v < 0) {
+            Ui.hint(logTable, "Chọn 1 dòng nhật ký cần hoàn tác trước");
             return;
         }
         PlacementBook.Event ev = logModel.payload(logTable.convertRowIndexToModel(v));

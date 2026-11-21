@@ -251,11 +251,11 @@ final class RolesTab {
                 return this;
             }
         });
-        tierBox.addActionListener(e -> {
+        tierBox.addActionListener(Ui.safe(e -> {
             if (editing >= 0) {
                 markDirty();
             }
-        });
+        }));
 
         enabledToggle.setOn(true, false);
         enabledToggle.setToolTipText("Bật hoặc tắt Role này khi chạy kiểm thử phân quyền");
@@ -365,7 +365,7 @@ final class RolesTab {
         jwtToggleBtn.setMargin(new java.awt.Insets(0, 0, 0, 0));
         jwtToggleBtn.setPreferredSize(new Dimension(20, 20));
         jwtToggleBtn.setToolTipText("Mở rộng / Thu gọn bảng giải mã JWT");
-        jwtToggleBtn.addActionListener(e -> setJwtExpanded(!jwtExpanded));
+        jwtToggleBtn.addActionListener(Ui.safe(e -> setJwtExpanded(!jwtExpanded)));
 
         JPanel jwtHeader = new JPanel(new BorderLayout(Theme.SPACE_2, 0)) {
             @Override
@@ -853,7 +853,7 @@ final class RolesTab {
             t.setRowSelectionInterval(0, 0);
         }
 
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(panel), "Trích xuất Token / Cookie từ API đã bắt",
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "Trích xuất Token / Cookie từ API đã bắt",
                 JDialog.ModalityType.APPLICATION_MODAL);
         JPanel body = new JPanel(new BorderLayout(6, 6));
         body.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -1062,11 +1062,11 @@ final class RolesTab {
         });
 
         JLabel statusLbl = Ui.muted("Chọn API GET mẫu (VD: /profile, /me) và bấm 'Chạy Ping' để kiểm tra toàn bộ " + enabledRoles.size() + " Role đang bật.");
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(panel), "Ping / Kiểm tra Session của các Role",
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "Ping / Kiểm tra Session của các Role",
                 JDialog.ModalityType.APPLICATION_MODAL);
         JButton runBtn = Ui.accent("Chạy Ping (" + enabledRoles.size() + " Role)",
                 t -> Icons.bolt(t.accent.onSolid()), t -> t.accent, null);
-        runBtn.addActionListener(e -> {
+        runBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sample = (ApiGroup) apiPicker.getSelectedItem();
             if (sample == null) {
                 return;
@@ -1096,7 +1096,7 @@ final class RolesTab {
                     }
                 }));
             }
-        });
+        }));
 
         JPanel top = new JPanel(new BorderLayout(6, 4));
         top.add(Ui.bold("API mẫu để Ping:"), BorderLayout.WEST);
@@ -1180,8 +1180,8 @@ final class RolesTab {
             }
             tm.fireTableDataChanged();
         };
-        pickA.addActionListener(e -> rebuildDiff.run());
-        pickB.addActionListener(e -> rebuildDiff.run());
+        pickA.addActionListener(Ui.safe(e -> rebuildDiff.run()));
+        pickB.addActionListener(Ui.safe(e -> rebuildDiff.run()));
         rebuildDiff.run();
 
         ThemedTable diffTable = new ThemedTable(tm);
@@ -1206,7 +1206,7 @@ final class RolesTab {
             }
         });
 
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(panel), "So sánh 2 Role (Diff Rules)",
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "So sánh 2 Role (Diff Rules)",
                 JDialog.ModalityType.APPLICATION_MODAL);
         JPanel pickBar = new JPanel(new GridLayout(1, 2, 8, 0));
         JPanel pA = new JPanel(new BorderLayout(4, 0));
@@ -1346,7 +1346,7 @@ final class RolesTab {
         try {
             List<Role> list = Roles.fromJson(Files.readString(fc.getSelectedFile().toPath(), StandardCharsets.UTF_8));
             Object[] opts = {"Thay toàn bộ", "Thêm vào cuối", "Hủy"};
-            int c = JOptionPane.showOptionDialog(panel, "Nạp " + list.size() + " role:", "Import", JOptionPane.DEFAULT_OPTION,
+            int c = JOptionPane.showOptionDialog(Ui.ownerWindow(panel), "Nạp " + list.size() + " role:", "Import", JOptionPane.DEFAULT_OPTION,
                     JOptionPane.QUESTION_MESSAGE, null, opts, opts[0]);
             if (c == 0) {
                 engine.roles().setAll(list);
@@ -1392,7 +1392,7 @@ final class RolesTab {
         p.add(f, BorderLayout.NORTH);
         p.add(new JLabel("JWT / Token value (hoặc [REMOVE]):"), BorderLayout.CENTER);
         p.add(new JScrollPane(token), BorderLayout.SOUTH);
-        if (JOptionPane.showConfirmDialog(panel, p, "Set JWT / Bearer", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
+        if (JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), p, "Set JWT / Bearer", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
             return;
         }
         String t = token.getText().replace("\r", "").replace("\n", "").trim();
@@ -1417,7 +1417,7 @@ final class RolesTab {
         p.add(k);
         p.add(new JLabel("Cookie Value:"));
         p.add(v);
-        if (JOptionPane.showConfirmDialog(panel, p, "Set Cookie / Session Key", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
+        if (JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), p, "Set Cookie / Session Key", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
             HeaderRule r = HeaderRule.of(k.getText(), v.getText(), "COOKIE_SET");
             if (r != null) {
                 rules.add(r);
@@ -1431,7 +1431,7 @@ final class RolesTab {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.add(new JLabel(q), BorderLayout.NORTH);
         p.add(new JScrollPane(area), BorderLayout.CENTER);
-        if (JOptionPane.showConfirmDialog(panel, p, cookies ? "Paste Cookies" : "Paste Headers", JOptionPane.OK_CANCEL_OPTION)
+        if (JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), p, cookies ? "Paste Cookies" : "Paste Headers", JOptionPane.OK_CANCEL_OPTION)
                 == JOptionPane.OK_OPTION) {
             for (HeaderRule r : cookies ? Roles.parseBulkCookies(area.getText()) : Roles.parseBulkHeaders(area.getText())) {
                 rules.add(r);
@@ -1441,6 +1441,10 @@ final class RolesTab {
 
     private void moveRule(int delta) {
         int r = rulesTable.getSelectedRow();
+        if (r < 0) {
+            Ui.hint(rulesTable, "Chọn 1 rule trong bảng trước rồi bấm Lên / Xuống");
+            return;
+        }
         int j = r + delta;
         if (r >= 0 && j >= 0 && j < rules.list.size()) {
             HeaderRule t = rules.list.get(r);
@@ -1453,6 +1457,10 @@ final class RolesTab {
 
     private void removeRules() {
         int[] rows = rulesTable.getSelectedRows();
+        if (rows.length == 0) {
+            Ui.hint(rulesTable, "Chọn rule cần xóa trong bảng trước");
+            return;
+        }
         for (int i = rows.length - 1; i >= 0; i--) {
             rules.list.remove(rows[i]);
         }

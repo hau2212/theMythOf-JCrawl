@@ -137,7 +137,7 @@ public final class ProxyInterceptDialog {
 
         Prefs prefs = UiPrefs.resolve(null, ui.engine);
         Window owner = SwingUtilities.getWindowAncestor(ui.root());
-        JDialog dlg = new JDialog(owner, "Hàng chờ Chặn Proxy chi tiết — " + Text.EXT_NAME,
+        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Hàng chờ Chặn Proxy chi tiết — " + Text.EXT_NAME,
                 JDialog.ModalityType.MODELESS);
         dlg.setResizable(true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -233,7 +233,7 @@ public final class ProxyInterceptDialog {
         pinBtn.setMargin(new Insets(3, 10, 3, 10));
         pinBtn.setFont(t0.smallBoldFont);
         pinBtn.setToolTipText("Ghim cửa sổ nổi phía trên Burp Suite để vừa thao tác trình duyệt vừa bấm Gửi");
-        pinBtn.addActionListener(e -> {
+        pinBtn.addActionListener(Ui.safe(e -> {
             boolean pinned = pinBtn.isSelected();
             Theme t = Theme.current();
             pinBtn.setIcon(Icons.themed(th -> Icons.pin(pinned ? th.accent.text() : th.muted, 12)));
@@ -241,7 +241,7 @@ public final class ProxyInterceptDialog {
             if (onPinToggle != null) {
                 onPinToggle.accept(pinned);
             }
-        });
+        }));
 
         SectionHeader headerInner = new SectionHeader(
                 "Hàng chờ Chặn Proxy chi tiết",
@@ -281,7 +281,7 @@ public final class ProxyInterceptDialog {
         autoOpenChk.setOpaque(false);
         autoOpenChk.setFont(t0.smallFont);
         autoOpenChk.setToolTipText("Mặc định tắt — mọi request chờ duyệt đã hiện ngay trên Cây. Tích chọn nếu muốn tự bật cửa sổ chi tiết khi có chặn mới.");
-        autoOpenChk.addActionListener(e -> queue.setAutoOpenWindow(autoOpenChk.isSelected()));
+        autoOpenChk.addActionListener(Ui.safe(e -> queue.setAutoOpenWindow(autoOpenChk.isSelected())));
 
         JPanel row1 = new JPanel(new BorderLayout(8, 0));
         row1.setOpaque(false);
@@ -642,12 +642,12 @@ public final class ProxyInterceptDialog {
         };
         refreshHolder[0] = refresh;
 
-        branchFilter.addActionListener(e -> {
+        branchFilter.addActionListener(Ui.safe(e -> {
             if (!syncingUi[0]) refresh.run();
-        });
-        hostFilter.addActionListener(e -> {
+        }));
+        hostFilter.addActionListener(Ui.safe(e -> {
             if (!syncingUi[0]) refresh.run();
-        });
+        }));
         filterSearch.onChange(s -> {
             if (!syncingUi[0]) refresh.run();
         });
@@ -667,14 +667,14 @@ public final class ProxyInterceptDialog {
             if (ui != null) ui.syncHeader();
         });
 
-        allScopeChk.addActionListener(e -> {
+        allScopeChk.addActionListener(Ui.safe(e -> {
             if (syncingUi[0]) {
                 return;
             }
             ae.setInterceptWaitAllScope(allScopeChk.isSelected());
             refresh.run();
             if (ui != null) ui.syncHeader();
-        });
+        }));
 
         methodBar.onChange(selMethods -> {
             if (syncingUi[0]) {
@@ -686,7 +686,7 @@ public final class ProxyInterceptDialog {
             if (ui != null) ui.syncHeader();
         });
 
-        pinBranchBtn.addActionListener(e -> {
+        pinBranchBtn.addActionListener(Ui.safe(e -> {
             String curBranch = engine.activeBranch().name();
             engine.toggleBranchInterceptWait(curBranch, true);
             refresh.run();
@@ -694,9 +694,9 @@ public final class ProxyInterceptDialog {
                 ui.syncHeader();
                 ui.flash("Đã bật Chặn chờ duyệt cho nhánh: " + curBranch);
             }
-        });
+        }));
 
-        pinApiBtn.addActionListener(e -> {
+        pinApiBtn.addActionListener(Ui.safe(e -> {
             ApiGroup curApi = (ui != null && ui.api != null) ? ui.api.currentGroup() : null;
             if (curApi == null) {
                 return;
@@ -708,25 +708,25 @@ public final class ProxyInterceptDialog {
                 ui.flash("Đã bật Chặn chờ duyệt cho API: " + curApi.method() + " "
                         + ActionEngine.normalizePathTemplate(curApi.path()));
             }
-        });
+        }));
 
-        rulesBtn.addActionListener(e -> {
+        rulesBtn.addActionListener(Ui.safe(e -> {
             ApiGroup curApi = (ui != null && ui.api != null) ? ui.api.currentGroup() : null;
             ActionWorkbenchDialog.show(root, engine, curApi, null, ActionWorkbenchDialog.TAB_LEDGER, () -> {
                 refresh.run();
                 if (ui != null) ui.syncHeader();
             });
-        });
+        }));
 
-        fmtJsonBtn.addActionListener(e -> {
+        fmtJsonBtn.addActionListener(Ui.safe(e -> {
             String formatted = RequestComposerDialog.formatJsonBodyInRawHttp(requestEditor.getText());
             if (formatted != null) {
                 requestEditor.setText(formatted);
                 requestEditor.setCaretPosition(0);
             }
-        });
+        }));
 
-        resetRawBtn.addActionListener(e -> {
+        resetRawBtn.addActionListener(Ui.safe(e -> {
             int row = queueTable.getSelectedRow();
             if (row >= 0 && row < displayed.size()) {
                 PendingRequest pr = displayed.get(row);
@@ -734,16 +734,16 @@ public final class ProxyInterceptDialog {
                 requestEditor.setText(new String(pr.originalRequest(), StandardCharsets.ISO_8859_1));
                 requestEditor.setCaretPosition(0);
             }
-        });
+        }));
 
-        forwardBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.FORWARD, ui, refresh));
-        holdSaveBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.HOLD_AND_SPOOF, ui, refresh));
-        dropBtn.addActionListener(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
-                ResolutionKind.DROP, ui, refresh));
+        forwardBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.FORWARD, ui, refresh)));
+        holdSaveBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.HOLD_AND_SPOOF, ui, refresh)));
+        dropBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.DROP, ui, refresh)));
 
-        forwardAllBtn.addActionListener(e -> {
+        forwardAllBtn.addActionListener(Ui.safe(e -> {
             int n = queue.releaseAll(ResolutionKind.FORWARD);
             draftEdits.clear();
             refresh.run();
@@ -751,8 +751,8 @@ public final class ProxyInterceptDialog {
                 ui.syncHeader();
                 if (n > 0) ui.flash("Đã gửi " + n + " request lên Server.");
             }
-        });
-        dropAllBtn.addActionListener(e -> {
+        }));
+        dropAllBtn.addActionListener(Ui.safe(e -> {
             int n = queue.releaseAll(ResolutionKind.DROP);
             draftEdits.clear();
             refresh.run();
@@ -760,7 +760,7 @@ public final class ProxyInterceptDialog {
                 ui.syncHeader();
                 if (n > 0) ui.flash("Đã hủy " + n + " request trong hàng chờ.");
             }
-        });
+        }));
 
         Runnable queueListener = () -> SwingUtilities.invokeLater(refresh);
         queue.addListener(queueListener);
@@ -907,7 +907,7 @@ public final class ProxyInterceptDialog {
         rm.setFocusPainted(false);
         rm.setMargin(new Insets(0, 2, 0, 2));
         rm.setToolTipText("Gỡ khỏi danh sách chặn chờ duyệt");
-        rm.addActionListener(e -> onRemove.run());
+        rm.addActionListener(Ui.safe(e -> onRemove.run()));
 
         chip.add(lbl);
         chip.add(rm);
