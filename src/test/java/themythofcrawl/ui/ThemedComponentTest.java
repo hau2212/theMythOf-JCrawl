@@ -421,6 +421,8 @@ class ThemedComponentTest {
 
             // BranchTree chip hit testing (Copy, Excel, Dup badges)
             BranchTree bt = panel.api.tree;
+            panel.api.setTreeShowsApis(true); // V_7.0: API rows in the tree are opt-in (legacy mode)
+            bt.rebuild(false);
             bt.expandFolders(true);
             bt.tree.setSize(720, 480);
             bt.tree.doLayout();
@@ -1022,6 +1024,7 @@ class ThemedComponentTest {
                     assertEquals(3, e.groups().size(), "declining Delete confirmation must keep APIs");
 
                     // 6. BranchTree Drag & Drop + Undo toast
+                    ui.api.setTreeShowsApis(true); // V_7.0: API rows in the tree are opt-in (legacy mode)
                     ui.api.tree.rebuild(false);
                     ui.api.tree.expandFolders(true);
                     ui.api.tree.selectGroup(gAlpha);
@@ -1059,7 +1062,7 @@ class ThemedComponentTest {
                     cm.setColumnVisible(lastModelCol, false);
                     cm.saveNow();
 
-                    String colJson = ui.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api");
+                    String colJson = ui.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + ApiTab.API_COLUMNS_ID);
                     assertNotNull(colJson);
                     assertTrue(colJson.contains("213"));
                     assertFalse(cm.isColumnVisible(lastModelCol));
@@ -1079,7 +1082,7 @@ class ThemedComponentTest {
                         assertTrue(colMenu.getComponentCount() >= lastModelCol);
                         cm2.resetDefaults();
                         assertTrue(cm2.isColumnVisible(lastModelCol));
-                        assertNull(ui2.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + "api"));
+                        assertNull(ui2.uiPrefs.get(UiPrefs.KEY_COLUMNS_PREFIX + ApiTab.API_COLUMNS_ID));
                     } finally {
                         ui2.dispose();
                     }

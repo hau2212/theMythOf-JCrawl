@@ -1,11 +1,33 @@
-# theMythOf-JCrawl (Java / Montoya) - 2.0
+# theMythOf-JCrawl (Java / Montoya) - V_7.0_beta
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
 
-## Giao diện mới (Light & Dark)
+## Điểm mới V_7.0_beta
+
+![Tab API V_7.0 - bảng kiểu Burp History](docs/images/v7-api-light.png)
+
+- **Bảng API kiểu Burp HTTP History**: `# | Method | Host | Path | Status | Length | Kết quả Role | Nhánh | Đánh giá | Time`,
+  Path luôn thẳng một cột; cột ít dùng (Group, Copy, Đã copy, Source, Đã gửi...) ẩn mặc định — chuột phải lên header để bật lại.
+- **Kết quả Role dạng heatmap**: mỗi role một ô màu ngay trên dòng API (xanh OK · vàng bị chặn/lệch · cam bypass · đỏ lỗi · xám chưa gửi).
+- **Cây chỉ hiển thị nhánh** (giống Site map) để lọc bảng; kéo dòng từ bảng thả vào nhánh để chuyển. Muốn kiểu cũ: `Bố cục ▾ → Hiện từng API trong cây`.
+- **Ẩn/hiện mọi khung** để tối đa không gian:
+
+  | Phím | Tác dụng |
+  |---|---|
+  | `Ctrl+Alt+1` | Ẩn/hiện cây nhánh |
+  | `Ctrl+Alt+2` | Ẩn/hiện khung chi tiết (Role + Request/Response) |
+  | `Ctrl+Alt+3` | Ẩn/hiện thanh công cụ tab API |
+  | `Ctrl+Alt+H` | Ẩn/hiện thanh trên cùng |
+  | `Ctrl+Alt+0` | Chế độ Tối đa: chỉ còn bảng API (bấm lại để thoát) |
+
+  Nút **Bố cục ▾** có sẵn 3 bố cục Crawl / Phân tích / Tối đa; trạng thái được nhớ giữa các lần mở Burp.
+- **Đồng bộ nhóm an toàn hơn**: phòng nhóm chỉ nghe `127.0.0.1` theo mặc định, bắt buộc passcode ≥ 8 ký tự.
+  Mở cho LAN phải bật riêng (có cảnh báo SOC). Xem phương án đồng bộ an toàn và lộ trình trong [`docs/V7_PLAN.md`](docs/V7_PLAN.md).
+
+## Giao diện (Light & Dark)
 
 | Tab API (FlatLaf Light) | Tab API (FlatLaf Dark) |
 |---|---|

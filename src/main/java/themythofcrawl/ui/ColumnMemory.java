@@ -39,17 +39,26 @@ public final class ColumnMemory {
     private final List<Integer> defaultOrder = new ArrayList<>();
     private final Map<Integer, Integer> defaultWidths = new LinkedHashMap<>();
     private final Set<Integer> hiddenModelCols = new LinkedHashSet<>();
+    private final Set<Integer> defaultHidden = new LinkedHashSet<>();
     private final Timer saveTimer;
     private boolean restoring;
 
-    private ColumnMemory(JTable table, String tableId, Prefs prefs) {
+    private ColumnMemory(JTable table, String tableId, Prefs prefs, int... hiddenByDefault) {
         this.table = table;
+        if (hiddenByDefault != null) {
+            for (int mi : hiddenByDefault) {
+                defaultHidden.add(mi);
+            }
+        }
         this.prefKey = UiPrefs.KEY_COLUMNS_PREFIX + tableId;
         this.prefs = prefs;
         this.saveTimer = new Timer(SAVE_DEBOUNCE_MS, e -> saveNow());
         this.saveTimer.setRepeats(false);
 
         captureDefaults();
+        if (!defaultHidden.isEmpty()) {
+            applyLayout(defaultOrder, null, defaultHidden);
+        }
         restore();
         installListeners();
     }
@@ -59,10 +68,18 @@ public final class ColumnMemory {
      * Restores any previously saved state from {@code prefs} immediately.
      */
     public static ColumnMemory install(JTable table, String tableId, Prefs prefs) {
+        return install(table, tableId, prefs, new int[0]);
+    }
+
+    /**
+     * Same as {@link #install(JTable, String, Prefs)}; {@code hiddenByDefault} model columns start hidden
+     * (and go back to hidden on {@link #resetDefaults()}) until the user shows them from the header menu.
+     */
+    public static ColumnMemory install(JTable table, String tableId, Prefs prefs, int... hiddenByDefault) {
         if (table == null || tableId == null || tableId.isBlank()) {
             return null;
         }
-        ColumnMemory cm = new ColumnMemory(table, tableId, prefs);
+        ColumnMemory cm = new ColumnMemory(table, tableId, prefs, hiddenByDefault);
         table.putClientProperty(ColumnMemory.class, cm);
         return cm;
     }
@@ -265,7 +282,11 @@ public final class ColumnMemory {
                         tc.setPreferredWidth(dw);
                         tc.setWidth(dw);
                     }
-                    cm.addColumn(tc);
+                    if (defaultHidden.contains(mi)) {
+                        hiddenModelCols.add(mi);
+                    } else {
+                        cm.addColumn(tc);
+                    }
                 }
             }
         } finally {

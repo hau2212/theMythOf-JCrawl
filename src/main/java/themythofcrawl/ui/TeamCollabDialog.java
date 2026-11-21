@@ -161,9 +161,13 @@ final class TeamCollabDialog {
         gc.anchor = GridBagConstraints.WEST;
 
         JTextField portField = new JTextField(sync.boundPort() > 0 ? String.valueOf(sync.boundPort()) : "18765", 8);
-        JTextField hostPassField = new JTextField(sync.passcode().isEmpty() ? "team2026" : sync.passcode(), 14);
+        JTextField hostPassField = new JTextField(sync.passcode().isEmpty() ? TeamSyncService.randomPasscode() : sync.passcode(), 14);
         JTextField shareUrlField = new JTextField(sync.mode() == TeamSyncService.Mode.HOST ? sync.roomUrl() : "(Chưa mở phòng)", 22);
         shareUrlField.setEditable(false);
+        javax.swing.JCheckBox lanBox = new javax.swing.JCheckBox("Cho máy khác trong LAN kết nối trực tiếp (không khuyến nghị)", false);
+        lanBox.setOpaque(false);
+        lanBox.setToolTipText("Mặc định phòng chỉ nghe 127.0.0.1. Mở cổng cho LAN có thể bị SOC/EDR coi là dịch vụ lạ. "
+                + "Cách an toàn hơn: dùng 'Đồng bộ qua thư mục chung' hoặc Google Sheets / Excel nhóm.");
         JButton startHostBtn = Ui.solidPrimary("Mở Phòng nhóm (Host)", t -> Icons.playTest(t.accent.onSolid(), 13), null);
         JButton copyRoomBtn = Ui.secondaryBtn("Copy URL", Icons::copy, () -> Ui.copyToClipboard(shareUrlField.getText()));
         JButton stopBtn = Ui.dangerBtn("Dừng / Ngắt kết nối", t -> Icons.stop(t.danger.text()), null);
@@ -177,6 +181,8 @@ final class TeamCollabDialog {
         gc.gridy = 3; gc.gridx = 0; gc.weightx = 0; hostCard.add(Ui.muted("URL chia sẻ:"), gc);
         gc.gridx = 1; gc.weightx = 1; hostCard.add(shareUrlField, gc);
         gc.gridy = 4; gc.gridx = 0; gc.gridwidth = 2;
+        hostCard.add(lanBox, gc);
+        gc.gridy = 5; gc.gridx = 0; gc.gridwidth = 2;
         hostCard.add(Ui.flow(FlowLayout.LEFT, startHostBtn, copyRoomBtn, stopBtn), gc);
 
         // Right: Join Room
@@ -236,7 +242,16 @@ final class TeamCollabDialog {
         startHostBtn.addActionListener(e -> {
             try {
                 int port = Integer.parseInt(portField.getText().trim());
-                sync.startHost(port, hostPassField.getText().trim());
+                if (lanBox.isSelected() && JOptionPane.showConfirmDialog(parent,
+                        "Mở cổng " + port + " cho toàn mạng LAN?\n\n"
+                                + "Một dịch vụ lạ nghe kết nối từ trong Burp + đồng đội hỏi dữ liệu liên tục\n"
+                                + "có thể bị SOC / EDR đánh giá là bất thường (giống beaconing).\n"
+                                + "Chỉ làm khi đã được bộ phận an ninh cho phép.",
+                        "Cảnh báo mở cổng LAN", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE)
+                        != JOptionPane.OK_OPTION) {
+                    return;
+                }
+                sync.startHost(port, hostPassField.getText().trim(), lanBox.isSelected());
                 refreshTeam.run();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(parent, "Không mở được phòng: " + ex.getMessage(),

@@ -190,6 +190,10 @@ public final class MainPanel {
         spotlight = new SpotlightDialog(this);
         toastPane.setModalOverlay(spotlight);
         api = new ApiTab(this);
+        String savedLayout = uiPrefs.get(ApiTab.KEY_LAYOUT);
+        if (savedLayout != null && savedLayout.contains("header=0")) {
+            headerPanel.setVisible(false);
+        }
         history = new HistoryTab(this);
         roles = new RolesTab(this);
         settings = new SettingsTab(this);
@@ -265,6 +269,20 @@ public final class MainPanel {
 
     JPanel headerPanel() {
         return headerPanel;
+    }
+
+    /** V_7.0: hide / show the whole extension header to give the tables more room (Ctrl+Alt+H). */
+    void setHeaderVisible(boolean on) {
+        if (headerPanel == null || headerPanel.isVisible() == on) {
+            return;
+        }
+        headerPanel.setVisible(on);
+        main.revalidate();
+        main.repaint();
+    }
+
+    boolean headerVisible() {
+        return headerPanel != null && headerPanel.isVisible();
     }
 
     public void dispose() {
@@ -1890,6 +1908,15 @@ public final class MainPanel {
                 tick(true);
             }
         });
+        // V_7.0 hideable layout
+        registerRootShortcut("ctrl alt 1", "tmoc.layout.tree", () -> api.togglePane(ApiTab.Pane.TREE));
+        registerRootShortcut("ctrl alt 2", "tmoc.layout.detail", () -> api.togglePane(ApiTab.Pane.DETAIL));
+        registerRootShortcut("ctrl alt 3", "tmoc.layout.toolbar", () -> api.togglePane(ApiTab.Pane.TOOLBAR));
+        registerRootShortcut("ctrl alt H", "tmoc.layout.header", () -> {
+            setHeaderVisible(!headerVisible());
+            api.saveLayout();
+        });
+        registerRootShortcut("ctrl alt 0", "tmoc.layout.max", () -> api.toggleMaximized());
         for (int i = 0; i < tabs.getTabCount() && i < 9; i++) {
             int idx = i;
             registerRootShortcut("alt " + (i + 1), "tmoc.tab." + (i + 1), () -> {

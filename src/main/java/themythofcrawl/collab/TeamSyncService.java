@@ -166,10 +166,30 @@ public final class TeamSyncService implements AutoCloseable {
 
     // ------------------------------------------------------------------ Host / Client lifecycle
 
+    /** Minimum passcode length for a room (V_7.0: a passcode is mandatory). */
+    public static final int MIN_PASSCODE = 8;
+
+    /** Opens a room reachable from THIS machine only (127.0.0.1) — safe default, no LAN exposure. */
     public synchronized void startHost(int port, String roomPasscode) throws IOException {
+        startHost(port, roomPasscode, false);
+    }
+
+    /**
+     * Opens a room. {@code lanExposed=false} binds to 127.0.0.1 only (teammates reach it through an approved
+     * tunnel such as SSH port-forwarding); {@code true} listens on every interface, which security monitoring
+     * may flag as an unusual listening service — use only in a lab network with SOC approval.
+     */
+    public synchronized void startHost(int port, String roomPasscode, boolean lanExposed) throws IOException {
+        String pass = roomPasscode == null ? "" : roomPasscode.trim();
+        if (pass.length() < MIN_PASSCODE) {
+            throw new IllegalArgumentException("Bắt buộc đặt passcode phòng từ " + MIN_PASSCODE + " ký tự trở lên");
+        }
         stop();
-        this.passcode = roomPasscode == null ? "" : roomPasscode.trim();
-        HttpServer s = HttpServer.create(new InetSocketAddress("0.0.0.0", Math.max(0, port)), 0);
+        this.passcode = pass;
+        InetSocketAddress bind = lanExposed
+                ? new InetSocketAddress(Math.max(0, port))
+                : new InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), Math.max(0, port));
+        HttpServer s = HttpServer.create(bind, 0);
         s.createContext("/api/sync/events", this::handleHostEvents);
         s.createContext("/api/sync/push", this::handleHostPush);
         s.createContext("/api/sync/presence", this::handleHostPresence);
@@ -184,7 +204,7 @@ public final class TeamSyncService implements AutoCloseable {
         this.boundPort = s.getAddress().getPort();
         this.roomUrl = "http://127.0.0.1:" + boundPort;
         this.mode = Mode.HOST;
-        this.lastStatus = "Đang mở phòng trên cổng " + boundPort;
+        this.lastStatus = "Đang mở phòng trên cổng " + boundPort + (lanExposed ? " (mở cho LAN)" : " (chỉ máy này)");
         updateLocalPresence(localBranch, "");
         fireChanged();
     }
@@ -324,9 +344,19 @@ public final class TeamSyncService implements AutoCloseable {
     // ------------------------------------------------------------------ Host HTTP handlers
 
     private boolean authorized(HttpExchange ex) {
-        if (passcode.isEmpty()) return true;
         String hdr = ex.getRequestHeaders().getFirst("X-JCrawl-Passcode");
-        return passcode.equals(hdr);
+        if (passcode.isEmpty() || hdr == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                passcode.getBytes(StandardCharsets.UTF_8), hdr.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Random room passcode (URL-safe, 16 chars) suggested by the UI instead of a fixed default. */
+    public static String randomPasscode() {
+        byte[] b = new byte[12];
+        new java.security.SecureRandom().nextBytes(b);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
     private void handleHostEvents(HttpExchange ex) throws IOException {

@@ -68,6 +68,7 @@ public final class BranchTree {
     private BiConsumer<List<ApiGroup>, String> moveHandler;
     private String focusPath;
     private boolean focusRecursive;
+    private boolean showApis = true;
 
     public BranchTree(Engine engine) {
         this.engine = engine;
@@ -185,6 +186,45 @@ public final class BranchTree {
 
     Transferable createTransferableForSelection() {
         return tree.getTransferHandler() instanceof BranchTransferHandler bth ? bth.createTransferable(tree) : null;
+    }
+
+    /**
+     * V_7.0: when false the tree shows only branches (with counts), like Burp's Site map; the API rows
+     * live in the flat table. Live held requests ([CHỜ DUYỆT]) are always shown.
+     */
+    public boolean showApis() {
+        return showApis;
+    }
+
+    public void setShowApis(boolean on) {
+        showApis = on;
+    }
+
+    /** Drag payload for API rows dragged from another component (the flat API table) onto a branch. */
+    public static Transferable transferableFor(List<ApiGroup> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return null;
+        }
+        DragPayload payload = new DragPayload(groups);
+        return new Transferable() {
+            @Override
+            public DataFlavor[] getTransferDataFlavors() {
+                return new DataFlavor[] {DragPayload.FLAVOR};
+            }
+
+            @Override
+            public boolean isDataFlavorSupported(DataFlavor flavor) {
+                return DragPayload.FLAVOR.equals(flavor);
+            }
+
+            @Override
+            public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+                if (!isDataFlavorSupported(flavor)) {
+                    throw new UnsupportedFlavorException(flavor);
+                }
+                return payload;
+            }
+        };
     }
 
     static final class DragPayload {
@@ -488,7 +528,7 @@ public final class BranchTree {
             nodes.put(hn.key, hn);
             ownApis.computeIfAbsent(leaf, k -> new ArrayList<>()).add(hn);
         }
-        for (ApiGroup g : groups) {
+        for (ApiGroup g : showApis ? groups : List.<ApiGroup>of()) {
             Node leaf = nodes.get("F" + Hierarchy.key(g.branch()));
             if (leaf == null) {
                 continue;
