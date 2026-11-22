@@ -62,7 +62,8 @@ final class ProjectTab {
     private List<String> cols = List.of();
     private ProjectData data;
     private static final String[] FILTERS = {"Mọi API", "Trong danh sách", "Còn thiếu của tôi", "Chênh lệch giữa tài khoản",
-        "Ngoài danh sách / Chỉ 1 số tài khoản có", "Có Q&A", "Có Info", "Nghi BAC", "Xung đột", "Đã loại khỏi danh sách"};
+        "Ngoài danh sách / Chỉ 1 số tài khoản có", "Có Q&A", "Có Info", "Nghi BAC", "Xung đột", "Đã loại khỏi danh sách",
+        "Có lỗi đã đánh dấu"};
 
     ProjectTab(MainPanel ui) {
         this.ui = ui;
@@ -173,6 +174,7 @@ final class ProjectTab {
             case 7 -> "bac";
             case 8 -> "conflict";
             case 9 -> "excluded";
+            case 10 -> "bug";
             default -> "all";
         };
     }
@@ -203,7 +205,7 @@ final class ProjectTab {
                     case Columns.METHOD -> 64;
                     case Columns.BRANCH -> 170;
                     case Columns.NOTE, Columns.BAC -> 220;
-                    case Columns.QA, Columns.INFO -> 190;
+                    case Columns.QA, Columns.INFO, Columns.BUGS, Columns.ROLES -> 190;
                     default -> 110;
                 };
                 table.getColumnModel().getColumn(i).setPreferredWidth(Theme.current().scaled(w));
@@ -317,6 +319,8 @@ final class ProjectTab {
         }));
         ApiGroup g = localGroup(r);
         m.add(Ui.item("Hỏi đáp (Q&A / Info)...", t -> Icons.info(t.info.text()), g != null, () -> QaDialog.open(ui, g, null)));
+        m.add(Ui.item("Xem ở workspace đồng đội (chỉ xem)", t -> Icons.users(t.fg, 13), ps.config().shareDetails,
+                () -> TeammateDialog.open(ui, r.id)));
         m.add(Ui.item("Mở API trên Cây", Icons::api, g != null, () -> {
             ui.selectTab(ui.treeTab.panel);
             ui.treeTab.tree.expandApi(g.gid());
@@ -398,7 +402,11 @@ final class ProjectTab {
         }
         ApiGroup g = localGroup(r);
         if (g == null) {
-            Ui.hint(table, "Tài khoản đang mở chưa gọi API này");
+            if (ui.project.config().shareDetails && !TeammateDialog.apis(ui.project).isEmpty()) {
+                TeammateDialog.open(ui, r.id);
+            } else {
+                Ui.hint(table, "Tài khoản đang mở chưa gọi API này");
+            }
             return;
         }
         ui.selectTab(ui.treeTab.panel);
@@ -409,6 +417,7 @@ final class ProjectTab {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Tài khoản tiếp theo (workspace con: giữ cây nhánh + Excel)...", Icons::plus, () -> ui.excel.familyTab.createChild()));
         m.add(ui.excel.familyTab.switchMenuAsMenu());
+        m.add(Ui.item("Xem workspace đồng đội (chỉ xem)...", t -> Icons.users(t.fg, 13), () -> TeammateDialog.open(ui, null)));
         m.addSeparator();
         m.add(Ui.item("Chuyển dự án sang OneDrive / thư mục khác...", Icons::move, () -> ProjectDialogs.moveProject(ui)));
         m.add(Ui.item("Mở thư mục dự án", Icons::folder, () -> open(ui.project.store().dir())));

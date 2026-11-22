@@ -244,7 +244,12 @@ public final class ProjectWorkbook {
         if (id.startsWith(Columns.ACC_PREFIX)) {
             String l = id.substring(Columns.ACC_PREFIX.length());
             ProjectData.Cell c = r.cell(l);
-            String text = c.text(l) + (c.conflict && !c.manual ? " · Xung đột" : "") + (c.doingBy.isEmpty() ? "" : " · " + c.doingBy);
+            String who = c.status == AccStatus.MISSING || c.by.isEmpty() ? "" : " · " + c.by;
+            if (c.byMember.size() > 1) {
+                who = " · " + String.join(", ", c.byMember.keySet());
+            }
+            String text = c.text(l) + (c.doingBy.isEmpty() ? who : "") + (c.conflict && !c.manual ? " · Xung đột" : "")
+                    + (c.doingBy.isEmpty() ? "" : " · " + c.doingBy);
             return StyledCell.of(text, tone(c));
         }
         return switch (id) {
@@ -267,6 +272,34 @@ public final class ProjectWorkbook {
             case Columns.TESTER -> r.tester();
             case Columns.TESTED_AT -> ProjectStore.time(r.testedAt());
             case Columns.SOURCE -> r.sourceLabel();
+            case Columns.BUGS -> {
+                List<String> parts = new ArrayList<>();
+                for (String l : letters) {
+                    for (String b : r.cell(l).bugs) {
+                        parts.add(b + " [" + l + "]");
+                    }
+                }
+                yield parts.isEmpty() ? "" : StyledCell.of(String.join("; ", parts), CellTone.ERROR_RED);
+            }
+            case Columns.ROLES -> {
+                List<String> parts = new ArrayList<>();
+                for (String l : letters) {
+                    ProjectData.Cell c = r.cell(l);
+                    if (!c.roles.isEmpty()) {
+                        StringBuilder sb = new StringBuilder(l).append(": ");
+                        c.roles.forEach((k, v) -> sb.append(k).append(' ').append(v).append(" · "));
+                        parts.add(sb.substring(0, sb.length() - 3));
+                    }
+                }
+                yield String.join("; ", parts);
+            }
+            case Columns.TAGS -> {
+                java.util.Set<String> t = new java.util.TreeSet<>();
+                for (String l : letters) {
+                    t.addAll(r.cell(l).tags);
+                }
+                yield String.join(", ", t);
+            }
             default -> "";
         };
     }
@@ -299,7 +332,9 @@ public final class ProjectWorkbook {
             case Columns.HOST -> 22;
             case Columns.REACHED -> 12;
             case Columns.BAC -> 34;
-            case Columns.QA, Columns.INFO -> 30;
+            case Columns.QA, Columns.INFO, Columns.BUGS -> 30;
+            case Columns.TAGS -> 18;
+            case Columns.ROLES -> 40;
             case Columns.NOTE -> 36;
             case Columns.TESTER -> 14;
             case Columns.TESTED_AT -> 17;

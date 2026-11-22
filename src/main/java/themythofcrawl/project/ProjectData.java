@@ -52,7 +52,18 @@ public final class ProjectData {
 
     /** One API seen in an account workspace on this machine. */
     public record ApiFact(int gid, String method, String path, String host, String branch, Integer http, Integer targetRow,
-                          String key, List<QaItem> qa, long createdMs) {
+                          String key, List<QaItem> qa, long createdMs, List<String> tags, List<String> bugs, List<Map<String, Object>> roles,
+                          boolean hidden) {
+        public ApiFact(int gid, String method, String path, String host, String branch, Integer http, Integer targetRow, String key,
+                       List<QaItem> qa, long createdMs) {
+            this(gid, method, path, host, branch, http, targetRow, key, qa, createdMs, List.of(), List.of(), List.of(), false);
+        }
+    }
+
+    /** "Dữ liệu người khác · Cao · Đã xác nhận (role B)". */
+    static String bugLabel(Map<String, Object> m) {
+        themythofcrawl.model.BugMark b = themythofcrawl.model.BugMark.fromMap(m);
+        return b.type().label + " · " + b.severity().label + " · " + b.status().label + (b.role().isEmpty() ? "" : " (" + b.role() + ")");
     }
 
     /** An account workspace on this machine. */
@@ -87,6 +98,10 @@ public final class ProjectData {
         public boolean conflict;
         public final List<Integer> gids = new ArrayList<>();
         public final Map<String, AccStatus> byMember = new LinkedHashMap<>();
+        public final java.util.Set<String> tags = new java.util.LinkedHashSet<>();
+        public final java.util.Set<String> bugs = new java.util.LinkedHashSet<>();
+        /** Role replay summary: role name -> HTTP status (V_11.5). */
+        public final Map<String, Long> roles = new java.util.TreeMap<>();
 
         public String text(String letter) {
             StringBuilder sb = new StringBuilder(status.label(letter));
@@ -221,7 +236,8 @@ public final class ProjectData {
 
     /** What this machine's own account workspaces found, per row and letter (what gets pushed to the team). */
     public record LocalCell(String rowId, String letter, AccStatus status, Integer http, int apis, String method, String path,
-                            String host, String branch, long at) {
+                            String host, String branch, long at, java.util.Set<String> tags, java.util.Set<String> bugs,
+                            Map<String, Long> roles) {
     }
 
     private final List<LocalCell> localCells = new ArrayList<>();
@@ -356,14 +372,78 @@ public final class ProjectData {
                 qa.add(QaItem.fromMap(mm));
             }
         }
+        List<String> tags = new ArrayList<>();
+        for (Object o : Json.list(g, "tags")) {
+            tags.add(String.valueOf(o));
+        }
+        List<String> bugs = new ArrayList<>();
+        for (Object o : Json.list(g, "bugs")) {
+            if (o instanceof Map<?, ?> bm) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> b = (Map<String, Object>) bm;
+                themythofcrawl.model.BugMark mark = themythofcrawl.model.BugMark.fromMap(b);
+                if (mark.status().open()) {
+                    bugs.add(bugLabel(b));
+                }
+            }
+        }
+        List<Map<String, Object>> roles = new ArrayList<>();
+        for (Object o : Json.list(g, "results")) {
+            if (o instanceof Map<?, ?> rm) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> r = (Map<String, Object>) rm;
+                Map<String, Object> x = new LinkedHashMap<>();
+                x.put("role", Json.str(r, "name", ""));
+                x.put("status", Json.num(r, "status", 0));
+                x.put("length", Json.num(r, "length", 0));
+                x.put("state", Json.str(r, "state", ""));
+                roles.add(x);
+            }
+        }
         return new ApiFact((int) Json.num(g, "gid", 0), method, path, Json.str(g, "host", ""), Json.str(g, "branch", ""),
                 os instanceof Number n ? n.intValue() : null, row instanceof Number n ? n.intValue() : null,
-                Engine.endpointKey(method, keyPath), qa, Json.num(g, "created_ms", 0));
+                Engine.endpointKey(method, keyPath), qa, Json.num(g, "created_ms", 0), tags, bugs, roles, Json.bool(g, "hidden", false));
     }
 
     // ------------------------------------------------------------------ build
     private record Obs(String letter, String member, Integer http, AccStatus status, int gid, long at, String method, String path,
-                       String host, String branch, boolean remote) {
+                       String host, String branch, boolean remote, List<String> tags, List<String> bugs, Map<String, Long> roles) {
+    }
+
+    static Map<String, Long> roleSummary(List<Map<String, Object>> results) {
+        Map<String, Long> out = new java.util.TreeMap<>();
+        for (Map<String, Object> r : results) {
+            long st = Json.num(r, "status", 0);
+            String name = Json.str(r, "role", "");
+            if (!name.isEmpty() && st > 0) {
+                out.put(name, st);
+            }
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Long> longs(Object o) {
+        Map<String, Long> out = new java.util.TreeMap<>();
+        if (o instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> {
+                if (v instanceof Number n) {
+                    out.put(String.valueOf(k), n.longValue());
+                }
+            });
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> strings(Object o) {
+        List<String> out = new ArrayList<>();
+        if (o instanceof List<?> l) {
+            for (Object x : l) {
+                out.add(String.valueOf(x));
+            }
+        }
+        return out;
     }
 
     public static String keyRowId(String key) {
@@ -441,7 +521,7 @@ public final class ProjectData {
             for (ApiFact a : l.apis()) {
                 String rid = a.targetRow() != null && rows.containsKey(stdRowId(a.targetRow())) ? stdRowId(a.targetRow()) : keyRowId(a.key());
                 obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(l.letter(), who, a.http(), AccStatus.ofHttp(a.http()), a.gid(), a.createdMs(),
-                        a.method(), a.path(), a.host(), a.branch(), false));
+                        a.method(), a.path(), a.host(), a.branch(), false, a.tags(), a.bugs(), roleSummary(a.roles())));
                 for (QaItem q : a.qa()) {
                     qaRefs.add(new QaRef(rid, l.letter(), q.by().isEmpty() ? who : q.by(), q, n -> l.image(a.gid(), n), true, a.gid()));
                 }
@@ -466,7 +546,7 @@ public final class ProjectData {
             AccStatus st = r.str("status").isEmpty() ? AccStatus.ofHttp(http > 0 ? (int) http : null) : parseName(r.str("status"));
             obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(r.account(), r.owner(), http > 0 ? (int) http : null,
                     st == null ? AccStatus.DOING : st, (int) r.num("gid"), r.at(), r.str("method"), r.str("path"), r.str("host"),
-                    r.str("branch"), true));
+                    r.str("branch"), true, strings(r.data().get("tags")), strings(r.data().get("bugs")), longs(r.data().get("roles"))));
         }
         // remote Q&A
         Set<String> localQaIds = new LinkedHashSet<>();
@@ -570,6 +650,9 @@ public final class ProjectData {
             for (Obs o : e.getValue()) {
                 Cell c = r.cell(o.letter());
                 c.apis++;
+                c.tags.addAll(o.tags());
+                c.bugs.addAll(o.bugs());
+                c.roles.putAll(o.roles());
                 if (o.gid() > 0 && !o.remote()) {
                     c.gids.add(o.gid());
                 }
@@ -713,11 +796,16 @@ public final class ProjectData {
                 LocalCell cur = lc.get(k);
                 Row r = rows.get(e.getKey());
                 if (cur == null) {
-                    lc.put(k, new LocalCell(e.getKey(), o.letter(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at()));
+                    lc.put(k, new LocalCell(e.getKey(), o.letter(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at(),
+                            new java.util.TreeSet<>(o.tags()), new java.util.TreeSet<>(o.bugs()), new java.util.TreeMap<>(o.roles())));
                 } else {
                     boolean better = rank(o.status()) > rank(cur.status());
+                    cur.tags().addAll(o.tags());
+                    cur.bugs().addAll(o.bugs());
+                    cur.roles().putAll(o.roles());
                     lc.put(k, new LocalCell(e.getKey(), o.letter(), better ? o.status() : cur.status(), better ? o.http() : cur.http(),
-                            cur.apis() + 1, cur.method(), cur.path(), cur.host(), cur.branch(), Math.max(cur.at(), o.at())));
+                            cur.apis() + 1, cur.method(), cur.path(), cur.host(), cur.branch(), Math.max(cur.at(), o.at()), cur.tags(),
+                            cur.bugs(), cur.roles()));
                 }
             }
         }
@@ -771,6 +859,7 @@ public final class ProjectData {
             case "qa" -> r.qa.stream().anyMatch(q -> q.item().kind() == QaItem.Kind.QA);
             case "info" -> r.qa.stream().anyMatch(q -> q.item().kind() == QaItem.Kind.INFO);
             case "bac" -> !r.bac.isEmpty();
+            case "bug" -> r.cells.values().stream().anyMatch(x -> !x.bugs.isEmpty());
             case "conflict" -> r.cells.values().stream().anyMatch(x -> x.conflict);
             case "excluded" -> r.excluded;
             case "text" -> (r.path + " " + r.branch + " " + r.stt + " " + r.note).toLowerCase(Locale.ROOT)

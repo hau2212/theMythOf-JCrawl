@@ -114,7 +114,11 @@ public final class ProjectConfig {
     public int syncSeconds = 12;
     public boolean syncOn = false;
     public String me = "";
-    public boolean sendRedactedRequests = false;
+    /**
+     * V_11.5 (shared, PIC decides): also send each API's request / response (tokens, cookies, passwords masked), role
+     * results and the branch tree, so everyone can open teammates' workspaces read-only. Off by default.
+     */
+    public boolean shareDetails = false;
 
     public ProjectConfig() {
         profiles.addAll(Columns.presets());
@@ -306,6 +310,7 @@ public final class ProjectConfig {
         if (targetsJson != null) {
             m.put("targets", targetsJson);
         }
+        m.put("share_details", shareDetails);
         m.put("updated_at", updatedAt);
         m.put("updated_by", updatedBy);
         if (!shared) {
@@ -315,7 +320,6 @@ public final class ProjectConfig {
             sync.put("seconds", syncSeconds);
             sync.put("on", syncOn);
             sync.put("me", me);
-            sync.put("send_requests", sendRedactedRequests);
             m.put("sync", sync);
         }
         return m;
@@ -335,7 +339,6 @@ public final class ProjectConfig {
         c.syncSeconds = (int) Math.max(8, Json.num(sync, "seconds", 12));
         c.syncOn = Json.bool(sync, "on", false);
         c.me = Json.str(sync, "me", "");
-        c.sendRedactedRequests = Json.bool(sync, "send_requests", false);
         return c;
     }
 
@@ -399,6 +402,11 @@ public final class ProjectConfig {
                             cols.add(new Col(Json.str(cc, "id", ""), Json.str(cc, "header", ""), Json.bool(cc, "visible", true)));
                         }
                     }
+                    for (String id : Columns.ALL) {
+                        if (cols.stream().noneMatch(c -> c.id().equals(id))) {
+                            cols.add(new Col(id, "", false));   // columns added in a later version: available, hidden
+                        }
+                    }
                     profiles.add(new Profile(Json.str(p, "name", "Mẫu"), cols));
                 }
             }
@@ -420,6 +428,7 @@ public final class ProjectConfig {
         if (t instanceof String ts && !ts.isBlank()) {
             targetsJson = ts;
         }
+        shareDetails = Json.bool(m, "share_details", shareDetails);
         updatedAt = Json.num(m, "updated_at", updatedAt);
         updatedBy = Json.str(m, "updated_by", updatedBy);
     }

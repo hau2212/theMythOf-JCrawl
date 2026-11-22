@@ -86,18 +86,15 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: kiến trúc dự án nhiều tài khoản + đồng bộ nhóm -> **\`V_11.4\`** (kênh stable).
+          > Theo \`VERSIONING.md\`: tính năng mới trên kiến trúc 11 -> **\`V_11.5\`** (kênh stable).
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Excel > Dự án**: danh sách chuẩn (file Excel chuẩn hoặc dựng từ API tài khoản A) x mọi tài khoản: Done / Denied / Error / Missing / Doing / OOS, đặt tay, "Chỉ B có" chờ PIC duyệt, nghi BAC.
-          2. **Làm chung**: mỗi người workspace riêng trên OneDrive của mình, đồng bộ ~12 giây qua Google Sheet (Apps Script), PIC / PIC phụ / Thành viên, mã mời, sửa tay trên Sheet về JCrawl, xung đột cho PIC chọn.
-          3. **Excel của tôi**: mỗi người tự có BangLamViec.xlsx đầy đủ dữ liệu nhóm (có ảnh), tự cập nhật.
-          4. **Báo cáo**: chọn / sắp xếp cột (mẫu cột), chọn sheet (Sổ dự án), Tổng quan có công thức COUNTIFS + biểu đồ, theo từng tài khoản / cả dự án, thư mục bao-cao/ phân loại.
-          5. **Q&A**: ảnh theo bước có tiêu đề + mô tả, mức độ, cần ai trả lời, hạn, trao đổi nhiều lượt, sheet Chi tiết Q&A.
-          6. **Khách hàng**: gửi theo vòng (goc/ giữ lại, chia-se/ để share), nhập phản hồi (trả lời, trạng thái, ảnh khách hàng dán) có duyệt từng thay đổi.
-          7. **Sao lưu**: theo giờ / ngày, so sánh & khôi phục, dựng lại Google Sheet từ máy bất kỳ; chuyển dự án sang OneDrive 1 nút.
-          8. Cây: "Hiện API tài khoản trên chưa gọi". Kế thừa V_10.4.
+          1. **Đồng bộ thêm** (luôn bật): lỗi đã đánh dấu, tag, kết quả gửi lại theo vai trò; cột Lỗi đã đánh dấu / Tag / Kết quả theo vai trò; lọc "Có lỗi".
+          2. **Chia sẻ chi tiết** (mặc định tắt, PIC bật): request / response đã che token, cookie, mật khẩu + Cây của từng người; **Xem workspace đồng đội (chỉ xem)**.
+          3. **Ảnh khách hàng** dán trong file phản hồi tới đúng người tạo Q&A và Excel của mọi người.
+          4. **Thành viên** tự gửi khách hàng / nhập phản hồi cho tài khoản của mình.
+          5. Ô tài khoản ghi tên người làm: Done (A) · An. Kế thừa V_11.4.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

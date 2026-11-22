@@ -1,9 +1,19 @@
-# theMythOf-JCrawl (Java / Montoya) - V_11.4
+# theMythOf-JCrawl (Java / Montoya) - V_11.5
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_11.5
+
+- **Đồng bộ thêm, luôn bật**: lỗi đã đánh dấu (tab Lỗi), tag, kết quả gửi lại theo vai trò của mọi tài khoản. Cột mới (bật trong **Cột...**):
+  Lỗi đã đánh dấu, Tag, Kết quả theo vai trò; Excel > Dự án có lọc **Có lỗi đã đánh dấu**. Ô tài khoản ghi tên người làm: `Done (A) · An`.
+- **Chia sẻ chi tiết** (mặc định **tắt**; PIC / PIC phụ bật ở Làm chung > PIC > D): mỗi người gửi thêm request / response của từng API
+  (đã che token, cookie, mật khẩu, JWT; tối đa 256 KB mỗi phần) và Cây. Nội dung nằm trong thư mục Drive của dự án, Sheet chỉ giữ chỉ mục.
+  Mở bằng **Excel > Dự án > Tài khoản > Xem workspace đồng đội (chỉ xem)**, hoặc nhấp đúp dòng mà chỉ đồng đội gọi được.
+- **Ảnh khách hàng** dán vào file phản hồi tới đúng người tạo Q&A (gắn loại "Ảnh khách hàng") và có trong Excel của mọi người.
+- **Thành viên** tự Gửi khách hàng / Nhập phản hồi cho tài khoản của mình; kết quả đồng bộ cho cả nhóm.
 
 ## Điểm mới V_11.4
 

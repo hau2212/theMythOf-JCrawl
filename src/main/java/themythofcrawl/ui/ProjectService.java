@@ -303,6 +303,25 @@ final class ProjectService {
         }
 
         @Override
+        public boolean applyImage(String qaId, byte[] image) {
+            AtomicBoolean done = new AtomicBoolean(false);
+            Runnable r = () -> done.set(ProjectDialogs.attachClientImage(ui, qaId, image));
+            try {
+                if (SwingUtilities.isEventDispatchThread()) {
+                    r.run();
+                } else {
+                    SwingUtilities.invokeAndWait(r);
+                }
+            } catch (Exception e) {
+                return false;
+            }
+            if (done.get()) {
+                ui.flash("Đã gắn ảnh khách hàng vào Q&A");
+            }
+            return done.get();
+        }
+
+        @Override
         public String[] doing() {
             ApiGroup g = doing;
             if (g == null || System.currentTimeMillis() - doingAt > 180_000) {

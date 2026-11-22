@@ -105,6 +105,13 @@ class V110SyncTest {
             answers.add(qaId + "=" + msg.text());
             return true;
         }
+
+        final List<String> images = new CopyOnWriteArrayList<>();
+
+        @Override public boolean applyImage(String qaId, byte[] image) {
+            images.add(qaId + ":" + image.length);
+            return true;
+        }
     }
 
     ProjectStore store(Path ws, String me) {
@@ -227,6 +234,85 @@ class V110SyncTest {
         // lost sheet: rebuild from a person's copy
         List<SyncRecord> before = new ArrayList<>(s1.records().values());
         assertTrue(m1.rebuildSheet() >= before.size());
+        m1.close();
+        m2.close();
+    }
+
+    /** V_11.5: bugs / tags / role results always; request / response + tree only when the PIC turns it on; client images. */
+    @Test
+    void detailsBugsTagsAndClientImages(@TempDir Path dir) throws Exception {
+        startHub(dir);
+        Workspaces w1 = new Workspaces(Prefs.memory(), Prefs.memory(), dir.resolve("m1/x.jar").toString());
+        w1.setRoot(dir.resolve("m1"));
+        Engine a = V110ProjectTest.engine();
+        FileStorage fa = w1.start("p", "admin");
+        a.open(fa);
+        a.setTargets(excel());
+        a.setDestination("Users");
+        ApiGroup users = V110ProjectTest.cap(a, "GET", "/api/users/15", 200);
+        a.putBug(users, themythofcrawl.model.BugMark.create(themythofcrawl.model.BugMark.Type.IDOR, themythofcrawl.model.BugMark.Severity.HIGH,
+                themythofcrawl.model.BugMark.Status.CONFIRMED, "B", "xem được user khác", "Hậu"));
+        QaItem q = QaItem.create(QaItem.Kind.QA, "Đúng thiết kế?", List.of(), "A", "Hậu");
+        a.putQa(users, q);
+        a.flush();
+        a.close();
+        Workspaces w2 = new Workspaces(Prefs.memory(), Prefs.memory(), dir.resolve("m2/x.jar").toString());
+        w2.setRoot(dir.resolve("m2"));
+        Engine b = V110ProjectTest.engine();
+        FileStorage fb = w2.start("p", "staff");
+        Workspaces.setMeta(fb.dir(), "letter", "B");
+        b.open(fb);
+        b.setTargets(excel());
+        V110ProjectTest.cap(b, "GET", "/api/users/99", 200);
+        b.flush();
+        b.close();
+        ProjectStore s1 = store(fa.dir(), "Hậu");
+        s1.config().putMember(new ProjectConfig.Member("Hậu", ProjectConfig.Role.PIC, List.of("A"), ""));
+        s1.config().touch("Hậu");
+        ProjectStore s2 = store(fb.dir(), "Bình");
+        TestHost h1 = new TestHost(fa.dir());
+        TestHost h2 = new TestHost(fb.dir());
+        ProjectSync m1 = new ProjectSync(s1, h1);
+        ProjectSync m2 = new ProjectSync(s2, h2);
+        m1.cycle();
+        m2.cycle();
+        m1.cycle();
+        // always: bug marks reach the teammate; no api records while details are off
+        ProjectData.Cell ca = row(m2.data(), "/api/users/{id}").cell("A");
+        assertTrue(ca.bugs.stream().anyMatch(x -> x.startsWith("Dữ liệu người khác")), ca.bugs.toString());
+        assertTrue(ca.tags.contains(themythofcrawl.model.ApiTagCatalog.TAG_BUG), ca.tags.toString());
+        assertTrue(ca.text("A").startsWith("Done (A)"));
+        assertTrue(s2.records().values().stream().noneMatch(r -> SyncRecord.API.equals(r.type())), "details off: nothing more is sent");
+
+        // the PIC turns details on: request / response (masked) + tree reach the member
+        s1.config().shareDetails = true;
+        s1.config().touch("Hậu");
+        m1.cycle();
+        m2.cycle();
+        assertTrue(s2.config().shareDetails, "the switch comes from the PIC");
+        m2.cycle();
+        m1.cycle();
+        m2.cycle();
+        SyncRecord api = s2.records().values().stream().filter(r -> SyncRecord.API.equals(r.type()) && r.owner().equals("Hậu")).findFirst()
+                .orElseThrow();
+        assertEquals("Users", api.str("branch"));
+        assertFalse(api.str("file").isEmpty(), api.toString());
+        java.util.Map<String, Object> det = m2.detail(api.str("file"));
+        String req = themythofcrawl.core.Json.str(det, "request", "");
+        assertTrue(req.startsWith("GET /api/users/15"), req);
+        assertFalse(req.contains("Bearer T\r"), "token masked: " + req);
+        assertTrue(req.contains("[đã che]"), req);
+        assertTrue(s1.records().values().stream().anyMatch(r -> SyncRecord.API.equals(r.type()) && r.owner().equals("Bình")));
+
+        // a client pastes a screenshot next to Hậu's question in a round Bình sent: it reaches Hậu's Q&A
+        ClientRound.Change img = new ClientRound.Change(ClientRound.Kind.IMAGE, "Q&A", q.id(), "", "", "", "",
+                V110ProjectTest.png(40, 30), "png");
+        ClientRound.apply(s2, List.of(img), "vong-1", "Bình", (id, bytes) -> false);
+        m2.cycle();
+        m1.cycle();
+        assertEquals(1, h1.images.size(), h1.images.toString());
+        assertTrue(h1.images.get(0).startsWith(q.id() + ":"));
+        assertTrue(h2.images.isEmpty());
         m1.close();
         m2.close();
     }

@@ -419,8 +419,9 @@ final class ProjectDialogs {
     static ExportForm exportForm(MainPanel ui, ProjectData d, boolean client, String fileName) {
         ProjectService ps = ui.project;
         ProjectConfig cfg = ps.config();
-        JRadioButton all = new JRadioButton("Cả dự án (mọi tài khoản)", true);
-        JRadioButton mine = new JRadioButton("Chỉ tài khoản đang mở (" + cfg.accountDisplay(ps.myLetter()) + ")");
+        boolean member = client && !ps.canManage();
+        JRadioButton all = new JRadioButton("Cả dự án (mọi tài khoản)", !member);
+        JRadioButton mine = new JRadioButton("Chỉ tài khoản đang mở (" + cfg.accountDisplay(ps.myLetter()) + ")", member);
         JRadioButton pick = new JRadioButton("Chọn tài khoản:");
         ButtonGroup bg = new ButtonGroup();
         bg.add(all);
@@ -559,10 +560,6 @@ final class ProjectDialogs {
     // ================================================================== Gửi khách hàng / Nhập phản hồi
     static void sendClient(MainPanel ui) {
         ProjectService ps = ui.project;
-        if (!ps.canManage()) {
-            ui.info("Chỉ PIC / PIC phụ gửi báo cáo cho khách hàng.");
-            return;
-        }
         ProjectData d = ps.buildNow();
         String name = "BaoCao_" + ProjectStore.safe(ps.config().name) + ".xlsx";
         ExportForm form = exportForm(ui, d, true, name);
@@ -627,10 +624,6 @@ final class ProjectDialogs {
 
     static void importClient(MainPanel ui) {
         ProjectService ps = ui.project;
-        if (!ps.canManage()) {
-            ui.info("Chỉ PIC / PIC phụ nhận phản hồi của khách hàng.");
-            return;
-        }
         ProjectStore store = ps.store();
         List<Path> rounds = store.rounds();
         JComboBox<String> pick = new JComboBox<>();

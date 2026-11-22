@@ -59,6 +59,11 @@ public final class ProjectSync implements AutoCloseable {
         /** A client / sheet answer for one of this person's Q&A items (open workspace); true when applied. */
         boolean applyAnswer(String qaId, QaItem.Msg msg);
 
+        /** V_11.5: a client screenshot for one of this person's Q&A items; true when attached. */
+        default boolean applyImage(String qaId, byte[] image) {
+            return false;
+        }
+
         /** Row + letter being tested right now (presence), or null. */
         default String[] doing() {
             return null;
@@ -84,6 +89,9 @@ public final class ProjectSync implements AutoCloseable {
     private final Map<String, String> pushedHash = new LinkedHashMap<>();
     private final Map<String, String> images = new LinkedHashMap<>();
     private final Map<String, Long> appliedAnswers = new LinkedHashMap<>();
+    /** V_11.5 details: "letter/gid" -> "signature|fileId". */
+    private final Map<String, String> details = new LinkedHashMap<>();
+    public static final int DETAIL_LIMIT = 256 * 1024;
     private long projectPushedAt;
     private long renderedVersion;
     private long lastRenderMs;
@@ -265,6 +273,10 @@ public final class ProjectSync implements AutoCloseable {
             helloDone = true;
         }
         uploadImages(d, hub);
+        if (cfg.shareDetails) {
+            uploadDetails(d, hub);
+        }
+        uploadClientImages(hub);
         List<SyncRecord> out = new ArrayList<>();
         Map<String, SyncRecord> mine = localRecords(d, me);
         for (SyncRecord r : mine.values()) {
@@ -276,7 +288,8 @@ public final class ProjectSync implements AutoCloseable {
         // things this person sent before and no longer has (API deleted, Q&A removed)
         for (String id : new ArrayList<>(pushedHash.keySet())) {
             String type = SyncRecord.typeOf(id);
-            if (!mine.containsKey(id) && (SyncRecord.CELL.equals(type) || SyncRecord.QA.equals(type) || SyncRecord.ROW.equals(type))) {
+            if (!mine.containsKey(id) && (SyncRecord.CELL.equals(type) || SyncRecord.QA.equals(type) || SyncRecord.ROW.equals(type)
+                    || SyncRecord.API.equals(type))) {
                 SyncRecord cur = store.record(id);
                 if (cur != null && !cur.deleted()) {
                     out.add(new SyncRecord(id, type, me, cur.account(), Map.of(), System.currentTimeMillis(), me, true, 0L));
@@ -335,6 +348,15 @@ public final class ProjectSync implements AutoCloseable {
             m.put("branch", c.branch());
             ProjectConfig.Account a = cfg.account(c.letter());
             m.put("account_name", a == null ? "" : a.name());
+            if (!c.tags().isEmpty()) {
+                m.put("tags", new ArrayList<>(c.tags()));
+            }
+            if (!c.bugs().isEmpty()) {
+                m.put("bugs", new ArrayList<>(c.bugs()));
+            }
+            if (!c.roles().isEmpty()) {
+                m.put("roles", new LinkedHashMap<>(c.roles()));
+            }
             String id = SyncRecord.CELL + ":" + c.rowId() + ":" + c.letter() + ":" + me;
             out.put(id, new SyncRecord(id, SyncRecord.CELL, me, c.letter(), m, now, me, false, 0L));
             if (c.rowId().startsWith("K:")) {
@@ -376,6 +398,31 @@ public final class ProjectSync implements AutoCloseable {
                 out.put(id, new SyncRecord(id, SyncRecord.QA, me, q.letter(), m, now, me, false, 0L));
             }
         }
+        if (cfg.shareDetails) {
+            for (ProjectData.LocalAccount l : d.locals()) {
+                for (ProjectData.ApiFact a : l.apis()) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    String rid = a.targetRow() != null && d.row(ProjectData.stdRowId(a.targetRow())) != null
+                            ? ProjectData.stdRowId(a.targetRow()) : ProjectData.keyRowId(a.key());
+                    m.put("row", rid);
+                    m.put("gid", a.gid());
+                    m.put("method", a.method());
+                    m.put("path", a.path());
+                    m.put("host", a.host());
+                    m.put("branch", a.branch());
+                    m.put("http", a.http() == null ? 0 : a.http());
+                    m.put("created", a.createdMs());
+                    m.put("hidden", a.hidden());
+                    m.put("tags", new ArrayList<>(a.tags()));
+                    m.put("bugs", new ArrayList<>(a.bugs()));
+                    m.put("roles", new ArrayList<Object>(a.roles()));
+                    String det = details.get(l.letter() + "/" + a.gid());
+                    m.put("file", det == null || det.indexOf('|') < 0 ? "" : det.substring(det.lastIndexOf('|') + 1));
+                    String id = SyncRecord.API + ":" + l.letter() + ":" + me + ":" + a.gid();
+                    out.put(id, new SyncRecord(id, SyncRecord.API, me, l.letter(), m, now, me, false, 0L));
+                }
+            }
+        }
         String[] doing = host.doing();
         if (doing != null && doing.length == 2 && now - lastPresenceMs > 45_000) {
             String id = SyncRecord.PRESENCE + ":" + me;
@@ -415,6 +462,94 @@ public final class ProjectSync implements AutoCloseable {
         }
     }
 
+    /** Request / response of each own API (masked), uploaded once per change (V_11.5, only when the PIC turned it on). */
+    private void uploadDetails(ProjectData d, SheetHub hub) throws IOException {
+        int budget = 20;
+        for (ProjectData.LocalAccount l : d.locals()) {
+            for (ProjectData.ApiFact a : l.apis()) {
+                if (budget <= 0) {
+                    return;
+                }
+                String key = l.letter() + "/" + a.gid();
+                String sig = signature(l, a.gid());
+                String cur = details.get(key);
+                if (cur != null && cur.startsWith(sig + "|")) {
+                    continue;
+                }
+                byte[] json = detailJson(l, a).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                SheetHub.Uploaded u = hub.uploadFile("api-" + l.letter() + "-" + a.gid(), "chi-tiet.json", "application/json", json);
+                details.put(key, sig + "|" + u.id());
+                budget--;
+            }
+        }
+    }
+
+    private static String signature(ProjectData.LocalAccount l, int gid) {
+        StringBuilder sb = new StringBuilder();
+        for (String f : List.of("meta.json", "orig.req", "orig.resp")) {
+            Path p = l.dir().resolve("apis").resolve(String.valueOf(gid)).resolve(f);
+            try {
+                sb.append(Files.isRegularFile(p) ? Files.size(p) + ":" + Files.getLastModifiedTime(p).toMillis() : "-").append(';');
+            } catch (IOException e) {
+                sb.append("?;");
+            }
+        }
+        return Integer.toHexString(sb.toString().hashCode());
+    }
+
+    /** Masked request / response (tokens, cookies, passwords, JWT), each cut at 256 KB. */
+    static String detailJson(ProjectData.LocalAccount l, ProjectData.ApiFact a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("letter", l.letter());
+        m.put("gid", a.gid());
+        boolean cut = false;
+        String[] parts = new String[2];
+        String[] names = {"orig.req", "orig.resp"};
+        for (int i = 0; i < 2; i++) {
+            byte[] b = l.image(a.gid(), names[i]);
+            String t = b == null ? "" : new String(b, java.nio.charset.StandardCharsets.UTF_8);
+            if (t.length() > DETAIL_LIMIT) {
+                t = t.substring(0, DETAIL_LIMIT);
+                cut = true;
+            }
+            parts[i] = themythofcrawl.core.ActivityLog.redact(t);
+        }
+        m.put("request", parts[0]);
+        m.put("response", parts[1]);
+        m.put("truncated", cut);
+        m.put("roles", new ArrayList<Object>(a.roles()));
+        return Json.write(m);
+    }
+
+    /** A teammate's API details: from the local cache, else downloaded once. Null when not shared / not uploaded yet. */
+    public Map<String, Object> detail(String fileId) throws IOException {
+        if (Text.blank(fileId)) {
+            return null;
+        }
+        Path f = store.syncDir().resolve("chi-tiet").resolve(ProjectStore.safe(fileId) + ".json");
+        if (!Files.isRegularFile(f)) {
+            ProjectStore.write(f, hub().downloadImage(fileId));
+        }
+        return Json.parseObject(Files.readString(f, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** Client screenshots waiting to be uploaded (ClientRound for a Q&A of another workspace). */
+    private void uploadClientImages(SheetHub hub) throws IOException {
+        for (SyncRecord r : store.pending()) {
+            if (!SyncRecord.QAIMG.equals(r.type()) || !r.str("file").isEmpty() || r.str("local").isEmpty()) {
+                continue;
+            }
+            Path p = store.dir().resolve(r.str("local"));
+            if (!Files.isRegularFile(p)) {
+                continue;
+            }
+            SheetHub.Uploaded u = hub.uploadFile(r.str("qa"), p.getFileName().toString(), "image/png", Files.readAllBytes(p));
+            Map<String, Object> data = new LinkedHashMap<>(r.data());
+            data.put("file", u.id());
+            store.putLocal(new SyncRecord(r.id(), r.type(), r.owner(), r.account(), data, System.currentTimeMillis(), r.by(), false, 0L));
+        }
+    }
+
     /** Applies what came from the team: project settings (from PIC / PIC phụ) and answers to this person's Q&A. */
     private void apply(List<SyncRecord> changed, String me, Set<String> localQa) {
         ProjectConfig cfg = store.config();
@@ -427,6 +562,19 @@ public final class ProjectSync implements AutoCloseable {
                     store.save();
                     store.log(r.by(), "project", "project", "Nhận cài đặt dự án từ " + r.by());
                 }
+            }
+            if (SyncRecord.QAIMG.equals(r.type()) && !r.deleted() && !r.str("file").isEmpty() && localQa.contains(r.str("qa"))
+                    && !appliedAnswers.containsKey("img:" + r.id())) {
+                try {
+                    byte[] img = hub().downloadImage(r.str("file"));
+                    if (host.applyImage(r.str("qa"), img)) {
+                        appliedAnswers.put("img:" + r.id(), r.at());
+                        store.log(r.by(), "qaimg", r.str("qa"), "Ảnh khách hàng gắn vào Q&A");
+                    }
+                } catch (IOException ignored) {
+                    // next cycle
+                }
+                continue;
             }
             if (SyncRecord.QANS.equals(r.type()) && !r.deleted()) {
                 String qaId = r.id().substring(SyncRecord.QANS.length() + 1);
@@ -669,6 +817,7 @@ public final class ProjectSync implements AutoCloseable {
             Json.obj(m, "pushed").forEach((k, v) -> pushedHash.put(k, String.valueOf(v)));
             Json.obj(m, "images").forEach((k, v) -> images.put(k, String.valueOf(v)));
             Json.obj(m, "answers").forEach((k, v) -> appliedAnswers.put(k, v instanceof Number n ? n.longValue() : 0L));
+            Json.obj(m, "details").forEach((k, v) -> details.put(k, String.valueOf(v)));
         } catch (IOException | RuntimeException ignored) {
             // start fresh: a full push / pull
         }
@@ -682,6 +831,7 @@ public final class ProjectSync implements AutoCloseable {
         m.put("pushed", new LinkedHashMap<>(pushedHash));
         m.put("images", new LinkedHashMap<>(images));
         m.put("answers", new LinkedHashMap<>(appliedAnswers));
+        m.put("details", new LinkedHashMap<>(details));
         try {
             ProjectStore.write(stateFile(), Json.write(m).getBytes(StandardCharsets.UTF_8));
         } catch (RuntimeException ignored) {

@@ -251,16 +251,32 @@ final class TeamWizard {
         bg.add(m1);
         bg.add(m2);
         bg.add(m3);
+        JCheckBox share = new JCheckBox("Chia sẻ chi tiết cho nhóm: request / response (đã che token, cookie, mật khẩu) + Cây của từng người",
+                cfg.shareDetails);
+        share.setToolTipText("Tắt: chỉ đồng bộ trạng thái, lỗi, tag, kết quả vai trò, Q&A. Bật: mọi người mở được workspace của nhau ở chế độ chỉ xem.");
         TargetList tl = ui.engine.targets();
         steps.add(page("""
                         Danh sách chuẩn = danh sách API mọi tài khoản đối chiếu. Có file Excel chuẩn thì dùng file đó; không có thì dựng từ API
                         tài khoản A đã crawl. Tài khoản con thấy đủ mọi dòng (dòng chưa gọi = Missing). API tài khoản khác tìm thêm hiện
                         "Chỉ B có" để PIC duyệt (chuột phải dòng > Thêm vào danh sách chuẩn).""",
-                fields(m1, m2, m3, Ui.muted(tl == null ? "Chưa nạp file Excel chuẩn trong workspace này." : "File chuẩn: " + tl.size() + " dòng.")),
+                fields(m1, m2, m3, Ui.muted(tl == null ? "Chưa nạp file Excel chuẩn trong workspace này." : "File chuẩn: " + tl.size() + " dòng."),
+                        share, Ui.muted("Bật chia sẻ chi tiết: body vẫn có thể chứa dữ liệu thật của khách hàng (email, tên...). Chỉ bật khi được phép;"
+                                + " không bao giờ có trong file gửi khách hàng.")),
                 Ui.flow(FlowLayout.LEFT, Ui.button("Nạp file Excel chuẩn...", t -> Icons.excel(t.fg, 13), "", () -> ui.excel.load()),
                         Ui.button("Cột...", Icons::sliders, "", () -> ProjectDialogs.columns(ui, null)),
                         Ui.button("Sổ dự án...", t -> Icons.excel(t.fg, 13), "", () -> ProjectDialogs.sheets(ui))),
                 Ui.flow(FlowLayout.RIGHT, Ui.accent("Lưu", t -> Icons.save(t.accent.onSolid()), t -> t.accent, () -> {
+                    if (share.isSelected() != cfg.shareDetails) {
+                        if (!ps.canManage()) {
+                            ui.info("Chỉ PIC / PIC phụ bật / tắt chia sẻ chi tiết.");
+                            share.setSelected(cfg.shareDetails);
+                        } else if (!share.isSelected() || ui.confirmDialog("Bật chia sẻ request / response (đã che token, cookie, mật khẩu) và Cây"
+                                + " cho cả nhóm?\nNội dung lưu trong thư mục Drive của dự án và máy từng thành viên.")) {
+                            cfg.shareDetails = share.isSelected();
+                        } else {
+                            share.setSelected(false);
+                        }
+                    }
                     cfg.baseline = m1.isSelected() ? ProjectConfig.BaselineMode.STANDARD
                             : m2.isSelected() ? ProjectConfig.BaselineMode.FROM_A : ProjectConfig.BaselineMode.BOTH;
                     TargetList cur = ui.engine.targets();
