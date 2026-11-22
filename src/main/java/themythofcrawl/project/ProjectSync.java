@@ -632,7 +632,7 @@ public final class ProjectSync implements AutoCloseable {
     }
 
     /** A teammate's screenshot: from the local cache (anh-qa/), else downloaded once from the team Drive folder. */
-    byte[] remoteImage(ProjectData.QaRef q, String name) {
+    public byte[] remoteImage(ProjectData.QaRef q, String name) {
         Path f = store.qaImageDir(q.item().id()).resolve(ProjectStore.safe(name));
         try {
             if (Files.isRegularFile(f)) {

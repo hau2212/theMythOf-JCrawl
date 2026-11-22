@@ -123,8 +123,40 @@ final class FamilyTab {
         }
         ui.engine.flush();
         FileStorage child = ui.workspaces.createChild(current(), name.trim(), ui.engine.templateStateJson());
+        // V_11.0: the next free letter of the project (A = root, B, C...)
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (themythofcrawl.project.ProjectData.LocalAccount l : themythofcrawl.project.ProjectData.loadLocal(current())) {
+            used.add(l.letter());
+        }
+        if (ui.project.ready()) {
+            for (themythofcrawl.project.ProjectConfig.Account a : ui.project.config().accounts) {
+                used.add(a.letter());
+            }
+        }
+        char c = 'B';
+        while (used.contains(String.valueOf(c)) && c < 'Z') {
+            c++;
+        }
+        Workspaces.setMeta(child.dir(), "letter", String.valueOf(c));
+        if (ui.project.ready()) {
+            ui.project.config().ensureAccount(String.valueOf(c), name.trim());
+            ui.project.saveConfig("Tài khoản " + c + " · " + name.trim());
+        }
         ui.openWorkspaceFromFamily(child);
-        ui.flash("Đã tạo workspace cho tài khoản " + name.trim() + " (cùng cây nhánh và file Excel, chưa có API)");
+        ui.flash("Đã tạo workspace cho tài khoản " + name.trim() + " (cùng cây nhánh và danh sách chuẩn, chưa có API): Excel > Dự án"
+                + " hiện mọi API của tài khoản trên, dòng chưa gọi = Missing");
+    }
+
+    /** The same list as a sub menu (Dự án > Tài khoản). */
+    javax.swing.JMenu switchMenuAsMenu() {
+        javax.swing.JMenu m = new javax.swing.JMenu("Mở tài khoản khác");
+        m.setIcon(Icons.themed(t -> Icons.folder(t.fg)));
+        for (java.awt.Component c : switchMenu().getComponents()) {
+            if (c instanceof javax.swing.JMenuItem mi) {
+                m.add(mi);
+            }
+        }
+        return m;
     }
 
     private JPopupMenu switchMenu() {

@@ -70,6 +70,13 @@ public final class BranchTree {
     private boolean focusRecursive;
     private boolean showApis = true;
 
+    /**
+     * V_11.0: project rows this account has not called yet, by branch key (shown when "Hiện API tài khoản trên chưa gọi"
+     * is on). Null = off.
+     */
+    public static volatile java.util.function.Supplier<Map<String, List<themythofcrawl.project.ProjectData.Row>>> missingSource;
+    private final Map<Node, Node> missingRows = new HashMap<>();
+
     public BranchTree(Engine engine) {
         this.engine = engine;
         Node root = new Node(Node.Kind.ROOT, "", "Tất cả nhánh & API", AuditLevel.NONE, "ROOT", 0);
@@ -548,6 +555,31 @@ public final class BranchTree {
             nodes.put(gn.key, gn);
             ghostRows.put(folder, gn);
         });
+        missingRows.clear();
+        var ms = missingSource;
+        Map<String, List<themythofcrawl.project.ProjectData.Row>> missing = ms == null ? Map.of() : ms.get();
+        if (missing != null) {
+            missing.forEach((fkey, rows) -> {
+                Node folder = nodes.get("F" + fkey);
+                if (folder == null) {
+                    folder = nodes.values().stream().filter(x -> x.kind == Node.Kind.FOLDER).findFirst().orElse(null);
+                }
+                if (folder == null || rows.isEmpty()) {
+                    return;
+                }
+                Node prev = missingRows.get(folder);
+                List<themythofcrawl.project.ProjectData.Row> all = new ArrayList<>(rows);
+                if (prev != null) {
+                    @SuppressWarnings("unchecked")
+                    List<themythofcrawl.project.ProjectData.Row> p0 = (List<themythofcrawl.project.ProjectData.Row>) prev.payload;
+                    all.addAll(p0);
+                }
+                Node mn = new Node(Node.Kind.MISSINGS, all, all.size() + " API tài khoản trên có mà tài khoản này chưa gọi",
+                        AuditLevel.NONE, "MS" + fkey, 0);
+                nodes.put(mn.key, mn);
+                missingRows.put(folder, mn);
+            });
+        }
         layoutFolders(nodes, ownApis, ghostRows, heldFolderKeys, reachable, expand);
         restoring = true;
         try {
@@ -737,6 +769,16 @@ public final class BranchTree {
                 }
                 apiParent.add(n);
             }
+            Node missRow = missingRows.get(folder);
+            if (missRow != null) {
+                if (folderOpen && expanded.contains(missRow.key)) {
+                    fillMissing(missRow, nodes);
+                    expand.add(missRow);
+                } else {
+                    missRow.lazy();
+                }
+                folder.add(missRow);
+            }
             if (ghostRow != null) {
                 if (folderOpen && expanded.contains(ghostRow.key)) {
                     fillGhosts(ghostRow, nodes);
@@ -815,8 +857,24 @@ public final class BranchTree {
             fillGroup(n, null);
         } else if (n.kind == Node.Kind.GHOSTS) {
             fillGhosts(n, null);
+        } else if (n.kind == Node.Kind.MISSINGS) {
+            fillMissing(n, null);
         }
         model.nodeStructureChanged(n);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void fillMissing(Node n, Map<Object, Node> nodes) {
+        n.removeAllChildren();
+        for (themythofcrawl.project.ProjectData.Row r : (List<themythofcrawl.project.ProjectData.Row>) n.payload) {
+            String label = (r.stt.isEmpty() ? "" : r.stt + ". ") + r.method + " " + Text.shortPath(r.path, 60) + "   ·   chưa gọi";
+            Node c = new Node(Node.Kind.MISSING, r, label, AuditLevel.NONE, "MI" + r.id, 0);
+            n.add(c);
+            if (nodes != null) {
+                nodes.put(c.key, c);
+            }
+        }
+        n.loaded = true;
     }
 
     @SuppressWarnings("unchecked")

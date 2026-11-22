@@ -335,6 +335,10 @@ public final class UiPreview {
             shot(fr[0], out.resolve("only_dp.png").toFile());
             System.exit(0);
         }
+        if (only != null && only.startsWith("prj")) {
+            project(e, ws, ui[0], fr[0], tabs, only, out);
+            System.exit(0);
+        }
         if (only != null) {
             // Quick mode: -Donly=<tab title> shoots just that tab with every folder expanded, then exits
             for (int i = 0; i < tabs.getTabCount(); i++) {
@@ -507,6 +511,142 @@ public final class UiPreview {
             }
         }
         return null;
+    }
+
+    /** V_11.0 project views: -Donly=prj (Excel > Dự án), prjwiz, prjcol, prjsheets, prjqa, prjbackup, prjexport. */
+    static void project(Engine e, Workspaces ws, MainPanel ui, JFrame fr, javax.swing.JTabbedPane tabs, String only, Path out)
+            throws Exception {
+        e.flush();
+        themythofcrawl.store.FileStorage child = ws.createChild(Path.of(e.workspaceLocation()), "staff", e.templateStateJson());
+        Workspaces.setMeta(child.dir(), "letter", "B");
+        Engine eb = new Engine(new DemoBridge(), Prefs.memory(), null);
+        eb.open(child);
+        Config c = eb.config().copy();
+        c.captureEnabled = true;
+        c.confirmNewApis = false;
+        eb.applyConfig(c);
+        eb.setDestination("Toppage > menu > Users");
+        for (String p : List.of("/api/v1/users/99", "/api/v1/profile", "/api/v1/staff/tasks")) {
+            eb.process(UiSmokeTest.msg("GET", p), "Proxy", true, eb.activeBranch().id());
+        }
+        eb.process(new Engine.Message(UiSmokeTest.SVC, "GET /api/v1/admin/stats HTTP/1.1\r\nHost: api.example.test\r\n\r\n"
+                .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), "HTTP/1.1 403 Forbidden\r\n\r\n{}"
+                .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), "https://api.example.test/api/v1/admin/stats"), "Proxy", true,
+                eb.activeBranch().id());
+        eb.flush();
+        eb.close();
+        ApiGroup g0 = e.groups().get(1);
+        java.awt.image.BufferedImage bi = new java.awt.image.BufferedImage(640, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        Graphics2D gg = bi.createGraphics();
+        gg.setColor(new java.awt.Color(230, 240, 255));
+        gg.fillRect(0, 0, 640, 400);
+        gg.setColor(java.awt.Color.DARK_GRAY);
+        gg.drawString("Ảnh chụp màn hình demo", 40, 60);
+        gg.dispose();
+        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(bi, "png", bo);
+        String img = e.addQaImage(g0, bo.toByteArray());
+        String img2 = e.addQaImage(g0, bo.toByteArray());
+        themythofcrawl.model.QaItem q = themythofcrawl.model.QaItem.create(themythofcrawl.model.QaItem.Kind.QA,
+                "Tài khoản staff xem được thông tin user khác (id 15). Có đúng thiết kế không?", List.of(), "A", "Hậu");
+        q = q.withImages(List.of(new themythofcrawl.model.QaItem.QaImage(img, themythofcrawl.model.QaItem.QaImage.Role.STEP, 1,
+                "Đăng nhập bằng staff", "Mở trang Users", ""), new themythofcrawl.model.QaItem.QaImage(img2,
+                themythofcrawl.model.QaItem.QaImage.Role.ACTUAL, 0, "Thấy email user 15", "", "")));
+        e.putQa(g0, q);
+        e.flush();
+        SwingUtilities.invokeAndWait(() -> {
+            ui.project.workspaceChanged();
+            ui.project.config().name = "Shop demo";
+            ui.project.config().me = "Hậu";
+            ui.project.config().putMember(new themythofcrawl.project.ProjectConfig.Member("Hậu",
+                    themythofcrawl.project.ProjectConfig.Role.PIC, List.of("A"), ""));
+            for (int i = 0; i < tabs.getTabCount(); i++) {
+                if (tabs.getTitleAt(i).equals("Excel")) {
+                    tabs.setSelectedIndex(i);
+                }
+            }
+            ui.excel.showProject();
+            ui.excel.projectTab.reload();
+        });
+        Thread.sleep(1500);
+        SwingUtilities.invokeAndWait(() -> ui.excel.projectTab.reload());
+        Thread.sleep(600);
+        if (only.equals("prj")) {
+            shot(fr, out.resolve("only_prj.png").toFile());
+            return;
+        }
+        SwingUtilities.invokeLater(() -> {
+            switch (only) {
+                case "prjwiz" -> TeamWizard.open(ui);
+                case "prjcol" -> ProjectDialogs.columns(ui, null);
+                case "prjsheets" -> ProjectDialogs.sheets(ui);
+                case "prjbackup" -> ProjectDialogs.backups(ui);
+                case "prjexport" -> ProjectDialogs.export(ui);
+                case "prjqa" -> QaDialog.open(ui, e.groups().get(1), e.groups().get(1).qa().get(0));
+                default -> { }
+            }
+        });
+        Thread.sleep(1500);
+        if (only.equals("prjwiz")) {
+            SwingUtilities.invokeAndWait(() -> {
+                for (java.awt.Window w : java.awt.Window.getWindows()) {
+                    if (w instanceof javax.swing.JDialog d && d.isVisible()) {
+                        javax.swing.JButton b = findButton(d.getContentPane(), "Tôi là PIC (người quản lý)");
+                        if (b != null) {
+                            b.doClick();
+                        }
+                    }
+                }
+            });
+            Thread.sleep(500);
+            String step = System.getProperty("step", "");
+            if (!step.isEmpty()) {
+                SwingUtilities.invokeAndWait(() -> {
+                    for (java.awt.Window w : java.awt.Window.getWindows()) {
+                        if (w instanceof javax.swing.JDialog d && d.isVisible()) {
+                            javax.swing.JList<?> l = find(d.getContentPane(), javax.swing.JList.class);
+                            if (l != null) {
+                                l.setSelectedIndex(Integer.parseInt(step));
+                            }
+                        }
+                    }
+                });
+                Thread.sleep(500);
+            }
+        }
+        for (java.awt.Window w : java.awt.Window.getWindows()) {
+            if (w instanceof javax.swing.JDialog d && d.isVisible()) {
+                shotWindow(d, out.resolve("only_" + only + System.getProperty("step", "") + ".png").toFile());
+            }
+        }
+    }
+
+    static javax.swing.JButton findButton(Component c, String text) {
+        if (c instanceof javax.swing.JButton b && text.equals(b.getText())) {
+            return b;
+        }
+        if (c instanceof java.awt.Container ct) {
+            for (Component k : ct.getComponents()) {
+                javax.swing.JButton r = findButton(k, text);
+                if (r != null) {
+                    return r;
+                }
+            }
+        }
+        return null;
+    }
+
+    static void shotWindow(java.awt.Window w, File file) throws Exception {
+        BufferedImage[] img = new BufferedImage[1];
+        SwingUtilities.invokeAndWait(() -> {
+            Component c = w instanceof javax.swing.RootPaneContainer rp ? rp.getContentPane() : w;
+            BufferedImage b = new BufferedImage(Math.max(1, c.getWidth()), Math.max(1, c.getHeight()), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = b.createGraphics();
+            c.printAll(g);
+            g.dispose();
+            img[0] = b;
+        });
+        javax.imageio.ImageIO.write(img[0], "png", file);
     }
 
     static void shot(JFrame f, File file) throws Exception {

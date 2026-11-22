@@ -329,7 +329,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             case GROUP -> x = nl.grid ? layoutGroupGrid(n, th, nl, x, gap) : layoutGroup(n, th, nl, x, gap);
             case LOGAPI -> x = layoutLogApi(n, th, nl, x, gap);
             case ORIG, ROLE -> x = nl.grid ? layoutRoleGrid(n, th, nl, x, gap) : layoutRole(n, th, nl, x, gap);
-            case GHOST, GHOSTS -> x = layoutGhost(n, th, nl, x, gap);
+            case GHOST, GHOSTS, MISSING, MISSINGS -> x = layoutGhost(n, th, nl, x, gap);
             case PLACE -> x = layoutPlace(n, th, nl, x, gap);
             case LOGLINE -> x = layoutLogLine(n, th, nl, x, gap);
             default -> x = layoutSimple(n, th, nl, x, gap);

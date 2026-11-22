@@ -1452,6 +1452,9 @@ final class ApiTab {
     }
 
     void showGroup(ApiGroup g) {
+        if (g != null) {
+            ui.project.setDoing(g);
+        }
         if (g != resultModel.group()) {
             resultModel.setGroup(g);
             if (resultModel.getRowCount() > 0) {

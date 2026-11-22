@@ -202,4 +202,87 @@ public class V110ProjectTest {
         List<String> none = new ArrayList<>();
         assertTrue(none.isEmpty());
     }
+
+    @Test
+    void clientRoundSendAndImport(@TempDir Path dir) throws Exception {
+        Path bDir = family(dir);
+        ProjectStore store = ProjectStore.open(ProjectStore.projectDirOf(bDir));
+        ProjectData d = ProjectData.build(store.config(), ProjectData.loadLocal(bDir), store.records(), "PIC");
+        ProjectWorkbook.Options o = new ProjectWorkbook.Options(d.letters(), "Nộp khách hàng", true, 320, true, List.of(), null, "Shop");
+        byte[] x = ProjectWorkbook.xlsx(d, store.config().sheets, o);
+        ClientRound.Sent sent = ClientRound.send(store, x, "BaoCao_Shop.xlsx", "PIC", Map.of());
+        assertTrue(sent.dir().getFileName().toString().startsWith("vong-1_"));
+        assertEquals(sent.shared(), ClientRound.sharedFile(sent.dir()));
+
+        // the client edits the shared copy: answers the question, changes B's status, deletes a row, pastes a screenshot
+        List<Xlsx.Sheet> sheets = Xlsx.readAll(sent.shared());
+        List<Xlsx.OutSheet> out = new ArrayList<>();
+        List<List<Xlsx.Picture>> pics = new ArrayList<>();
+        String qaId = null;
+        for (Xlsx.Sheet s : sheets) {
+            List<List<Object>> rows = new ArrayList<>();
+            for (List<Object> r : s.rows()) {
+                rows.add(new ArrayList<>(r));
+            }
+            List<Xlsx.Picture> sp = new ArrayList<>();
+            if (s.name().equals("Q&A")) {
+                int col = rows.get(0).indexOf(ProjectWorkbook.ANSWER_HEADER);
+                while (rows.get(1).size() <= col) {
+                    rows.get(1).add(null);
+                }
+                rows.get(1).set(col, "Đúng thiết kế");
+                qaId = String.valueOf(rows.get(1).get(0));
+                sp.add(new Xlsx.Picture(0, col, png(50, 40), "png", 50, 40));
+            }
+            if (s.name().equals("Tổng hợp")) {
+                int bcol = -1;
+                for (int i = 0; i < rows.get(0).size(); i++) {
+                    if (String.valueOf(rows.get(0).get(i)).startsWith("B ·")) {
+                        bcol = i;
+                    }
+                }
+                for (List<Object> r : rows) {
+                    if (r.contains("/api/orders")) {
+                        r.set(bcol, "OOS (B)");
+                    }
+                }
+                rows.removeIf(r -> r.contains("/api/profile"));
+            }
+            List<String> header = new ArrayList<>();
+            for (Object h : rows.get(0)) {
+                header.add(h == null ? "" : String.valueOf(h));
+            }
+            boolean table = "Mã".equals(header.isEmpty() ? "" : header.get(0));
+            out.add(new Xlsx.OutSheet(s.name(), table ? header : List.of(), table ? rows.subList(1, rows.size()) : rows, new int[] {10},
+                    new Xlsx.Layout(table, java.util.Set.of(), Map.of(), null)));
+            pics.add(sp);
+        }
+        Files.write(sent.shared(), Xlsx.write(out, pics));
+
+        List<ClientRound.Change> ch = ClientRound.diff(sent.original(), sent.shared(), store.config());
+        assertTrue(ch.stream().anyMatch(c -> c.kind() == ClientRound.Kind.ANSWER && c.after().equals("Đúng thiết kế")), ch.toString());
+        ClientRound.Change mark = ch.stream().filter(c -> c.kind() == ClientRound.Kind.MARK).findFirst().orElseThrow();
+        assertEquals("B", mark.letter());
+        assertTrue(ch.stream().anyMatch(c -> c.kind() == ClientRound.Kind.DELETED_ROW));
+        String fqa = qaId;
+        assertTrue(ch.stream().anyMatch(c -> c.kind() == ClientRound.Kind.IMAGE && c.target().equals(fqa)), ch.toString());
+
+        List<ClientRound.Change> chosen = ch.stream().filter(c -> c.kind() != ClientRound.Kind.DELETED_ROW).toList();
+        List<String> sunk = new ArrayList<>();
+        ClientRound.apply(store, chosen, "vong-1", "PIC", (id, img) -> sunk.add(id));
+        assertEquals(List.of(qaId), sunk);
+        d = ProjectData.build(store.config(), ProjectData.loadLocal(bDir), store.records(), "PIC");
+        assertEquals(AccStatus.OOS, row(d, "/api/orders").cell("B").status);
+        assertTrue(row(d, "/api/orders").cell("B").manualVia.startsWith("Khách hàng"));
+        assertEquals("Đúng thiết kế", d.allQa().get(0).item().answer(), "the client's answer shows on the Q&A");
+    }
+
+    @Test
+    void inviteRoundTrip() {
+        Invite i = new Invite("prj-1", "Shop", "https://script.google.com/macros/s/X/exec", "pw", "Bình", ProjectConfig.Role.DEPUTY,
+                List.of("B", "C"), "{\"rows\":[]}", 7L);
+        Invite back = Invite.decode(i.encode());
+        assertEquals(i, back);
+        assertThrows(IllegalArgumentException.class, () -> Invite.decode("abc"));
+    }
 }

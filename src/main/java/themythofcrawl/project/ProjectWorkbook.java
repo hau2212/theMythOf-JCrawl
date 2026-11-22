@@ -193,7 +193,7 @@ public final class ProjectWorkbook {
 
     // ------------------------------------------------------------------ row tables
     /** Expanded visible columns of a profile: ACCOUNTS -> one per letter. */
-    static List<String> columns(ProjectConfig.Profile p, List<String> letters) {
+    public static List<String> columns(ProjectConfig.Profile p, List<String> letters) {
         List<String> out = new ArrayList<>();
         for (ProjectConfig.Col c : p.cols()) {
             if (!c.visible()) {
@@ -214,7 +214,7 @@ public final class ProjectWorkbook {
         return out;
     }
 
-    private static String header(ProjectData d, ProjectConfig.Profile p, String id) {
+    public static String header(ProjectData d, ProjectConfig.Profile p, String id) {
         if (id.startsWith(Columns.ACC_PREFIX)) {
             return d.config().accountDisplay(id.substring(Columns.ACC_PREFIX.length()));
         }
@@ -226,7 +226,7 @@ public final class ProjectWorkbook {
         return Columns.defaultHeader(id);
     }
 
-    static CellTone tone(ProjectData.Cell c) {
+    public static CellTone tone(ProjectData.Cell c) {
         if (c.conflict && !c.manual) {
             return CellTone.CONFLICT_ORANGE;
         }
@@ -240,7 +240,7 @@ public final class ProjectWorkbook {
         };
     }
 
-    private static Object value(ProjectData d, ProjectData.Row r, String id, List<String> letters) {
+    public static Object value(ProjectData d, ProjectData.Row r, String id, List<String> letters) {
         if (id.startsWith(Columns.ACC_PREFIX)) {
             String l = id.substring(Columns.ACC_PREFIX.length());
             ProjectData.Cell c = r.cell(l);
