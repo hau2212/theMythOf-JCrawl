@@ -38,7 +38,7 @@ import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * V_11.0 Excel > Dự án: the project list x every account (this person's and the team's), filters, hand marks, the
+ * V_11.4 Excel > Dự án: the project list x every account (this person's and the team's), filters, hand marks, the
  * team sync light and every project tool (Làm chung, Cột, Xuất báo cáo, Gửi khách hàng, Nhập phản hồi, Sổ dự án,
  * Sao lưu). Replaces V_10.4 "Tài khoản".
  */

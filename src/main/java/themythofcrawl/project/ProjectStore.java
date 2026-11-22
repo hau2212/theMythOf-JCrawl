@@ -25,7 +25,7 @@ import themythofcrawl.core.Json;
 import themythofcrawl.core.Text;
 
 /**
- * V_11.0 project folder (the folder holding the account workspaces, normally in the person's own OneDrive):
+ * V_11.4 project folder (the folder holding the account workspaces, normally in the person's own OneDrive):
  * <pre>
  * &lt;project&gt;/
  *   du-an.json                     project settings ({@link ProjectConfig})

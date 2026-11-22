@@ -13,7 +13,7 @@ import themythofcrawl.core.Json;
 import themythofcrawl.core.Text;
 
 /**
- * V_11.0 "mã mời": everything a member needs to join (project id / name, team sheet link + passcode, their name,
+ * V_11.4 "mã mời": everything a member needs to join (project id / name, team sheet link + passcode, their name,
  * role and accounts, the Excel list). Contains the sheet link and passcode: send it privately to that person.
  */
 public record Invite(String projectId, String projectName, String sheetUrl, String sheetPass, String member, ProjectConfig.Role role,

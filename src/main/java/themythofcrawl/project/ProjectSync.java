@@ -25,7 +25,7 @@ import themythofcrawl.excel.Xlsx;
 import themythofcrawl.model.QaItem;
 
 /**
- * V_11.0 "Làm chung": every few seconds (default 12) this person's JCrawl
+ * V_11.4 "Làm chung": every few seconds (default 12) this person's JCrawl
  * <ol>
  * <li>reads its own account workspaces, sends what changed (cells, rows, Q&A + screenshots, hand marks, presence,
  * project settings for PIC / PIC phụ) to the team Google Sheet,</li>
@@ -136,7 +136,7 @@ public final class ProjectSync implements AutoCloseable {
             t.setDaemon(true);
             return t;
         });
-        int sec = Math.max(8, store.config().syncSeconds);
+        int sec = hubOn() ? Math.max(8, store.config().syncSeconds) : 30;
         task = timer.scheduleWithFixedDelay(this::safeCycle, 2, sec, TimeUnit.SECONDS);
     }
 

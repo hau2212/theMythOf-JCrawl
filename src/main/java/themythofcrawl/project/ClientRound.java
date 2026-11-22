@@ -18,7 +18,7 @@ import themythofcrawl.core.Text;
 import themythofcrawl.excel.Xlsx;
 
 /**
- * V_11.0 client rounds: "Gửi khách hàng" writes the report twice into bao-cao/khach-hang/vong-N_date/ - goc/ (kept,
+ * V_11.4 client rounds: "Gửi khách hàng" writes the report twice into bao-cao/khach-hang/vong-N_date/ - goc/ (kept,
  * never shared) and chia-se/ (the copy shared with the client, who may write in it). "Nhập phản hồi" compares the two
  * and lists every change the client made (answers, statuses, notes, new rows, pasted screenshots) for the PIC to
  * accept one by one. The original is never touched, so nothing the client deletes or overwrites is lost.

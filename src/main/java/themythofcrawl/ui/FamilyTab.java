@@ -123,7 +123,7 @@ final class FamilyTab {
         }
         ui.engine.flush();
         FileStorage child = ui.workspaces.createChild(current(), name.trim(), ui.engine.templateStateJson());
-        // V_11.0: the next free letter of the project (A = root, B, C...)
+        // V_11.4: the next free letter of the project (A = root, B, C...)
         java.util.Set<String> used = new java.util.HashSet<>();
         for (themythofcrawl.project.ProjectData.LocalAccount l : themythofcrawl.project.ProjectData.loadLocal(current())) {
             used.add(l.letter());

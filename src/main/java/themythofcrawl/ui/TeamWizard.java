@@ -39,7 +39,7 @@ import themythofcrawl.store.Workspaces;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * V_11.0 "Làm chung": step-by-step setup for the PIC (project, Google Sheet, project list, team & roles, invites) and for a
+ * V_11.4 "Làm chung": step-by-step setup for the PIC (project, Google Sheet, project list, team & roles, invites) and for a
  * member (paste the invite, choose the OneDrive folder, join). Every step has a check button; the wizard remembers
  * nothing secret outside the person's own project settings.
  */
@@ -238,6 +238,7 @@ final class TeamWizard {
                     if (changed) {
                         ps.sync().resetSent();
                     }
+                    ps.sync().start();
                     ps.syncSoon();
                     check.setText(cfg.syncOn ? "Đã bật đồng bộ." : "Đã lưu (đồng bộ đang tắt).");
                 }))));

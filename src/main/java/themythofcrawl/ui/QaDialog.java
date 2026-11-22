@@ -38,7 +38,7 @@ import themythofcrawl.model.QaItem;
 import themythofcrawl.ui.theme.Theme;
 
 /**
- * "Hỏi đáp" (V_11.0): a question (Q&A) or a note (Info) about one API. Every screenshot has a role (step 1..n, actual
+ * "Hỏi đáp" (V_11.4): a question (Q&A) or a note (Info) about one API. Every screenshot has a role (step 1..n, actual
  * result, expected result, extra, client image), a title and a description so the reader understands the context;
  * severity, who must answer, due date, a conversation thread and the answer. Images: files (several at once) or
  * paste (Ctrl+V).

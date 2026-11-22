@@ -195,7 +195,7 @@ public final class MainPanel {
     final SettingsTab settings;
     final LogTab log;
     final ExcelTab excel;
-    /** V_11.0: project of the open workspace (list x accounts, team sync, reports). */
+    /** V_11.4: project of the open workspace (list x accounts, team sync, reports). */
     final ProjectService project;
     final AuditTab audit;
     final AccessMatrixTab matrix;
@@ -1483,7 +1483,7 @@ public final class MainPanel {
                 + (engine.referenceLabel() != null ? " · so với tài khoản " + engine.referenceLabel() : ""));
     }
 
-    /** V_11.0: open the workspace in this folder (after joining a project / moving it to OneDrive). */
+    /** V_11.4: open the workspace in this folder (after joining a project / moving it to OneDrive). */
     void openWorkspaceAt(java.nio.file.Path dir) {
         openWorkspace(workspaces.open(dir));
         if (excel != null && excel.projectTab != null) {

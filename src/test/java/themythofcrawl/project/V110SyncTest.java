@@ -31,7 +31,7 @@ import themythofcrawl.store.FileStorage;
 import themythofcrawl.store.Workspaces;
 
 /**
- * V_11.0 "Làm chung" end to end: two people, each with their own workspace and project folder, sync through the real
+ * V_11.4 "Làm chung" end to end: two people, each with their own workspace and project folder, sync through the real
  * Apps Script (run by node against a fake of the Google services); a client answers in the sheet; hand marks;
  * conflicts; the personal Excel copy and snapshots.
  */

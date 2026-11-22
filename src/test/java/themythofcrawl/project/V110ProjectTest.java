@@ -28,7 +28,7 @@ import themythofcrawl.model.Service;
 import themythofcrawl.store.FileStorage;
 import themythofcrawl.store.Workspaces;
 
-/** V_11.0: project list x accounts, marks, the project workbook (formulas, chart, Q&A pictures). */
+/** V_11.4: project list x accounts, marks, the project workbook (formulas, chart, Q&A pictures). */
 public class V110ProjectTest {
     static final Service SVC = new Service("shop.test", 443, true);
 

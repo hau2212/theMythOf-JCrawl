@@ -74,19 +74,19 @@ public final class Xlsx {
         }
     }
 
-    /** V_11.0: a formula (without '=') and the value it gives now, so viewers that do not recalculate still show it. */
+    /** V_11.4: a formula (without '=') and the value it gives now, so viewers that do not recalculate still show it. */
     public record Formula(String expr, Object cached, CellTone tone) {
         public static Formula of(String expr, Object cached) {
             return new Formula(expr, cached, CellTone.DEFAULT);
         }
     }
 
-    /** V_11.0: a clustered bar chart placed on the sheet (cells A1-style ranges like 'Tổng quan'!$B$3:$D$3). */
+    /** V_11.4: a clustered bar chart placed on the sheet (cells A1-style ranges like 'Tổng quan'!$B$3:$D$3). */
     public record Chart(String title, String categories, List<String[]> series, int fromCol, int fromRow, int toCol, int toRow) {
     }
 
     /**
-     * V_11.0 sheet layout: frozen header / auto-filter (normal tables), hidden columns (the row code), explicit row
+     * V_11.4 sheet layout: frozen header / auto-filter (normal tables), hidden columns (the row code), explicit row
      * heights, an optional chart.
      */
     public record Layout(boolean header, Set<Integer> hiddenCols, Map<Integer, Integer> rowHeightsPx, Chart chart) {
@@ -244,7 +244,7 @@ public final class Xlsx {
         }
     }
 
-    /** V_11.0: every sheet of a workbook (name + rows). */
+    /** V_11.4: every sheet of a workbook (name + rows). */
     public static List<Sheet> readAll(Path file) throws IOException {
         List<Sheet> out = new ArrayList<>();
         int n = sheetNames(file).size();
@@ -258,7 +258,7 @@ public final class Xlsx {
     public record InPicture(String sheet, int row, int col, byte[] data, String ext) {
     }
 
-    /** V_11.0: pictures placed on the sheets (to bring back screenshots a client pasted into a report). */
+    /** V_11.4: pictures placed on the sheets (to bring back screenshots a client pasted into a report). */
     public static List<InPicture> readPictures(Path file) throws IOException {
         List<InPicture> out = new ArrayList<>();
         try (ZipFile z = new ZipFile(file.toFile())) {

@@ -1,4 +1,4 @@
-// theMythOf-JCrawl V_11.0 - Google Sheet "Làm chung" (team sync hub)
+// theMythOf-JCrawl V_11.4 - Google Sheet "Làm chung" (team sync hub)
 // Cài đặt (PIC, 1 lần):
 //   1. Tạo Google Sheet mới -> Tiện ích mở rộng (Extensions) -> Apps Script -> xóa mã mẫu, dán toàn bộ mã này -> Lưu.
 //   2. Triển khai (Deploy) -> Triển khai mới (New deployment) -> loại: Ứng dụng web (Web app)

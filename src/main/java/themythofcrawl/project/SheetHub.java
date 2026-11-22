@@ -18,7 +18,7 @@ import themythofcrawl.core.Json;
 import themythofcrawl.core.Text;
 
 /**
- * V_11.0: client of the team Google Sheet (Apps Script web app, {@link #script()}). Every call carries the project
+ * V_11.4: client of the team Google Sheet (Apps Script web app, {@link #script()}). Every call carries the project
  * passcode; the script stamps server time on every record so "later wins" does not depend on anyone's clock.
  */
 public final class SheetHub {

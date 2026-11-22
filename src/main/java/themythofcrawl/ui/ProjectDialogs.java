@@ -51,7 +51,7 @@ import themythofcrawl.project.SyncRecord;
 import themythofcrawl.ui.kit.ThemedTable;
 import themythofcrawl.ui.theme.Theme;
 
-/** V_11.0 project tools: columns, workbook sheets, reports, client rounds, backups / conflicts, moving the project. */
+/** V_11.4 project tools: columns, workbook sheets, reports, client rounds, backups / conflicts, moving the project. */
 final class ProjectDialogs {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm");
 

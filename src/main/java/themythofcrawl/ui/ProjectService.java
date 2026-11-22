@@ -24,7 +24,7 @@ import themythofcrawl.project.ProjectSync;
 import themythofcrawl.store.Workspaces;
 
 /**
- * V_11.0: the project of the open workspace (its folder = the folder holding the account workspaces): settings,
+ * V_11.4: the project of the open workspace (its folder = the folder holding the account workspaces): settings,
  * team records, the sync loop and the data every project view reads. One per MainPanel; follows workspace switches.
  */
 final class ProjectService {
