@@ -116,6 +116,14 @@ public final class ApiGroup {
     }
 
     public Blob origRequest() { return origRequest; }
+
+    // V_9.3.1: the request as first captured, kept the first time the user edits the crawl account's request
+    private volatile Blob capturedRequest;
+    private volatile Service capturedService;
+    public Blob capturedRequest() { return capturedRequest; }
+    public Service capturedService() { return capturedService; }
+    public void setCaptured(Blob request, Service svc) { capturedRequest = request; capturedService = svc; }
+    public boolean originalEdited() { return capturedRequest != null; }
     public Blob origResponse() { return origResponse; }
 
     public void setOriginal(Blob req, Blob resp) {

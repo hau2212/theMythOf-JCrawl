@@ -212,6 +212,18 @@ final class TreeMenus {
                         : "Gửi API #" + g.gid() + " (" + g.results().size() + " vai trò)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
                 m.add(SendMenus.build(ui, targetGs, nodeRole));
+                if (n.kind == Node.Kind.ORIG || n.kind == Node.Kind.GROUP) {
+                    m.add(Ui.item("Sửa request gốc (tài khoản crawl)...", t -> Icons.edit(t.info.text()),
+                            () -> RequestComposerDialog.showFloating(c, engine, g, g.origResult(), () -> ui.tick(true))));
+                    m.add(Ui.item("Khôi phục request lúc bắt", Icons::undo, g.originalEdited(), () -> {
+                        if (ui.confirmDialog("Khôi phục request lúc bắt cho " + Text.apiLabel(g.gid())
+                                + "?\nBản đã sửa của tài khoản crawl sẽ bị thay bằng bản lúc bắt.")) {
+                            engine.restoreCapturedRequest(g);
+                            ui.tick(true);
+                            ui.flash("Đã khôi phục request lúc bắt của " + Text.apiLabel(g.gid()) + ".");
+                        }
+                    }));
+                }
                 m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));

@@ -195,9 +195,9 @@ final class V23BetaTest {
                 assertFalse(toggles.isEmpty(), "Profile editor header must use ModernToggleSwitch for BẬT / TẮT");
 
                 // Toggle row 1 ON via table model and verify sync
-                tbl.setValueAt(Boolean.TRUE, 1, 1);
+                tbl.setValueAt(Boolean.TRUE, 2, 1);   // row 0 = Tài khoản crawl, role 1 is row 2
                 assertTrue(e.roles().get(1).enabled());
-                tbl.setValueAt(Boolean.FALSE, 1, 1);
+                tbl.setValueAt(Boolean.FALSE, 2, 1);
                 assertFalse(e.roles().get(1).enabled());
             } finally {
                 ui.dispose();

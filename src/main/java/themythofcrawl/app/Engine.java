@@ -661,6 +661,22 @@ public final class Engine {
         changes.status();
     }
 
+    /** V_9.3.1: apply the crawl account's header rules to every API already captured (like editing a role). */
+    public int applyOriginalProfileToAll() {
+        int n = 0;
+        for (ApiGroup g : groups()) {
+            synchronized (g) {
+                applyOriginalProfile(g);
+            }
+            Audit.recalc(g);
+            touch(g);
+            n++;
+        }
+        changes.structure();
+        log("Đã áp luật của tài khoản crawl cho " + n + " API đã bắt.", null);
+        return n;
+    }
+
     // =================================================================== branches
     public synchronized List<Branch> branches() {
         return new ArrayList<>(branches);
@@ -2563,6 +2579,12 @@ public final class Engine {
         String[] rl = Text.requestLine(editedRequest);
         synchronized (g) {
             if (targetRow == null || targetRow.original()) {
+                if (!g.originalEdited()) {
+                    byte[] firstCapture = Blob.bytesOf(g.origRequest());
+                    if (firstCapture != null) {   // keep the request as captured: "Khôi phục" can always go back to it
+                        g.setCaptured(storage.put(g.gid(), GroupCodec.CAPTURED_REQ, firstCapture), g.service());
+                    }
+                }
                 if (newService != null) {
                     g.setService(newService);
                 }
@@ -2605,9 +2627,39 @@ public final class Engine {
         Audit.recalc(g);
         touch(g);
         changes.structure();
-        log("Composer: Đã lưu đè Request cho API #" + g.gid()
-                + (targetRow != null && !targetRow.original() ? " [" + targetRow.roleName() + "]" : " (API gốc)"),
+        log("Đã lưu request đã sửa cho API #" + g.gid()
+                + (targetRow != null && !targetRow.original() ? " [" + targetRow.roleName() + "]"
+                        : " (tài khoản crawl; mọi vai trò dựng lại từ request này; khôi phục được bản lúc bắt)"),
                 g.gid());
+        return true;
+    }
+
+    /** V_9.3.1: put the crawl account's request back exactly as first captured (method, path, host, headers, body). */
+    public boolean restoreCapturedRequest(ApiGroup g) {
+        if (g == null || !g.originalEdited()) {
+            return false;
+        }
+        byte[] captured = Blob.bytesOf(g.capturedRequest());
+        if (captured == null || captured.length == 0) {
+            return false;
+        }
+        synchronized (g) {
+            if (g.capturedService() != null) {
+                g.setService(g.capturedService());
+            }
+            String[] rl = Text.requestLine(captured);
+            if (rl != null) {
+                g.setMethod(rl[0]);
+                g.setPathAndUrl(rl[1], g.service().protocol() + "://" + g.service().hostLabel() + rl[1]);
+            }
+            g.setOriginal(storage.put(g.gid(), GroupCodec.ORIG_REQ, captured), g.origResponse());
+            g.origResult().setCustomRequest(null);
+            g.setCaptured(null, null);
+        }
+        Audit.recalc(g);
+        touch(g);
+        changes.structure();
+        log("Đã khôi phục request lúc bắt cho API #" + g.gid() + " (tài khoản crawl).", g.gid());
         return true;
     }
 

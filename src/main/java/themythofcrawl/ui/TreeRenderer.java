@@ -680,7 +680,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (g.dupTotal() > 1) {
             nl.dupX0 = x;
             if (nl.originFlag) {
-                x = addChip(th, nl, "Gốc · " + g.dupTotal() + " lần", th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                x = addChip(th, nl, "Gốc · còn " + g.dupTotal() + " bản", th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
                         th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
             } else {
                 x = addChip(th, nl, "#" + g.dupNo() + "/" + g.dupTotal(), th.smallBoldFont, th.dup.fill(), th.dup.border(),
@@ -718,8 +718,15 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         return Math.max(x, vx + th.scaled(20));
     }
 
+    private boolean lastGroupEdited;
+
     /** V_8.2: which ID this row really used ("ID 91"), when it differs from the captured request. */
     private int addSentNoteChip(Theme th, NodeLayout nl, RoleResult r, int x) {
+        if (r.original() && lastGroupEdited) {
+            Theme.Token ed = th.warning;
+            x = addChip(th, nl, "Đã sửa", th.smallBoldFont, ed.fill(), ed.border(), ed.text(),
+                    Icons.edit(ed.text(), 10), false, x, th.scaled(4));
+        }
         String note = r.sentNote();
         if (note == null || note.isBlank() || r.status() == null) {
             return x;
@@ -771,6 +778,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
+        lastGroupEdited = g.originalEdited();
         return addSentNoteChip(th, nl, r, x);
     }
 
@@ -849,7 +857,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 ApiGroup orig = engine != null ? engine.originOf(g.bookKey()) : null;
                 String dupTxt = orig != null && orig.gid() != g.gid()
                         ? "Lần " + g.dupNo() + " · gốc " + Text.apiLabel(orig.gid())
-                        : "Lần " + g.dupNo() + " / " + g.dupTotal();
+                        : "Lần " + g.dupNo() + " · gốc đã xóa · còn " + g.dupTotal() + " bản";
                 x = addChip(th, nl, dupTxt, th.smallBoldFont, th.dup.fill(), th.dup.border(),
                         th.dup.text(), Icons.dup(th.dup.text(), 11), true, x, th.scaled(4));
             }
@@ -984,6 +992,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
+        lastGroupEdited = g.originalEdited();
         return addSentNoteChip(th, nl, r, x);
     }
 

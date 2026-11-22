@@ -156,8 +156,9 @@ final class TreeTab {
         quickSendBtn.setToolTipText("Gửi trực tiếp nội dung Request đang hiển thị (kể cả phần bạn vừa sửa tại chỗ)");
         quickSendBtn.addActionListener(Ui.safe(e -> quickSendCurrent()));
 
-        quickSaveBtn = Ui.tonalBtn("Lưu sửa vào API", t -> Icons.check(t.success.text(), 12), t -> t.success);
-        quickSaveBtn.setToolTipText("Lưu nội dung Request vừa chỉnh sửa tại chỗ đè vào API này");
+        quickSaveBtn = Ui.tonalBtn("Lưu request", t -> Icons.check(t.success.text(), 12), t -> t.success);
+        quickSaveBtn.setToolTipText("Lưu request vừa sửa (thêm / xóa / sửa header, body, path). Dòng Tài khoản crawl: sửa request gốc,"
+                + " mọi vai trò dựng lại từ đó; bản lúc bắt được giữ để khôi phục. Dòng vai trò: chỉ sửa request của vai trò đó.");
         quickSaveBtn.addActionListener(Ui.safe(e -> quickSaveEdit()));
 
         JButton fmtJsonApiBtn = Ui.secondaryBtn("Format JSON", null);
@@ -165,7 +166,7 @@ final class TreeTab {
         fmtJsonApiBtn.addActionListener(Ui.safe(e -> formatCurrentRequestJson()));
 
         JButton resetApiBtn = Ui.secondaryBtn("Khôi phục", t -> Icons.undo(t.muted, 12));
-        resetApiBtn.setToolTipText("Khôi phục lại Request gốc chưa chỉnh sửa");
+        resetApiBtn.setToolTipText("Dòng Tài khoản crawl đã sửa: đưa về đúng request lúc bắt. Dòng khác: bỏ thay đổi chưa lưu.");
         resetApiBtn.addActionListener(Ui.safe(e -> restoreOriginalRequest()));
 
         JButton[] qaRef = new JButton[1];
@@ -544,7 +545,9 @@ final class TreeTab {
         boolean ok = engine.updateApiRequestFromComposer(g, shown, g.service(), fixed, null);
         if (ok) {
             req.show(g.service(), fixed);
-            ui.flash("Đã lưu chỉnh sửa Request vào " + Text.apiLabel(g.gid()) + "!");
+            ui.flash(shown == null || shown.original()
+                    ? "Đã lưu request gốc của " + Text.apiLabel(g.gid()) + " (khôi phục được bản lúc bắt)."
+                    : "Đã lưu request của " + shown.roleName() + ".");
         }
     }
 
@@ -571,8 +574,23 @@ final class TreeTab {
             ui.flash("Đã khôi phục Request gốc đang chờ duyệt.");
         } else if (shownGroup != null) {
             RoleResult r = shown != null ? shown : shownGroup.origResult();
+            if (r.original() && shownGroup.originalEdited()) {
+                if (ui.confirmDialog("Khôi phục request lúc bắt cho " + Text.apiLabel(shownGroup.gid())
+                        + "?\nBản đã sửa của tài khoản crawl sẽ bị thay bằng bản lúc bắt.")) {
+                    engine.restoreCapturedRequest(shownGroup);
+                    req.show(shownGroup.service(), engine.shownRequestOf(shownGroup, r));
+                    ui.flash("Đã khôi phục request lúc bắt của " + Text.apiLabel(shownGroup.gid()) + ".");
+                }
+                return;
+            }
+            if (!r.original() && r.customRequest() != null) {
+                engine.setCustomRequest(shownGroup, r, null);
+                req.show(shownGroup.service(), engine.shownRequestOf(shownGroup, r));
+                ui.flash("Đã bỏ request sửa tay của " + r.roleName() + ".");
+                return;
+            }
             req.show(shownGroup.service(), engine.shownRequestOf(shownGroup, r));
-            ui.flash("Đã khôi phục Request gốc của " + Text.apiLabel(shownGroup.gid()) + ".");
+            ui.flash("Đã bỏ thay đổi chưa lưu.");
         } else {
             ui.flash("Chọn 1 API / vai trò trong cây trước rồi bấm Khôi phục.");
         }

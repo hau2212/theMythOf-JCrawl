@@ -19,6 +19,8 @@ import themythofcrawl.model.Service;
 public final class GroupCodec {
     public static final String ORIG_REQ = "orig.req";
     public static final String ORIG_RESP = "orig.resp";
+    /** V_9.3.1: the crawl account's request as first captured (kept once it is edited). */
+    public static final String CAPTURED_REQ = "orig.captured.req";
 
     private GroupCodec() {
     }
@@ -78,6 +80,12 @@ public final class GroupCodec {
         m.put("orig_status", g.origStatus());
         m.put("orig_length", g.origLength());
         m.put("has_orig_resp", g.origResponse() != null);
+        if (g.capturedRequest() != null && g.capturedService() != null) {
+            m.put("captured_req", true);
+            m.put("captured_host", g.capturedService().host());
+            m.put("captured_port", g.capturedService().port());
+            m.put("captured_secure", g.capturedService().secure());
+        }
         m.put("target_row", g.target() != null ? g.target().rowNo() : null);
         m.put("overrides", g.roleOverrides());
         m.put("copy_stt", g.copyStt());
@@ -156,6 +164,10 @@ public final class GroupCodec {
         Object os = m.get("orig_status");
         Object ol = m.get("orig_length");
         g.setOrigMeta(os instanceof Number n ? n.intValue() : null, ol instanceof Number n2 ? n2.intValue() : null);
+        if (Json.bool(m, "captured_req", false)) {
+            g.setCaptured(st.blob(gid, CAPTURED_REQ), new Service(Json.str(m, "captured_host", svc.host()),
+                    (int) Json.num(m, "captured_port", svc.port()), Json.bool(m, "captured_secure", svc.secure())));
+        }
         Object row = m.get("target_row");
         if (row instanceof Number n && targetByRow != null) {
             g.setTarget(targetByRow.apply(n.intValue()));

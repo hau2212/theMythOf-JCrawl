@@ -86,17 +86,14 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: thay đổi giao diện / tên gọi -> tăng MINOR: **\`V_9.3\`**, kênh stable.
+          > Theo \`VERSIONING.md\`: tính năng mới -> tăng MINOR: **\`V_9.4\`**, kênh stable.
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Một khái niệm, một tên**: Tài khoản crawl · Vai trò · API 12 · Nhánh · Gửi lại · Sửa & gửi · Chặn & gửi lại · Các lần bắt (bảng từ điển trong README); test tự động chặn tên cũ.
-          2. **Chữ kết quả dễ đọc**: Gọi được 200 · Bị chặn 403 · Chưa đăng nhập 401 · Nghi BAC · Chưa kết luận; bỏ tiền tố OK: / INFO: / WARN:.
-          3. **Chip có chữ**: Lần 5 · gốc API 492 · Giữ lần 5? · Gốc · 3 lần · Excel 200 · Tải lại? · 7 chờ · 1 đã xóa · 3/12 cần xem.
-          4. **Tab gọn**: Cây · API · Phân quyền · Lỗi · Excel · Vai trò · Cần xử lý · Cài đặt; Lịch sử thành chế độ "Theo thời gian" của Cây.
-          5. **Chặn & gửi lại** gộp Bảo vệ dữ liệu + Luật chặn thành 1 cửa sổ có trang Tổng quan.
-          6. Thanh trên: Tắt | Bắt · Không gửi | Tự gửi · Chờ gửi chỉ hiện khi bận; không còn chữ viết hoa toàn bộ.
-          7. Kế thừa V_9.2: gửi lại theo vai trò, mỗi vai trò 1 bản ghi, kết luận BAC trên Cây, Nhật ký cho Claude.
+          1. **Tài khoản crawl = dòng 00 của tab Vai trò**: thêm / xóa / sửa header, cookie, token như vai trò khác; áp cho mọi request gốc (hỏi áp cả API đã bắt).
+          2. **Sửa request gốc an toàn**: giữ bản lúc bắt, Khôi phục đưa về đúng method / path / host / header / body ban đầu; chip "Đã sửa" trên Cây.
+          3. Nhãn lần bắt: "Gốc · còn 3 bản", "Lần 5 · gốc đã xóa · còn 2 bản".
+          4. Kế thừa V_9.3 (từ điển thống nhất, tab gọn, Chặn & gửi lại một cửa sổ) và V_9.2.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

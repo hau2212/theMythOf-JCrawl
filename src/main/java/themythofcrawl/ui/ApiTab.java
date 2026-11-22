@@ -1911,10 +1911,17 @@ final class ApiTab {
     private void resetRequest() {
         ApiGroup g = currentGroup();
         RoleResult r = selectedResult();
-        if (g != null && r != null) {
+        if (g != null && r != null && r.original() && g.originalEdited()) {
+            if (ui.confirmDialog("Khôi phục request lúc bắt cho " + Text.apiLabel(g.gid())
+                    + "?\nBản đã sửa của tài khoản crawl sẽ bị thay bằng bản lúc bắt.")) {
+                engine.restoreCapturedRequest(g);
+                showResult(r);
+                ui.flash("Đã khôi phục request lúc bắt của " + Text.apiLabel(g.gid()) + ".");
+            }
+        } else if (g != null && r != null) {
             engine.setCustomRequest(g, r, null);
             showResult(r);
-            ui.flash("Đã khôi phục Request ban đầu của " + r.roleName() + ".");
+            ui.flash("Đã khôi phục request ban đầu của " + r.roleName() + ".");
         } else {
             ui.flash("Chọn 1 API và 1 vai trò trước rồi bấm Khôi phục.");
         }

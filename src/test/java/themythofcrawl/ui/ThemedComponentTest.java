@@ -721,7 +721,7 @@ class ThemedComponentTest {
             ThemedTable roleTable = ui.roles.roleTable();
             assertEquals(themythofcrawl.ui.theme.Theme.current().scaled(36), roleTable.getRowHeight());
             assertNotNull(ui.roles.originalProfileCard());
-            roleTable.setRowSelectionInterval(0, 0);
+            roleTable.setRowSelectionInterval(1, 1);   // V_9.3.1: row 0 = Tài khoản crawl, roles start at row 1
             assertTrue(ui.roles.expBadge().isVisible());
             assertTrue(ui.roles.expBadge().getText().contains("hết hạn"), ui.roles.expBadge().getText());
             javax.swing.text.StyledDocument doc = ui.roles.jwtInspector().getStyledDocument();
@@ -732,7 +732,7 @@ class ThemedComponentTest {
             }
             assertTrue(jwtColors.size() >= 3, "JWT JSON syntax highlighter should produce >= 3 distinct token colors");
 
-            roleTable.setRowSelectionInterval(1, 1);
+            roleTable.setRowSelectionInterval(2, 2);
             assertTrue(ui.roles.expBadge().isVisible());
             assertTrue(ui.roles.expBadge().getText().contains("còn hạn"), ui.roles.expBadge().getText());
 
@@ -1000,13 +1000,13 @@ class ThemedComponentTest {
                     assertTrue(ui.spotlight.itemCount() >= 1);
                     assertTrue(ui.spotlight.executeSelected());
                     assertSame(ui.roles.panel, ui.tabs.getSelectedComponent());
-                    assertEquals(0, ui.roles.roleTable().getSelectedRow());
+                    assertEquals(1, ui.roles.roleTable().getSelectedRow());   // row 0 = Tài khoản crawl
 
                     ui.spotlight.open();
                     ui.spotlight.searchField().setText("original");
                     assertTrue(ui.spotlight.executeSelected());
                     assertSame(ui.roles.panel, ui.tabs.getSelectedComponent());
-                    assertEquals(-1, ui.roles.roleTable().getSelectedRow());
+                    assertEquals(0, ui.roles.roleTable().getSelectedRow(), "Tài khoản crawl is row 0 of the Vai trò table");
 
                     // 5. Ctrl+Shift+C, Ctrl+Enter, Ctrl+R, Delete with confirmation
                     assertTrue(ui.dispatchShortcut("alt 1"));

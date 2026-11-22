@@ -105,12 +105,12 @@ final class V36RealtimeInterceptTest {
             props.load(in);
         }
         assertEquals("9", props.getProperty("major"));
-        assertEquals("3", props.getProperty("minor"));
-        assertEquals("V_9.3", props.getProperty("releaseTag"));
-        assertEquals("9.3", props.getProperty("versionName"));
-        assertEquals("theMythOf-JCrawl_V_9.3.jar", props.getProperty("jarName"));
-        assertEquals("9.3", Extension.VERSION);
-        assertEquals("9.3", Diagnostics.VERSION);
+        assertEquals("4", props.getProperty("minor"));
+        assertEquals("V_9.4", props.getProperty("releaseTag"));
+        assertEquals("9.4", props.getProperty("versionName"));
+        assertEquals("theMythOf-JCrawl_V_9.4.jar", props.getProperty("jarName"));
+        assertEquals("9.4", Extension.VERSION);
+        assertEquals("9.4", Diagnostics.VERSION);
 
         String wf = Files.readString(Path.of(".github/workflows/build.yml"), StandardCharsets.UTF_8);
         assertTrue(wf.contains("IMMUTABLE GUARD"), "CI workflow must preserve immutable release guard");

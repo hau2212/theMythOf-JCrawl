@@ -1,9 +1,20 @@
-# theMythOf-JCrawl (Java / Montoya) - V_9.3
+# theMythOf-JCrawl (Java / Montoya) - V_9.4
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_9.4
+
+- **Tài khoản crawl là dòng đầu (00) của tab Vai trò**, sửa y như vai trò khác: Thêm luật / Xóa luật / sửa giá trị / Cách
+  (Thay, Thêm, Xóa, Đặt cookie, Xóa cookie). Ví dụ thêm `A: B` -> mọi request gốc JCrawl gửi đều có header `A: B`; khi Lưu, app hỏi
+  có áp cho các API đã bắt không. Bật / tắt bằng công tắc của dòng.
+- **Sửa request gốc an toàn**: sửa ở khung Request (dòng Tài khoản crawl) rồi bấm **Lưu request**; mọi vai trò dựng lại từ request
+  mới. Lần sửa đầu tiên app giữ **bản lúc bắt**: nút **Khôi phục** (hoặc chuột phải -> *Khôi phục request lúc bắt*) đưa về đúng
+  method, path, host, header, body ban đầu. Dòng Tài khoản crawl trên Cây hiện chip **Đã sửa**.
+- Chuột phải API trên Cây: **Sửa request gốc (tài khoản crawl)...**.
+- Nhãn lần bắt: **Gốc · còn 3 bản**; lần bắt lại khi bản gốc đã bị xóa: **Lần 5 · gốc đã xóa · còn 2 bản**.
 
 ## Điểm mới V_9.3 - một khái niệm, một tên
 
