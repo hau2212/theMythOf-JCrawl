@@ -185,6 +185,11 @@ final class ProjectService {
         return m.isEmpty() ? "A" : m;
     }
 
+    /** The column the open workspace's results show in (its web account, or the one it was merged into). */
+    String myColumn() {
+        return ready() ? config().resolve(myLetter()) : myLetter();
+    }
+
     void saveConfig(String what) {
         ProjectConfig c = config();
         c.touch(me());
@@ -245,7 +250,7 @@ final class ProjectService {
             return null;
         }
         ProjectData d = sync.data();
-        String me = myLetter();
+        String me = myColumn();
         Map<String, List<ProjectData.Row>> out = new LinkedHashMap<>();
         for (ProjectData.Row r : d.listRows()) {
             ProjectData.Cell c = r.cells.get(me);
@@ -298,6 +303,25 @@ final class ProjectService {
                 }
             } catch (Exception e) {
                 return false;
+            }
+            return done.get();
+        }
+
+        @Override
+        public boolean applyImage(String qaId, byte[] image) {
+            AtomicBoolean done = new AtomicBoolean(false);
+            Runnable r = () -> done.set(ProjectDialogs.attachClientImage(ui, qaId, image));
+            try {
+                if (SwingUtilities.isEventDispatchThread()) {
+                    r.run();
+                } else {
+                    SwingUtilities.invokeAndWait(r);
+                }
+            } catch (Exception e) {
+                return false;
+            }
+            if (done.get()) {
+                ui.flash("Đã gắn ảnh khách hàng vào Q&A");
             }
             return done.get();
         }

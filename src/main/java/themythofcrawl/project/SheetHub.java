@@ -167,6 +167,13 @@ public final class SheetHub {
         return new Uploaded(Json.str(m, "id", ""), Json.str(m, "url", ""));
     }
 
+    /** Any small file into the project's Drive folder (V_11.5: request / response details, client screenshots). */
+    public Uploaded uploadFile(String tag, String name, String mime, byte[] data) throws IOException {
+        Map<String, Object> m = call(Map.of("action", "image", "qa", tag, "name", name, "mime", mime,
+                "b64", Base64.getEncoder().encodeToString(data)), 120);
+        return new Uploaded(Json.str(m, "id", ""), Json.str(m, "url", ""));
+    }
+
     public byte[] downloadImage(String fileId) throws IOException {
         Map<String, Object> m = call(Map.of("action", "imageget", "id", fileId), 120);
         return Base64.getDecoder().decode(Json.str(m, "b64", ""));

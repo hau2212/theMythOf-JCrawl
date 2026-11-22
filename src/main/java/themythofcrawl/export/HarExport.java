@@ -62,7 +62,7 @@ public final class HarExport {
         }
         Map<String, Object> log = new LinkedHashMap<>();
         log.put("version", "1.2");
-        log.put("creator", Map.of("name", "theMythOf-JCrawl", "version", "11.4"));
+        log.put("creator", Map.of("name", "theMythOf-JCrawl", "version", "11.5"));
         log.put("entries", entries);
         return Json.write(Map.of("log", log));
     }

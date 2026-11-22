@@ -59,6 +59,11 @@ public final class ProjectSync implements AutoCloseable {
         /** A client / sheet answer for one of this person's Q&A items (open workspace); true when applied. */
         boolean applyAnswer(String qaId, QaItem.Msg msg);
 
+        /** V_11.5: a client screenshot for one of this person's Q&A items; true when attached. */
+        default boolean applyImage(String qaId, byte[] image) {
+            return false;
+        }
+
         /** Row + letter being tested right now (presence), or null. */
         default String[] doing() {
             return null;
@@ -84,6 +89,9 @@ public final class ProjectSync implements AutoCloseable {
     private final Map<String, String> pushedHash = new LinkedHashMap<>();
     private final Map<String, String> images = new LinkedHashMap<>();
     private final Map<String, Long> appliedAnswers = new LinkedHashMap<>();
+    /** V_11.5 details: "letter/gid" -> "signature|fileId". */
+    private final Map<String, String> details = new LinkedHashMap<>();
+    public static final int DETAIL_LIMIT = 256 * 1024;
     private long projectPushedAt;
     private long renderedVersion;
     private long lastRenderMs;
@@ -203,6 +211,9 @@ public final class ProjectSync implements AutoCloseable {
         if (cfg.me.isEmpty()) {
             cfg.me = me;
         }
+        cfg.applyAccountRecords(store.records());
+        registerLocalAccounts(locals, me);
+        autoMerge(me);
         ProjectData d = ProjectData.build(cfg, locals, store.records(), me);
         int conflicts = 0;
         if (hubOn()) {
@@ -211,6 +222,11 @@ public final class ProjectSync implements AutoCloseable {
             } else {
                 try {
                     conflicts = exchange(d, me);
+                    cfg.applyAccountRecords(store.records());
+                    if (resolveClashes(locals, me)) {
+                        locals = ProjectData.loadLocal(ws);
+                    }
+                    autoMerge(me);
                     d = ProjectData.build(cfg, locals, store.records(), me);
                     renderIfElected(d, me);
                     failures = 0;
@@ -241,6 +257,131 @@ public final class ProjectSync implements AutoCloseable {
         fire();
     }
 
+    // ------------------------------------------------------------------ web accounts (V_11.5)
+    private final Map<String, Object[]> fpCache = new LinkedHashMap<>();
+    private final Set<String> createdLetters = new LinkedHashSet<>();
+    private volatile String accountNotice = "";
+
+    public String accountNotice() {
+        return accountNotice;
+    }
+
+    private Set<String> fps(ProjectData.LocalAccount l) {
+        Object[] c = fpCache.get(l.letter() + "@" + l.dir());
+        if (c != null && (int) c[0] == l.apis().size()) {
+            @SuppressWarnings("unchecked")
+            Set<String> s = (Set<String>) c[1];
+            return s;
+        }
+        Set<String> s = Identity.of(l, 40);
+        fpCache.put(l.letter() + "@" + l.dir(), new Object[] {l.apis().size(), s});
+        return s;
+    }
+
+    /** Every own account workspace is on the shared web account list, with its login fingerprints. */
+    private void registerLocalAccounts(List<ProjectData.LocalAccount> locals, String me) {
+        ProjectConfig cfg = store.config();
+        for (ProjectData.LocalAccount l : locals) {
+            SyncRecord rec = store.record(SyncRecord.ACCT + ":" + l.letter());
+            ProjectConfig.Account base = rec != null ? ProjectConfig.Account.fromMap(new LinkedHashMap<>(rec.data())) : cfg.account(l.letter());
+            boolean changed = rec == null;
+            if (base == null) {
+                base = new ProjectConfig.Account(l.letter(), l.name(), me);
+            }
+            List<String> f = new ArrayList<>(base.fps());
+            for (String x : fps(l)) {
+                if (!f.contains(x)) {
+                    f.add(x);
+                    changed = true;
+                }
+            }
+            String name = base.name().isEmpty() ? l.name() : base.name();
+            changed |= !name.equals(base.name());
+            String createdBy = base.createdBy().isEmpty() ? me : base.createdBy();
+            long createdAt = base.createdAt() > 0 ? base.createdAt() : System.currentTimeMillis();
+            changed |= base.createdBy().isEmpty() || base.createdAt() == 0;
+            if (changed) {
+                if (rec == null && createdBy.equalsIgnoreCase(me)) {
+                    createdLetters.add(l.letter());
+                }
+                store.putAccount(new ProjectConfig.Account(l.letter(), name, base.owner().isEmpty() ? me : base.owner(), base.aliases(),
+                        base.mergedInto(), f, createdBy, createdAt, base.mergedBy()), me, null);
+            }
+        }
+    }
+
+    /**
+     * Two people created the same letter for different web accounts (offline / at the same time): whoever's account does
+     * not hold the letter any more moves to the next free letter. Same login or similar name = same account: kept.
+     */
+    private boolean resolveClashes(List<ProjectData.LocalAccount> locals, String me) {
+        ProjectConfig cfg = store.config();
+        boolean moved = false;
+        for (String letter : new ArrayList<>(createdLetters)) {
+            SyncRecord rec = store.record(SyncRecord.ACCT + ":" + letter);
+            if (rec == null) {
+                continue;
+            }
+            String creator = rec.str("created_by");
+            if (creator.isEmpty() || creator.equalsIgnoreCase(me)) {
+                continue;
+            }
+            ProjectData.LocalAccount mine = locals.stream().filter(x -> x.letter().equals(letter)).findFirst().orElse(null);
+            createdLetters.remove(letter);
+            if (mine == null) {
+                continue;
+            }
+            ProjectConfig.Account theirs = ProjectConfig.Account.fromMap(new LinkedHashMap<>(rec.data()));
+            Set<String> myFp = fps(mine);
+            boolean same = myFp.stream().anyMatch(theirs.fps()::contains) || ProjectConfig.similar(theirs.name(), mine.name())
+                    || theirs.aliases().stream().anyMatch(a -> ProjectConfig.similar(a, mine.name()));
+            if (same) {
+                continue;   // the same web account: one column for everyone who uses it
+            }
+            String nl = cfg.nextLetter();
+            themythofcrawl.store.Workspaces.setMeta(mine.dir(), "letter", nl);
+            store.putAccount(new ProjectConfig.Account(nl, mine.name(), me, List.of(), "", new ArrayList<>(myFp), me,
+                    System.currentTimeMillis(), ""), me, null);
+            createdLetters.add(nl);
+            accountNotice = "Chữ " + letter + " đã được " + creator + " dùng cho tài khoản web " + theirs.display()
+                    + ": tài khoản web \"" + mine.name() + "\" của bạn chuyển thành " + nl;
+            store.log(me, "acct", nl, accountNotice);
+            moved = true;
+        }
+        return moved;
+    }
+
+    /** Web accounts with the same login fingerprint are one web account: the later ones merge into the first (undoable). */
+    private void autoMerge(String me) {
+        ProjectConfig cfg = store.config();
+        Map<String, List<ProjectConfig.Account>> byFp = new LinkedHashMap<>();
+        for (ProjectConfig.Account a : cfg.activeAccounts()) {
+            for (String f : a.fps()) {
+                byFp.computeIfAbsent(f, k -> new ArrayList<>()).add(a);
+            }
+        }
+        for (List<ProjectConfig.Account> group : byFp.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+            ProjectConfig.Account keeper = group.stream().min(Comparator.comparingLong((ProjectConfig.Account a) -> a.createdAt() > 0
+                    ? a.createdAt() : Long.MAX_VALUE).thenComparing(ProjectConfig.Account::letter)).orElseThrow();
+            for (ProjectConfig.Account a : group) {
+                if (a.letter().equals(keeper.letter()) || a.merged()) {
+                    continue;
+                }
+                SyncRecord rec = store.record(SyncRecord.ACCT + ":" + a.letter());
+                Object no = rec == null ? null : rec.data().get("no_auto");
+                if (no instanceof List<?> l && l.contains(keeper.letter())) {
+                    continue;   // someone split them on purpose
+                }
+                store.putAccount(a.withMerged(keeper.letter(), "tự động: cùng người đăng nhập"), me, null);
+                accountNotice = "Đã gộp " + a.display() + " vào " + keeper.display() + " (cùng người đăng nhập)";
+                store.log(me, "acct", a.letter(), accountNotice);
+            }
+        }
+    }
+
     private String me() {
         String m = store.config().me;
         return Text.blank(m) ? System.getProperty("user.name", "Tôi") : m;
@@ -265,6 +406,10 @@ public final class ProjectSync implements AutoCloseable {
             helloDone = true;
         }
         uploadImages(d, hub);
+        if (cfg.shareDetails) {
+            uploadDetails(d, hub);
+        }
+        uploadClientImages(hub);
         List<SyncRecord> out = new ArrayList<>();
         Map<String, SyncRecord> mine = localRecords(d, me);
         for (SyncRecord r : mine.values()) {
@@ -276,7 +421,8 @@ public final class ProjectSync implements AutoCloseable {
         // things this person sent before and no longer has (API deleted, Q&A removed)
         for (String id : new ArrayList<>(pushedHash.keySet())) {
             String type = SyncRecord.typeOf(id);
-            if (!mine.containsKey(id) && (SyncRecord.CELL.equals(type) || SyncRecord.QA.equals(type) || SyncRecord.ROW.equals(type))) {
+            if (!mine.containsKey(id) && (SyncRecord.CELL.equals(type) || SyncRecord.QA.equals(type) || SyncRecord.ROW.equals(type)
+                    || SyncRecord.API.equals(type))) {
                 SyncRecord cur = store.record(id);
                 if (cur != null && !cur.deleted()) {
                     out.add(new SyncRecord(id, type, me, cur.account(), Map.of(), System.currentTimeMillis(), me, true, 0L));
@@ -335,6 +481,15 @@ public final class ProjectSync implements AutoCloseable {
             m.put("branch", c.branch());
             ProjectConfig.Account a = cfg.account(c.letter());
             m.put("account_name", a == null ? "" : a.name());
+            if (!c.tags().isEmpty()) {
+                m.put("tags", new ArrayList<>(c.tags()));
+            }
+            if (!c.bugs().isEmpty()) {
+                m.put("bugs", new ArrayList<>(c.bugs()));
+            }
+            if (!c.roles().isEmpty()) {
+                m.put("roles", new LinkedHashMap<>(c.roles()));
+            }
             String id = SyncRecord.CELL + ":" + c.rowId() + ":" + c.letter() + ":" + me;
             out.put(id, new SyncRecord(id, SyncRecord.CELL, me, c.letter(), m, now, me, false, 0L));
             if (c.rowId().startsWith("K:")) {
@@ -373,7 +528,32 @@ public final class ProjectSync implements AutoCloseable {
                 }
                 m.put("images", im);
                 String id = SyncRecord.QA + ":" + q.item().id();
-                out.put(id, new SyncRecord(id, SyncRecord.QA, me, q.letter(), m, now, me, false, 0L));
+                out.put(id, new SyncRecord(id, SyncRecord.QA, me, q.raw(), m, now, me, false, 0L));
+            }
+        }
+        if (cfg.shareDetails) {
+            for (ProjectData.LocalAccount l : d.locals()) {
+                for (ProjectData.ApiFact a : l.apis()) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    String rid = a.targetRow() != null && d.row(ProjectData.stdRowId(a.targetRow())) != null
+                            ? ProjectData.stdRowId(a.targetRow()) : ProjectData.keyRowId(a.key());
+                    m.put("row", rid);
+                    m.put("gid", a.gid());
+                    m.put("method", a.method());
+                    m.put("path", a.path());
+                    m.put("host", a.host());
+                    m.put("branch", a.branch());
+                    m.put("http", a.http() == null ? 0 : a.http());
+                    m.put("created", a.createdMs());
+                    m.put("hidden", a.hidden());
+                    m.put("tags", new ArrayList<>(a.tags()));
+                    m.put("bugs", new ArrayList<>(a.bugs()));
+                    m.put("roles", new ArrayList<Object>(a.roles()));
+                    String det = details.get(l.letter() + "/" + a.gid());
+                    m.put("file", det == null || det.indexOf('|') < 0 ? "" : det.substring(det.lastIndexOf('|') + 1));
+                    String id = SyncRecord.API + ":" + l.letter() + ":" + me + ":" + a.gid();
+                    out.put(id, new SyncRecord(id, SyncRecord.API, me, l.letter(), m, now, me, false, 0L));
+                }
             }
         }
         String[] doing = host.doing();
@@ -415,6 +595,94 @@ public final class ProjectSync implements AutoCloseable {
         }
     }
 
+    /** Request / response of each own API (masked), uploaded once per change (V_11.5, only when the PIC turned it on). */
+    private void uploadDetails(ProjectData d, SheetHub hub) throws IOException {
+        int budget = 20;
+        for (ProjectData.LocalAccount l : d.locals()) {
+            for (ProjectData.ApiFact a : l.apis()) {
+                if (budget <= 0) {
+                    return;
+                }
+                String key = l.letter() + "/" + a.gid();
+                String sig = signature(l, a.gid());
+                String cur = details.get(key);
+                if (cur != null && cur.startsWith(sig + "|")) {
+                    continue;
+                }
+                byte[] json = detailJson(l, a).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                SheetHub.Uploaded u = hub.uploadFile("api-" + l.letter() + "-" + a.gid(), "chi-tiet.json", "application/json", json);
+                details.put(key, sig + "|" + u.id());
+                budget--;
+            }
+        }
+    }
+
+    private static String signature(ProjectData.LocalAccount l, int gid) {
+        StringBuilder sb = new StringBuilder();
+        for (String f : List.of("meta.json", "orig.req", "orig.resp")) {
+            Path p = l.dir().resolve("apis").resolve(String.valueOf(gid)).resolve(f);
+            try {
+                sb.append(Files.isRegularFile(p) ? Files.size(p) + ":" + Files.getLastModifiedTime(p).toMillis() : "-").append(';');
+            } catch (IOException e) {
+                sb.append("?;");
+            }
+        }
+        return Integer.toHexString(sb.toString().hashCode());
+    }
+
+    /** Masked request / response (tokens, cookies, passwords, JWT), each cut at 256 KB. */
+    static String detailJson(ProjectData.LocalAccount l, ProjectData.ApiFact a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("letter", l.letter());
+        m.put("gid", a.gid());
+        boolean cut = false;
+        String[] parts = new String[2];
+        String[] names = {"orig.req", "orig.resp"};
+        for (int i = 0; i < 2; i++) {
+            byte[] b = l.image(a.gid(), names[i]);
+            String t = b == null ? "" : new String(b, java.nio.charset.StandardCharsets.UTF_8);
+            if (t.length() > DETAIL_LIMIT) {
+                t = t.substring(0, DETAIL_LIMIT);
+                cut = true;
+            }
+            parts[i] = themythofcrawl.core.ActivityLog.redact(t);
+        }
+        m.put("request", parts[0]);
+        m.put("response", parts[1]);
+        m.put("truncated", cut);
+        m.put("roles", new ArrayList<Object>(a.roles()));
+        return Json.write(m);
+    }
+
+    /** A teammate's API details: from the local cache, else downloaded once. Null when not shared / not uploaded yet. */
+    public Map<String, Object> detail(String fileId) throws IOException {
+        if (Text.blank(fileId)) {
+            return null;
+        }
+        Path f = store.syncDir().resolve("chi-tiet").resolve(ProjectStore.safe(fileId) + ".json");
+        if (!Files.isRegularFile(f)) {
+            ProjectStore.write(f, hub().downloadImage(fileId));
+        }
+        return Json.parseObject(Files.readString(f, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** Client screenshots waiting to be uploaded (ClientRound for a Q&A of another workspace). */
+    private void uploadClientImages(SheetHub hub) throws IOException {
+        for (SyncRecord r : store.pending()) {
+            if (!SyncRecord.QAIMG.equals(r.type()) || !r.str("file").isEmpty() || r.str("local").isEmpty()) {
+                continue;
+            }
+            Path p = store.dir().resolve(r.str("local"));
+            if (!Files.isRegularFile(p)) {
+                continue;
+            }
+            SheetHub.Uploaded u = hub.uploadFile(r.str("qa"), p.getFileName().toString(), "image/png", Files.readAllBytes(p));
+            Map<String, Object> data = new LinkedHashMap<>(r.data());
+            data.put("file", u.id());
+            store.putLocal(new SyncRecord(r.id(), r.type(), r.owner(), r.account(), data, System.currentTimeMillis(), r.by(), false, 0L));
+        }
+    }
+
     /** Applies what came from the team: project settings (from PIC / PIC phụ) and answers to this person's Q&A. */
     private void apply(List<SyncRecord> changed, String me, Set<String> localQa) {
         ProjectConfig cfg = store.config();
@@ -427,6 +695,19 @@ public final class ProjectSync implements AutoCloseable {
                     store.save();
                     store.log(r.by(), "project", "project", "Nhận cài đặt dự án từ " + r.by());
                 }
+            }
+            if (SyncRecord.QAIMG.equals(r.type()) && !r.deleted() && !r.str("file").isEmpty() && localQa.contains(r.str("qa"))
+                    && !appliedAnswers.containsKey("img:" + r.id())) {
+                try {
+                    byte[] img = hub().downloadImage(r.str("file"));
+                    if (host.applyImage(r.str("qa"), img)) {
+                        appliedAnswers.put("img:" + r.id(), r.at());
+                        store.log(r.by(), "qaimg", r.str("qa"), "Ảnh khách hàng gắn vào Q&A");
+                    }
+                } catch (IOException ignored) {
+                    // next cycle
+                }
+                continue;
             }
             if (SyncRecord.QANS.equals(r.type()) && !r.deleted()) {
                 String qaId = r.id().substring(SyncRecord.QANS.length() + 1);
@@ -669,6 +950,10 @@ public final class ProjectSync implements AutoCloseable {
             Json.obj(m, "pushed").forEach((k, v) -> pushedHash.put(k, String.valueOf(v)));
             Json.obj(m, "images").forEach((k, v) -> images.put(k, String.valueOf(v)));
             Json.obj(m, "answers").forEach((k, v) -> appliedAnswers.put(k, v instanceof Number n ? n.longValue() : 0L));
+            Json.obj(m, "details").forEach((k, v) -> details.put(k, String.valueOf(v)));
+            for (Object o : Json.list(m, "created")) {
+                createdLetters.add(String.valueOf(o));
+            }
         } catch (IOException | RuntimeException ignored) {
             // start fresh: a full push / pull
         }
@@ -682,6 +967,8 @@ public final class ProjectSync implements AutoCloseable {
         m.put("pushed", new LinkedHashMap<>(pushedHash));
         m.put("images", new LinkedHashMap<>(images));
         m.put("answers", new LinkedHashMap<>(appliedAnswers));
+        m.put("details", new LinkedHashMap<>(details));
+        m.put("created", new ArrayList<>(createdLetters));
         try {
             ProjectStore.write(stateFile(), Json.write(m).getBytes(StandardCharsets.UTF_8));
         } catch (RuntimeException ignored) {

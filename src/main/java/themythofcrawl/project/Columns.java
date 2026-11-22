@@ -24,10 +24,13 @@ public final class Columns {
     public static final String TESTER = "TESTER";
     public static final String TESTED_AT = "TESTED_AT";
     public static final String SOURCE = "SOURCE";
+    public static final String BUGS = "BUGS";
+    public static final String TAGS = "TAGS";
+    public static final String ROLES = "ROLES";
     public static final String ACC_PREFIX = "ACC:";
 
-    public static final List<String> ALL = List.of(STT, PATH, METHOD, BRANCH, HOST, ACCOUNTS, REACHED, BAC, QA, INFO, NOTE,
-            TESTER, TESTED_AT, SOURCE);
+    public static final List<String> ALL = List.of(STT, PATH, METHOD, BRANCH, HOST, ACCOUNTS, REACHED, BAC, BUGS, TAGS, ROLES, QA, INFO,
+            NOTE, TESTER, TESTED_AT, SOURCE);
 
     private Columns() {
     }
@@ -52,6 +55,9 @@ public final class Columns {
             case TESTER -> "Người test";
             case TESTED_AT -> "Ngày test";
             case SOURCE -> "Nguồn";
+            case BUGS -> "Lỗi đã đánh dấu";
+            case TAGS -> "Tag";
+            case ROLES -> "Kết quả theo vai trò";
             default -> id;
         };
     }
@@ -63,6 +69,8 @@ public final class Columns {
             case BAC -> "Tài khoản thấp gọi được thứ tài khoản cao bị chặn: cần xem";
             case SOURCE -> "File chuẩn / Từ crawl A / Ngoài danh sách / Chỉ B có";
             case TESTER -> "Người cập nhật trạng thái gần nhất";
+            case BUGS -> "Lỗi đã đánh dấu ở tab Lỗi (đang mở), theo tài khoản";
+            case ROLES -> "Gửi lại theo vai trò: status của từng vai trò, vd 01_Admin 200 · 02_User 403";
             default -> "";
         };
     }
@@ -82,7 +90,7 @@ public final class Columns {
 
     public static List<ProjectConfig.Profile> presets() {
         return List.of(
-                profile("Nội bộ", STT, METHOD, PATH, BRANCH, ACCOUNTS, REACHED, BAC, QA, INFO, NOTE, TESTER, TESTED_AT, SOURCE),
+                profile("Nội bộ", STT, METHOD, PATH, BRANCH, ACCOUNTS, REACHED, BAC, BUGS, QA, INFO, NOTE, TESTER, TESTED_AT, SOURCE),
                 profile("Nộp khách hàng", STT, PATH, METHOD, BRANCH, ACCOUNTS, QA, NOTE),
                 profile("Q&A", STT, PATH, METHOD, QA, ACCOUNTS));
     }

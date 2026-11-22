@@ -116,40 +116,88 @@ final class FamilyTab {
         info.setText(sb.toString().trim() + " · " + report.rows().size() + " API khác nhau");
     }
 
+    /**
+     * V_11.5: the next web account to crawl. Picked from the shared web account list (so two people crawling with the same
+     * login share one column), or a new one registered on the list right away (synced to the whole team).
+     */
     void createChild() {
-        String name = ui.ask("Tên tài khoản tiếp theo (vd user, staff, guest):", "user");
-        if (name == null || name.isBlank()) {
-            return;
-        }
-        ui.engine.flush();
-        FileStorage child = ui.workspaces.createChild(current(), name.trim(), ui.engine.templateStateJson());
-        // V_11.4: the next free letter of the project (A = root, B, C...)
-        java.util.Set<String> used = new java.util.HashSet<>();
+        themythofcrawl.project.ProjectConfig cfg = ui.project.ready() ? ui.project.config() : null;
+        java.util.Set<String> local = new java.util.HashSet<>();
         for (themythofcrawl.project.ProjectData.LocalAccount l : themythofcrawl.project.ProjectData.loadLocal(current())) {
-            used.add(l.letter());
+            local.add(l.letter());
         }
-        if (ui.project.ready()) {
-            for (themythofcrawl.project.ProjectConfig.Account a : ui.project.config().accounts) {
-                used.add(a.letter());
+        javax.swing.JComboBox<String> pick = new javax.swing.JComboBox<>();
+        java.util.List<String> letters = new java.util.ArrayList<>();
+        if (cfg != null) {
+            for (themythofcrawl.project.ProjectConfig.Account a : cfg.activeAccounts()) {
+                if (!local.contains(a.letter())) {
+                    pick.addItem(a.display() + (a.aliases().isEmpty() ? "" : "  (còn gọi: " + String.join(", ", a.aliases()) + ")"));
+                    letters.add(a.letter());
+                }
             }
         }
-        char c = 'B';
-        while (used.contains(String.valueOf(c)) && c < 'Z') {
-            c++;
+        pick.addItem("Tài khoản web mới...");
+        javax.swing.JTextField name = new javax.swing.JTextField("", 18);
+        name.putClientProperty("JTextField.placeholderText", "vd staff, user, guest");
+        JPanel f = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
+        f.add(Ui.muted("Chọn tài khoản web (tài khoản đăng nhập website) bạn sẽ crawl. Đã có trong danh sách chung thì chọn, đừng tạo mới:"));
+        f.add(pick);
+        f.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Tên nếu tạo mới:"), name));
+        if (javax.swing.JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), f, "Tài khoản web tiếp theo",
+                javax.swing.JOptionPane.OK_CANCEL_OPTION) != javax.swing.JOptionPane.OK_OPTION) {
+            return;
         }
-        Workspaces.setMeta(child.dir(), "letter", String.valueOf(c));
-        if (ui.project.ready()) {
-            ui.project.config().ensureAccount(String.valueOf(c), name.trim());
-            ui.project.saveConfig("Tài khoản " + c + " · " + name.trim());
+        String letter;
+        String display;
+        if (pick.getSelectedIndex() < letters.size()) {
+            letter = letters.get(pick.getSelectedIndex());
+            display = cfg.account(letter).name();
+        } else {
+            String n = name.getText().trim();
+            if (n.isEmpty()) {
+                n = ui.ask("Tên tài khoản web mới (vd user, staff, guest):", "user");
+                if (n == null || n.isBlank()) {
+                    return;
+                }
+                n = n.trim();
+            }
+            themythofcrawl.project.ProjectConfig.Account same = cfg == null ? null : ProjectDialogs.similarTo(cfg, n);
+            if (same != null && ui.confirmDialog("\"" + n + "\" giống tài khoản web " + same.display() + " đã có. Dùng " + same.display()
+                    + " (cùng 1 cột với người khác)?")) {
+                letter = same.letter();
+                display = same.name();
+            } else {
+                java.util.Set<String> used = new java.util.HashSet<>(local);
+                if (cfg != null) {
+                    for (themythofcrawl.project.ProjectConfig.Account a : cfg.accounts) {
+                        used.add(a.letter());
+                    }
+                }
+                char c = 'B';
+                while (used.contains(String.valueOf(c)) && c < 'Z') {
+                    c++;
+                }
+                letter = String.valueOf(c);
+                display = n;
+                if (cfg != null) {
+                    ui.project.store().putAccount(new themythofcrawl.project.ProjectConfig.Account(letter, n, ui.project.me(), java.util.List.of(),
+                            "", java.util.List.of(), ui.project.me(), System.currentTimeMillis(), ""), ui.project.me(), null);
+                    ui.project.store().saveRecords();
+                }
+            }
         }
+        ui.engine.flush();
+        FileStorage child = ui.workspaces.createChild(current(), display, ui.engine.templateStateJson());
+        Workspaces.setMeta(child.dir(), "letter", letter);
         ui.openWorkspaceFromFamily(child);
-        ui.flash("Đã tạo workspace cho tài khoản " + name.trim() + " (cùng cây nhánh và danh sách chuẩn, chưa có API): Excel > Dự án"
-                + " hiện mọi API của tài khoản trên, dòng chưa gọi = Missing");
+        ui.project.syncSoon();
+        ui.flash("Workspace cho tài khoản web " + letter + " · " + display + " (cùng cây nhánh và danh sách chuẩn, chưa có API):"
+                + " Excel > Dự án hiện mọi API, dòng chưa gọi = Missing");
     }
 
     /** The same list as a sub menu (Dự án > Tài khoản). */
     javax.swing.JMenu switchMenuAsMenu() {
-        javax.swing.JMenu m = new javax.swing.JMenu("Mở tài khoản khác");
+        javax.swing.JMenu m = new javax.swing.JMenu("Mở workspace tài khoản web khác");
         m.setIcon(Icons.themed(t -> Icons.folder(t.fg)));
         for (java.awt.Component c : switchMenu().getComponents()) {
             if (c instanceof javax.swing.JMenuItem mi) {

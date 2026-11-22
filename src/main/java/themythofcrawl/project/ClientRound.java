@@ -232,8 +232,15 @@ public final class ClientRound {
                     String file = "khach-hang-" + System.currentTimeMillis() % 1_000_000 + "." + (c.imageExt() == null ? "png" : c.imageExt());
                     Path dir = store.qaImageDir(c.target().isEmpty() ? "khong-ro" : c.target());
                     ProjectStore.write(dir.resolve(file), c.image());
-                    if (imageSink != null && !c.target().isEmpty()) {
-                        imageSink.test(c.target(), c.image());
+                    boolean attached = imageSink != null && !c.target().isEmpty() && imageSink.test(c.target(), c.image());
+                    if (!attached && !c.target().isEmpty()) {
+                        // the Q&A lives in someone else's workspace: the team sync carries it to its owner
+                        Map<String, Object> d = new java.util.LinkedHashMap<>();
+                        d.put("qa", c.target());
+                        d.put("local", store.dir().relativize(dir.resolve(file)).toString().replace('\\', '/'));
+                        d.put("file", "");
+                        d.put("via", via);
+                        store.putLocal(SyncRecord.of(SyncRecord.QAIMG + ":" + c.target() + ":" + sha(c.image()).substring(0, 10), by, "", d, via));
                     }
                     n++;
                 }

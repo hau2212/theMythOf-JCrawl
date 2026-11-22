@@ -244,7 +244,7 @@ public final class ProjectWorkbook {
         if (id.startsWith(Columns.ACC_PREFIX)) {
             String l = id.substring(Columns.ACC_PREFIX.length());
             ProjectData.Cell c = r.cell(l);
-            String text = c.text(l) + (c.conflict && !c.manual ? " · Xung đột" : "") + (c.doingBy.isEmpty() ? "" : " · " + c.doingBy);
+            String text = c.text(l);
             return StyledCell.of(text, tone(c));
         }
         return switch (id) {
@@ -267,6 +267,34 @@ public final class ProjectWorkbook {
             case Columns.TESTER -> r.tester();
             case Columns.TESTED_AT -> ProjectStore.time(r.testedAt());
             case Columns.SOURCE -> r.sourceLabel();
+            case Columns.BUGS -> {
+                List<String> parts = new ArrayList<>();
+                for (String l : letters) {
+                    for (String b : r.cell(l).bugs) {
+                        parts.add(b + " [" + l + "]");
+                    }
+                }
+                yield parts.isEmpty() ? "" : StyledCell.of(String.join("; ", parts), CellTone.ERROR_RED);
+            }
+            case Columns.ROLES -> {
+                List<String> parts = new ArrayList<>();
+                for (String l : letters) {
+                    ProjectData.Cell c = r.cell(l);
+                    if (!c.roles.isEmpty()) {
+                        StringBuilder sb = new StringBuilder(l).append(": ");
+                        c.roles.forEach((k, v) -> sb.append(k).append(' ').append(v).append(" · "));
+                        parts.add(sb.substring(0, sb.length() - 3));
+                    }
+                }
+                yield String.join("; ", parts);
+            }
+            case Columns.TAGS -> {
+                java.util.Set<String> t = new java.util.TreeSet<>();
+                for (String l : letters) {
+                    t.addAll(r.cell(l).tags);
+                }
+                yield String.join(", ", t);
+            }
             default -> "";
         };
     }
@@ -299,7 +327,9 @@ public final class ProjectWorkbook {
             case Columns.HOST -> 22;
             case Columns.REACHED -> 12;
             case Columns.BAC -> 34;
-            case Columns.QA, Columns.INFO -> 30;
+            case Columns.QA, Columns.INFO, Columns.BUGS -> 30;
+            case Columns.TAGS -> 18;
+            case Columns.ROLES -> 40;
             case Columns.NOTE -> 36;
             case Columns.TESTER -> 14;
             case Columns.TESTED_AT -> 17;
@@ -514,11 +544,26 @@ public final class ProjectWorkbook {
             }
             rows.add(List.of(StyledCell.of("API có Q&A ở mọi tài khoản", CellTone.BOLD), both.size()));
         }
+        List<ProjectData.PersonStats> people = d.people();
+        if (!people.isEmpty()) {
+            rows.add(List.of());
+            rows.add(List.of(StyledCell.of("Theo người làm", CellTone.HEADER)));
+            rows.add(List.of(StyledCell.of("Người làm", CellTone.BOLD), StyledCell.of("Tài khoản web", CellTone.BOLD),
+                    StyledCell.of("API đã test", CellTone.BOLD), StyledCell.of("Done", CellTone.BOLD), StyledCell.of("Denied", CellTone.BOLD),
+                    StyledCell.of("Error", CellTone.BOLD), StyledCell.of("Đặt tay", CellTone.BOLD), StyledCell.of("Q&A đã hỏi", CellTone.BOLD)));
+            for (ProjectData.PersonStats p : people) {
+                List<String> accs = new ArrayList<>();
+                for (String l : p.letters()) {
+                    accs.add(d.config().accountDisplay(l));
+                }
+                rows.add(List.of(p.person(), String.join(", ", accs), p.apis(), p.done(), p.denied(), p.error(), p.manual(), p.qa()));
+            }
+        }
         if (!d.conflicts().isEmpty()) {
             rows.add(List.of());
             rows.add(List.of(StyledCell.of("Xung đột chờ PIC chọn: " + d.conflicts().size(), CellTone.CONFLICT_ORANGE)));
         }
-        int[] w = new int[1 + Math.max(1, letters.size())];
+        int[] w = new int[Math.max(8, 1 + letters.size())];
         w[0] = 46;
         for (int i = 1; i < w.length; i++) {
             w[i] = 18;

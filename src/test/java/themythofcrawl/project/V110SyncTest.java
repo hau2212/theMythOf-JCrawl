@@ -105,6 +105,13 @@ class V110SyncTest {
             answers.add(qaId + "=" + msg.text());
             return true;
         }
+
+        final List<String> images = new CopyOnWriteArrayList<>();
+
+        @Override public boolean applyImage(String qaId, byte[] image) {
+            images.add(qaId + ":" + image.length);
+            return true;
+        }
     }
 
     ProjectStore store(Path ws, String me) {
@@ -181,7 +188,7 @@ class V110SyncTest {
 
         // the human sheets were drawn
         List<List<Object>> sum = sheet("Tổng hợp");
-        assertTrue(sum.toString().contains("Denied (B) 403"), sum.toString());
+        assertTrue(sum.toString().contains("Denied (Bình) 403"), sum.toString());
         List<List<Object>> qa = sheet("Q&A");
         assertTrue(qa.toString().contains("HYPERLINK(\"https://drive.google.com/file/d/"), qa.toString());
         // the member's Excel copy has the PIC's screenshot (downloaded from the team folder)
@@ -229,5 +236,181 @@ class V110SyncTest {
         assertTrue(m1.rebuildSheet() >= before.size());
         m1.close();
         m2.close();
+    }
+
+    /** V_11.5: bugs / tags / role results always; request / response + tree only when the PIC turns it on; client images. */
+    @Test
+    void detailsBugsTagsAndClientImages(@TempDir Path dir) throws Exception {
+        startHub(dir);
+        Workspaces w1 = new Workspaces(Prefs.memory(), Prefs.memory(), dir.resolve("m1/x.jar").toString());
+        w1.setRoot(dir.resolve("m1"));
+        Engine a = V110ProjectTest.engine();
+        FileStorage fa = w1.start("p", "admin");
+        a.open(fa);
+        a.setTargets(excel());
+        a.setDestination("Users");
+        ApiGroup users = V110ProjectTest.cap(a, "GET", "/api/users/15", 200);
+        a.putBug(users, themythofcrawl.model.BugMark.create(themythofcrawl.model.BugMark.Type.IDOR, themythofcrawl.model.BugMark.Severity.HIGH,
+                themythofcrawl.model.BugMark.Status.CONFIRMED, "B", "xem được user khác", "Hậu"));
+        QaItem q = QaItem.create(QaItem.Kind.QA, "Đúng thiết kế?", List.of(), "A", "Hậu");
+        a.putQa(users, q);
+        a.flush();
+        a.close();
+        Workspaces w2 = new Workspaces(Prefs.memory(), Prefs.memory(), dir.resolve("m2/x.jar").toString());
+        w2.setRoot(dir.resolve("m2"));
+        Engine b = V110ProjectTest.engine();
+        FileStorage fb = w2.start("p", "staff");
+        Workspaces.setMeta(fb.dir(), "letter", "B");
+        b.open(fb);
+        b.setTargets(excel());
+        V110ProjectTest.cap(b, "GET", "/api/users/99", 200);
+        b.flush();
+        b.close();
+        ProjectStore s1 = store(fa.dir(), "Hậu");
+        s1.config().putMember(new ProjectConfig.Member("Hậu", ProjectConfig.Role.PIC, List.of("A"), ""));
+        s1.config().touch("Hậu");
+        ProjectStore s2 = store(fb.dir(), "Bình");
+        TestHost h1 = new TestHost(fa.dir());
+        TestHost h2 = new TestHost(fb.dir());
+        ProjectSync m1 = new ProjectSync(s1, h1);
+        ProjectSync m2 = new ProjectSync(s2, h2);
+        m1.cycle();
+        m2.cycle();
+        m1.cycle();
+        // always: bug marks reach the teammate; no api records while details are off
+        ProjectData.Cell ca = row(m2.data(), "/api/users/{id}").cell("A");
+        assertTrue(ca.bugs.stream().anyMatch(x -> x.startsWith("Dữ liệu người khác")), ca.bugs.toString());
+        assertTrue(ca.tags.contains(themythofcrawl.model.ApiTagCatalog.TAG_BUG), ca.tags.toString());
+        assertEquals("Done (Hậu) · Q&A", ca.text("A"));
+        assertTrue(s2.records().values().stream().noneMatch(r -> SyncRecord.API.equals(r.type())), "details off: nothing more is sent");
+
+        // the PIC turns details on: request / response (masked) + tree reach the member
+        s1.config().shareDetails = true;
+        s1.config().touch("Hậu");
+        m1.cycle();
+        m2.cycle();
+        assertTrue(s2.config().shareDetails, "the switch comes from the PIC");
+        m2.cycle();
+        m1.cycle();
+        m2.cycle();
+        SyncRecord api = s2.records().values().stream().filter(r -> SyncRecord.API.equals(r.type()) && r.owner().equals("Hậu")).findFirst()
+                .orElseThrow();
+        assertEquals("Users", api.str("branch"));
+        assertFalse(api.str("file").isEmpty(), api.toString());
+        java.util.Map<String, Object> det = m2.detail(api.str("file"));
+        String req = themythofcrawl.core.Json.str(det, "request", "");
+        assertTrue(req.startsWith("GET /api/users/15"), req);
+        assertFalse(req.contains("Bearer T\r"), "token masked: " + req);
+        assertTrue(req.contains("[đã che]"), req);
+        assertTrue(s1.records().values().stream().anyMatch(r -> SyncRecord.API.equals(r.type()) && r.owner().equals("Bình")));
+
+        // a client pastes a screenshot next to Hậu's question in a round Bình sent: it reaches Hậu's Q&A
+        ClientRound.Change img = new ClientRound.Change(ClientRound.Kind.IMAGE, "Q&A", q.id(), "", "", "", "",
+                V110ProjectTest.png(40, 30), "png");
+        ClientRound.apply(s2, List.of(img), "vong-1", "Bình", (id, bytes) -> false);
+        m2.cycle();
+        m1.cycle();
+        assertEquals(1, h1.images.size(), h1.images.toString());
+        assertTrue(h1.images.get(0).startsWith(q.id() + ":"));
+        assertTrue(h2.images.isEmpty());
+        m1.close();
+        m2.close();
+    }
+
+    static String jwt(String sub) {
+        java.util.Base64.Encoder e = java.util.Base64.getUrlEncoder().withoutPadding();
+        return "eyJhbGciOiJIUzI1NiJ9." + e.encodeToString(("{\"sub\":\"" + sub + "\",\"exp\":9999999999}").getBytes(StandardCharsets.UTF_8))
+                + ".c2lnbmF0dXJl";
+    }
+
+    static ApiGroup capAs(Engine e, String method, String path, int status, String sub) {
+        String req = method + " " + path + " HTTP/1.1\r\nHost: shop.test\r\nAuthorization: Bearer " + jwt(sub) + "\r\n\r\n";
+        return e.process(new Engine.Message(V110ProjectTest.SVC, req.getBytes(StandardCharsets.ISO_8859_1),
+                ("HTTP/1.1 " + status + " X\r\n\r\n{}").getBytes(StandardCharsets.ISO_8859_1), "https://shop.test" + path), "Proxy", true,
+                e.activeBranch().id());
+    }
+
+    record Person(String name, ProjectStore store, ProjectSync sync, Path ws) {
+    }
+
+    Person person(Path dir, String name, String letter, String account, String sub, String[][] calls) throws Exception {
+        Workspaces w = new Workspaces(Prefs.memory(), Prefs.memory(), dir.resolve(name + "/x.jar").toString());
+        w.setRoot(dir.resolve(name));
+        Engine e = V110ProjectTest.engine();
+        FileStorage f = w.start("p", account);
+        Workspaces.setMeta(f.dir(), "letter", letter);
+        Workspaces.setMeta(f.dir(), "account", account);
+        e.open(f);
+        e.setTargets(excel());
+        for (String[] c : calls) {
+            capAs(e, c[0], c[1], Integer.parseInt(c[2]), sub);
+        }
+        e.flush();
+        e.close();
+        ProjectStore st = store(f.dir(), name);
+        return new Person(name, st, new ProjectSync(st, new TestHost(f.dir())), f.dir());
+    }
+
+    /** V_11.5: web accounts are a shared list; same login = one column; letter clashes fixed; split; per-person stats. */
+    @Test
+    void webAccountsAreSharedAndMerged(@TempDir Path dir) throws Exception {
+        startHub(dir);
+        Person hau = person(dir, "hau", "A", "system", "u1", new String[][] {{"GET", "/api/users/15", "200"}});
+        hau.store().config().putMember(new ProjectConfig.Member("hau", ProjectConfig.Role.PIC, List.of("A"), ""));
+        hau.store().config().touch("hau");
+        Person an = person(dir, "an", "A", "system", "u1", new String[][] {{"GET", "/api/users/99", "200"}, {"GET", "/api/admin/stats", "403"}});
+        Person binh = person(dir, "binh", "B", "sys-tem", "u1", new String[][] {{"GET", "/api/orders", "200"}});
+        Person chi = person(dir, "chi", "C", "guest", "u2", new String[][] {{"GET", "/api/users/7", "403"}});
+        Person dung = person(dir, "dung", "C", "staff", "u3", new String[][] {{"GET", "/api/users/8", "200"}});
+        List<Person> all = List.of(hau, an, binh, chi, dung);
+        for (int round = 0; round < 4; round++) {
+            for (Person p : all) {
+                p.sync().cycle();
+                assertEquals(ProjectSync.State.OK, p.sync().status().state(), p.name() + ": " + p.sync().status().text());
+            }
+        }
+        ProjectData d = hau.sync().data();
+        ProjectConfig cfg = hau.store().config();
+        // same login (u1): B "sys-tem" merged into A "system" automatically
+        assertEquals("A", cfg.resolve("B"), cfg.accounts.toString());
+        assertFalse(d.letters().contains("B"), d.letters().toString());
+        ProjectData.Row users = row(d, "/api/users/{id}");
+        String a = users.cell("A").text("A");
+        assertTrue(a.startsWith("Done (") && a.contains("hau") && a.contains("an"), a);
+        assertEquals("Denied (an) 403", row(d, "/api/admin/stats").cell("A").text("A"));
+        assertEquals("Done (binh)", row(d, "/api/orders").cell("A").text("A"), "bình's results show in the system column: "
+                + row(d, "/api/orders").cells.keySet() + " " + hau.store().records().keySet().stream().filter(k -> k.contains("R4")).toList());
+        // letter clash: chi and dung both took C for different logins -> one of them moved to another letter
+        List<String> names = new java.util.ArrayList<>();
+        for (String l : d.letters()) {
+            names.add(cfg.account(l).name());
+        }
+        assertTrue(names.contains("guest") && names.contains("staff"), names.toString());
+        assertEquals(3, d.letters().size(), d.letters() + " " + names);
+        // every machine shows the same columns
+        for (Person p : all) {
+            assertEquals(d.letters(), p.sync().data().letters(), p.name());
+        }
+        // per-person stats
+        ProjectData.PersonStats ps = d.people().stream().filter(x -> x.person().equals("an")).findFirst().orElseThrow();
+        assertEquals(2, ps.apis());
+        assertEquals(1, ps.denied());
+        assertTrue(d.filter("person:binh").stream().anyMatch(r -> r.path.equals("/api/orders")));
+        // split on purpose: B gets its own column back and is not merged again automatically
+        ProjectConfig.Account b = cfg.account("B");
+        hau.store().putAccount(b.withMerged("", ""), "hau", java.util.Map.of("no_auto", List.of("A")));
+        for (int round = 0; round < 2; round++) {
+            for (Person p : all) {
+                p.sync().cycle();
+            }
+        }
+        assertTrue(hau.sync().data().letters().contains("B"));
+        assertTrue(an.sync().data().letters().contains("B"), "the split reached everyone");
+        assertEquals("Done (binh)", row(an.sync().data(), "/api/orders").cell("B").text("B"), an.store().records().values().stream()
+                .filter(r -> r.id().contains("R4") || r.id().startsWith("acct:B")).map(r -> r.id() + "=" + r.data() + " del=" + r.deleted()).toList()
+                .toString());
+        for (Person p : all) {
+            p.sync().close();
+        }
     }
 }

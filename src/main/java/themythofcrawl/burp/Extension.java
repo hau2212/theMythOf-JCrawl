@@ -50,7 +50,7 @@ import themythofcrawl.ui.MainPanel;
 
 /** Burp entry point (Montoya API). */
 public final class Extension implements BurpExtension {
-    public static final String VERSION = "11.4";
+    public static final String VERSION = "11.5";
 
     private static final long BRIDGE_TTL_MS = 15_000L;
     private static final Method SPOOF_METHOD = resolveStaticMethod(

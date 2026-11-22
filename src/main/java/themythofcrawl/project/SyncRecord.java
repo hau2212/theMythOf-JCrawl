@@ -33,6 +33,12 @@ public record SyncRecord(String id, String type, String owner, String account, M
     public static final String PROJECT = "project";
     public static final String PRESENCE = "presence";
     public static final String CONFLICT = "conflict";
+    /** V_11.5: one API of a teammate's workspace (shared only when the PIC turns on "Chia sẻ chi tiết"). */
+    public static final String API = "api";
+    /** V_11.5: a screenshot a client pasted in a report, for the Q&A owner to attach. */
+    public static final String QAIMG = "qaimg";
+    /** V_11.5: one web account of the shared list ("acct:<letter>"): name, other names, merged into, fingerprints. */
+    public static final String ACCT = "acct";
 
     public SyncRecord {
         id = Text.nz(id);
