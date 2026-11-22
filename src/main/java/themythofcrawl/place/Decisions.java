@@ -152,7 +152,7 @@ public final class Decisions {
             String origWhere = origin != null
                     ? Text.apiLabel(origin.gid()) + " tại " + origin.branch()
                     : (rec != null && rec.originBranch != null ? rec.originBranch + " (đã xóa)" : "Chưa xác định");
-            String badge = isOrig ? "BẢN GỐC #1" : "BẢN TRÙNG #" + g.dupNo() + "/" + copies.size();
+            String badge = isOrig ? "Bản gốc" : "Lần " + g.dupNo() + " / " + copies.size();
             String head = isOrig
                     ? "Đây là Bản Gốc (#1) — có thêm " + Math.max(0, copies.size() - 1) + " lần xuất hiện lại ở nơi khác"
                     : "API này đã có Bản Gốc (#1), vừa xuất hiện lại lần #" + g.dupNo() + " ở vị trí mới";

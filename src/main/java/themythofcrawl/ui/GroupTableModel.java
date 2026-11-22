@@ -336,7 +336,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                 if (!g.tags().isEmpty()) {
                     base = "[" + String.join("][", g.tags()) + "] " + base;
                 } else if (g.suspectedRefresh()) {
-                    base = "[? Refresh] " + base;
+                    base = "[Tải lại?] " + base;
                 }
                 yield base;
             }

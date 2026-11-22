@@ -70,7 +70,7 @@ final class TagManagerDialog {
             }
         });
         JCheckBox autoDetectChk = new JCheckBox(
-                "Tự động phát hiện API GET xuất hiện ngay sau hành động (POST/PUT/PATCH/DELETE trong <= 2.5s) và gợi ý [? Refresh]",
+                "Tự động phát hiện API GET xuất hiện ngay sau hành động (POST/PUT/PATCH/DELETE trong <= 2.5s) và gợi ý tag Tải lại?",
                 engine.config().autoDetectRefresh);
         autoDetectChk.setOpaque(false);
 
@@ -350,7 +350,7 @@ final class TagManagerDialog {
                 }
                 if (hasSuspected && !tagList.contains(ApiTagCatalog.TAG_REFRESH)) {
                     if (tagTxt.length() > 0) tagTxt.append(' ');
-                    tagTxt.append("[? Refresh]");
+                    tagTxt.append("[Tải lại?]");
                 }
                 ApiGroup orig = engine.originOf(rec.key);
                 String origBranch = orig != null ? orig.branch() : Text.nz(rec.originBranch != null ? rec.originBranch : rec.place);

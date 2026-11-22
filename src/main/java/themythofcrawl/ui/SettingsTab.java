@@ -92,7 +92,7 @@ final class SettingsTab {
     private final JCheckBox dupNew = new JCheckBox("Gặp API trùng ở chỗ mới: tạo bản #2, #3 ... và hỏi giữ hay ẩn (màu tím)");
     private final JCheckBox ghosts = new JCheckBox("Hiện API đã xóa (giữ chỗ) trong cây");
     private final JComboBox<String> refreshPolicyBox = new JComboBox<>();
-    private final JCheckBox autoDetectRefreshChk = new JCheckBox("Tự phát hiện API GET xuất hiện ngay sau hành động (<= 2.5s) & gợi ý [? Refresh]");
+    private final JCheckBox autoDetectRefreshChk = new JCheckBox("Tự phát hiện API GET xuất hiện ngay sau hành động (<= 2.5s) & gợi ý tag Tải lại?");
     private final JComboBox<String> profile = new JComboBox<>();
     private final JTextField delay = new JTextField(6);
     private final JTextField jitter = new JTextField(6);
@@ -213,12 +213,12 @@ final class SettingsTab {
                 "Request qua Proxy được bắt và nhân bản theo vai trò. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
                 row(scope), pair(ignoreStatic, staticExt), pair(regexOn, regex), pair(null, regexError), row(options)));
         sections.add(section("Trùng lặp & vị trí", t -> t.dup,
-                "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại / API REFRESH được xử lý.",
+                "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại / API tải lại được xử lý.",
                 row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts),
-                field("Chính sách API [REFRESH]:", refreshPolicyBox, null),
+                field("API tải lại:", refreshPolicyBox, null),
                 row(autoDetectRefreshChk),
-                pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
-                        Ui.muted("Danh mục Tag & hành vi M1-M4"))));
+                pair(Ui.button("Quản lý tag...", Icons::tag, ui::openTagManager),
+                        Ui.muted("Tag và cách xử lý API tải lại"))));
         sections.add(section("Gửi request", t -> t.success,
                 "Hàng đợi theo host chống 429 / 503; chế độ cho API thao tác (POST / PUT / PATCH / DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),

@@ -1,9 +1,57 @@
-# theMythOf-JCrawl (Java / Montoya) - V_9.2 (bản chính thức)
+# theMythOf-JCrawl (Java / Montoya) - V_9.3
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_9.3 - một khái niệm, một tên
+
+Rà soát toàn bộ chữ trên giao diện (khoảng 4.500 chuỗi): mỗi khái niệm chỉ còn **một tên**, nhãn ngắn, số luôn kèm chữ,
+không viết hoa toàn bộ, chi tiết để ở tooltip khi rê chuột. Có test tự động chặn tên cũ quay lại.
+
+### Từ điển
+
+| Khái niệm | Tên dùng trong app | Tên cũ (đã bỏ) |
+|---|---|---|
+| Tài khoản bạn dùng khi crawl | **Tài khoản crawl** | API gốc, Acc Crawl, 00_Original, [API GỐC] |
+| Tài khoản giả lập để test quyền | **Vai trò** | Role, Roles |
+| Một API đã bắt | **API 12** | #12, G12, API Group |
+| Lần bắt lại cùng API | **Lần 5 · gốc API 492** | #5 ← G492 |
+| Lần bắt lại đang chờ bạn quyết | **Giữ lần 5?** | Trùng #5 |
+| Bản đầu tiên của API | **Gốc · 3 lần** | GỐC · 3 |
+| Thư mục trên Cây | **Nhánh** | Sub-folder, Group Path |
+| Nhánh nhận request mới | **Nhánh đang crawl** | Đích |
+| Gửi lại request | **Gửi / Gửi lại** | Send, Replay, Forward |
+| Sửa request rồi gửi | **Sửa & gửi** | Composer |
+| Chặn khi crawl + cách gửi lại | **Chặn & gửi lại** (1 cửa sổ) | Bảo vệ dữ liệu, Luật chặn, Action Workbench |
+| Các lần bắt cùng API | **Các lần bắt** | Lineage, Bản Gốc & Trùng |
+| Tìm nhanh | **Tìm** (Ctrl+K) | Spotlight |
+| Dòng trong file Excel | **Excel 200** | #200 |
+| API đoán là tải lại | **Tải lại?** | ? Refresh |
+| Kết quả 1 vai trò | **Gọi được 200 · Bị chặn 403 · Chưa đăng nhập 401 · Nghi BAC · Chưa kết luận · Lỗi 500 · Chưa gửi** | OK: Thành công (200), INFO: Không đủ quyền (403)... |
+| Tóm tắt 1 nhánh | **3/12 cần xem** · **2/2 gọi được** | 5/12 lệch, OK: 2/2 API 2xx |
+| Chip đếm trên nhánh | **7 chờ** · **1 đã xóa** | ⧗ 7 · ⊡ 1 |
+| Hoạt động của app | **Hoạt động** (Cài đặt) | Log |
+| Xuất nhật ký cho Claude | **Nhật ký cho Claude** | |
+
+### Giao diện
+
+- **Thanh trên**: Bắt request **Tắt | Bắt** · gửi tự động **Không gửi | Tự gửi** · **Chờ gửi N** chỉ hiện khi đang có request chờ ·
+  **Xử lý N** · **Nhánh** đang crawl · **Chặn: Tắt / Hỏi trước / 200 giả / Cắt**.
+- **Tab**: Cây · API · Phân quyền · Lỗi · **Excel** · Vai trò · **Cần xử lý** · Cài đặt (Alt+1..8).
+  - Excel là tab riêng (trước nằm trong Báo cáo): *Xuất & làm việc nhóm* · *Đối chiếu file Excel*.
+  - Lịch sử nay là chế độ xem trong Cây: nút **Theo nhánh | Theo thời gian** trên thanh công cụ của Cây.
+  - Cần xử lý (trước là Duyệt): *Chờ xác nhận* · *Giữ chỗ* · *Lần bắt trùng* · *Lịch sử chỗ*.
+- **Chặn & gửi lại**: một cửa sổ, 6 trang: **Tổng quan** (2 câu hỏi: khi crawl chặn hay cho đi; khi gửi lại ID đã dùng thì làm gì)
+  · Chế độ · Luật · Kiểm tra · ID & 200 · Hướng dẫn. Mọi nút "Bảo vệ dữ liệu" / "Luật chặn" cũ mở cửa sổ này.
+- **Bảng API**: cột Dòng · Vai trò · Kết quả · Trạng thái · Mã · Độ dài · Chênh · Thời gian · Lần gửi · Ghi chú; bộ lọc
+  **Đúng hết / Cần xem / Nghi BAC / Lỗi / Chưa gửi / Chờ xác nhận**.
+- **Phân quyền**: chú giải gọn (Đúng · Bị chặn · Nghi BAC · Vi phạm · Khác nội dung · Thấy · bị chặn · Chưa rõ), rê chuột để xem nghĩa.
+- **Vai trò**: nút **Kiểm tra phiên** (Còn hạn 200 / Hết hạn 401 / Bị chặn 403).
+- **Excel**: bảng hiện Đã bắt / Cần xem / Chưa bắt / Ngoài phạm vi / Xung đột / Đang làm. File Excel và Google Sheets vẫn ghi mã
+  Done / Info / Missing / OOS / Conflict / Doing để đồng đội dùng bản cũ vẫn đọc được.
+- Dữ liệu workspace cũ mở bình thường; dòng "[API GỐC] 00_Original (Acc Crawl)" tự hiện thành "Tài khoản crawl".
 
 ## Điểm mới V_9.2 (bản chính thức)
 
