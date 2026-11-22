@@ -640,6 +640,15 @@ final class TreeTab {
                 UiPrefs.treeStartCollapsed(ui.uiPrefs));
         startCollapsed.addActionListener(Ui.safe(e -> UiPrefs.setTreeStartCollapsed(ui.uiPrefs, startCollapsed.isSelected())));
         m.add(startCollapsed);
+        javax.swing.JCheckBoxMenuItem missing = new javax.swing.JCheckBoxMenuItem("Hiện API tài khoản trên chưa gọi (theo Dự án)",
+                ui.project.showMissing());
+        missing.setToolTipText("Mỗi nhánh có thêm 1 dòng mờ: API trong danh sách chuẩn mà tài khoản đang mở chưa gọi");
+        missing.addActionListener(Ui.safe(e -> {
+            ui.project.setShowMissing(missing.isSelected());
+            ui.project.syncSoon();
+            tree.rebuild(engine.config().showGhosts);
+        }));
+        m.add(missing);
         m.addSeparator();
         m.add(Ui.item("Hướng dẫn Action & Ví dụ thực chiến...", Icons::info,
                 () -> ActionWorkbenchDialog.show(panel, engine, shownGroup, null, ActionWorkbenchDialog.TAB_GUIDE, ui::syncHeader)));
@@ -782,6 +791,7 @@ final class TreeTab {
     private void showEntry(ApiGroup g, RoleResult r) {
         shownHeld = null;
         shownGroup = g;
+        ui.project.setDoing(g);
         shown = r;
         inlineCardLayout.show(inlineActionBar, CARD_API);
         Object st = r.status() != null ? r.status() : r.state();

@@ -86,17 +86,18 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: họ workspace + thuật toán khớp path mới -> **\`V_10.4\`** (kênh stable).
+          > Theo \`VERSIONING.md\`: kiến trúc dự án nhiều tài khoản + đồng bộ nhóm -> **\`V_11.4\`** (kênh stable).
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Crawl từng tài khoản**: workspace con cho tài khoản tiếp theo (giữ cây nhánh + Excel), chip "Có ở / Mới so với", Excel > Tài khoản (ma trận, chuyển tài khoản, báo cáo tổng hợp).
-          2. **Hỏi đáp Q&A / Info**: câu hỏi, nhiều ảnh (dán Ctrl+V), câu trả lời của khách hàng; Excel Q&A có ảnh chèn thật.
-          3. **Request bị chặn**: nhãn API mới / Trùng / Đã xóa; gửi đồng loạt; **Gửi riêng** không qua Logger++.
-          4. **ID dạng chữ**: path cùng dòng Excel {ID} (new, old...) là cùng 1 API, lần sau là bản trùng; không có Excel thì chuột phải > Cùng 1 API.
-          5. **Cây**: xóa API thông minh (bản gốc hỏi + chuyển gốc), Mở hết / Thu hết, Nhóm.
-          6. **Nhật ký**: thời gian phản hồi, chậm / đứng, thói quen, Báo lỗi ở mọi cửa sổ, xuất Markdown / JSONL.
-          7. Kế thừa V_9.4 (tài khoản crawl là dòng 00 của Vai trò, sửa request gốc an toàn) và V_9.3.
+          1. **Excel > Dự án**: danh sách chuẩn (file Excel chuẩn hoặc dựng từ API tài khoản A) x mọi tài khoản: Done / Denied / Error / Missing / Doing / OOS, đặt tay, "Chỉ B có" chờ PIC duyệt, nghi BAC.
+          2. **Làm chung**: mỗi người workspace riêng trên OneDrive của mình, đồng bộ ~12 giây qua Google Sheet (Apps Script), PIC / PIC phụ / Thành viên, mã mời, sửa tay trên Sheet về JCrawl, xung đột cho PIC chọn.
+          3. **Excel của tôi**: mỗi người tự có BangLamViec.xlsx đầy đủ dữ liệu nhóm (có ảnh), tự cập nhật.
+          4. **Báo cáo**: chọn / sắp xếp cột (mẫu cột), chọn sheet (Sổ dự án), Tổng quan có công thức COUNTIFS + biểu đồ, theo từng tài khoản / cả dự án, thư mục bao-cao/ phân loại.
+          5. **Q&A**: ảnh theo bước có tiêu đề + mô tả, mức độ, cần ai trả lời, hạn, trao đổi nhiều lượt, sheet Chi tiết Q&A.
+          6. **Khách hàng**: gửi theo vòng (goc/ giữ lại, chia-se/ để share), nhập phản hồi (trả lời, trạng thái, ảnh khách hàng dán) có duyệt từng thay đổi.
+          7. **Sao lưu**: theo giờ / ngày, so sánh & khôi phục, dựng lại Google Sheet từ máy bất kỳ; chuyển dự án sang OneDrive 1 nút.
+          8. Cây: "Hiện API tài khoản trên chưa gọi". Kế thừa V_10.4.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

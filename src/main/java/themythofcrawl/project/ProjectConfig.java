@@ -13,7 +13,7 @@ import themythofcrawl.core.Json;
 import themythofcrawl.core.Text;
 
 /**
- * V_11.0 "Dự án" (du-an.json, next to the account workspaces): the accounts (A = highest, B, C...), the team and
+ * V_11.4 "Dự án" (du-an.json, next to the account workspaces): the accounts (A = highest, B, C...), the team and
  * their roles (PIC, PIC phụ, Thành viên), the project list decisions (added / removed APIs), the column templates,
  * the workbook sheets and the sync settings. One copy per person (in their own OneDrive); the shared part travels
  * through the team sheet (record "project"), the PIC's / PIC phụ's version wins.

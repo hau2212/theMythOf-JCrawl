@@ -1,6 +1,13 @@
-# Plan V_10.5 → V_11.0: Dự án nhiều tài khoản, Excel nâng cao, Q&A, làm chung
+# Plan V_10.5 → V_11.4: Dự án nhiều tài khoản, Excel nâng cao, Q&A, làm chung
 
-Trạng thái: **đã duyệt** (người dùng duyệt toàn bộ). Chưa triển khai.
+Trạng thái: **đã triển khai trong V_11.4** (theo quy tắc phiên bản: kiến trúc mới -> MAJOR 11, giữ MINOR 4).
+
+Khác với plan:
+- Không dùng Microsoft Graph (công ty chặn ứng dụng ngoài): Excel chung là **Excel của mỗi người** tự cập nhật trên OneDrive riêng,
+  Google Sheet là trung tâm đồng bộ (đúng mô hình người dùng chốt cuối cùng).
+- Ảnh trên Google Sheet là **link** tới file trong thư mục Drive của dự án (Apps Script không đặt ảnh vào ô bền vững khi sheet được vẽ lại);
+  file Excel (của tôi, báo cáo, gửi khách hàng) luôn có ảnh chèn thật.
+- Ảnh khách hàng dán vào file được gắn thẳng vào Q&A của workspace đang mở; Q&A của người khác: ảnh lưu trong anh-qa/<mã Q&A>/.
 
 ## 0. Quyết định đã chốt
 
@@ -55,7 +62,7 @@ Trạng thái: **đã duyệt** (người dùng duyệt toàn bộ). Chưa tri�
 - Cùng cấu hình cho `.xlsx`, Excel online và Google Sheet.
 - Quản trị (PIC): tài khoản & ký hiệu, thành viên & phân công, khóa danh sách chuẩn, xung đột, lịch sử, xuất bản bản cố định.
 
-## 6. P5: Làm chung (V_11.0)
+## 6. P5: Làm chung (V_11.4)
 
 ### 6.1 Kết hợp
 

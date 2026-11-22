@@ -133,7 +133,7 @@ public final class Workspaces {
             Path parentPath = parent.isBlank() ? null : Paths.get(parent);
             if (parentPath != null && !Files.isRegularFile(parentPath.resolve(FileStorage.META)) && parentPath.getFileName() != null
                     && dir.toAbsolutePath().getParent() != null) {
-                // V_11.0: the project folder was moved (e.g. into OneDrive): the parent is the sibling with the same name
+                // V_11.4: the project folder was moved (e.g. into OneDrive): the parent is the sibling with the same name
                 Path sib = dir.toAbsolutePath().getParent().resolve(parentPath.getFileName().toString());
                 if (Files.isRegularFile(sib.resolve(FileStorage.META))) {
                     parentPath = sib;
@@ -147,7 +147,7 @@ public final class Workspaces {
         }
     }
 
-    /** V_11.0: one value of a workspace's meta file (letter, project id...), or "". */
+    /** V_11.4: one value of a workspace's meta file (letter, project id...), or "". */
     public static String metaValue(Path dir, String key) {
         try {
             Path meta = dir.resolve(FileStorage.META);

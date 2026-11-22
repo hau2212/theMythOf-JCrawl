@@ -84,6 +84,8 @@ final class ExcelTab {
 
     QaTab qaTab;
     FamilyTab familyTab;
+    ProjectTab projectTab;
+    private javax.swing.JTabbedPane modeTabs;
 
     ExcelTab(MainPanel ui) {
         this.ui = ui;
@@ -245,20 +247,30 @@ final class ExcelTab {
         excelModeTabs.addTab("Đối chiếu file Excel", deck);
         qaTab = new QaTab(ui);
         familyTab = new FamilyTab(ui);
-        excelModeTabs.addTab("Hỏi đáp", null, qaTab.panel, "Q&A / Info của từng API: câu hỏi, ảnh, câu trả lời; xuất Excel Q&A");
-        excelModeTabs.addTab("Tài khoản", null, familyTab.panel,
-                "Crawl từng tài khoản: workspace cho tài khoản tiếp theo, ma trận API x tài khoản, báo cáo tổng hợp");
+        projectTab = new ProjectTab(ui);
+        excelModeTabs.insertTab("Dự án", null, projectTab.panel,
+                "Danh sách chuẩn x mọi tài khoản, làm chung (Google Sheet), báo cáo, gửi khách hàng, sao lưu", 0);
+        excelModeTabs.addTab("Hỏi đáp", null, qaTab.panel, "Q&A / Info của từng API: câu hỏi, ảnh theo bước, câu trả lời; xuất Excel Q&A");
+        excelModeTabs.setTitleAt(excelModeTabs.indexOfComponent(inventoryBoard), "Đồng đội (cũ)");
+        excelModeTabs.setSelectedIndex(0);
+        modeTabs = excelModeTabs;
         excelModeTabs.addChangeListener(e -> {
             java.awt.Component sel = excelModeTabs.getSelectedComponent();
             if (sel == qaTab.panel) {
                 qaTab.reload();
-            } else if (sel == familyTab.panel) {
-                familyTab.reload();
+            } else if (sel == projectTab.panel) {
+                projectTab.reload();
             }
         });
         panel.add(excelModeTabs, BorderLayout.CENTER);
 
         controls(engine.groups());
+    }
+
+    void showProject() {
+        if (modeTabs != null) {
+            modeTabs.setSelectedComponent(projectTab.panel);
+        }
     }
 
     private javax.swing.JPopupMenu excelMenu() {

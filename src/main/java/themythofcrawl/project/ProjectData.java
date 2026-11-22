@@ -21,7 +21,7 @@ import themythofcrawl.store.FileStorage;
 import themythofcrawl.store.Workspaces;
 
 /**
- * V_11.0: the project list ("danh sách chuẩn") x accounts, built from the account workspaces on this machine plus the
+ * V_11.4: the project list ("danh sách chuẩn") x accounts, built from the account workspaces on this machine plus the
  * team's records (other people's accounts), with manual marks on top. Every view, sheet and report reads this.
  * <ul>
  * <li>Rows: the standard Excel file, and / or the APIs account A crawled; APIs other accounts found beyond that are
@@ -219,6 +219,17 @@ public final class ProjectData {
         return locals;
     }
 
+    /** What this machine's own account workspaces found, per row and letter (what gets pushed to the team). */
+    public record LocalCell(String rowId, String letter, AccStatus status, Integer http, int apis, String method, String path,
+                            String host, String branch, long at) {
+    }
+
+    private final List<LocalCell> localCells = new ArrayList<>();
+
+    public List<LocalCell> localCells() {
+        return localCells;
+    }
+
     public List<SyncRecord> conflicts() {
         return conflicts;
     }
@@ -286,34 +297,68 @@ public final class ProjectData {
             tl = null;
         }
         List<ApiFact> apis = new ArrayList<>();
-        for (String doc : st.loadGroupDocs()) {
-            Map<String, Object> g;
-            try {
-                g = Json.parseObject(doc);
-            } catch (RuntimeException e) {
-                continue;
-            }
-            String method = Json.str(g, "method", "GET");
-            String path = Json.str(g, "path", "/");
-            String bk = Json.str(g, "book_key", null);
-            String keyPath = bk != null && bk.lastIndexOf('|') >= 0 ? bk.substring(bk.lastIndexOf('|') + 1) : path;
-            Object row = g.get("target_row");
-            Object os = g.get("orig_status");
-            List<QaItem> qa = new ArrayList<>();
-            for (Object o : Json.list(g, "qa")) {
-                if (o instanceof Map<?, ?> qm) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> mm = (Map<String, Object>) qm;
-                    qa.add(QaItem.fromMap(mm));
+        java.nio.file.Path apiRoot = i.dir().resolve("apis");
+        if (java.nio.file.Files.isDirectory(apiRoot)) {
+            try (java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(apiRoot)) {
+                for (java.nio.file.Path d : ds) {
+                    java.nio.file.Path meta = d.resolve("meta.json");
+                    try {
+                        if (!java.nio.file.Files.isRegularFile(meta)) {
+                            continue;
+                        }
+                        long mt = java.nio.file.Files.getLastModifiedTime(meta).toMillis();
+                        long sz = java.nio.file.Files.size(meta);
+                        Cached c = CACHE.get(meta);
+                        if (c == null || c.mtime != mt || c.size != sz) {
+                            c = new Cached(mt, sz, parse(java.nio.file.Files.readString(meta, java.nio.charset.StandardCharsets.UTF_8)));
+                            CACHE.put(meta, c);
+                        }
+                        if (c.fact != null) {
+                            apis.add(c.fact);
+                        }
+                    } catch (java.io.IOException | RuntimeException ignored) {
+                        // a file being written: next cycle
+                    }
                 }
+            } catch (java.io.IOException ignored) {
+                // no API yet
             }
-            apis.add(new ApiFact((int) Json.num(g, "gid", 0), method, path, Json.str(g, "host", ""), Json.str(g, "branch", ""),
-                    os instanceof Number n ? n.intValue() : null, row instanceof Number n ? n.intValue() : null,
-                    Engine.endpointKey(method, keyPath), qa, Json.num(g, "created_ms", 0)));
         }
         apis.sort(Comparator.comparingInt(ApiFact::gid));
         String name = Text.blank(i.account()) ? i.name() : i.account();
         return new LocalAccount(letter, name, i.dir(), st, apis, tl);
+    }
+
+    /** Parsed API files by path + time + size: each cycle only re-reads what changed. */
+    private record Cached(long mtime, long size, ApiFact fact) {
+    }
+
+    private static final Map<java.nio.file.Path, Cached> CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static ApiFact parse(String doc) {
+        Map<String, Object> g;
+        try {
+            g = Json.parseObject(doc);
+        } catch (RuntimeException e) {
+            return null;
+        }
+        String method = Json.str(g, "method", "GET");
+        String path = Json.str(g, "path", "/");
+        String bk = Json.str(g, "book_key", null);
+        String keyPath = bk != null && bk.lastIndexOf('|') >= 0 ? bk.substring(bk.lastIndexOf('|') + 1) : path;
+        Object row = g.get("target_row");
+        Object os = g.get("orig_status");
+        List<QaItem> qa = new ArrayList<>();
+        for (Object o : Json.list(g, "qa")) {
+            if (o instanceof Map<?, ?> qm) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mm = (Map<String, Object>) qm;
+                qa.add(QaItem.fromMap(mm));
+            }
+        }
+        return new ApiFact((int) Json.num(g, "gid", 0), method, path, Json.str(g, "host", ""), Json.str(g, "branch", ""),
+                os instanceof Number n ? n.intValue() : null, row instanceof Number n ? n.intValue() : null,
+                Engine.endpointKey(method, keyPath), qa, Json.num(g, "created_ms", 0));
     }
 
     // ------------------------------------------------------------------ build
@@ -657,7 +702,27 @@ public final class ProjectData {
                 r.stt = (std.isEmpty() ? "" : "+") + n;
             }
         }
-        return new ProjectData(cfg, accounts, ordered, locals, conflicts);
+        ProjectData built = new ProjectData(cfg, accounts, ordered, locals, conflicts);
+        Map<String, LocalCell> lc = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Obs>> e : obs.entrySet()) {
+            for (Obs o : e.getValue()) {
+                if (o.remote()) {
+                    continue;
+                }
+                String k = e.getKey() + "|" + o.letter();
+                LocalCell cur = lc.get(k);
+                Row r = rows.get(e.getKey());
+                if (cur == null) {
+                    lc.put(k, new LocalCell(e.getKey(), o.letter(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at()));
+                } else {
+                    boolean better = rank(o.status()) > rank(cur.status());
+                    lc.put(k, new LocalCell(e.getKey(), o.letter(), better ? o.status() : cur.status(), better ? o.http() : cur.http(),
+                            cur.apis() + 1, cur.method(), cur.path(), cur.host(), cur.branch(), Math.max(cur.at(), o.at())));
+                }
+            }
+        }
+        built.localCells.addAll(lc.values());
+        return built;
     }
 
     static AccStatus parseName(String s) {

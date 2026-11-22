@@ -1,9 +1,54 @@
-# theMythOf-JCrawl (Java / Montoya) - V_10.4
+# theMythOf-JCrawl (Java / Montoya) - V_11.4
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_11.4
+
+Theo `VERSIONING.md`: kiến trúc dự án nhiều tài khoản + đồng bộ nhóm -> tăng MAJOR (10.4 -> 11.4). Plan chi tiết: `docs/V10_5_PLAN.md`.
+
+### Excel > Dự án
+
+![Excel > Dự án](docs/images/v11_du_an.png)
+
+- **Danh sách chuẩn** = file Excel chuẩn, hoặc dựng từ API tài khoản **A** (cao nhất) đã crawl, hoặc cả hai. Mọi tài khoản đối chiếu theo
+  danh sách này: tài khoản con thấy **đủ mọi dòng**, dòng chưa gọi = `Missing (B)`.
+- Mỗi tài khoản 1 cột: `Done (A)` gọi được · `Denied (B)` 401 / 403 · `Error` · `Missing` · `Doing` (ai đang test) · `OOS`; kèm `Info (A)` / `Q&A (A)`.
+- Chuột phải ô tài khoản: **đặt tay** (luôn thắng kết quả crawl). API tài khoản khác tìm thêm hiện **Chỉ B có**, PIC chọn **Thêm vào
+  danh sách chuẩn**. Cột **Kết luận phân quyền**: "Cần xem: B gọi được, A bị chặn".
+- Cây > ... > **Hiện API tài khoản trên chưa gọi**: mỗi nhánh có thêm dòng mờ liệt kê API còn thiếu.
+
+### Làm chung (Google Sheet + OneDrive của từng người)
+
+- Mỗi người làm trong **workspace riêng** trên OneDrive của mình; **Google Sheet** là nơi đồng bộ (khoảng 12 giây / lần, 2 chiều);
+  mỗi người tự có **Excel của tôi** (`excel/BangLamViec.xlsx`) đầy đủ dữ liệu cả nhóm, có ảnh, tự cập nhật.
+- **PIC** (Excel > Dự án > Làm chung... > Tôi là PIC): A. dự án, B. chuyển dự án sang OneDrive, C. Google Sheet (Mở Google Sheets ->
+  Tiện ích mở rộng > Apps Script -> dán mã JCrawl copy -> Triển khai > Ứng dụng web, Thực thi: Tôi, Ai có quyền: Bất kỳ ai -> dán URL ->
+  Kiểm tra kết nối), D. danh sách chuẩn, E. thành viên & quyền (PIC / PIC phụ / Thành viên, giao tài khoản), F. **mã mời** (gửi riêng),
+  G. theo dõi.
+- **Thành viên** (Tôi là Thành viên): dán mã mời -> chọn thư mục OneDrive của mình -> Tham gia -> đăng nhập tài khoản được giao và crawl.
+- Sửa tay trên Google Sheet (cột tài khoản, Ghi chú, "Khách hàng trả lời") được JCrawl kéo về. Hai người ghi khác nhau cùng 1 ô ->
+  **Xung đột** cho PIC chọn (Sao lưu... > Xung đột). Chỉ gửi trạng thái, ghi chú, Q&A; **không bao giờ** gửi token / cookie.
+
+### Báo cáo
+
+- **Cột...**: chọn / ẩn / sắp xếp / đổi tên cột (mẫu cột: Nội bộ, Nộp khách hàng, Q&A, tự tạo). **Sổ dự án...**: thêm / xóa / đổi tên /
+  lọc sheet (Tổng quan, Tổng hợp, từng tài khoản, Chênh lệch, Ngoài danh sách, Q&A, Chi tiết Q&A, Info, Phân quyền, Nhật ký, sheet lọc
+  `missing:B`...) kèm thống kê.
+- **Báo cáo > Xuất báo cáo**: cả dự án / tài khoản đang mở / chọn tài khoản, mỗi tài khoản 1 file. **Tổng quan** dùng công thức
+  COUNTIFS (tự tính lại khi sửa Tổng hợp) + biểu đồ: Done / Denied / Missing... theo tài khoản, % phủ, hợp / giao, A và B, chỉ A, chỉ B,
+  B được mà A bị chặn, Q&A theo tài khoản. File lưu vào `bao-cao/noi-bo | tung-tai-khoan | qa | khach-hang`.
+
+### Q&A, khách hàng, sao lưu
+
+- Q&A: mỗi ảnh là **Bước 1, 2...** / Kết quả thực tế / Kết quả mong đợi / Bổ sung / Ảnh khách hàng, có **tiêu đề + mô tả**; mức độ, cần ai
+  trả lời, hạn, **trao đổi nhiều lượt**. Excel có sheet Chi tiết Q&A (bước + ảnh xếp dọc + ô trả lời).
+- **Gửi khách hàng**: tạo `bao-cao/khach-hang/vong-N_ngày/goc` (giữ lại) và `chia-se` (share file này cho khách hàng trên OneDrive, Có thể
+  chỉnh sửa). **Nhập phản hồi**: so với bản gốc, liệt kê câu trả lời, trạng thái, ghi chú, ảnh khách hàng dán, dòng bị xóa; PIC chọn nhận.
+- **Sao lưu...**: bản lưu theo giờ (7 ngày) / ngày (30 ngày), Sao lưu ngay, So sánh & khôi phục, **Dựng lại Google Sheet từ máy này**,
+  Dọn dữ liệu Sheet. Mất Sheet -> dựng lại từ máy bất kỳ; mất máy -> workspace trên OneDrive + dữ liệu nhóm trên Sheet.
 
 ## Điểm mới V_10.4
 

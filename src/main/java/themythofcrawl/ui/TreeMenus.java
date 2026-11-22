@@ -303,6 +303,24 @@ final class TreeMenus {
                 m.add(Ui.item("Quên giữ chỗ (lần sau bắt lại sẽ vào đích hiện tại)", Icons::error, () -> engine.forgetPlace(r.key)));
                 m.add(Ui.item("Lịch sử trong tab Audit", Icons::compass, () -> ui.showPlaceOf(r.key)));
             }
+            case MISSINGS, MISSING -> {
+                m.add(Ui.item("Xem trong Excel > Dự án (lọc: còn thiếu của tôi)", Icons::excel, () -> {
+                    ui.selectTab(ui.excel.panel);
+                    ui.excel.showProject();
+                }));
+                if (n.kind == Node.Kind.MISSING && n.payload instanceof themythofcrawl.project.ProjectData.Row r) {
+                    String me = ui.project.myLetter();
+                    m.add(Ui.item("Đặt OOS cho tài khoản " + me + " (ngoài phạm vi)", Icons::hide,
+                            () -> ui.project.mark(r.id, me, themythofcrawl.project.AccStatus.OOS, "")));
+                    m.add(Ui.item("Đặt Denied cho tài khoản " + me + " (đã thử tay, bị chặn)", Icons::stop,
+                            () -> ui.project.mark(r.id, me, themythofcrawl.project.AccStatus.DENIED, "")));
+                    m.add(Ui.item("Copy path", t -> Icons.copy(t.muted), () -> Ui.copyToClipboard(r.path)));
+                }
+                m.add(Ui.item("Tắt dòng này (Cây > ... > Hiện API tài khoản trên chưa gọi)", Icons::hide, () -> {
+                    ui.project.setShowMissing(false);
+                    ui.treeTab.refreshIfVisible();
+                }));
+            }
             default -> {
                 return;
             }

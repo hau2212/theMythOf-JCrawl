@@ -20,7 +20,6 @@ import javax.swing.table.DefaultTableModel;
 import themythofcrawl.app.Engine;
 import themythofcrawl.core.Text;
 import themythofcrawl.model.QaItem;
-import themythofcrawl.store.FamilyReport;
 import themythofcrawl.ui.kit.ThemedTable;
 
 /** V_10.4 Excel > Hỏi đáp: every Q&A / Info item, filters, edit, export (this account or every account). */
@@ -28,7 +27,7 @@ final class QaTab {
     final JPanel panel = new JPanel(new BorderLayout(0, 4));
     private final MainPanel ui;
     private final DefaultTableModel model = new DefaultTableModel(
-            new Object[] {"Loại", "API", "Method", "Path", "Nhánh", "Câu hỏi / ghi chú", "Ảnh", "Trạng thái", "Trả lời", "Người hỏi"}, 0) {
+            new Object[] {"Mã", "Loại", "API", "Method", "Path", "Nhánh", "Câu hỏi / ghi chú", "Ảnh", "Mức độ", "Trạng thái", "Trả lời", "Người hỏi"}, 0) {
         @Override
         public boolean isCellEditable(int r, int c) {
             return false;
@@ -36,7 +35,7 @@ final class QaTab {
     };
     final ThemedTable table = new ThemedTable(model);
     private final JComboBox<String> kind = new JComboBox<>(new String[] {"Mọi loại", "Q&A", "Info"});
-    private final JComboBox<String> status = new JComboBox<>(new String[] {"Mọi trạng thái", "Chờ trả lời", "Đã trả lời", "Đóng"});
+    private final JComboBox<String> status = new JComboBox<>(new String[] {"Mọi trạng thái", "Mới", "Đã gửi khách hàng", "Đã trả lời", "Đóng"});
     private final JTextField search = new JTextField(18);
     private final List<Engine.QaRow> shown = new ArrayList<>();
 
@@ -44,7 +43,7 @@ final class QaTab {
         this.ui = ui;
         Ui.style(table);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        Ui.widths(table, 60, 60, 60, 260, 160, 320, 40, 90, 220, 70);
+        Ui.widths(table, 80, 50, 60, 60, 240, 150, 300, 40, 80, 110, 220, 80);
         Ui.onDoubleClick(table, this::editSelected);
         search.putClientProperty("JTextField.placeholderText", "Tìm path, câu hỏi, trả lời...");
         kind.addActionListener(Ui.safe(e -> reload()));
@@ -84,8 +83,8 @@ final class QaTab {
                 continue;
             }
             shown.add(r);
-            model.addRow(new Object[] {it.kind().label, Text.apiLabel(r.group().gid()), r.group().method(), r.group().path(),
-                r.group().branch(), it.question(), it.images().size(), it.status().label, it.answer(), it.by()});
+            model.addRow(new Object[] {it.code(), it.kind().label, Text.apiLabel(r.group().gid()), r.group().method(), r.group().path(),
+                r.group().branch(), it.question(), it.imgs().size(), it.severity().label, it.status().label, it.answer(), it.by()});
         }
     }
 
@@ -125,40 +124,54 @@ final class QaTab {
         ui.treeTab.tree.expandApi(r.group().gid());
     }
 
-    /** Export: only this account or every account of the workspace family; Q&A and / or Info. */
+    /** Export Q&A / Info (this account or every account of the project) with screenshots by step. */
     private void export() {
         JCheckBox qa = new JCheckBox("Q&A", true);
         JCheckBox info = new JCheckBox("Info", true);
+        JCheckBox detail = new JCheckBox("Kèm sheet Chi tiết Q&A (mỗi Q&A 1 khối: bước + ảnh + ô trả lời)", true);
         JComboBox<String> scope = new JComboBox<>(new String[] {"Chỉ tài khoản này (" + ui.engine.workspaceName() + ")",
-            "Mọi tài khoản (cả họ workspace, có cột tài khoản)"});
-        JCheckBox withReport = new JCheckBox("Kèm báo cáo tổng hợp (Tổng quan, Ma trận tài khoản, API từng tài khoản)", false);
+            "Mọi tài khoản của dự án (cả của đồng đội)"});
+        JCheckBox withReport = new JCheckBox("Kèm Tổng quan + Tổng hợp", false);
         JPanel form = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
         form.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Xuất:"), qa, info));
+        form.add(detail);
         form.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Phạm vi:"), scope));
         form.add(withReport);
         if (javax.swing.JOptionPane.showConfirmDialog(Ui.ownerWindow(panel), form, "Xuất Excel Q&A",
                 javax.swing.JOptionPane.OK_CANCEL_OPTION) != javax.swing.JOptionPane.OK_OPTION) {
             return;
         }
-        List<QaItem.Kind> kinds = new ArrayList<>();
+        themythofcrawl.project.ProjectData d = ui.project.buildNow();
+        if (d == null) {
+            ui.info("Workspace này chưa lưu trên đĩa.");
+            return;
+        }
+        List<themythofcrawl.project.SheetDef> sheets = new ArrayList<>();
+        if (withReport.isSelected()) {
+            sheets.add(themythofcrawl.project.SheetDef.of(themythofcrawl.project.SheetDef.Type.OVERVIEW));
+            sheets.add(themythofcrawl.project.SheetDef.of(themythofcrawl.project.SheetDef.Type.SUMMARY));
+        }
         if (qa.isSelected()) {
-            kinds.add(QaItem.Kind.QA);
+            sheets.add(themythofcrawl.project.SheetDef.of(themythofcrawl.project.SheetDef.Type.QA));
         }
         if (info.isSelected()) {
-            kinds.add(QaItem.Kind.INFO);
+            sheets.add(themythofcrawl.project.SheetDef.of(themythofcrawl.project.SheetDef.Type.INFO));
         }
-        JFileChooser fc = new JFileChooser();
-        fc.setSelectedFile(new File("jcrawl-hoi-dap.xlsx"));
+        if (detail.isSelected()) {
+            sheets.add(themythofcrawl.project.SheetDef.of(themythofcrawl.project.SheetDef.Type.QA_DETAIL));
+        }
+        List<String> letters = scope.getSelectedIndex() == 0 ? List.of(ui.project.myLetter()) : d.letters();
+        Path dir = ui.project.store().reportsDir("qa");
+        JFileChooser fc = new JFileChooser(dir.toFile());
+        fc.setSelectedFile(dir.resolve("HoiDap_" + themythofcrawl.project.ProjectStore.safe(ui.project.config().name) + ".xlsx").toFile());
         if (fc.showSaveDialog(Ui.ownerWindow(panel)) != JFileChooser.APPROVE_OPTION || fc.getSelectedFile() == null) {
             return;
         }
-        ui.engine.flush();
         try {
-            Path ws = Path.of(ui.engine.workspaceLocation());
-            FamilyReport rep = FamilyReport.load(ws);
-            String only = scope.getSelectedIndex() == 0 ? FamilyReport.accountOf(themythofcrawl.store.Workspaces.info(ws)) : null;
-            byte[] x = rep.workbook(withReport.isSelected(), kinds, only);
-            Files.write(fc.getSelectedFile().toPath(), x);
+            themythofcrawl.project.ProjectSync sync = ui.project.sync();
+            themythofcrawl.project.ProjectWorkbook.Options o = new themythofcrawl.project.ProjectWorkbook.Options(letters, "Q&A", true, 320, false,
+                    List.of(), sync == null ? null : sync::remoteImage, ui.project.config().name);
+            Files.write(fc.getSelectedFile().toPath(), themythofcrawl.project.ProjectWorkbook.xlsx(d, sheets, o));
             ui.flash("Đã xuất " + fc.getSelectedFile().getName());
         } catch (Exception ex) {
             ui.info("Không xuất được: " + ex.getMessage());

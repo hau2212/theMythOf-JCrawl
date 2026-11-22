@@ -195,6 +195,8 @@ public final class MainPanel {
     final SettingsTab settings;
     final LogTab log;
     final ExcelTab excel;
+    /** V_11.4: project of the open workspace (list x accounts, team sync, reports). */
+    final ProjectService project;
     final AuditTab audit;
     final AccessMatrixTab matrix;
     final BugsTab bugs;
@@ -213,6 +215,7 @@ public final class MainPanel {
         main.add(headerPanel, BorderLayout.NORTH);
         spotlight = new SpotlightDialog(this);
         toastPane.setModalOverlay(spotlight);
+        project = new ProjectService(this);
         api = new ApiTab(this);
         String savedLayout = uiPrefs.get(ApiTab.KEY_LAYOUT);
         if (savedLayout != null && savedLayout.contains("header=0")) {
@@ -254,6 +257,7 @@ public final class MainPanel {
         installClickLog();
         installStallWatch();
         FamilyTab.applyReference(this);
+        project.workspaceChanged();
         reportTabs.addChangeListener(e -> tick(true));
         settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
@@ -492,6 +496,7 @@ public final class MainPanel {
 
     public void dispose() {
         watching = false;
+        project.close();
         timer.stop();
         if (clickLog != null) {
             try {
@@ -1406,9 +1411,12 @@ public final class MainPanel {
                 excel.familyTab.createChild();
             }
         }));
-        m.add(Ui.item("So sánh tài khoản / báo cáo tổng hợp...", Icons::excel, () -> {
+        m.add(Ui.item("Dự án: so sánh tài khoản, báo cáo, làm chung...", Icons::excel, () -> {
             selectTab(excel.panel);
+            excel.showProject();
         }));
+        m.add(Ui.item("Làm chung (Google Sheet, PIC, thành viên)...", t -> Icons.users(t.fg, 13), () -> TeamWizard.open(this)));
+        m.add(Ui.item("Chuyển dự án sang OneDrive / thư mục khác...", Icons::move, () -> ProjectDialogs.moveProject(this)));
         m.add(Ui.item("Workspace mới...", Icons::plus, () -> {
             String n = ask("Tên workspace mới (thuộc project '" + host.projectName() + "'):", "Workspace mới");
             if (n != null && !n.isBlank()) {
@@ -1468,17 +1476,26 @@ public final class MainPanel {
         engine.open(st);
         workspaces.remember(projectId, st);
         FamilyTab.applyReference(this);
+        project.workspaceChanged();
         api.reloadAll();
         tick(true);
         flash("Đang dùng workspace " + st.name() + " (" + engine.groups().size() + " API)"
                 + (engine.referenceLabel() != null ? " · so với tài khoản " + engine.referenceLabel() : ""));
     }
 
+    /** V_11.4: open the workspace in this folder (after joining a project / moving it to OneDrive). */
+    void openWorkspaceAt(java.nio.file.Path dir) {
+        openWorkspace(workspaces.open(dir));
+        if (excel != null && excel.projectTab != null) {
+            excel.projectTab.reload();
+        }
+    }
+
     /** V_10.4: switch to another account's workspace of the same family. */
     void openWorkspaceFromFamily(FileStorage st) {
         openWorkspace(st);
-        if (excel != null && excel.familyTab != null) {
-            excel.familyTab.reload();
+        if (excel != null && excel.projectTab != null) {
+            excel.projectTab.reload();
         }
     }
 

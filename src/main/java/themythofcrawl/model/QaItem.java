@@ -13,7 +13,7 @@ import themythofcrawl.core.Text;
 /**
  * "Hỏi đáp": a question to the client / dev team about one API (Q&A) or a note (Info).
  * <p>
- * V_11.0: every screenshot has a role (step 1..n, actual result, expected result, extra, client image), a title and a
+ * V_11.4: every screenshot has a role (step 1..n, actual result, expected result, extra, client image), a title and a
  * description, so a reader understands the context; the item has a short code (QA-1A2B3C) used to match answers
  * coming back from Excel / Google Sheets, a severity, who must answer, a due date and a conversation thread.
  * Old (V_10.4) saved items load unchanged: plain image names become "Bổ sung" images without a title.
