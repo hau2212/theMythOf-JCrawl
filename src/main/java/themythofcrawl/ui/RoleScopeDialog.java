@@ -49,8 +49,8 @@ final class RoleScopeDialog {
     private final Engine engine;
     private final List<ApiGroup> groups;
     private final JDialog dialog;
-    private final JRadioButton on = new JRadioButton("BẬT vai trò");
-    private final JRadioButton off = new JRadioButton("TẮT vai trò");
+    private final JRadioButton on = new JRadioButton("Bật vai trò");
+    private final JRadioButton off = new JRadioButton("Tắt vai trò");
     private final JRadioButton[] scopes = new JRadioButton[3];
     private final CheckList<String> roleList;
     private final CheckList<String> branchList;
@@ -84,7 +84,7 @@ final class RoleScopeDialog {
         JPanel head = new JPanel();
         head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
         JPanel hdr = Ui.dialogHeader("Bật / Tắt vai trò theo phạm vi",
-                "Chọn vai trò, thao tác BẬT / TẮT và phạm vi áp dụng (Toàn bộ, Nhánh hoặc API)");
+                "Chọn vai trò, thao tác bật / tắt và phạm vi áp dụng (Toàn bộ, Nhánh hoặc API)");
         hdr.setAlignmentX(0f);
         head.add(hdr);
 
@@ -185,7 +185,7 @@ final class RoleScopeDialog {
     private static String onOff(Map<String, Boolean> m) {
         List<String> offs = m.entrySet().stream().filter(e -> !e.getValue()).map(Map.Entry::getKey).sorted().toList();
         List<String> ons = m.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).sorted().toList();
-        return (offs.isEmpty() ? "" : "TẮT: " + String.join(", ", offs)) + (ons.isEmpty() ? "" : "   BẬT: " + String.join(", ", ons));
+        return (offs.isEmpty() ? "" : "Tắt: " + String.join(", ", offs)) + (ons.isEmpty() ? "" : "   Bật: " + String.join(", ", ons));
     }
 
     private void fillRules() {
@@ -261,7 +261,7 @@ final class RoleScopeDialog {
 
     private void update() {
         Result c = choice();
-        String verb = c.enable() ? "BẬT" : "TẮT";
+        String verb = c.enable() ? "Bật" : "Tắt";
         boolean good;
         String msg;
         if (c.roles().isEmpty()) {

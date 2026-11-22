@@ -367,7 +367,7 @@ public final class ActionWorkbenchDialog {
 
         final boolean[] syncingBanner = {false};
         ModernToggleSwitch waitMasterSwitch = new ModernToggleSwitch(engine.actionEngine().isInterceptWaitEnabled(), true)
-                .labels("ĐANG CHẶN", "Đang tắt");
+                .labels("Đang chặn", "Đang tắt");
         waitMasterSwitch.setToolTipText(ActionMode.INTERCEPT_WAIT.description);
 
         JButton openWaitQueueBtn = Ui.secondaryBtn("Hàng chặn...",
@@ -598,7 +598,7 @@ public final class ActionWorkbenchDialog {
         JComboBox<String> resBox = new JComboBox<>();
         resBox.setEditable(true);
         JCheckBox autoHarvestChk = new JCheckBox("Tự lấy ID từ response 2xx", engine.actionEngine().isAutoHarvest());
-        autoHarvestChk.setToolTipText("Chỉ lấy ID của CÙNG họ API, từ response 2xx: POST tạo mới, GET danh sách, GET / PUT chi tiết. DELETE thành công thì ID bị đánh dấu đã dùng.");
+        autoHarvestChk.setToolTipText("Chỉ lấy ID của cùng họ API, từ response 2xx: POST tạo mới, GET danh sách, GET / PUT chi tiết. DELETE thành công thì ID bị đánh dấu đã dùng.");
         autoHarvestChk.setOpaque(false);
         autoHarvestChk.addActionListener(Ui.safe(e -> engine.actionEngine().setAutoHarvest(autoHarvestChk.isSelected())));
 

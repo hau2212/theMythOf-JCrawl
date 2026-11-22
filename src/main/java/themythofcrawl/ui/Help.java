@@ -7,12 +7,12 @@ public final class Help {
 
     public static final String CAPTURE = "Bắt request từ Proxy.\n\n"
             + "• Dừng / Capture: bật / tắt bắt (chấm đỏ nhấp nháy nhẹ khi đang bật).\n"
-            + "• CHỈ CRAWL / GỬI: chỉ ghi lại API, hoặc bắt xong tự gửi ngay các vai trò qua hàng đợi chống 429.\n"
+            + "• chỉ CRAWL / gửi: chỉ ghi lại API, hoặc bắt xong tự gửi ngay các vai trò qua hàng đợi chống 429.\n"
             + "• Hàng đợi: số request đang chờ gửi kèm thanh tiến độ mảnh; bấm để hủy hàng đợi.";
     public static final String DEST = "Đích (Breadcrumb): mọi request MỚI sẽ vào đường dẫn này.\n\n"
             + "Mỗi cấp hiển thị thành 1 chip màu; bấm vào một cấp để chuyển nhanh tới cấp đó, hoặc bấm mũi tên để "
             + "mở menu (chọn từ danh sách, lấy nhánh đang chọn trong cây, tạo nhánh mới, đổi tên). Chọn xem nhánh khác "
-            + "trong cây / bảng KHÔNG làm đổi Đích.\n\n"
+            + "trong cây / bảng không làm đổi Đích.\n\n"
             + "API đã từng xóa sẽ quay về chỗ cũ thay vì vào Đích (xem tab Audit).";
     public static final String TODO = "Việc cần bạn quyết định:\n\n"
             + "• API mới chờ xác nhận vị trí (màu xám).\n"

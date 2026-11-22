@@ -445,7 +445,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.dashedEdge = true;
 
         x = addLeadIcon(nl, Icons.cluster(tok.text(), 14), x, th.scaled(4));
-        x = addChip(th, nl, "CỤM", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
+        x = addChip(th, nl, "Cụm", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
 
         Node.FolderMeta m = n.folderMeta;
         String title = m != null ? m.name() : (cl != null ? cl.name() : Icons.stripLeadingSymbol(n.label));
@@ -550,7 +550,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.dashedEdge = true;
 
         x = addLeadIcon(nl, Icons.strategyShield(th.danger.text(), 13), x, th.scaled(4));
-        x = addChip(th, nl, "CHỜ DUYỆT · CHƯA GỬI", th.smallBoldFont,
+        x = addChip(th, nl, "Chờ duyệt · Chưa gửi", th.smallBoldFont,
                 th.danger.solidFill(), th.danger.border(), th.danger.onSolid(), null, true, x, gap);
         Theme.Token mt = th.method(pr.method());
         x = addChip(th, nl, pr.method(), th.smallBoldFont, mt.fill(), mt.border(), mt.text(), null, true, x, gap);
@@ -782,7 +782,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.edge = th.danger.border();
         nl.dashedEdge = true;
         x = addLeadIcon(nl, Icons.strategyShield(th.danger.text(), 13), x, th.scaled(4));
-        x = addPrimary(nl, clip("CHỜ DUYỆT", th.boldFont, treeColEnd(th, nl) - x), th.boldFont, th.danger.text(), x, gap);
+        x = addPrimary(nl, clip("Chờ duyệt", th.boldFont, treeColEnd(th, nl) - x), th.boldFont, th.danger.text(), x, gap);
         x = col(th, nl, TreeColumns.Col.METHOD, x);
         Theme.Token mt = th.method(pr.method());
         addChip(th, nl, pr.method(), th.smallBoldFont, mt.fill(), mt.border(), mt.text(), null, true, x, gap);
@@ -843,7 +843,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             nl.dupX0 = x;
             boolean isOrig = nl.originFlag;
             if (isOrig) {
-                x = addChip(th, nl, "GỐC · " + g.dupTotal(), th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                x = addChip(th, nl, "Gốc · " + g.dupTotal(), th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
                         th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
             } else {
                 ApiGroup orig = engine != null ? engine.originOf(g.bookKey()) : null;

@@ -99,7 +99,7 @@ final class DataProtectionDialog {
         JList<ActionPolicy> rulesList = new JList<>(rulesModel);
         rulesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         rulesList.setCellRenderer((list, value, index, sel, focusCell) -> {
-            JLabel l = new JLabel((index + 1) + ". " + (value.enabled() ? "" : "[TẮT] ") + DataProtection.sentence(value)
+            JLabel l = new JLabel((index + 1) + ". " + (value.enabled() ? "" : "[Tắt] ") + DataProtection.sentence(value)
                     + (value.hitCount() > 0 ? "   (đã khớp " + value.hitCount() + " lần)" : ""));
             l.setOpaque(true);
             l.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));

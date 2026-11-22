@@ -522,7 +522,7 @@ public final class BranchTree {
             }
             String hostLbl = pr.service() != null ? pr.service().hostLabel() : "";
             Node hn = new Node(Node.Kind.HELD_PENDING, pr,
-                    "[CHỜ DUYỆT] " + pr.method() + " " + Text.shortPath(pr.path(), 48)
+                    "[Chờ duyệt] " + pr.method() + " " + Text.shortPath(pr.path(), 48)
                             + (hostLbl.isEmpty() ? "" : " · " + hostLbl),
                     AuditLevel.WARN, "H" + pr.id(), 0);
             nodes.put(hn.key, hn);
@@ -764,9 +764,9 @@ public final class BranchTree {
         }
         Audit.Verdict v = Audit.branch(gs);
         String count = gs.size() + " API";
-        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "CỤM", count, v.summary(),
+        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "Cụm", count, v.summary(),
                 pending > 0 ? pending + " chờ" : null, null);
-        return new Node(Node.Kind.CLUSTER, cl, "[CỤM] " + cl.name() + " · " + count, v.level(),
+        return new Node(Node.Kind.CLUSTER, cl, "[Cụm] " + cl.name() + " · " + count, v.level(),
                 "C" + cl.id(), folder.depth, meta);
     }
 

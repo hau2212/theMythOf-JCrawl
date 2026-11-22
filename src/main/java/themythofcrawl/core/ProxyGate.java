@@ -49,11 +49,11 @@ public final class ProxyGate {
                 "Request DỪNG ở Burp. Bạn xem / sửa rồi bấm Gửi (mới tới Server) hoặc Hủy. Trình duyệt đứng chờ (tối đa 10 phút).",
                 "Muốn tự quyết từng request."),
         FAKE_200("Giữ lại, trả 200 giả cho trình duyệt", ProxyEffect.HOLD_SPOOF,
-                "Server KHÔNG nhận gì. Trình duyệt nhận 200 giả nên tưởng thành công và chạy tiếp. Request được lưu vào JCrawl"
+                "Server không nhận gì. Trình duyệt nhận 200 giả nên tưởng thành công và chạy tiếp. Request được lưu vào JCrawl"
                         + " để gửi tay / gửi theo role sau.",
                 "Crawl nút Xóa / Hủy / Thanh toán mà không muốn dữ liệu thật bị đổi."),
         DROP("Chặn hẳn (cắt kết nối)", ProxyEffect.BLOCK_DROP,
-                "Server KHÔNG nhận gì. Trình duyệt báo lỗi mạng. Request vẫn được lưu vào JCrawl.",
+                "Server không nhận gì. Trình duyệt báo lỗi mạng. Request vẫn được lưu vào JCrawl.",
                 "Chặn chắc chắn, không cần trình duyệt chạy tiếp.");
 
         public final String label;
@@ -119,7 +119,7 @@ public final class ProxyGate {
             }
             String ms = methods.isEmpty() ? "mọi method" : String.join("/", ordered(methods));
             String where = switch (scope) {
-                case ALL_HOSTS -> "tới MỌI host";
+                case ALL_HOSTS -> "tới mọi host";
                 case HOST -> "tới host " + (host.isEmpty() ? "(chưa chọn)" : host);
                 case HOST_PATH -> "tới " + (host.isEmpty() ? "(chưa chọn host)" : host) + (path.isEmpty() ? "/*" : path);
                 case BRANCH -> "khi đang crawl ở nhánh " + (branch.isEmpty() ? "(chưa chọn)" : branch);

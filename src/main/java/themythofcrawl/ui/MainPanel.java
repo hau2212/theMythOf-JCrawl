@@ -500,9 +500,9 @@ public final class MainPanel {
         Config c = engine.config();
         int h24 = Theme.current().scaled(24);
         captureToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("Tắt", "Bắt request: TẮT. Request qua Proxy không được ghi lại.", t -> t.slate,
+                new SegmentedToggle.Option("Tắt", "Bắt request: Tắt. Request qua Proxy không được ghi lại.", t -> t.slate,
                         (t, sel) -> Icons.circle(sel ? t.slate.onSolid() : t.muted, false), false),
-                new SegmentedToggle.Option("Bắt", "Bắt request: BẬT. Mọi request API qua Proxy được ghi vào Cây.", t -> t.danger,
+                new SegmentedToggle.Option("Bắt", "Bắt request: Bật. Mọi request API qua Proxy được ghi vào Cây.", t -> t.danger,
                         (t, sel) -> {
                             Color dot = sel ? (pulseDim ? t.danger.border() : t.danger.base()) : t.muted;
                             return Icons.statusDot(dot, 10);
@@ -616,8 +616,8 @@ public final class MainPanel {
             if (settings != null) {
                 settings.load();
             }
-            flash(on ? "Đã BẬT cổng chặn: " + engine.proxyGate().sentence()
-                    : "Đã TẮT chặn — mọi request đi thẳng lên Server");
+            flash(on ? "Đã bật cổng chặn: " + engine.proxyGate().sentence()
+                    : "Đã tắt chặn — mọi request đi thẳng lên Server");
         });
 
         actionControlBar = new JPanel() {
@@ -1009,9 +1009,9 @@ public final class MainPanel {
         update(c -> c.autoSend = on);
         if (on) {
             int n = engine.sendAllUnsent();
-            engine.log("Bật GỬI: bắt xong gửi luôn" + (n > 0 ? "; xếp hàng " + n + " request chưa gửi." : "."), null);
+            engine.log("Bật gửi: bắt xong gửi luôn" + (n > 0 ? "; xếp hàng " + n + " request chưa gửi." : "."), null);
         } else {
-            engine.log("CHỈ CRAWL: chỉ ghi lại API, không gửi.", null);
+            engine.log("Chỉ crawl: chỉ ghi lại API, không gửi.", null);
         }
     }
 
@@ -1785,7 +1785,7 @@ public final class MainPanel {
         }
         String branch = gs.get(0).branch();
         String name = ask("Tên Cụm hiển thị mới trong nhánh '" + branch + "'\n"
-                + "(Cụm chỉ gom gọn để dễ nhìn, KHÔNG đổi đường dẫn nhánh / Copy STT / Excel):",
+                + "(Cụm chỉ gom gọn để dễ nhìn, không đổi đường dẫn nhánh / Copy STT / Excel):",
                 "Cụm " + (engine.clustersInBranch(branch).size() + 1));
         if (name == null || name.isBlank()) {
             return;

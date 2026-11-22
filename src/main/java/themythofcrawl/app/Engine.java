@@ -295,7 +295,7 @@ public final class Engine {
                 || actionEngine.isHoldAllActionAtProxy()) {
             return "Chặn: " + Math.max(1, blocking) + " luật";
         }
-        return "Chặn: TẮT";
+        return "Chặn: Tắt";
     }
 
     /** Short human-readable label for the Top Bar live Action indicator pill. */
@@ -359,7 +359,7 @@ public final class Engine {
             actionEngine.setInterceptWaitEnabled(false);
             actionEngine.clearAllProxyControls();
             changes.structure();
-            log("Thanh trên: đã TẮT chặn, request đi thẳng.", null);
+            log("Thanh trên: đã tắt chặn, request đi thẳng.", null);
             return;
         }
         ActionEngine.ActionMode target = lastActiveQuickMode != null && lastActiveQuickMode != ActionEngine.ActionMode.NONE
@@ -416,7 +416,7 @@ public final class Engine {
         } else {
             changes.status();
         }
-        log("Chặn chờ duyệt: " + (includeGet ? "ĐÃ BẬT chặn cả GET" : "Đã bỏ chặn GET")
+        log("Chặn chờ duyệt: " + (includeGet ? "Đã bật chặn cả GET" : "Đã bỏ chặn GET")
                 + " (" + interceptMethodsSummary() + ").", null);
     }
 
@@ -2103,7 +2103,7 @@ public final class Engine {
                 first = cps.stream().min(Comparator.comparingInt(ApiGroup::dupNo)).orElse(cps.get(0));
             }
             book.event(action, pkey, gid, method, path, first.branch(), feat.name(),
-                    "bản #" + g.dupNo() + "; GỐC #" + first.dupNo() + " (API #" + first.gid() + ") đang ở " + first.branch());
+                    "bản #" + g.dupNo() + "; gốc #" + first.dupNo() + " (API #" + first.gid() + ") đang ở " + first.branch());
         } else if (hint != null) {
             book.event(action, pkey, gid, method, path, hint.found(), feat.name(), "từng ở đây (đã xóa " + hint.deleted()
                     + " lần); vừa gặp tại " + hint.found() + (hint.oldMissing() ? "; nhánh cũ đã bị xóa nên được tạo lại" : ""));
@@ -2492,7 +2492,7 @@ public final class Engine {
         saveInterceptRules();
         saveActionPolicies();
         changes.structure();
-        log("ĐÃ ĐẶT LẠI: tắt mọi chặn; đã đưa " + clearedPolicies
+        log("Đã đặt lại: tắt mọi chặn; đã đưa " + clearedPolicies
                 + " chính sách vào Thùng rác Undo và tắt sạch mọi chặn Proxy.", null);
         return clearedPolicies;
     }
@@ -2691,7 +2691,7 @@ public final class Engine {
     public void setInterceptWaitEnabled(boolean on) {
         actionEngine.setInterceptWaitEnabled(on);
         changes.structure();
-        log((on ? "BẬT" : "TẮT") + " chế độ Chặn chờ duyệt trực tiếp tại Proxy", null);
+        log((on ? "Bật" : "Tắt") + " chế độ Chặn chờ duyệt trực tiếp tại Proxy", null);
     }
 
     /**
@@ -3462,7 +3462,7 @@ public final class Engine {
             case BRANCH -> "nhánh: " + String.join(", ", targets.stream().map(String::valueOf).toList());
             case API -> targets.size() + " API";
         };
-        log((enable ? "BẬT " : "TẮT ") + roleNames.size() + " role (" + String.join(", ", roleNames) + ") cho " + what + "; "
+        log((enable ? "Bật " : "Tắt ") + roleNames.size() + " role (" + String.join(", ", roleNames) + ") cho " + what + "; "
                 + changed + " API đã bắt được cập nhật.", null);
         changes.structure();
         return changed;
@@ -3632,10 +3632,10 @@ public final class Engine {
         book.setPending(key, false);
         book.event(PlacementBook.Action.PROMOTE_ORIGIN, key, newOrigin.gid(), newOrigin.method(), newOrigin.path(),
                 oldOrigin != null ? oldOrigin.branch() : null, newOrigin.branch(),
-                "Đặt API #" + newOrigin.gid() + " làm GỐC định hình #1"
+                "Đặt API #" + newOrigin.gid() + " làm bản gốc"
                         + (oldOrigin != null && oldOrigin.gid() != newOrigin.gid() ? " (thay API #" + oldOrigin.gid() + ")" : ""));
         changes.structure();
-        log("★ Đã đặt API #" + newOrigin.gid() + " (" + newOrigin.branch() + ") làm API GỐC định hình #1.", newOrigin.gid());
+        log("★ Đã đặt API #" + newOrigin.gid() + " (" + newOrigin.branch() + ") làm bản gốc.", newOrigin.gid());
         return true;
     }
 
@@ -3665,12 +3665,12 @@ public final class Engine {
             show(List.of(origin));
         }
         if (origin.pending() || origin.dupPending()) {
-            confirm(List.of(origin), "Xác nhận API GỐC định hình #1");
+            confirm(List.of(origin), "Xác nhận bản gốc");
         }
         List<ApiGroup> others = copiesOf(bookKey).stream()
                 .filter(c -> c.gid() != origin.gid() && !c.hidden())
                 .toList();
-        return others.isEmpty() ? 0 : hide(others, "Chỉ giữ API GỐC #1 (" + Text.apiLabel(origin.gid()) + ")");
+        return others.isEmpty() ? 0 : hide(others, "Chỉ giữ bản gốc (" + Text.apiLabel(origin.gid()) + ")");
     }
 
     /** Di chuyển một bản sao về đúng nhánh của API GỐC định hình (hoặc vị trí giữ chỗ). */
@@ -3686,7 +3686,7 @@ public final class Engine {
         if (Text.blank(dst)) {
             return false;
         }
-        moveToPath(List.of(copy), dst, "Đưa về nhánh của API GỐC #1");
+        moveToPath(List.of(copy), dst, "Đưa về nhánh của bản gốc");
         return true;
     }
 

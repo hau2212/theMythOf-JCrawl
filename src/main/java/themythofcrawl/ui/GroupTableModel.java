@@ -366,7 +366,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                     yield "";
                 }
                 if (engine.isOrigin(g)) {
-                    yield "GỐC · " + g.dupTotal();
+                    yield "Gốc · " + g.dupTotal();
                 }
                 ApiGroup orig = engine.originOf(g.bookKey());
                 yield orig != null && orig.gid() != g.gid()

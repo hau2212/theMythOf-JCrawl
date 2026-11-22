@@ -297,7 +297,7 @@ final class AuditTab {
             decideKindPill.setToken(t -> t.neutral).setIcon(null).setText("Chưa chọn");
             decideCard.setAccentToken(t -> t.neutral, false);
             decideAdvice.setAdvice(decideModel.getRowCount() == 0
-                    ? new Decisions.SmartAdvice("SẠCH SẼ", "Không có mục nào đang chờ xử lý",
+                    ? new Decisions.SmartAdvice("SẠCH sẽ", "Không có mục nào đang chờ xử lý",
                             "Mọi API đã có vị trí rõ ràng trên cây thư mục.", List.of(), List.of(), "", false)
                     : null);
         } else if (gs.size() == 1) {
@@ -582,7 +582,7 @@ final class AuditTab {
             m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
             m.addSeparator();
             m.add(Ui.item("Đặt làm bản gốc", Icons::check, one, () -> dupAction("promote")));
-            m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
+            m.add(Ui.item("Chỉ giữ bản gốc, ẩn các lần sau", Icons::hide, one, () -> dupAction("keep_origin")));
             m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
             m.add(Ui.item("Hiện", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
             m.add(Ui.item("Ẩn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
@@ -604,7 +604,7 @@ final class AuditTab {
             m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
             m.addSeparator();
             m.add(Ui.item("Đặt làm bản gốc", Icons::check, one, () -> dupAction("promote")));
-            m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
+            m.add(Ui.item("Chỉ giữ bản gốc, ẩn các lần sau", Icons::hide, one, () -> dupAction("keep_origin")));
             m.add(Ui.item("Hiện bản đang chọn", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
             m.add(Ui.item("Ẩn bản đang chọn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
             m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
@@ -665,7 +665,7 @@ final class AuditTab {
             }
             case "keep_origin" -> {
                 int hidden = engine.keepOnlyOriginAndHideOthers(gs.get(0).bookKey());
-                ui.flash("Đã giữ GỐC #1 và ẩn " + hidden + " bản trùng");
+                ui.flash("Đã giữ bản gốc và ẩn " + hidden + " bản trùng");
             }
             case "toggle_refresh" -> {
                 String key = gs.get(0).bookKey();

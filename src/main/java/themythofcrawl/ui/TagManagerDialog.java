@@ -149,11 +149,11 @@ final class TagManagerDialog {
                 ui.tick(true);
             }
         });
-        JButton keepOrigBtn = Ui.button("Chỉ giữ GỐC #1 & Ẩn #2+", t -> Icons.check(t.success.text()), () -> {
+        JButton keepOrigBtn = Ui.button("Chỉ giữ bản gốc, ẩn các lần sau", t -> Icons.check(t.success.text()), () -> {
             TaggedRow tr = taggedModel.rowAt(taggedTable.getSelectedRow());
             if (tr != null && tr.bookKey != null) {
                 int n = engine.keepOnlyOriginAndHideOthers(tr.bookKey);
-                ui.flash("Đã giữ GỐC #1 và ẩn " + n + " bản trùng");
+                ui.flash("Đã giữ bản gốc và ẩn " + n + " bản trùng");
                 taggedModel.reload(String.valueOf(filterBox.getSelectedItem()));
                 ui.tick(true);
             }

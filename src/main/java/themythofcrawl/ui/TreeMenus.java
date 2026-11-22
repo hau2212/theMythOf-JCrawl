@@ -51,7 +51,7 @@ final class TreeMenus {
                                     }
                                 }));
                     }
-                    m.add(Ui.item("Đặt \"" + title + "\" làm ĐÍCH cho request mới", Icons::arrowRight,
+                    m.add(Ui.item("Đặt \"" + title + "\" làm đích cho request mới", Icons::arrowRight,
                             () -> ui.setDestination(prefix)));
                     m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus,
                             () -> ui.addSubfolder(prefix)));
@@ -118,8 +118,8 @@ final class TreeMenus {
                                 engine.toggleBranchInterceptWait(prefix, next);
                                 ui.syncHeader();
                                 ui.flash(next
-                                        ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [CHỜ DUYỆT]!"
-                                        : "Đã TẮT Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
+                                        ? "Đã bật Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [Chờ duyệt]!"
+                                        : "Đã tắt Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
                             }));
                     m.add(Ui.item("Luật cho nhánh \"" + Hierarchy.leaf(prefix) + "\"...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));

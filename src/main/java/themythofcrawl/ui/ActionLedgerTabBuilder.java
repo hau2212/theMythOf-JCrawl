@@ -113,7 +113,7 @@ final class ActionLedgerTabBuilder {
                 ScopeType.API_EXACT.label
         });
         JComboBox<String> stateFilterCombo = new JComboBox<>(new String[] {
-                "Mọi trạng thái", "Đang BẬT", "Đang TẮT"
+                "Mọi trạng thái", "Đang bật", "Đang tắt"
         });
         JTextField searchField = new JTextField(15);
         searchField.setToolTipText("Lọc nhanh theo tên chính sách, path, nhánh, method, nguồn tạo...");
@@ -531,7 +531,7 @@ final class ActionLedgerTabBuilder {
                 int rank = rankById.getOrDefault(p.id(), i + 1);
                 tableModel.addRow(new Object[] {
                         "#" + rank,
-                        p.enabled() ? "BẬT" : "TẮT",
+                        p.enabled() ? "Bật" : "Tắt",
                         p.scopeType().label,
                         p.targetSummary(),
                         p.methodsLabel(),

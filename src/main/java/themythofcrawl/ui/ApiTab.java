@@ -736,7 +736,7 @@ final class ApiTab {
     }
 
     private JPanel buildHeldStrip() {
-        heldStripLabel = new JLabel("CHỜ DUYỆT");
+        heldStripLabel = new JLabel("Chờ duyệt");
         heldStripLabel.setIcon(Icons.themed(t -> Icons.strategyShield(t.danger.text(), 13)));
         heldStripLabel.setIconTextGap(6);
 
@@ -794,14 +794,14 @@ final class ApiTab {
             return;
         }
         String host = pr.service() != null ? pr.service().hostLabel() : "";
-        heldStripLabel.setText("[CHỜ DUYỆT · CHƯA GỬI] #" + pr.id() + "  " + pr.method() + " "
+        heldStripLabel.setText("[Chờ duyệt · Chưa gửi] #" + pr.id() + "  " + pr.method() + " "
                 + Text.shortPath(pr.path(), 42)
                 + (host.isEmpty() ? "" : "  (" + host + ")")
                 + "  ·  Nhánh: " + pr.branchName());
         heldStripLabel.setToolTipText(pr.reason());
         heldStrip.setVisible(true);
-        reqHeader.setText(" Request [CHỜ DUYỆT #" + pr.id() + "] — Sửa trực tiếp rồi bấm Gửi lên Server");
-        respHeader.setText(" Response · CHƯA GỬI LÊN SERVER");
+        reqHeader.setText(" Request [Chờ duyệt #" + pr.id() + "] — Sửa trực tiếp rồi bấm Gửi lên Server");
+        respHeader.setText(" Response · Chưa gửi lên server");
         reqViewer.show(pr.service(), pr.originalRequest());
         respViewer.show(pr.service(), TreeTab.heldPreviewBytes(pr));
         panel.revalidate();
@@ -834,7 +834,7 @@ final class ApiTab {
 
     private void saveInlineRequestEdit() {
         if (shownHeld != null) {
-            ui.flash("Request đang ở trạng thái CHỜ DUYỆT — hãy bấm 'Gửi lên Server' hoặc 'Lưu nháp'.");
+            ui.flash("Request đang ở trạng thái chờ duyệt — hãy bấm 'Gửi lên Server' hoặc 'Lưu nháp'.");
             return;
         }
         ApiGroup g = currentGroup();
@@ -1089,7 +1089,7 @@ final class ApiTab {
         if (g != null) {
             RoleResult cur = selectedResult();
             for (RoleResult r : g.entries()) {
-                String lbl = (r.original() ? "[GỐC] " : "") + r.roleName()
+                String lbl = (r.original() ? "[Gốc] " : "") + r.roleName()
                         + (r.status() != null ? "  —  HTTP " + r.status() : "  —  " + r.state());
                 m.add(Ui.item(lbl, t -> Icons.circle(r == cur ? t.accent.text() : t.muted, r == cur),
                         () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
@@ -1123,7 +1123,7 @@ final class ApiTab {
     }
 
     private JPanel buildFocusBanner() {
-        focusLabel = new JLabel("TẬP TRUNG");
+        focusLabel = new JLabel("Tập trung");
         focusLabel.setIcon(Icons.themed(t -> Icons.focus(t.accent.text(), 14)));
         focusLabel.setIconTextGap(6);
         focusScopeToggle = new SegmentedToggle(
@@ -1549,7 +1549,7 @@ final class ApiTab {
         tree.setFocus(clean, recursive);
         groupModel.setBranchFilter(clean, !recursive);
         if (focusLabel != null) {
-            focusLabel.setText("TẬP TRUNG: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
+            focusLabel.setText("Tập trung: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
             focusLabel.setToolTipText("Đang cô lập hiển thị cho đường dẫn: " + clean);
         }
         if (focusScopeToggle != null) {
@@ -1945,7 +1945,7 @@ final class ApiTab {
             RoleResult cur = selectedResult();
             pill.setText(Text.groupId(g.gid()) + ": " + g.method() + " " + Text.shortPath(g.path(), 26) + " (" + entries.size() + ")");
             if (compactSummaryBtn != null) {
-                String curRole = cur == null ? "" : (" · " + (cur.original() ? "GỐC" : cur.roleName())
+                String curRole = cur == null ? "" : (" · " + (cur.original() ? "Gốc" : cur.roleName())
                         + (cur.status() != null ? " [" + cur.status() + "]" : ""));
                 compactSummaryBtn.setText(Text.groupId(g.gid()) + " · " + g.method() + " " + Text.shortPath(g.path(), 34) + curRole);
             }
@@ -1957,7 +1957,7 @@ final class ApiTab {
             if (expandedTabs) {
                 Theme th = Theme.current();
                 for (RoleResult r : entries) {
-                    String lbl = (r.original() ? "GỐC" : r.roleName()) + (r.status() != null ? " (" + r.status() + ")" : "");
+                    String lbl = (r.original() ? "Gốc" : r.roleName()) + (r.status() != null ? " (" + r.status() + ")" : "");
                     JButton b = new JButton(lbl);
                     b.setMargin(new Insets(2, 7, 2, 7));
                     b.setFont(r == cur ? th.smallBoldFont : th.smallFont);
@@ -1996,7 +1996,7 @@ final class ApiTab {
         if (g != null) {
             RoleResult cur = selectedResult();
             for (RoleResult r : g.entries()) {
-                String lbl = (r.original() ? "[GỐC] " : "") + r.roleName()
+                String lbl = (r.original() ? "[Gốc] " : "") + r.roleName()
                         + (r.status() != null ? "  —  HTTP " + r.status() : "  —  " + r.state());
                 m.add(Ui.item(lbl, t -> Icons.circle(r == cur ? t.accent.text() : t.muted, r == cur),
                         () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
@@ -2159,7 +2159,7 @@ final class ApiTab {
         }));
         m.add(Ui.item("Gửi toàn bộ Nhánh đang chọn (Đệ quy tất cả cấp con)", Icons::sendAll, this::sendBranchSelection));
         m.addSeparator();
-        m.add(Ui.item("Gửi tất cả request CHƯA GỬI (crawl lúc đang dừng)", Icons::send,
+        m.add(Ui.item("Gửi tất cả request chưa gửi (crawl lúc đang dừng)", Icons::send,
                 () -> ui.flash("Xếp hàng " + engine.sendAllUnsent() + " request chưa gửi")));
         m.add(Ui.item("Hủy hàng đợi gửi", t -> Icons.stop(t.danger.text()), () -> engine.cancelPending("Đã hủy")));
         m.add(Ui.item("Gửi tất cả API đã bắt (" + engine.groups().size() + " API)", Icons::sendAll, () -> ui.send(engine.groups())));
@@ -2225,7 +2225,7 @@ final class ApiTab {
                     : "Tập trung vào nhánh \"" + Hierarchy.leaf(selBranch) + "\"";
             m.add(Ui.item(label, Icons::focus, this::toggleFocusFromSelection));
         }
-        m.add(Ui.item("Đặt làm ĐÍCH cho request mới", Icons::move, ui::destinationFromTree));
+        m.add(Ui.item("Đặt làm đích cho request mới", Icons::move, ui::destinationFromTree));
         m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
         m.add(Ui.item("Thêm Nhánh mới cùng cấp...", Icons::plus, ui::nextSibling));
         m.add(Ui.item("Đổi loại & Icon nhánh đang chọn...", Icons::sliders, () -> {

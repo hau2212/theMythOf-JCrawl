@@ -1190,11 +1190,11 @@ final class RolesTab {
                 String sb = rb == null ? "—" : rb.mode().name() + ": " + rb.value();
                 String st;
                 if (ra != null && rb != null) {
-                    st = (ra.mode() == rb.mode() && ra.value().equals(rb.value())) ? "KHỚP" : "KHÁC GIÁ TRỊ";
+                    st = (ra.mode() == rb.mode() && ra.value().equals(rb.value())) ? "Khớp" : "Khác giá trị";
                 } else if (ra != null) {
-                    st = "CHỈ Ở A";
+                    st = "Chỉ Ở A";
                 } else {
-                    st = "CHỈ Ở B";
+                    st = "Chỉ Ở B";
                 }
                 diffRows.add(new String[] {k, sa, sb, st});
             }
@@ -1217,8 +1217,8 @@ final class RolesTab {
                 setHorizontalAlignment(CENTER);
                 if (!sel) {
                     switch (s) {
-                        case "KHỚP" -> { setBackground(th.success.fill()); setForeground(th.success.text()); }
-                        case "KHÁC GIÁ TRỊ" -> { setBackground(th.warning.fill()); setForeground(th.warning.text()); }
+                        case "Khớp" -> { setBackground(th.success.fill()); setForeground(th.success.text()); }
+                        case "Khác giá trị" -> { setBackground(th.warning.fill()); setForeground(th.warning.text()); }
                         default -> { setBackground(th.info.fill()); setForeground(th.info.text()); }
                     }
                 }
@@ -1658,7 +1658,7 @@ final class RolesTab {
             this.on = on;
             this.selected = selected;
             this.row = row;
-            setToolTipText(on ? "Vai trò đang BẬT — bấm để tắt" : "Vai trò đang TẮT — bấm để bật");
+            setToolTipText(on ? "Vai trò đang bật — bấm để tắt" : "Vai trò đang tắt — bấm để bật");
         }
 
         @Override

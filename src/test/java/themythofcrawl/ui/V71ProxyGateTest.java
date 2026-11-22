@@ -37,7 +37,7 @@ class V71ProxyGateTest {
         Engine e = V70MultiRoleTeamTest.engine(new V70MultiRoleTeamTest.Server(), "A");
         try {
             assertFalse(e.proxyGate().on());
-            assertEquals("Chặn: TẮT", e.proxyGateHeaderLabel());
+            assertEquals("Chặn: Tắt", e.proxyGateHeaderLabel());
             assertFalse(blocked(e, SHOP, "DELETE", "/api/orders/1"));
 
             // 1 host + path, only DELETE, ask first

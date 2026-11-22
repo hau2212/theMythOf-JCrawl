@@ -79,7 +79,7 @@ final class ProxyFlowDiagram extends JComponent {
             }, mid);
             boolean serverGets = !on || effect == ProxyGate.Effect.ASK;
             box(g2, th, bx3, top, bw, bh, "Server", serverGets ? (on ? "chỉ khi bạn bấm Gửi" : "nhận request thật")
-                    : "KHÔNG nhận gì", serverGets ? th.neutral : bad);
+                    : "Không nhận gì", serverGets ? th.neutral : bad);
 
             // request: browser -> burp
             arrow(g2, th, bx1 + bw, cy - th.scaled(6), bx2, cy - th.scaled(6), ok.base(), false, "request", true);
@@ -105,8 +105,8 @@ final class ProxyFlowDiagram extends JComponent {
             g2.setFont(th.baseFont);
             g2.setColor(th.fg);
             FontMetrics fm = g2.getFontMetrics();
-            String line1 = !on ? "Cổng chặn TẮT: mọi request đi thẳng, JCrawl chỉ ghi lại API." : "Sơ đồ cho request KHỚP phạm vi + method đã chọn.";
-            String line2 = !on ? "" : "Request KHÔNG khớp phạm vi / method đã chọn: vẫn đi thẳng lên Server như bình thường.";
+            String line1 = !on ? "Cổng chặn tắt: mọi request đi thẳng, JCrawl chỉ ghi lại API." : "Sơ đồ cho request khớp phạm vi + method đã chọn.";
+            String line2 = !on ? "" : "Request không khớp phạm vi / method đã chọn: vẫn đi thẳng lên Server như bình thường.";
             int ty = top + bh + th.scaled(40);
             drawWrapped(g2, fm, line1, th.scaled(16), ty, w - th.scaled(32));
             g2.setColor(th.muted);

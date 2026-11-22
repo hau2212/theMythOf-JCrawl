@@ -339,7 +339,7 @@ final class ProxyGateDialog {
         private void refreshView(boolean pending) {
             ProxyGate.Settings s = formSettings();
             Theme th = Theme.current();
-            status.setText(s.on() ? "Cổng chặn: ĐANG BẬT" : "Cổng chặn: TẮT");
+            status.setText(s.on() ? "Cổng chặn: Đang bật" : "Cổng chặn: Tắt");
             status.setForeground(s.on() ? th.warning.text() : th.fg);
             sentence.setText(s.sentence());
             diagram.show(s.on(), s.effect());
