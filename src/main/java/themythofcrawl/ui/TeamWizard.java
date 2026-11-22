@@ -147,7 +147,7 @@ final class TeamWizard {
         // A
         JTextField pname = new JTextField(cfg.name, 26);
         JTextField me = new JTextField(ps.me(), 18);
-        DefaultTableModel acc = new DefaultTableModel(new Object[] {"Ký hiệu", "Tên tài khoản (vd admin, staff)"}, 0);
+        DefaultTableModel acc = new DefaultTableModel(new Object[] {"Ký hiệu", "Tài khoản web (tài khoản đăng nhập website, vd system, staff)"}, 0);
         ProjectData d0 = ps.data();
         if (d0 != null) {
             for (String l : d0.letters()) {
@@ -156,18 +156,41 @@ final class TeamWizard {
             }
         }
         javax.swing.JTable accT = new javax.swing.JTable(acc);
-        JPanel a = page("Đặt tên dự án và tên của bạn. Mỗi tài khoản có ký hiệu: A = tài khoản cao nhất (cha), B, C... Tài khoản tiếp"
-                        + " theo: Excel > Dự án > Tài khoản > Tài khoản tiếp theo.",
-                Ui.flow(FlowLayout.LEFT, Ui.bold("Tên dự án:"), pname, Ui.bold("Tên bạn:"), me), new JScrollPane(accT),
+        JButton addAcc = Ui.button("Thêm tài khoản web", Icons::plus, "", () -> {
+            java.util.Set<String> used = new java.util.HashSet<>();
+            for (int i = 0; i < acc.getRowCount(); i++) {
+                used.add(String.valueOf(acc.getValueAt(i, 0)));
+            }
+            char c = 'A';
+            while (used.contains(String.valueOf(c)) && c < 'Z') {
+                c++;
+            }
+            acc.addRow(new Object[] {String.valueOf(c), ""});
+        });
+        JPanel a = page("Đặt tên dự án và tên của bạn (người làm). Tài khoản web = tài khoản đăng nhập website (system, staff...), mỗi tài khoản"
+                        + " web 1 cột, ký hiệu A = cao nhất. Nhiều người có thể crawl cùng 1 tài khoản web. Danh sách tài khoản web dùng chung:"
+                        + " ai thêm / sửa cũng đồng bộ cho cả nhóm (Excel > Dự án > Tài khoản web > Danh sách...).",
+                Ui.flow(FlowLayout.LEFT, Ui.bold("Tên dự án:"), pname, Ui.bold("Tên bạn:"), me, addAcc), new JScrollPane(accT),
                 Ui.flow(FlowLayout.RIGHT, Ui.accent("Lưu", t -> Icons.save(t.accent.onSolid()), t -> t.accent, () -> {
                     cfg.name = pname.getText().trim().isEmpty() ? cfg.name : pname.getText().trim();
                     cfg.me = me.getText().trim().isEmpty() ? cfg.me : me.getText().trim();
-                    for (int i = 0; i < acc.getRowCount(); i++) {
-                        String l = String.valueOf(acc.getValueAt(i, 0)).trim();
-                        String n = String.valueOf(acc.getValueAt(i, 1)).trim();
-                        ProjectConfig.Account old = cfg.ensureAccount(l, n);
-                        cfg.accounts.set(cfg.accounts.indexOf(old), new ProjectConfig.Account(l, n, old.owner()));
+                    if (accT.isEditing()) {
+                        accT.getCellEditor().stopCellEditing();
                     }
+                    for (int i = 0; i < acc.getRowCount(); i++) {
+                        String l = String.valueOf(acc.getValueAt(i, 0)).trim().toUpperCase(java.util.Locale.ROOT);
+                        String n = String.valueOf(acc.getValueAt(i, 1) == null ? "" : acc.getValueAt(i, 1)).trim();
+                        if (l.isEmpty()) {
+                            continue;
+                        }
+                        ProjectConfig.Account old = cfg.account(l);
+                        ProjectConfig.Account acct = old == null ? new ProjectConfig.Account(l, n, "", List.of(), "", List.of(), ps.me(),
+                                System.currentTimeMillis(), "") : old.withName(n);
+                        if (old == null || !old.name().equals(n)) {
+                            ps.store().putAccount(acct, ps.me(), null);
+                        }
+                    }
+                    ps.store().saveRecords();
                     if (cfg.member(cfg.me) == null) {
                         cfg.putMember(new ProjectConfig.Member(cfg.me, ProjectConfig.Role.PIC, List.of(ps.myLetter()), ""));
                     }
@@ -288,7 +311,8 @@ final class TeamWizard {
                 }))));
 
         // E
-        DefaultTableModel mem = new DefaultTableModel(new Object[] {"Tên", "Vai trò (PIC / PIC phụ / Thành viên)", "Tài khoản (vd B, C)", "Ghi chú"}, 0);
+        DefaultTableModel mem = new DefaultTableModel(new Object[] {"Người làm", "Vai trò (PIC / PIC phụ / Thành viên)",
+            "Tài khoản web được giao (vd A, hoặc A, C)", "Ghi chú"}, 0);
         for (ProjectConfig.Member x : cfg.members) {
             mem.addRow(new Object[] {x.name(), x.role().label, String.join(", ", x.accounts()), x.note()});
         }
@@ -299,6 +323,7 @@ final class TeamWizard {
                         + " (khi PIC vắng: PIC phụ bấm Nhận quyền PIC). Thành viên: crawl tài khoản được giao, tạo Q&A.",
                 new JScrollPane(memT),
                 Ui.flow(FlowLayout.LEFT, Ui.button("Thêm người", Icons::plus, "", () -> mem.addRow(new Object[] {"", "Thành viên", "", ""})),
+                        Ui.button("Danh sách tài khoản web...", t -> Icons.users(t.fg, 13), "", () -> ProjectDialogs.accounts(ui)),
                         Ui.button("Xóa người", t -> Icons.trash(t.danger.text()), "", () -> {
                             int i = memT.getSelectedRow();
                             if (i >= 0) {
@@ -410,7 +435,7 @@ final class TeamWizard {
                     try {
                         inv[0] = Invite.decode(code.getText());
                         read.setText("Dự án: " + inv[0].projectName() + " · bạn: " + inv[0].member() + " (" + inv[0].role().label
-                                + ") · tài khoản: " + String.join(", ", inv[0].accounts()) + (inv[0].targetsJson() == null ? "" : " · có danh sách chuẩn"));
+                                + ") · tài khoản web được giao: " + String.join(", ", inv[0].accounts()) + (inv[0].targetsJson() == null ? "" : " · có danh sách chuẩn"));
                     } catch (IllegalArgumentException e) {
                         read.setText(e.getMessage());
                     }

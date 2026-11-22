@@ -94,7 +94,7 @@ jobs:
           2. **Chia sẻ chi tiết** (mặc định tắt, PIC bật): request / response đã che token, cookie, mật khẩu + Cây của từng người; **Xem workspace đồng đội (chỉ xem)**.
           3. **Ảnh khách hàng** dán trong file phản hồi tới đúng người tạo Q&A và Excel của mọi người.
           4. **Thành viên** tự gửi khách hàng / nhập phản hồi cho tài khoản của mình.
-          5. Ô tài khoản ghi tên người làm: Done (A) · An. Kế thừa V_11.4.
+          5. **Tài khoản web dùng chung** (ai cũng sửa, đồng bộ cho cả nhóm), ô ghi người làm: Done (an), tự gộp khi cùng người đăng nhập, tự đổi chữ khi trùng, gộp / tách tay, thống kê theo người làm. Kế thừa V_11.4.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

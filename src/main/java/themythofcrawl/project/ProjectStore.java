@@ -254,6 +254,20 @@ public final class ProjectStore {
         return putLocal(SyncRecord.of(SyncRecord.NOTE + ":" + rowId, by, "", Map.of("row", rowId, "note", Text.nz(note)), by));
     }
 
+    // ------------------------------------------------------------------ web accounts (V_11.5)
+    /** Saves one web account of the shared list (anyone may edit; the team gets it at the next sync). */
+    public synchronized SyncRecord putAccount(ProjectConfig.Account a, String by, Map<String, Object> keep) {
+        SyncRecord cur = records.get(SyncRecord.ACCT + ":" + a.letter());
+        Map<String, Object> d = new LinkedHashMap<>(cur == null ? Map.of() : cur.data());
+        if (keep != null) {
+            d.putAll(keep);
+        }
+        d.putAll(a.toMap());
+        SyncRecord r = putLocal(SyncRecord.of(SyncRecord.ACCT + ":" + a.letter(), by, a.letter(), d, by));
+        config.putAccount(a);
+        return r;
+    }
+
     // ------------------------------------------------------------------ log
     public void log(String by, String kind, String id, String detail) {
         Map<String, Object> m = new LinkedHashMap<>();

@@ -53,6 +53,7 @@ final class ProjectTab {
     };
     final ThemedTable table = new ThemedTable(model);
     private final JComboBox<String> filter = new JComboBox<>();
+    private final JComboBox<String> person = new JComboBox<>(new String[] {"Mọi người làm"});
     private final JTextField search = new JTextField(16);
     private final JLabel stats = Ui.muted(" ");
     private final JLabel me = Ui.bold(" ");
@@ -74,6 +75,12 @@ final class ProjectTab {
             filter.addItem(f);
         }
         filter.addActionListener(Ui.safe(e -> fill()));
+        person.addActionListener(Ui.safe(e -> {
+            if (!fillingPeople) {
+                fill();
+            }
+        }));
+        person.setToolTipText("Chỉ API người này đã làm (crawl, đặt tay, hỏi Q&A)");
         search.putClientProperty("JTextField.placeholderText", "Tìm path, nhánh, STT, ghi chú...");
         search.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { fill(); }
@@ -83,8 +90,9 @@ final class ProjectTab {
         syncPill = Ui.button("Làm chung: tắt", t -> Icons.refresh(t.fg), "Trạng thái đồng bộ với nhóm. Bấm để mở Làm chung",
                 () -> TeamWizard.open(ui));
         JButton[] accRef = new JButton[1];
-        JButton accounts = Ui.dropdown("Tài khoản", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
-                "Tài khoản tiếp theo, mở workspace của tài khoản khác", () -> accountMenu().show(accRef[0], 0, accRef[0].getHeight()));
+        JButton accounts = Ui.dropdown("Tài khoản web", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
+                "Danh sách tài khoản web dùng chung, tài khoản web tiếp theo, mở workspace khác",
+                () -> accountMenu().show(accRef[0], 0, accRef[0].getHeight()));
         accRef[0] = accounts;
         JButton[] repRef = new JButton[1];
         JButton reports = Ui.dropdown("Báo cáo", t -> Icons.withChevron(Icons.excel(t.fg, 13), t.fg),
@@ -94,7 +102,7 @@ final class ProjectTab {
         JPanel row1 = new JPanel(new BorderLayout());
         JPanel left = new JPanel(new BorderLayout(0, 2));
         left.add(Ui.flow(FlowLayout.LEFT, me), BorderLayout.NORTH);
-        left.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Lọc:"), filter, search), BorderLayout.SOUTH);
+        left.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Lọc:"), filter, person, search), BorderLayout.SOUTH);
         row1.add(left, BorderLayout.WEST);
         row1.add(Ui.flow(FlowLayout.RIGHT, syncPill, Ui.button("Làm mới", Icons::refresh, "Đọc lại workspace và dữ liệu nhóm", this::refreshNow)),
                 BorderLayout.EAST);
@@ -163,7 +171,7 @@ final class ProjectTab {
     }
 
     private String spec() {
-        String my = ui.project.myLetter();
+        String my = ui.project.myColumn();
         return switch (filter.getSelectedIndex()) {
             case 1 -> "list";
             case 2 -> "missing:" + my;
@@ -213,10 +221,12 @@ final class ProjectTab {
         }
         String q = search.getText().trim().toLowerCase(Locale.ROOT);
         String sp = spec();
+        refreshPeople();
+        String who = person.getSelectedIndex() > 0 ? (String) person.getSelectedItem() : null;
         shown.clear();
         model.setRowCount(0);
         for (ProjectData.Row r : data.rows()) {
-            if (!data.matches(r, sp)) {
+            if (!data.matches(r, sp) || who != null && !data.matches(r, "person:" + who)) {
                 continue;
             }
             if (!q.isEmpty() && !(r.path + " " + r.branch + " " + r.stt + " " + r.note + " " + r.method).toLowerCase(Locale.ROOT).contains(q)) {
@@ -231,6 +241,37 @@ final class ProjectTab {
         }
     }
 
+    private boolean fillingPeople;
+
+    private void refreshPeople() {
+        if (data == null || fillingPeople) {
+            return;
+        }
+        List<String> names = new ArrayList<>();
+        for (ProjectData.PersonStats p : data.people()) {
+            names.add(p.person());
+        }
+        List<String> cur = new ArrayList<>();
+        for (int i = 1; i < person.getItemCount(); i++) {
+            cur.add(person.getItemAt(i));
+        }
+        if (cur.equals(names)) {
+            return;
+        }
+        Object sel = person.getSelectedItem();
+        fillingPeople = true;
+        try {
+            person.removeAllItems();
+            person.addItem("Mọi người làm");
+            for (String n : names) {
+                person.addItem(n);
+            }
+            person.setSelectedItem(sel != null && names.contains(sel) ? sel : "Mọi người làm");
+        } finally {
+            fillingPeople = false;
+        }
+    }
+
     private void status() {
         ProjectService ps = ui.project;
         ProjectSync s = ps.sync();
@@ -239,7 +280,7 @@ final class ProjectTab {
             return;
         }
         String my = ps.myLetter();
-        me.setText(cfg.name + " · bạn: " + ps.me() + " (" + cfg.roleOf(ps.me()).label + ") · tài khoản đang mở: "
+        me.setText(cfg.name + " · bạn: " + ps.me() + " (" + cfg.roleOf(ps.me()).label + ") · tài khoản web đang mở: "
                 + cfg.accountDisplay(my));
         if (s != null) {
             ProjectSync.Status st = s.status();
@@ -264,7 +305,19 @@ final class ProjectTab {
             }
             stats.setText(sb.length() == 0 ? "Chưa có tài khoản nào" : sb.toString());
             int c = data.conflicts().size();
-            conflicts.setText(c == 0 ? " " : c + " xung đột chờ PIC chọn (2 người ghi khác nhau cùng 1 ô): Sao lưu... > Xung đột");
+            List<String> notes = new ArrayList<>();
+            if (c > 0) {
+                notes.add(c + " xung đột chờ PIC chọn (Sao lưu... > Xung đột)");
+            }
+            for (String[] p : cfg.similarPairs()) {
+                notes.add("Có thể cùng 1 tài khoản web: " + cfg.accountDisplay(p[0]) + " và " + cfg.accountDisplay(p[1])
+                        + " (Tài khoản web > Danh sách... > Gộp)");
+            }
+            String n = s == null ? "" : s.accountNotice();
+            if (!n.isEmpty()) {
+                notes.add(n);
+            }
+            conflicts.setText(notes.isEmpty() ? " " : String.join("   |   ", notes));
         }
     }
 
@@ -297,7 +350,7 @@ final class ProjectTab {
     private JPopupMenu rowMenu(ProjectData.Row r, String col) {
         JPopupMenu m = new JPopupMenu();
         ProjectService ps = ui.project;
-        String letter = col.startsWith(Columns.ACC_PREFIX) ? col.substring(Columns.ACC_PREFIX.length()) : ps.myLetter();
+        String letter = col.startsWith(Columns.ACC_PREFIX) ? col.substring(Columns.ACC_PREFIX.length()) : ps.myColumn();
         JMenu set = new JMenu("Đặt trạng thái tài khoản " + letter);
         set.setIcon(Icons.themed(t -> Icons.edit(t.fg, 13)));
         for (AccStatus st : AccStatus.values()) {
@@ -371,7 +424,7 @@ final class ProjectTab {
     }
 
     ApiGroup localGroup(ProjectData.Row r) {
-        ProjectData.Cell c = r.cells.get(ui.project.myLetter());
+        ProjectData.Cell c = r.cells.get(ui.project.myColumn());
         if (c != null && !c.gids.isEmpty()) {
             ApiGroup g = groupByGid(c.gids.get(0));
             if (g != null) {
@@ -415,7 +468,9 @@ final class ProjectTab {
 
     private JPopupMenu accountMenu() {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Tài khoản tiếp theo (workspace con: giữ cây nhánh + Excel)...", Icons::plus, () -> ui.excel.familyTab.createChild()));
+        m.add(Ui.item("Danh sách tài khoản web (dùng chung, ai cũng sửa được)...", t -> Icons.users(t.fg, 13),
+                () -> ProjectDialogs.accounts(ui)));
+        m.add(Ui.item("Tài khoản web tiếp theo (workspace mới: giữ cây nhánh + Excel)...", Icons::plus, () -> ui.excel.familyTab.createChild()));
         m.add(ui.excel.familyTab.switchMenuAsMenu());
         m.add(Ui.item("Xem workspace đồng đội (chỉ xem)...", t -> Icons.users(t.fg, 13), () -> TeammateDialog.open(ui, null)));
         m.addSeparator();

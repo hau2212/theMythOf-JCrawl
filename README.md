@@ -14,6 +14,15 @@ nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, 
   Mở bằng **Excel > Dự án > Tài khoản > Xem workspace đồng đội (chỉ xem)**, hoặc nhấp đúp dòng mà chỉ đồng đội gọi được.
 - **Ảnh khách hàng** dán vào file phản hồi tới đúng người tạo Q&A (gắn loại "Ảnh khách hàng") và có trong Excel của mọi người.
 - **Thành viên** tự Gửi khách hàng / Nhập phản hồi cho tài khoản của mình; kết quả đồng bộ cho cả nhóm.
+- **Tài khoản web** (tài khoản đăng nhập website: system, staff, guest...) tách khỏi **người làm** (hau, an, bình...). Mỗi tài khoản web
+  1 cột; ô ghi người làm: `Done (an)`, `Done (hau, an)`, `Denied (an) 403`, `Done (hau) · Xung đột: Denied (an) 403`, `OOS (hau, đặt tay)`,
+  `Done (khách hàng)`, `Missing`.
+- **Danh sách tài khoản web dùng chung** (Excel > Dự án > Tài khoản web > Danh sách...): ai cũng thêm / đổi tên / thêm tên khác / gộp /
+  tách, đồng bộ cho cả nhóm, ghi nhật ký. **Tài khoản web tiếp theo...** chọn từ danh sách (không tự gõ tên mới), gõ tên giống tài khoản
+  đã có (sys ~ system) thì được hỏi.
+- **Tự nhận cùng tài khoản**: cùng người đăng nhập (user trong JWT; chỉ gửi mã băm, không gửi token / tên) thì tự gộp vào 1 cột; tách lại
+  được (không tự gộp lại). Hai người lỡ lấy cùng chữ cái cho 2 tài khoản web khác nhau: tự đổi sang chữ trống tiếp theo và báo.
+- **Theo người làm**: lọc "Người làm" ở Excel > Dự án; Tổng quan có bảng theo người làm (API đã test, Done, Denied, Error, đặt tay, Q&A).
 
 ## Điểm mới V_11.4
 

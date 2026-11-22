@@ -974,6 +974,170 @@ final class ProjectDialogs {
         return p;
     }
 
+    // ================================================================== tài khoản web dùng chung
+    /**
+     * V_11.5: the shared web account list (system, staff, guest...). Anyone may add / rename / add other names / merge /
+     * split; every change reaches the whole team at the next sync and is written in the change log.
+     */
+    static void accounts(MainPanel ui) {
+        ProjectService ps = ui.project;
+        ProjectConfig cfg = ps.config();
+        DefaultTableModel m = new DefaultTableModel(new Object[] {"Ký hiệu", "Tên tài khoản web", "Tên khác", "Gộp vào", "Người làm",
+            "Người tạo", "Nhận diện đăng nhập"}, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return false;
+            }
+        };
+        ThemedTable t = new ThemedTable(m);
+        Ui.style(t);
+        Ui.widths(t, 60, 160, 160, 110, 180, 100, 140);
+        List<ProjectConfig.Account> rows = new ArrayList<>();
+        JLabel hint = Ui.muted(" ");
+        Runnable fill = () -> {
+            rows.clear();
+            m.setRowCount(0);
+            ProjectData d = ps.data();
+            Map<String, List<String>> people = new LinkedHashMap<>();
+            if (d != null) {
+                for (ProjectData.PersonStats p : d.people()) {
+                    for (String l : p.letters()) {
+                        people.computeIfAbsent(l, k -> new ArrayList<>()).add(p.person());
+                    }
+                }
+            }
+            for (ProjectConfig.Account a : cfg.accounts) {
+                rows.add(a);
+                m.addRow(new Object[] {a.letter(), a.name(), String.join(", ", a.aliases()),
+                    a.merged() ? cfg.accountDisplay(a.mergedInto()) + (a.mergedBy().isEmpty() ? "" : " (" + a.mergedBy() + ")") : "",
+                    String.join(", ", people.getOrDefault(a.letter(), List.of())), a.createdBy(),
+                    a.fps().isEmpty() ? "chưa thấy token" : a.fps().size() + " dấu vân tay"});
+            }
+            List<String> sim = new ArrayList<>();
+            for (String[] p : cfg.similarPairs()) {
+                sim.add(cfg.accountDisplay(p[0]) + " ~ " + cfg.accountDisplay(p[1]));
+            }
+            hint.setText(sim.isEmpty() ? "Cùng người đăng nhập (cùng user trong token) thì JCrawl tự gộp; tách lại được."
+                    : "Gợi ý gộp (tên giống nhau): " + String.join("; ", sim));
+        };
+        fill.run();
+        java.util.function.Supplier<ProjectConfig.Account> selected = () -> {
+            int i = t.getSelectedRow();
+            return i < 0 ? null : rows.get(t.convertRowIndexToModel(i));
+        };
+        Runnable after = () -> {
+            ps.store().saveRecords();
+            ps.syncSoon();
+            fill.run();
+            if (ui.excel != null && ui.excel.projectTab != null) {
+                ui.excel.projectTab.reload();
+            }
+        };
+        JDialog[] ref = new JDialog[1];
+        JPanel bar = Ui.flow(FlowLayout.LEFT,
+                Ui.button("Thêm...", Icons::plus, "Thêm tài khoản web (vd system, staff, guest)", () -> {
+                    String n = ui.ask("Tên tài khoản web mới (tên đăng nhập / vai trò trên website):", "");
+                    if (n == null || n.isBlank()) {
+                        return;
+                    }
+                    ProjectConfig.Account same = similarTo(cfg, n.trim());
+                    if (same != null && ui.confirmDialog("\"" + n.trim() + "\" giống " + same.display()
+                            + ". Đây có phải cùng tài khoản web không?\n(Có = thêm thành tên khác của " + same.letter() + ")")) {
+                        List<String> al = new ArrayList<>(same.aliases());
+                        al.add(n.trim());
+                        ps.store().putAccount(same.withAliases(al), ps.me(), null);
+                    } else {
+                        ps.store().putAccount(new ProjectConfig.Account(cfg.nextLetter(), n.trim(), "", List.of(), "", List.of(), ps.me(),
+                                System.currentTimeMillis(), ""), ps.me(), null);
+                    }
+                    after.run();
+                }),
+                Ui.button("Đổi tên / tên khác...", t2 -> Icons.edit(t2.fg, 13), "Tên hiển thị và các tên khác của cùng tài khoản", () -> {
+                    ProjectConfig.Account a = selected.get();
+                    if (a == null) {
+                        Ui.hint(t, "Chọn 1 tài khoản web");
+                        return;
+                    }
+                    JTextField name = new JTextField(a.name(), 22);
+                    JTextField al = new JTextField(String.join(", ", a.aliases()), 28);
+                    JPanel f = new JPanel(new GridLayout(0, 1, 0, 4));
+                    f.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Tên:"), name));
+                    f.add(Ui.flow(FlowLayout.LEFT, Ui.bold("Tên khác (cách nhau dấu phẩy):"), al));
+                    if (javax.swing.JOptionPane.showConfirmDialog(Ui.ownerWindow(ui.root()), f, a.display(),
+                            javax.swing.JOptionPane.OK_CANCEL_OPTION) == javax.swing.JOptionPane.OK_OPTION) {
+                        List<String> list = new ArrayList<>();
+                        for (String x : al.getText().split(",")) {
+                            if (!x.isBlank()) {
+                                list.add(x.trim());
+                            }
+                        }
+                        ps.store().putAccount(a.withName(name.getText().trim()).withAliases(list), ps.me(), null);
+                        after.run();
+                    }
+                }),
+                Ui.button("Gộp vào...", Icons::move, "Cùng 1 tài khoản web: dữ liệu hiện chung 1 cột", () -> {
+                    ProjectConfig.Account a = selected.get();
+                    if (a == null) {
+                        Ui.hint(t, "Chọn tài khoản web cần gộp (vd B · sys)");
+                        return;
+                    }
+                    List<String> opts = new ArrayList<>();
+                    for (ProjectConfig.Account x : cfg.activeAccounts()) {
+                        if (!x.letter().equals(a.letter())) {
+                            opts.add(x.display());
+                        }
+                    }
+                    if (opts.isEmpty()) {
+                        return;
+                    }
+                    Object pick = javax.swing.JOptionPane.showInputDialog(Ui.ownerWindow(ui.root()), "Gộp " + a.display() + " vào:",
+                            "Gộp tài khoản web", javax.swing.JOptionPane.QUESTION_MESSAGE, null, opts.toArray(), opts.get(0));
+                    if (pick == null) {
+                        return;
+                    }
+                    String into = String.valueOf(pick).split(" ")[0];
+                    ps.store().putAccount(a.withMerged(into, ps.me()), ps.me(), null);
+                    ps.store().log(ps.me(), "acct", a.letter(), "Gộp " + a.display() + " vào " + cfg.accountDisplay(into));
+                    after.run();
+                }),
+                Ui.button("Tách", Icons::undo, "Bỏ gộp: tài khoản web có lại cột riêng (dữ liệu không mất)", () -> {
+                    ProjectConfig.Account a = selected.get();
+                    if (a == null || !a.merged()) {
+                        Ui.hint(t, "Chọn 1 tài khoản web đã gộp");
+                        return;
+                    }
+                    SyncRecord rec = ps.store().record(SyncRecord.ACCT + ":" + a.letter());
+                    List<Object> no = new ArrayList<>();
+                    if (rec != null && rec.data().get("no_auto") instanceof List<?> l) {
+                        no.addAll(l);
+                    }
+                    no.add(a.mergedInto());
+                    ps.store().putAccount(a.withMerged("", ""), ps.me(), Map.of("no_auto", no));
+                    ps.store().log(ps.me(), "acct", a.letter(), "Tách " + a.display() + " khỏi " + cfg.accountDisplay(a.mergedInto()));
+                    after.run();
+                }));
+        JPanel body = new JPanel(new BorderLayout(0, Theme.SPACE_2));
+        body.add(bar, BorderLayout.NORTH);
+        body.add(MainPanel.scroll(t), BorderLayout.CENTER);
+        JPanel south = new JPanel(new BorderLayout());
+        south.add(hint, BorderLayout.CENTER);
+        south.add(Ui.flow(FlowLayout.RIGHT, Ui.secondaryBtn("Đóng", null, () -> ref[0].dispose())), BorderLayout.EAST);
+        body.add(south, BorderLayout.SOUTH);
+        ref[0] = dialog(ui, "Tài khoản web", "Tài khoản đăng nhập vào website (mỗi tài khoản 1 cột). Nhiều người có thể crawl cùng 1 tài khoản"
+                + " web. Danh sách dùng chung: ai sửa cũng đồng bộ cho cả nhóm.", body, 1000, 480);
+        ref[0].setVisible(true);
+    }
+
+    /** An existing web account with a similar name / other name, or null. */
+    static ProjectConfig.Account similarTo(ProjectConfig cfg, String name) {
+        for (ProjectConfig.Account a : cfg.activeAccounts()) {
+            if (ProjectConfig.similar(a.name(), name) || a.aliases().stream().anyMatch(x -> ProjectConfig.similar(x, name))) {
+                return a;
+            }
+        }
+        return null;
+    }
+
     // ================================================================== chuyển dự án
     static void moveProject(MainPanel ui) {
         ProjectService ps = ui.project;

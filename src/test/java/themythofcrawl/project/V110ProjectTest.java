@@ -163,7 +163,7 @@ public class V110ProjectTest {
         List<Xlsx.Sheet> back = Xlsx.readAll(f);
         Xlsx.Sheet sum = back.stream().filter(s -> s.name().equals("Tổng hợp")).findFirst().orElseThrow();
         assertEquals("Mã", sum.rows().get(0).get(0));
-        assertTrue(sum.rows().stream().anyMatch(r -> r.stream().anyMatch(v -> String.valueOf(v).startsWith("Denied (B) 403"))),
+        assertTrue(sum.rows().stream().anyMatch(r -> r.stream().anyMatch(v -> String.valueOf(v).equals("Denied (An) 403"))),
                 sum.rows().toString());
         List<Xlsx.InPicture> pics = Xlsx.readPictures(f);
         assertTrue(pics.stream().filter(p -> p.sheet().equals("Q&A")).count() >= 2);

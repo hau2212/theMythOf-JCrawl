@@ -56,17 +56,171 @@ public final class ProjectConfig {
         }
     }
 
-    public record Account(String letter, String name, String owner) {
+    /**
+     * A web account (the login used on the tested website: system, staff, guest...). One column per account. Several
+     * people may crawl with the same web account; they are "Thành viên", not accounts.
+     *
+     * @param aliases other names people typed for the same web account (sys, sys-tem...)
+     * @param mergedInto letter this account was merged into ("" = its own column)
+     * @param fps identity fingerprints (hash of the logged-in user found in requests), never the user name itself
+     */
+    public record Account(String letter, String name, String owner, List<String> aliases, String mergedInto, List<String> fps,
+                          String createdBy, long createdAt, String mergedBy) {
         public Account {
             letter = Text.nz(letter).trim().toUpperCase(Locale.ROOT);
             name = Text.nz(name).trim();
             owner = Text.nz(owner).trim();
+            aliases = aliases == null ? List.of() : List.copyOf(aliases);
+            mergedInto = Text.nz(mergedInto).trim().toUpperCase(Locale.ROOT);
+            fps = fps == null ? List.of() : List.copyOf(fps);
+            createdBy = Text.nz(createdBy).trim();
+            mergedBy = Text.nz(mergedBy).trim();
+        }
+
+        public Account(String letter, String name, String owner) {
+            this(letter, name, owner, List.of(), "", List.of(), "", 0L, "");
         }
 
         /** "A · admin". */
         public String display() {
             return name.isEmpty() || name.equalsIgnoreCase(letter) ? letter : letter + " · " + name;
         }
+
+        public boolean merged() {
+            return !mergedInto.isEmpty() && !mergedInto.equals(letter);
+        }
+
+        public Account withName(String n) {
+            return new Account(letter, n, owner, aliases, mergedInto, fps, createdBy, createdAt, mergedBy);
+        }
+
+        public Account withAliases(List<String> a) {
+            return new Account(letter, name, owner, a, mergedInto, fps, createdBy, createdAt, mergedBy);
+        }
+
+        public Account withMerged(String into, String by) {
+            return new Account(letter, name, owner, aliases, into, fps, createdBy, createdAt, by);
+        }
+
+        public Account withFps(List<String> f) {
+            return new Account(letter, name, owner, aliases, mergedInto, f, createdBy, createdAt, mergedBy);
+        }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("letter", letter);
+            m.put("name", name);
+            m.put("owner", owner);
+            m.put("aliases", new ArrayList<>(aliases));
+            m.put("merged_into", mergedInto);
+            m.put("merged_by", mergedBy);
+            m.put("fps", new ArrayList<>(fps));
+            m.put("created_by", createdBy);
+            m.put("created_at", createdAt);
+            return m;
+        }
+
+        public static Account fromMap(Map<String, Object> a) {
+            List<String> al = new ArrayList<>();
+            for (Object o : Json.list(a, "aliases")) {
+                al.add(String.valueOf(o));
+            }
+            List<String> fp = new ArrayList<>();
+            for (Object o : Json.list(a, "fps")) {
+                fp.add(String.valueOf(o));
+            }
+            return new Account(Json.str(a, "letter", ""), Json.str(a, "name", ""), Json.str(a, "owner", ""), al,
+                    Json.str(a, "merged_into", ""), fp, Json.str(a, "created_by", ""), Json.num(a, "created_at", 0),
+                    Json.str(a, "merged_by", ""));
+        }
+    }
+
+    /** Letter an account's data shows under (follows merges, A <- B <- C). */
+    public String resolve(String letter) {
+        String l = Text.nz(letter).trim().toUpperCase(Locale.ROOT);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        Account a = account(l);
+        while (a != null && a.merged() && seen.add(l)) {
+            l = a.mergedInto();
+            a = account(l);
+        }
+        return l;
+    }
+
+    /** Accounts that have their own column (not merged into another). */
+    public List<Account> activeAccounts() {
+        List<Account> out = new ArrayList<>();
+        for (Account a : accounts) {
+            if (!a.merged()) {
+                out.add(a);
+            }
+        }
+        return out;
+    }
+
+    /** Replace / add one account (keeps the A, B, C order). */
+    public void putAccount(Account a) {
+        for (int i = 0; i < accounts.size(); i++) {
+            if (accounts.get(i).letter().equals(a.letter())) {
+                accounts.set(i, a);
+                return;
+            }
+        }
+        accounts.add(a);
+        accounts.sort((x, y) -> x.letter().length() != y.letter().length()
+                ? Integer.compare(x.letter().length(), y.letter().length()) : x.letter().compareTo(y.letter()));
+    }
+
+    /** V_11.5: the shared web account list ("acct:<letter>" records, anyone may edit) on top of the settings. */
+    public void applyAccountRecords(Map<String, SyncRecord> records) {
+        for (SyncRecord r : records.values()) {
+            if (SyncRecord.ACCT.equals(r.type()) && !r.deleted()) {
+                Account a = Account.fromMap(new LinkedHashMap<>(r.data()));
+                if (!a.letter().isEmpty()) {
+                    putAccount(a);
+                }
+            } else if (SyncRecord.ACCT.equals(r.type()) && r.deleted()) {
+                String l = r.id().substring(SyncRecord.ACCT.length() + 1);
+                accounts.removeIf(x -> x.letter().equals(l));
+            }
+        }
+    }
+
+    /** Letters with a similar name ("system", "sys", "sys-tem", "System"): merge suggestions. */
+    public static String norm(String name) {
+        return java.text.Normalizer.normalize(Text.nz(name), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT);
+    }
+
+    public static boolean similar(String a, String b) {
+        String x = norm(a);
+        String y = norm(b);
+        if (x.length() < 2 || y.length() < 2) {
+            return false;
+        }
+        return x.equals(y) || x.length() >= 3 && y.startsWith(x) || y.length() >= 3 && x.startsWith(y);
+    }
+
+    public List<String[]> similarPairs() {
+        List<String[]> out = new ArrayList<>();
+        List<Account> act = activeAccounts();
+        for (int i = 0; i < act.size(); i++) {
+            for (int j = i + 1; j < act.size(); j++) {
+                Account a = act.get(i);
+                Account b = act.get(j);
+                boolean sim = similar(a.name(), b.name());
+                for (String al : b.aliases()) {
+                    sim |= similar(a.name(), al);
+                }
+                for (String al : a.aliases()) {
+                    sim |= similar(al, b.name());
+                }
+                if (sim) {
+                    out.add(new String[] {a.letter(), b.letter()});
+                }
+            }
+        }
+        return out;
     }
 
     public record Member(String name, Role role, List<String> accounts, String note) {
@@ -136,7 +290,7 @@ public final class ProjectConfig {
     }
 
     public String accountDisplay(String letter) {
-        Account a = account(letter);
+        Account a = account(resolve(letter));
         return a == null ? letter : a.display();
     }
 
@@ -163,7 +317,7 @@ public final class ProjectConfig {
             accounts.sort((x, y) -> x.letter().length() != y.letter().length()
                     ? Integer.compare(x.letter().length(), y.letter().length()) : x.letter().compareTo(y.letter()));
         } else if (a.name().isEmpty() && !Text.blank(name)) {
-            accounts.set(accounts.indexOf(a), new Account(letter, name, a.owner()));
+            accounts.set(accounts.indexOf(a), a.withName(name));
             a = account(letter);
         }
         return a;
@@ -276,7 +430,7 @@ public final class ProjectConfig {
         m.put("created", created);
         List<Object> acc = new ArrayList<>();
         for (Account a : accounts) {
-            acc.add(Map.of("letter", a.letter(), "name", a.name(), "owner", a.owner()));
+            acc.add(a.toMap());
         }
         m.put("accounts", acc);
         List<Object> mem = new ArrayList<>();
@@ -351,8 +505,7 @@ public final class ProjectConfig {
         accounts.clear();
         for (Object o : Json.list(m, "accounts")) {
             if (o instanceof Map<?, ?> am) {
-                Map<String, Object> a = (Map<String, Object>) am;
-                accounts.add(new Account(Json.str(a, "letter", ""), Json.str(a, "name", ""), Json.str(a, "owner", "")));
+                accounts.add(Account.fromMap((Map<String, Object>) am));
             }
         }
         members.clear();

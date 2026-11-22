@@ -100,19 +100,65 @@ public final class ProjectData {
         public final Map<String, AccStatus> byMember = new LinkedHashMap<>();
         public final java.util.Set<String> tags = new java.util.LinkedHashSet<>();
         public final java.util.Set<String> bugs = new java.util.LinkedHashSet<>();
+        /** HTTP of each member's best result on this cell. */
+        public final Map<String, Integer> httpBy = new LinkedHashMap<>();
         /** Role replay summary: role name -> HTTP status (V_11.5). */
         public final Map<String, Long> roles = new java.util.TreeMap<>();
 
+        /**
+         * V_11.5: the column is the web account, the parentheses name the people: "Done (an)", "Done (hau, an)",
+         * "Denied (an) 403", "Done (hau) · Xung đột: Denied (an) 403", "Doing (an)", "OOS (hau, đặt tay)",
+         * "Done (khách hàng)", "Missing". Always starts with the status word (Excel COUNTIFS count it).
+         */
         public String text(String letter) {
-            StringBuilder sb = new StringBuilder(status.label(letter));
-            if (http != null && status != AccStatus.DONE && status != AccStatus.MISSING && !manual) {
-                sb.append(' ').append(http);
+            StringBuilder sb = new StringBuilder();
+            if (manual) {
+                String via = manualVia == null ? "" : manualVia;
+                String who = via.startsWith("Khách hàng") ? "khách hàng"
+                        : (by.isEmpty() ? "" : by + ", ") + (via.equals("Google Sheet") ? "trên Google Sheet" : "đặt tay");
+                sb.append(status.word).append(" (").append(who).append(')');
+            } else if (status == AccStatus.MISSING) {
+                sb.append(status.word);
+            } else if (status == AccStatus.DOING && !doingBy.isEmpty() && byMember.isEmpty()) {
+                sb.append(status.word).append(" (").append(doingBy).append(')');
+            } else {
+                List<String> same = new ArrayList<>();
+                byMember.forEach((m, st) -> {
+                    if (st == status) {
+                        same.add(m);
+                    }
+                });
+                if (same.isEmpty() && !by.isEmpty()) {
+                    same.add(by);
+                }
+                sb.append(status.word);
+                if (!same.isEmpty()) {
+                    sb.append(" (").append(String.join(", ", same)).append(')');
+                }
+                if (http != null && status != AccStatus.DONE && status != AccStatus.DOING) {
+                    sb.append(' ').append(http);
+                }
+                if (conflict) {
+                    List<String> other = new ArrayList<>();
+                    byMember.forEach((m, st) -> {
+                        if (st != status && st != AccStatus.DOING) {
+                            Integer h = httpBy.get(m);
+                            other.add(st.word + " (" + m + ")" + (h != null && st != AccStatus.DONE ? " " + h : ""));
+                        }
+                    });
+                    if (!other.isEmpty()) {
+                        sb.append(" · Xung đột: ").append(String.join(" · ", other));
+                    }
+                }
+                if (!doingBy.isEmpty()) {
+                    sb.append(" · đang làm: ").append(doingBy);
+                }
             }
             if (info) {
-                sb.append(" · Info (").append(letter).append(')');
+                sb.append(" · Info");
             }
             if (qaOpen) {
-                sb.append(" · Q&A (").append(letter).append(')');
+                sb.append(" · Q&A");
             }
             return sb.toString();
         }
@@ -184,7 +230,10 @@ public final class ProjectData {
     }
 
     /** A Q&A / Info item on a row, with where its images come from. */
-    public record QaRef(String rowId, String letter, String member, QaItem item, Images images, boolean local, int gid) {
+    public record QaRef(String rowId, String letter, String member, QaItem item, Images images, boolean local, int gid, String raw) {
+        public QaRef(String rowId, String letter, String member, QaItem item, Images images, boolean local, int gid) {
+            this(rowId, letter, member, item, images, local, gid, letter);
+        }
     }
 
     public record Conflict(SyncRecord record) {
@@ -406,8 +455,10 @@ public final class ProjectData {
     }
 
     // ------------------------------------------------------------------ build
+    /** @param letter the column it shows in (after merges); {@code raw} the workspace's own letter (what is sent) */
     private record Obs(String letter, String member, Integer http, AccStatus status, int gid, long at, String method, String path,
-                       String host, String branch, boolean remote, List<String> tags, List<String> bugs, Map<String, Long> roles) {
+                       String host, String branch, boolean remote, List<String> tags, List<String> bugs, Map<String, Long> roles,
+                       String raw) {
     }
 
     static Map<String, Long> roleSummary(List<Map<String, Object>> results) {
@@ -465,7 +516,8 @@ public final class ProjectData {
         for (LocalAccount l : locals) {
             ProjectConfig.Account a = cfg.ensureAccount(l.letter(), l.name());
             if (a.owner().isEmpty() && !who.isEmpty()) {
-                cfg.accounts.set(cfg.accounts.indexOf(a), new ProjectConfig.Account(a.letter(), a.name(), who));
+                cfg.accounts.set(cfg.accounts.indexOf(a), new ProjectConfig.Account(a.letter(), a.name(), who, a.aliases(), a.mergedInto(),
+                        a.fps(), a.createdBy().isEmpty() ? who : a.createdBy(), a.createdAt(), a.mergedBy()));
             }
         }
         for (SyncRecord r : recs.values()) {
@@ -473,7 +525,8 @@ public final class ProjectData {
                 cfg.ensureAccount(r.account(), r.str("account_name"));
             }
         }
-        List<ProjectConfig.Account> accounts = new ArrayList<>(cfg.accounts);
+        // merged web accounts (B "sys" merged into A "system") show under the account they were merged into
+        List<ProjectConfig.Account> accounts = new ArrayList<>(cfg.activeAccounts());
         String first = accounts.isEmpty() ? "A" : accounts.get(0).letter();
 
         // standard rows
@@ -520,10 +573,11 @@ public final class ProjectData {
             localLetters.add(l.letter());
             for (ApiFact a : l.apis()) {
                 String rid = a.targetRow() != null && rows.containsKey(stdRowId(a.targetRow())) ? stdRowId(a.targetRow()) : keyRowId(a.key());
-                obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(l.letter(), who, a.http(), AccStatus.ofHttp(a.http()), a.gid(), a.createdMs(),
-                        a.method(), a.path(), a.host(), a.branch(), false, a.tags(), a.bugs(), roleSummary(a.roles())));
+                obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(cfg.resolve(l.letter()), who, a.http(), AccStatus.ofHttp(a.http()), a.gid(), a.createdMs(),
+                        a.method(), a.path(), a.host(), a.branch(), false, a.tags(), a.bugs(), roleSummary(a.roles()), l.letter()));
                 for (QaItem q : a.qa()) {
-                    qaRefs.add(new QaRef(rid, l.letter(), q.by().isEmpty() ? who : q.by(), q, n -> l.image(a.gid(), n), true, a.gid()));
+                    qaRefs.add(new QaRef(rid, cfg.resolve(l.letter()), q.by().isEmpty() ? who : q.by(), q, n -> l.image(a.gid(), n), true, a.gid(),
+                            l.letter()));
                 }
             }
         }
@@ -544,9 +598,10 @@ public final class ProjectData {
             }
             long http = r.num("http");
             AccStatus st = r.str("status").isEmpty() ? AccStatus.ofHttp(http > 0 ? (int) http : null) : parseName(r.str("status"));
-            obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(r.account(), r.owner(), http > 0 ? (int) http : null,
+            obs.computeIfAbsent(rid, k -> new ArrayList<>()).add(new Obs(cfg.resolve(r.account()), r.owner(), http > 0 ? (int) http : null,
                     st == null ? AccStatus.DOING : st, (int) r.num("gid"), r.at(), r.str("method"), r.str("path"), r.str("host"),
-                    r.str("branch"), true, strings(r.data().get("tags")), strings(r.data().get("bugs")), longs(r.data().get("roles"))));
+                    r.str("branch"), true, strings(r.data().get("tags")), strings(r.data().get("bugs")), longs(r.data().get("roles")),
+                    r.account()));
         }
         // remote Q&A
         Set<String> localQaIds = new LinkedHashSet<>();
@@ -566,7 +621,7 @@ public final class ProjectData {
             if (localQaIds.contains(item.id())) {
                 continue;
             }
-            qaRefs.add(new QaRef(r.str("row"), r.account(), r.owner(), item, null, false, (int) r.num("gid")));
+            qaRefs.add(new QaRef(r.str("row"), cfg.resolve(r.account()), r.owner(), item, null, false, (int) r.num("gid"), r.account()));
         }
 
         // key rows
@@ -661,6 +716,7 @@ public final class ProjectData {
                 AccStatus prev = pm.get(o.member());
                 if (prev == null || rank(st) > rank(prev)) {
                     pm.put(o.member(), st);
+                    c.httpBy.put(o.member(), o.http());
                 }
                 if (rank(st) > rank(c.status)) {
                     c.status = st;
@@ -689,7 +745,7 @@ public final class ProjectData {
             if (SyncRecord.PRESENCE.equals(p.type()) && !p.deleted() && now - p.at() < 120_000) {
                 Row r = rows.get(p.str("row"));
                 if (r != null && !p.account().isEmpty()) {
-                    Cell c = r.cell(p.account());
+                    Cell c = r.cell(cfg.resolve(p.account()));
                     c.doingBy = p.owner();
                     if (c.status == AccStatus.MISSING) {
                         c.status = AccStatus.DOING;
@@ -705,7 +761,7 @@ public final class ProjectData {
                 if (r == null) {
                     continue;
                 }
-                Cell c = r.cell(m.account());
+                Cell c = r.cell(cfg.resolve(m.account()));
                 AccStatus st = m.str("status").isEmpty() ? null : parseName(m.str("status"));
                 if (st != null) {
                     c.status = st;
@@ -741,7 +797,7 @@ public final class ProjectData {
             if (ans != null && ans.at() > it.updatedAtMs() && !ans.str("answer").equals(it.answer())) {
                 it = it.withMessage(new QaItem.Msg(ans.by().isEmpty() ? "Khách hàng" : ans.by(), ans.at(), ans.str("answer"), true));
             }
-            QaRef ref = new QaRef(q.rowId(), q.letter(), q.member(), it, q.images(), q.local(), q.gid());
+            QaRef ref = new QaRef(q.rowId(), q.letter(), q.member(), it, q.images(), q.local(), q.gid(), q.raw());
             r.qa.add(ref);
             Cell c = r.cell(q.letter());
             if (it.kind() == QaItem.Kind.INFO && it.status() != QaItem.Status.CLOSED) {
@@ -792,18 +848,18 @@ public final class ProjectData {
                 if (o.remote()) {
                     continue;
                 }
-                String k = e.getKey() + "|" + o.letter();
+                String k = e.getKey() + "|" + o.raw();
                 LocalCell cur = lc.get(k);
                 Row r = rows.get(e.getKey());
                 if (cur == null) {
-                    lc.put(k, new LocalCell(e.getKey(), o.letter(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at(),
+                    lc.put(k, new LocalCell(e.getKey(), o.raw(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at(),
                             new java.util.TreeSet<>(o.tags()), new java.util.TreeSet<>(o.bugs()), new java.util.TreeMap<>(o.roles())));
                 } else {
                     boolean better = rank(o.status()) > rank(cur.status());
                     cur.tags().addAll(o.tags());
                     cur.bugs().addAll(o.bugs());
                     cur.roles().putAll(o.roles());
-                    lc.put(k, new LocalCell(e.getKey(), o.letter(), better ? o.status() : cur.status(), better ? o.http() : cur.http(),
+                    lc.put(k, new LocalCell(e.getKey(), o.raw(), better ? o.status() : cur.status(), better ? o.http() : cur.http(),
                             cur.apis() + 1, cur.method(), cur.path(), cur.host(), cur.branch(), Math.max(cur.at(), o.at()), cur.tags(),
                             cur.bugs(), cur.roles()));
                 }
@@ -860,6 +916,8 @@ public final class ProjectData {
             case "info" -> r.qa.stream().anyMatch(q -> q.item().kind() == QaItem.Kind.INFO);
             case "bac" -> !r.bac.isEmpty();
             case "bug" -> r.cells.values().stream().anyMatch(x -> !x.bugs.isEmpty());
+            case "person" -> r.cells.values().stream().anyMatch(x -> x.byMember.containsKey(v) || x.manual && x.by.equalsIgnoreCase(v)
+                    || x.doingBy.equalsIgnoreCase(v)) || r.qa.stream().anyMatch(q -> q.item().by().equalsIgnoreCase(v));
             case "conflict" -> r.cells.values().stream().anyMatch(x -> x.conflict);
             case "excluded" -> r.excluded;
             case "text" -> (r.path + " " + r.branch + " " + r.stt + " " + r.note).toLowerCase(Locale.ROOT)
@@ -924,6 +982,39 @@ public final class ProjectData {
             }
         }
         return new Stats(letter, list, done, denied, error, missing, doing, oos, info, qaOpen, qaAns, only);
+    }
+
+    /** V_11.5: what one person (team member) did: web accounts, APIs tested, results, hand marks, questions. */
+    public record PersonStats(String person, java.util.Set<String> letters, int apis, int done, int denied, int error, int manual,
+                              int qa) {
+    }
+
+    public List<PersonStats> people() {
+        Map<String, int[]> n = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        Map<String, java.util.Set<String>> acc = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (Row r : visibleRows()) {
+            r.cells.forEach((letter, c) -> {
+                c.byMember.forEach((person, st) -> {
+                    int[] x = n.computeIfAbsent(person, k -> new int[6]);
+                    acc.computeIfAbsent(person, k -> new java.util.TreeSet<>()).add(letter);
+                    x[0]++;
+                    x[1] += st == AccStatus.DONE ? 1 : 0;
+                    x[2] += st == AccStatus.DENIED ? 1 : 0;
+                    x[3] += st == AccStatus.ERROR ? 1 : 0;
+                });
+                if (c.manual && !c.by.isEmpty() && !c.manualVia.startsWith("Khách hàng")) {
+                    n.computeIfAbsent(c.by, k -> new int[6])[4]++;
+                }
+            });
+            for (QaRef q : r.qa) {
+                if (!q.item().by().isEmpty()) {
+                    n.computeIfAbsent(q.item().by(), k -> new int[6])[5]++;
+                }
+            }
+        }
+        List<PersonStats> out = new ArrayList<>();
+        n.forEach((p, x) -> out.add(new PersonStats(p, acc.getOrDefault(p, java.util.Set.of()), x[0], x[1], x[2], x[3], x[4], x[5])));
+        return out;
     }
 
     /** Rows where every account in {@code all} is Done and none in {@code none} is. */

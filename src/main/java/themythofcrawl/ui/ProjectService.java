@@ -185,6 +185,11 @@ final class ProjectService {
         return m.isEmpty() ? "A" : m;
     }
 
+    /** The column the open workspace's results show in (its web account, or the one it was merged into). */
+    String myColumn() {
+        return ready() ? config().resolve(myLetter()) : myLetter();
+    }
+
     void saveConfig(String what) {
         ProjectConfig c = config();
         c.touch(me());
@@ -245,7 +250,7 @@ final class ProjectService {
             return null;
         }
         ProjectData d = sync.data();
-        String me = myLetter();
+        String me = myColumn();
         Map<String, List<ProjectData.Row>> out = new LinkedHashMap<>();
         for (ProjectData.Row r : d.listRows()) {
             ProjectData.Cell c = r.cells.get(me);

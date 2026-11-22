@@ -582,6 +582,7 @@ public final class UiPreview {
                 case "prjsheets" -> ProjectDialogs.sheets(ui);
                 case "prjbackup" -> ProjectDialogs.backups(ui);
                 case "prjexport" -> ProjectDialogs.export(ui);
+                case "prjacc" -> ProjectDialogs.accounts(ui);
                 case "prjqa" -> QaDialog.open(ui, e.groups().get(1), e.groups().get(1).qa().get(0));
                 default -> { }
             }

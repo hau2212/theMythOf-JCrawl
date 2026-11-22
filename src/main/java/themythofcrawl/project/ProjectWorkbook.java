@@ -244,12 +244,7 @@ public final class ProjectWorkbook {
         if (id.startsWith(Columns.ACC_PREFIX)) {
             String l = id.substring(Columns.ACC_PREFIX.length());
             ProjectData.Cell c = r.cell(l);
-            String who = c.status == AccStatus.MISSING || c.by.isEmpty() ? "" : " · " + c.by;
-            if (c.byMember.size() > 1) {
-                who = " · " + String.join(", ", c.byMember.keySet());
-            }
-            String text = c.text(l) + (c.doingBy.isEmpty() ? who : "") + (c.conflict && !c.manual ? " · Xung đột" : "")
-                    + (c.doingBy.isEmpty() ? "" : " · " + c.doingBy);
+            String text = c.text(l);
             return StyledCell.of(text, tone(c));
         }
         return switch (id) {
@@ -549,11 +544,26 @@ public final class ProjectWorkbook {
             }
             rows.add(List.of(StyledCell.of("API có Q&A ở mọi tài khoản", CellTone.BOLD), both.size()));
         }
+        List<ProjectData.PersonStats> people = d.people();
+        if (!people.isEmpty()) {
+            rows.add(List.of());
+            rows.add(List.of(StyledCell.of("Theo người làm", CellTone.HEADER)));
+            rows.add(List.of(StyledCell.of("Người làm", CellTone.BOLD), StyledCell.of("Tài khoản web", CellTone.BOLD),
+                    StyledCell.of("API đã test", CellTone.BOLD), StyledCell.of("Done", CellTone.BOLD), StyledCell.of("Denied", CellTone.BOLD),
+                    StyledCell.of("Error", CellTone.BOLD), StyledCell.of("Đặt tay", CellTone.BOLD), StyledCell.of("Q&A đã hỏi", CellTone.BOLD)));
+            for (ProjectData.PersonStats p : people) {
+                List<String> accs = new ArrayList<>();
+                for (String l : p.letters()) {
+                    accs.add(d.config().accountDisplay(l));
+                }
+                rows.add(List.of(p.person(), String.join(", ", accs), p.apis(), p.done(), p.denied(), p.error(), p.manual(), p.qa()));
+            }
+        }
         if (!d.conflicts().isEmpty()) {
             rows.add(List.of());
             rows.add(List.of(StyledCell.of("Xung đột chờ PIC chọn: " + d.conflicts().size(), CellTone.CONFLICT_ORANGE)));
         }
-        int[] w = new int[1 + Math.max(1, letters.size())];
+        int[] w = new int[Math.max(8, 1 + letters.size())];
         w[0] = 46;
         for (int i = 1; i < w.length; i++) {
             w[i] = 18;

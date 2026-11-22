@@ -211,6 +211,9 @@ public final class ProjectSync implements AutoCloseable {
         if (cfg.me.isEmpty()) {
             cfg.me = me;
         }
+        cfg.applyAccountRecords(store.records());
+        registerLocalAccounts(locals, me);
+        autoMerge(me);
         ProjectData d = ProjectData.build(cfg, locals, store.records(), me);
         int conflicts = 0;
         if (hubOn()) {
@@ -219,6 +222,11 @@ public final class ProjectSync implements AutoCloseable {
             } else {
                 try {
                     conflicts = exchange(d, me);
+                    cfg.applyAccountRecords(store.records());
+                    if (resolveClashes(locals, me)) {
+                        locals = ProjectData.loadLocal(ws);
+                    }
+                    autoMerge(me);
                     d = ProjectData.build(cfg, locals, store.records(), me);
                     renderIfElected(d, me);
                     failures = 0;
@@ -247,6 +255,131 @@ public final class ProjectSync implements AutoCloseable {
         saveState();
         host.changed(d, status);
         fire();
+    }
+
+    // ------------------------------------------------------------------ web accounts (V_11.5)
+    private final Map<String, Object[]> fpCache = new LinkedHashMap<>();
+    private final Set<String> createdLetters = new LinkedHashSet<>();
+    private volatile String accountNotice = "";
+
+    public String accountNotice() {
+        return accountNotice;
+    }
+
+    private Set<String> fps(ProjectData.LocalAccount l) {
+        Object[] c = fpCache.get(l.letter() + "@" + l.dir());
+        if (c != null && (int) c[0] == l.apis().size()) {
+            @SuppressWarnings("unchecked")
+            Set<String> s = (Set<String>) c[1];
+            return s;
+        }
+        Set<String> s = Identity.of(l, 40);
+        fpCache.put(l.letter() + "@" + l.dir(), new Object[] {l.apis().size(), s});
+        return s;
+    }
+
+    /** Every own account workspace is on the shared web account list, with its login fingerprints. */
+    private void registerLocalAccounts(List<ProjectData.LocalAccount> locals, String me) {
+        ProjectConfig cfg = store.config();
+        for (ProjectData.LocalAccount l : locals) {
+            SyncRecord rec = store.record(SyncRecord.ACCT + ":" + l.letter());
+            ProjectConfig.Account base = rec != null ? ProjectConfig.Account.fromMap(new LinkedHashMap<>(rec.data())) : cfg.account(l.letter());
+            boolean changed = rec == null;
+            if (base == null) {
+                base = new ProjectConfig.Account(l.letter(), l.name(), me);
+            }
+            List<String> f = new ArrayList<>(base.fps());
+            for (String x : fps(l)) {
+                if (!f.contains(x)) {
+                    f.add(x);
+                    changed = true;
+                }
+            }
+            String name = base.name().isEmpty() ? l.name() : base.name();
+            changed |= !name.equals(base.name());
+            String createdBy = base.createdBy().isEmpty() ? me : base.createdBy();
+            long createdAt = base.createdAt() > 0 ? base.createdAt() : System.currentTimeMillis();
+            changed |= base.createdBy().isEmpty() || base.createdAt() == 0;
+            if (changed) {
+                if (rec == null && createdBy.equalsIgnoreCase(me)) {
+                    createdLetters.add(l.letter());
+                }
+                store.putAccount(new ProjectConfig.Account(l.letter(), name, base.owner().isEmpty() ? me : base.owner(), base.aliases(),
+                        base.mergedInto(), f, createdBy, createdAt, base.mergedBy()), me, null);
+            }
+        }
+    }
+
+    /**
+     * Two people created the same letter for different web accounts (offline / at the same time): whoever's account does
+     * not hold the letter any more moves to the next free letter. Same login or similar name = same account: kept.
+     */
+    private boolean resolveClashes(List<ProjectData.LocalAccount> locals, String me) {
+        ProjectConfig cfg = store.config();
+        boolean moved = false;
+        for (String letter : new ArrayList<>(createdLetters)) {
+            SyncRecord rec = store.record(SyncRecord.ACCT + ":" + letter);
+            if (rec == null) {
+                continue;
+            }
+            String creator = rec.str("created_by");
+            if (creator.isEmpty() || creator.equalsIgnoreCase(me)) {
+                continue;
+            }
+            ProjectData.LocalAccount mine = locals.stream().filter(x -> x.letter().equals(letter)).findFirst().orElse(null);
+            createdLetters.remove(letter);
+            if (mine == null) {
+                continue;
+            }
+            ProjectConfig.Account theirs = ProjectConfig.Account.fromMap(new LinkedHashMap<>(rec.data()));
+            Set<String> myFp = fps(mine);
+            boolean same = myFp.stream().anyMatch(theirs.fps()::contains) || ProjectConfig.similar(theirs.name(), mine.name())
+                    || theirs.aliases().stream().anyMatch(a -> ProjectConfig.similar(a, mine.name()));
+            if (same) {
+                continue;   // the same web account: one column for everyone who uses it
+            }
+            String nl = cfg.nextLetter();
+            themythofcrawl.store.Workspaces.setMeta(mine.dir(), "letter", nl);
+            store.putAccount(new ProjectConfig.Account(nl, mine.name(), me, List.of(), "", new ArrayList<>(myFp), me,
+                    System.currentTimeMillis(), ""), me, null);
+            createdLetters.add(nl);
+            accountNotice = "Chữ " + letter + " đã được " + creator + " dùng cho tài khoản web " + theirs.display()
+                    + ": tài khoản web \"" + mine.name() + "\" của bạn chuyển thành " + nl;
+            store.log(me, "acct", nl, accountNotice);
+            moved = true;
+        }
+        return moved;
+    }
+
+    /** Web accounts with the same login fingerprint are one web account: the later ones merge into the first (undoable). */
+    private void autoMerge(String me) {
+        ProjectConfig cfg = store.config();
+        Map<String, List<ProjectConfig.Account>> byFp = new LinkedHashMap<>();
+        for (ProjectConfig.Account a : cfg.activeAccounts()) {
+            for (String f : a.fps()) {
+                byFp.computeIfAbsent(f, k -> new ArrayList<>()).add(a);
+            }
+        }
+        for (List<ProjectConfig.Account> group : byFp.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+            ProjectConfig.Account keeper = group.stream().min(Comparator.comparingLong((ProjectConfig.Account a) -> a.createdAt() > 0
+                    ? a.createdAt() : Long.MAX_VALUE).thenComparing(ProjectConfig.Account::letter)).orElseThrow();
+            for (ProjectConfig.Account a : group) {
+                if (a.letter().equals(keeper.letter()) || a.merged()) {
+                    continue;
+                }
+                SyncRecord rec = store.record(SyncRecord.ACCT + ":" + a.letter());
+                Object no = rec == null ? null : rec.data().get("no_auto");
+                if (no instanceof List<?> l && l.contains(keeper.letter())) {
+                    continue;   // someone split them on purpose
+                }
+                store.putAccount(a.withMerged(keeper.letter(), "tự động: cùng người đăng nhập"), me, null);
+                accountNotice = "Đã gộp " + a.display() + " vào " + keeper.display() + " (cùng người đăng nhập)";
+                store.log(me, "acct", a.letter(), accountNotice);
+            }
+        }
     }
 
     private String me() {
@@ -395,7 +528,7 @@ public final class ProjectSync implements AutoCloseable {
                 }
                 m.put("images", im);
                 String id = SyncRecord.QA + ":" + q.item().id();
-                out.put(id, new SyncRecord(id, SyncRecord.QA, me, q.letter(), m, now, me, false, 0L));
+                out.put(id, new SyncRecord(id, SyncRecord.QA, me, q.raw(), m, now, me, false, 0L));
             }
         }
         if (cfg.shareDetails) {
@@ -818,6 +951,9 @@ public final class ProjectSync implements AutoCloseable {
             Json.obj(m, "images").forEach((k, v) -> images.put(k, String.valueOf(v)));
             Json.obj(m, "answers").forEach((k, v) -> appliedAnswers.put(k, v instanceof Number n ? n.longValue() : 0L));
             Json.obj(m, "details").forEach((k, v) -> details.put(k, String.valueOf(v)));
+            for (Object o : Json.list(m, "created")) {
+                createdLetters.add(String.valueOf(o));
+            }
         } catch (IOException | RuntimeException ignored) {
             // start fresh: a full push / pull
         }
@@ -832,6 +968,7 @@ public final class ProjectSync implements AutoCloseable {
         m.put("images", new LinkedHashMap<>(images));
         m.put("answers", new LinkedHashMap<>(appliedAnswers));
         m.put("details", new LinkedHashMap<>(details));
+        m.put("created", new ArrayList<>(createdLetters));
         try {
             ProjectStore.write(stateFile(), Json.write(m).getBytes(StandardCharsets.UTF_8));
         } catch (RuntimeException ignored) {

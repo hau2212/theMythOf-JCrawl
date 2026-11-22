@@ -176,7 +176,7 @@ function sameData_(a, b) {
   return String(a) === String(b);
 }
 
-var MANUAL_TYPES = {mark: 1, note: 1, qans: 1, project: 1};
+var MANUAL_TYPES = {mark: 1, note: 1, qans: 1, project: 1, acct: 1};
 
 function push_(req) {
   var all = readAll_();
