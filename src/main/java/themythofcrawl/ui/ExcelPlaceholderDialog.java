@@ -648,6 +648,7 @@ public final class ExcelPlaceholderDialog {
                     case RANDOM_TOKEN -> "sess_9f8e7d6c5b4a";
                     case ALPHANUMERIC -> "demo-item-01";
                     case CUSTOM_REGEX, ANY_SEGMENT -> "x9k2m8p1";
+                    case ID_LIKE -> "1024";
                 });
             } else {
                 out.add(seg);

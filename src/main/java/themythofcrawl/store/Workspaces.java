@@ -31,7 +31,11 @@ public final class Workspaces {
     public static final String PROJECT_LINK = "tmoc.workspaceDir";
 
     /** A workspace folder with its name and API count. */
-    public record Info(Path dir, String project, String name, String created, int apis) {
+    /** @param parent the workspace this one was created from (V_10.4 next account), or null */
+    public record Info(Path dir, String project, String name, String created, int apis, Path parent, String account) {
+        public Info(Path dir, String project, String name, String created, int apis) {
+            this(dir, project, name, created, apis, null, "");
+        }
     }
 
     private final Prefs prefs;
@@ -125,8 +129,10 @@ public final class Workspaces {
                     apis = (int) s.count();
                 }
             }
+            String parent = Json.str(m, "parent", "");
             return new Info(dir, Json.str(m, "project", dir.getParent().getFileName().toString()),
-                    Json.str(m, "name", dir.getFileName().toString()), Json.str(m, "created", ""), apis);
+                    Json.str(m, "name", dir.getFileName().toString()), Json.str(m, "created", ""), apis,
+                    parent.isBlank() ? null : Paths.get(parent), Json.str(m, "account", ""));
         } catch (IOException | RuntimeException e) {
             return null;
         }
@@ -145,6 +151,71 @@ public final class Workspaces {
         m.put("version", 2);
         FileStorage.writeAtomic(dir.resolve(FileStorage.META), Json.pretty(m).getBytes(StandardCharsets.UTF_8));
         return new FileStorage(dir, name);
+    }
+
+    /**
+     * V_10.4: a workspace for the next account (crawled from the highest account down). It remembers its parent and
+     * starts with the parent's branch tree / Excel list ({@code templateState}), but no API.
+     */
+    public FileStorage createChild(Path parentDir, String account, String templateState) {
+        Info parent = info(parentDir);
+        if (parent == null) {
+            throw new IllegalArgumentException("Không phải thư mục workspace: " + parentDir);
+        }
+        String name = safe(account);
+        Path dir = parentDir.getParent().resolve(name);
+        int n = 2;
+        while (Files.exists(dir.resolve(FileStorage.META))) {
+            dir = parentDir.getParent().resolve(name + " (" + n++ + ")");
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("name", account);
+        m.put("project", parent.project());
+        m.put("created", Clock.stamp());
+        m.put("version", 2);
+        m.put("parent", parentDir.toAbsolutePath().toString());
+        m.put("account", account);
+        FileStorage.writeAtomic(dir.resolve(FileStorage.META), Json.pretty(m).getBytes(StandardCharsets.UTF_8));
+        FileStorage st = new FileStorage(dir, account);
+        if (templateState != null) {
+            st.saveState(templateState);
+        }
+        return st;
+    }
+
+    /** Every workspace of the same family (root first, then children breadth-first), from the project folder. */
+    public static List<Info> family(Path anyMember) {
+        Info me = info(anyMember);
+        if (me == null) {
+            return List.of();
+        }
+        Info root = me;
+        java.util.Set<Path> guard = new java.util.HashSet<>();
+        while (root.parent() != null && guard.add(root.dir().toAbsolutePath()) && info(root.parent()) != null) {
+            root = info(root.parent());
+        }
+        List<Info> siblings = new ArrayList<>();
+        try (DirectoryStream<Path> ws = Files.newDirectoryStream(root.dir().toAbsolutePath().getParent(), Files::isDirectory)) {
+            for (Path w : ws) {
+                Info i = info(w);
+                if (i != null) {
+                    siblings.add(i);
+                }
+            }
+        } catch (IOException e) {
+            return List.of(me);
+        }
+        List<Info> out = new ArrayList<>();
+        out.add(root);
+        for (int k = 0; k < out.size(); k++) {
+            Path cur = out.get(k).dir().toAbsolutePath().normalize();
+            for (Info i : siblings) {
+                if (i.parent() != null && i.parent().toAbsolutePath().normalize().equals(cur) && !out.contains(i)) {
+                    out.add(i);
+                }
+            }
+        }
+        return out;
     }
 
     public FileStorage open(Path dir) {

@@ -13,6 +13,14 @@ public interface Bridge {
     /** Blocking; called from send worker threads. */
     Sent send(Service service, byte[] request);
 
+    /**
+     * V_10.4 "Gửi riêng": send outside Burp's networking so Logger / Logger++ do not see it.
+     * The default (tests, other hosts) is a normal send.
+     */
+    default Sent sendQuiet(Service service, byte[] request) {
+        return send(service, request);
+    }
+
     void toRepeater(Service service, byte[] request, String tabName);
 
     void out(String line);

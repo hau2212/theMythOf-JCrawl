@@ -82,6 +82,8 @@ public final class Config {
     public boolean confirmNewApis = true;
     public boolean restoreKnownPlace = true;
     public boolean dupNewPlace = true;
+    /** V_10.4: JCrawl's own sends go outside Burp (Logger / Logger++ do not see them). */
+    public boolean quietSend = false;
     public boolean showGhosts = true;
     // sending
     public boolean autoRepeater = false;
@@ -163,6 +165,7 @@ public final class Config {
         m.put("confirm_new_apis", confirmNewApis);
         m.put("restore_known_place", restoreKnownPlace);
         m.put("dup_new_place", dupNewPlace);
+        m.put("quiet_send", quietSend);
         m.put("show_ghosts", showGhosts);
         m.put("auto_repeater", autoRepeater);
         m.put("auto_send", autoSend);
@@ -211,6 +214,7 @@ public final class Config {
         c.confirmNewApis = b(m, "confirm_new_apis", c.confirmNewApis);
         c.restoreKnownPlace = b(m, "restore_known_place", c.restoreKnownPlace);
         c.dupNewPlace = b(m, "dup_new_place", c.dupNewPlace);
+        c.quietSend = b(m, "quiet_send", c.quietSend);
         c.showGhosts = b(m, "show_ghosts", c.showGhosts);
         c.autoRepeater = b(m, "auto_repeater", c.autoRepeater);
         c.autoSend = b(m, "auto_send", c.autoSend);

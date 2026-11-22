@@ -82,6 +82,9 @@ final class ExcelTab {
     boolean stale = true;
     private long nextOk;
 
+    QaTab qaTab;
+    FamilyTab familyTab;
+
     ExcelTab(MainPanel ui) {
         this.ui = ui;
         this.engine = ui.engine;
@@ -240,6 +243,19 @@ final class ExcelTab {
         javax.swing.JTabbedPane excelModeTabs = new javax.swing.JTabbedPane();
         excelModeTabs.addTab("Xuất & làm việc nhóm", inventoryBoard);
         excelModeTabs.addTab("Đối chiếu file Excel", deck);
+        qaTab = new QaTab(ui);
+        familyTab = new FamilyTab(ui);
+        excelModeTabs.addTab("Hỏi đáp", null, qaTab.panel, "Q&A / Info của từng API: câu hỏi, ảnh, câu trả lời; xuất Excel Q&A");
+        excelModeTabs.addTab("Tài khoản", null, familyTab.panel,
+                "Crawl từng tài khoản: workspace cho tài khoản tiếp theo, ma trận API x tài khoản, báo cáo tổng hợp");
+        excelModeTabs.addChangeListener(e -> {
+            java.awt.Component sel = excelModeTabs.getSelectedComponent();
+            if (sel == qaTab.panel) {
+                qaTab.reload();
+            } else if (sel == familyTab.panel) {
+                familyTab.reload();
+            }
+        });
         panel.add(excelModeTabs, BorderLayout.CENTER);
 
         controls(engine.groups());

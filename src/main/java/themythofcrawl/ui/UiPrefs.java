@@ -181,6 +181,17 @@ public final class UiPrefs {
         UiDisplayMode.set(m);
     }
 
+    /** V_10.4: open the Cây with every branch collapsed. */
+    public static boolean treeStartCollapsed(Prefs prefs) {
+        return prefs != null && "true".equalsIgnoreCase(prefs.get("tmoc.tree.startCollapsed"));
+    }
+
+    public static void setTreeStartCollapsed(Prefs prefs, boolean on) {
+        if (prefs != null) {
+            prefs.set("tmoc.tree.startCollapsed", Boolean.toString(on));
+        }
+    }
+
     public static boolean topCompact(Prefs prefs) {
         if (prefs == null) {
             return false;

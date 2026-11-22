@@ -445,7 +445,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.dashedEdge = true;
 
         x = addLeadIcon(nl, Icons.cluster(tok.text(), 14), x, th.scaled(4));
-        x = addChip(th, nl, "Cụm", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
+        x = addChip(th, nl, "Nhóm", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
 
         Node.FolderMeta m = n.folderMeta;
         String title = m != null ? m.name() : (cl != null ? cl.name() : Icons.stripLeadingSymbol(n.label));
@@ -680,7 +680,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (g.dupTotal() > 1) {
             nl.dupX0 = x;
             if (nl.originFlag) {
-                x = addChip(th, nl, "Gốc · " + g.dupTotal() + " lần", th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                x = addChip(th, nl, "Gốc · còn " + g.dupTotal() + " bản", th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
                         th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
             } else {
                 x = addChip(th, nl, "#" + g.dupNo() + "/" + g.dupTotal(), th.smallBoldFont, th.dup.fill(), th.dup.border(),
@@ -704,6 +704,13 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Text.shortPath(g.activeIdNote(), 22), th.smallBoldFont,
                     th.accent.fill(), th.accent.border(), th.accent.text(), null, true, x, th.scaled(4));
         }
+        Boolean inRefGrid = engine != null ? engine.inReference(g) : null;
+        if (inRefGrid != null) {
+            Theme.Token rt = inRefGrid ? th.neutral : th.accent;
+            x = addChip(th, nl, inRefGrid ? "Có ở " + Text.shortPath(engine.referenceLabel(), 14)
+                    : "Mới so với " + Text.shortPath(engine.referenceLabel(), 14), th.smallFont, rt.fill(), rt.border(), rt.text(),
+                    null, true, x, th.scaled(4));
+        }
         int shownTags = 0;
         for (String tagId : g.tags()) {
             if (shownTags >= 2) {
@@ -718,8 +725,15 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         return Math.max(x, vx + th.scaled(20));
     }
 
+    private boolean lastGroupEdited;
+
     /** V_8.2: which ID this row really used ("ID 91"), when it differs from the captured request. */
     private int addSentNoteChip(Theme th, NodeLayout nl, RoleResult r, int x) {
+        if (r.original() && lastGroupEdited) {
+            Theme.Token ed = th.warning;
+            x = addChip(th, nl, "Đã sửa", th.smallBoldFont, ed.fill(), ed.border(), ed.text(),
+                    Icons.edit(ed.text(), 10), false, x, th.scaled(4));
+        }
         String note = r.sentNote();
         if (note == null || note.isBlank() || r.status() == null) {
             return x;
@@ -771,6 +785,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
+        lastGroupEdited = g.originalEdited();
         return addSentNoteChip(th, nl, r, x);
     }
 
@@ -794,6 +809,10 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.statusColor = th.danger.text();
         nl.statusX = x;
         x = col(th, nl, TreeColumns.Col.ROLES, x);
+        // V_10.4: is it a new API or another capture of an existing one? (decide before sending)
+        String kind = engine != null ? engine.classifyHeld(pr) : "API mới";
+        Theme.Token kt = kind.startsWith("API mới") ? th.success : kind.startsWith("Trùng") ? th.dup : th.neutral;
+        x = addChip(th, nl, Text.shortPath(kind, 40), th.smallBoldFont, kt.fill(), kt.border(), kt.text(), null, false, x, gap);
         String host = pr.service() != null ? pr.service().hostLabel() : "";
         return addTail(nl, th, (host.isEmpty() ? "" : host + " · ") + pr.timeHms(), x, gap);
     }
@@ -849,7 +868,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                 ApiGroup orig = engine != null ? engine.originOf(g.bookKey()) : null;
                 String dupTxt = orig != null && orig.gid() != g.gid()
                         ? "Lần " + g.dupNo() + " · gốc " + Text.apiLabel(orig.gid())
-                        : "Lần " + g.dupNo() + " / " + g.dupTotal();
+                        : "Lần " + g.dupNo() + " · gốc đã xóa · còn " + g.dupTotal() + " bản";
                 x = addChip(th, nl, dupTxt, th.smallBoldFont, th.dup.fill(), th.dup.border(),
                         th.dup.text(), Icons.dup(th.dup.text(), 11), true, x, th.scaled(4));
             }
@@ -882,6 +901,13 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                     th.info.fill(), th.info.border(), th.info.text(), null, true, x, th.scaled(4));
         }
 
+        // V_10.4: compared with the account above (workspace cha): already reached there, or new for this account
+        Boolean inRef = engine != null ? engine.inReference(g) : null;
+        if (inRef != null) {
+            Theme.Token rt = inRef ? th.neutral : th.accent;
+            x = addChip(th, nl, inRef ? "Có ở " + Text.shortPath(engine.referenceLabel(), 14) : "Mới so với " + Text.shortPath(engine.referenceLabel(), 14),
+                    th.smallFont, rt.fill(), rt.border(), rt.text(), null, true, x, th.scaled(4));
+        }
         // API Tag chips (REFRESH / INIT / POLLING / custom) + Suspected Refresh hint
         int shownTags = 0;
         for (String tagId : g.tags()) {
@@ -984,6 +1010,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
+        lastGroupEdited = g.originalEdited();
         return addSentNoteChip(th, nl, r, x);
     }
 

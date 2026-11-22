@@ -28,6 +28,8 @@ public final class ProxyInterceptQueue {
 
     public enum ResolutionKind {
         FORWARD("Gửi lên Server"),
+        /** V_10.4: JCrawl sends it itself outside Burp (Logger++ does not log the server call); the real response goes back to the browser. */
+        FORWARD_QUIET("Gửi riêng (không qua Logger++)"),
         HOLD_AND_SPOOF("Lưu vào bảng & Giữ (200 ảo)"),
         DROP_AND_SAVE("Hủy & Lưu vào bảng"),
         DROP("Hủy bỏ (Drop)");

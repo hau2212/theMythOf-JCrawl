@@ -81,13 +81,13 @@ final class TeamCollabDialog {
         JPanel root = new JPanel(new BorderLayout(0, Theme.SPACE_2));
         root.setBorder(BorderFactory.createEmptyBorder(0, 0, Theme.SPACE_2, 0));
         root.add(Ui.dialogHeader(
-                "Trung tâm Đồng bộ Nhóm, Google Sheets & Xung đột (V_5.0_beta)",
+                "Đồng đội, Google Sheets & xung đột",
                 "Cộng tác real-time giữa nhiều Extension (Host/Client) · Đồng bộ 2 chiều Google Sheets tô màu · Quản lý Tag & Git-style Conflict."),
                 BorderLayout.NORTH);
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
-        tabs.addTab("1. Nhóm & Real-time", buildTeamTab(parent, engine, catalog, sync, onChanged));
+        tabs.addTab("Đồng đội", buildTeamTab(parent, engine, catalog, sync, onChanged));
         tabs.addTab("2. Google Sheets Online", buildSheetsTab(parent, engine, gsheets, onChanged));
         tabs.addTab("3. Tag tùy chỉnh", buildTagsTab(parent, engine, catalog, sync, onChanged));
         tabs.addTab("4. Xung đột (" + catalog.conflictCount() + ")", buildConflictsTab(parent, engine, catalog, sync, onChanged));

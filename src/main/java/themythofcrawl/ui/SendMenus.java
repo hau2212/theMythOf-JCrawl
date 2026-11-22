@@ -60,6 +60,18 @@ final class SendMenus {
         m.add(Ui.item("Chỉ dòng lỗi / nghi BAC (" + flagged + ")", t -> Icons.alertMark(t.danger.text(), 13), flagged > 0,
                 () -> send(ui, gs, g -> g.results().stream().filter(r -> Audit.level(g, r).flagged()).toList(), "dòng lỗi / nghi BAC")));
         m.add(Ui.item("Chọn vai trò...", Icons::target, () -> ui.pushDialog(true, new ArrayList<>(gs), apis)));
+        m.addSeparator();
+        JMenuItem quiet = Ui.item("Gửi riêng (không qua Logger++)", t -> Icons.send(t.info.text(), 13), () -> {
+            int rows = 0;
+            for (ApiGroup g : gs) {
+                List<RoleResult> t = engine.defaultTargets(g, true);
+                engine.replayQuiet(g, t);
+                rows += t.size();
+            }
+            ui.flash("Gửi riêng " + rows + " request (Logger++ không thấy)");
+        });
+        quiet.setToolTipText("JCrawl tự gửi thẳng tới server, không qua Burp: Logger / Logger++ không ghi, không đẩy nhầm lên server quản lý");
+        m.add(quiet);
 
         if (anyAction) {
             m.addSeparator();

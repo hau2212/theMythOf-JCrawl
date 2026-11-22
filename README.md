@@ -1,9 +1,73 @@
-# theMythOf-JCrawl (Java / Montoya) - V_9.3
+# theMythOf-JCrawl (Java / Montoya) - V_10.4
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_10.4
+
+Theo `VERSIONING.md`: thêm kiến trúc họ workspace và đổi thuật toán khớp path -> tăng MAJOR (9.4 -> 10.4).
+
+### Crawl từng tài khoản (từ cao xuống thấp)
+
+- **Excel > Tài khoản > Tài khoản tiếp theo...** (hoặc menu Workspace): tạo **workspace con** cho tài khoản kế tiếp. Workspace con có sẵn
+  **cây nhánh, luật nhánh, kiểu node và file Excel** của tài khoản trên nhưng **không có API**, nên Cây chỉ chứa API của tài khoản đó
+  (không lẫn với hàng trăm API của tài khoản gốc). Workspace con nhớ workspace cha.
+- Trên Cây của workspace con, mỗi API có chip **Có ở <tài khoản trên>** hoặc **Mới so với <tài khoản trên>**.
+- **Excel > Tài khoản**: ma trận API x tài khoản (Có 200 / -), lọc "chỉ API không phải tài khoản nào cũng gọi được", nút **Mở tài khoản**
+  để chuyển giữa các workspace trong họ, **Xuất báo cáo tổng hợp** (.xlsx): Tổng quan · Ma trận tài khoản · API từng tài khoản · Q&A.
+
+### Hỏi đáp (Q&A / Info) có ảnh
+
+- Chuột phải API (Cây / API) -> **Hỏi đáp (Q&A / Info)...**: câu hỏi hoặc ghi chú, **nhiều ảnh** (thêm từ file hoặc **dán Ctrl+V** ảnh
+  chụp màn hình), trạng thái (Chờ trả lời / Đã trả lời / Đóng), ô **Khách hàng / dev trả lời**. API tự có tag **Q&A** / **INFO**.
+- **Excel > Hỏi đáp**: quản lý mọi câu hỏi (lọc loại, trạng thái, tìm), sửa / trả lời, mở API, **Xuất Excel Q&A**: ảnh được **chèn
+  thật vào ô** (mỗi ảnh một cột Ảnh 1, Ảnh 2...), có cột Khách hàng trả lời, Người trả lời, Ngày trả lời, Tài khoản khác gọi được;
+  xuất riêng tài khoản này hoặc mọi tài khoản, có thể kèm báo cáo tổng hợp.
+
+### Request bị chặn & Gửi riêng
+
+- Mỗi request đang chờ hiện **Loại**: **API mới** / **Trùng API 12 · 3 lần bắt · nhánh** / **Đã xóa trước đây · chỗ cũ** để quyết định trước khi gửi.
+- Gửi đồng loạt: chuột phải request chờ -> **Gửi N request đang chọn** / **Gửi tất cả N request đang chờ** (Hàng chặn cũng có **Gửi tất cả**).
+- **Gửi riêng (không qua Logger++)**: JCrawl tự mở kết nối gửi thẳng tới server, không qua Burp, nên Logger / Logger++ không ghi
+  (theo PortSwigger: request không đi qua networking của Burp thì Logger không thấy). Có ở menu **Gửi lại**, ở request đang chờ
+  (trình duyệt vẫn nhận response thật) và công tắc trong **Cài đặt > Gửi request** cho mọi lần gửi.
+
+### ID dạng chữ: cùng 1 API
+
+- Dòng Excel `/api/a/b/{ID}`: `{ID}` khớp **mọi giá trị**, số hoặc chữ (`15`, `new`, `old`...). Request rơi vào cùng dòng `{ID}` là
+  **cùng 1 API**: lần bắt đầu là bản gốc, `/api/a/b/old` sau `/api/a/b/new` là **bản trùng** (request đang chờ hiện "Trùng API n").
+  API bắt trước khi nạp Excel được gộp lại tự động khi nạp / sửa Excel.
+- Dòng Excel ghi path cụ thể (`/api/a/b/export`) luôn thắng dòng `{ID}`: API đó đứng riêng.
+- Không có dòng Excel: chọn các API trên Cây / API -> chuột phải -> **Cùng 1 API...** -> tích đoạn path là ID -> **Gộp thành 1 API**.
+  Quản lý / xóa mẫu ở **Cài đặt > Trùng lặp & vị trí > Mẫu path (ID dạng chữ)**.
+- Muốn `{id}` chỉ khớp giá trị có chữ số / UUID: **Excel > {...} Placeholder** -> kiểu "Trông giống ID".
+
+### Cây
+
+- **Xóa API** (chuột phải / phím Delete): lần bắt trùng xóa luôn; **bản gốc** hỏi xác nhận rồi **lần bắt kế tiếp thành bản gốc**; API không
+  còn lần bắt nào khác cũng hỏi trước (vẫn giữ chỗ).
+- **Mở hết / Thu hết** trên thanh Cây; chuột phải nền Cây -> **Mở app: thu gọn hết Cây**.
+- **Nhóm** (trước là Cụm): gom API trong một nhánh cho gọn mà không tạo nhánh con (chuột phải API -> Nhóm).
+
+### Nhật ký
+
+- Đổi tên thành **Nhật ký** (Menu / Tùy chọn / Cài đặt). Ghi thời gian phản hồi của từng thao tác, thao tác **chậm** (>= 300 ms), lúc
+  **giao diện không phản hồi** (>= 0,8 s), **thói quen** (chuỗi 2–3 thao tác hay lặp lại để rút gọn sau này), tính năng dùng nhiều.
+- **Báo lỗi**: nút nhỏ ở đầu mọi cửa sổ, Menu, hoặc **Ctrl+Alt+E**: ghi vấn đề bằng lời của bạn, kèm nơi xảy ra và 15 thao tác vừa làm.
+- Xuất **Markdown** hoặc **JSONL** (mỗi dòng 1 sự kiện, dạng máy đọc). Chạy ngầm, giới hạn 4000 sự kiện, không làm chậm extension.
+
+## Điểm mới V_9.4
+
+- **Tài khoản crawl là dòng đầu (00) của tab Vai trò**, sửa y như vai trò khác: Thêm luật / Xóa luật / sửa giá trị / Cách
+  (Thay, Thêm, Xóa, Đặt cookie, Xóa cookie). Ví dụ thêm `A: B` -> mọi request gốc JCrawl gửi đều có header `A: B`; khi Lưu, app hỏi
+  có áp cho các API đã bắt không. Bật / tắt bằng công tắc của dòng.
+- **Sửa request gốc an toàn**: sửa ở khung Request (dòng Tài khoản crawl) rồi bấm **Lưu request**; mọi vai trò dựng lại từ request
+  mới. Lần sửa đầu tiên app giữ **bản lúc bắt**: nút **Khôi phục** (hoặc chuột phải -> *Khôi phục request lúc bắt*) đưa về đúng
+  method, path, host, header, body ban đầu. Dòng Tài khoản crawl trên Cây hiện chip **Đã sửa**.
+- Chuột phải API trên Cây: **Sửa request gốc (tài khoản crawl)...**.
+- Nhãn lần bắt: **Gốc · còn 3 bản**; lần bắt lại khi bản gốc đã bị xóa: **Lần 5 · gốc đã xóa · còn 2 bản**.
 
 ## Điểm mới V_9.3 - một khái niệm, một tên
 

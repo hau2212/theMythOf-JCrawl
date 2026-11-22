@@ -42,4 +42,24 @@ class ActivityLogTest {
         assertTrue(lines.stream().anyMatch(l -> l.contains("DELETE /api/orders/91")), lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.contains("\"kind\":\"ERROR\"")), lines.toString());
     }
+
+    @Test
+    void timingHabitsAndJsonl() throws Exception {
+        ActivityLog.clear();
+        for (int i = 0; i < 3; i++) {
+            ActivityLog.ui("Menu: Gửi lại");
+            ActivityLog.timed("Menu: Gửi lại", 5);
+            Thread.sleep(450);   // past the same-label dedup window
+            ActivityLog.ui("Bấm: Chỉ vai trò");
+            ActivityLog.timed("Bấm: Chỉ vai trò", 420);
+            Thread.sleep(450);
+        }
+        assertTrue(ActivityLog.habits(5).stream().anyMatch(h -> h.getKey().equals("Menu: Gửi lại  ->  Bấm: Chỉ vai trò") && h.getValue() >= 3),
+                ActivityLog.habits(5).toString());
+        long[] u = ActivityLog.usage().get("Bấm: Chỉ vai trò");
+        assertEquals(3, u[0]);
+        assertTrue(u[2] >= 420, "the slowest time is kept");
+        assertTrue(ActivityLog.recent(4000).stream().anyMatch(e -> e.kind() == ActivityLog.Kind.SLOW), "clicks >= 300 ms are SLOW");
+        assertTrue(ActivityLog.jsonl(50).contains("\"ms\":420"));
+    }
 }

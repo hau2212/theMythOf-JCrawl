@@ -20,6 +20,9 @@ public final class ApiTagCatalog {
     public static final String TAG_ACTION_CORE = "ACTION-CORE";
     /** V_8.2: set automatically while an API has an open bug mark. */
     public static final String TAG_BUG = "BUG";
+    /** V_10.4: an open question for the client / dev team, and a note. */
+    public static final String TAG_QA = "Q&A";
+    public static final String TAG_INFO = "INFO";
 
     public record TagDef(
             String id,
@@ -80,7 +83,9 @@ public final class ApiTagCatalog {
                         "API chạy ngầm định kỳ (heartbeat, thông báo, kiểm tra trạng thái)", true),
                 new TagDef(TAG_ACTION_CORE, "ACTION-CORE", "accent",
                         "API hành động nghiệp vụ quan trọng cần ưu tiên rà soát phân quyền", true),
-                new TagDef(TAG_BUG, "BUG", "danger", "API đang có lỗi được đánh dấu (xem tab Lỗi)", true)
+                new TagDef(TAG_BUG, "BUG", "danger", "API đang có lỗi được đánh dấu (xem tab Lỗi)", true),
+                new TagDef(TAG_QA, "Q&A", "info", "API có câu hỏi cần khách hàng / dev trả lời (Excel > Hỏi đáp)", true),
+                new TagDef(TAG_INFO, "INFO", "neutral", "API có ghi chú cần lưu ý (Excel > Hỏi đáp)", true)
         );
     }
 

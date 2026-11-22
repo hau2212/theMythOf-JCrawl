@@ -56,9 +56,12 @@ public final class Ui {
             return null;
         }
         return e -> {
+            String label = "Bấm: " + describe(e == null ? null : e.getSource());
+            long t0 = System.nanoTime();
             try {
-                themythofcrawl.core.ActivityLog.ui("Bấm: " + describe(e == null ? null : e.getSource()));
+                themythofcrawl.core.ActivityLog.ui(label);
                 l.actionPerformed(e);
+                themythofcrawl.core.ActivityLog.timed(label, (System.nanoTime() - t0) / 1_000_000);
             } catch (VirtualMachineError fatal) {
                 throw fatal;
             } catch (Throwable ex) {
@@ -68,9 +71,12 @@ public final class Ui {
     }
 
     static void runSafe(Object source, Runnable action) {
+        String label = (source instanceof javax.swing.JMenuItem ? "Menu: " : "Bấm: ") + describe(source);
+        long t0 = System.nanoTime();
         try {
-            themythofcrawl.core.ActivityLog.ui((source instanceof javax.swing.JMenuItem ? "Menu: " : "Bấm: ") + describe(source));
+            themythofcrawl.core.ActivityLog.ui(label);
             action.run();
+            themythofcrawl.core.ActivityLog.timed(label, (System.nanoTime() - t0) / 1_000_000);
         } catch (VirtualMachineError fatal) {
             throw fatal;
         } catch (Throwable ex) {
@@ -719,6 +725,18 @@ public final class Ui {
         wrap.setOpaque(false);
         wrap.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_1, Theme.SPACE_3));
         wrap.add(new themythofcrawl.ui.kit.SectionHeader(title, subtitle, rightSlot, null), BorderLayout.CENTER);
+        if (!"Báo lỗi".equals(title)) {
+            // V_10.4: every window can report a problem in the user's own words (stored in the Nhật ký)
+            javax.swing.JButton report = new javax.swing.JButton("Báo lỗi");
+            report.setToolTipText("Ghi lại vấn đề ở cửa sổ này vào Nhật ký (Ctrl+Alt+E ở mọi nơi)");
+            report.setMargin(new java.awt.Insets(0, 4, 0, 4));
+            report.setFont(Theme.current().smallFont);
+            report.addActionListener(e -> ReportIssueDialog.open(report, title));
+            JPanel east = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 0, 0));
+            east.setOpaque(false);
+            east.add(report);
+            wrap.add(east, BorderLayout.EAST);
+        }
         return wrap;
     }
 }

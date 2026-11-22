@@ -227,6 +227,13 @@ public final class Xlsx {
     public record OutSheet(String name, List<String> header, List<List<Object>> rows, int[] widths) {
     }
 
+    /**
+     * V_10.4: an image placed at a data cell (row 0 = first data row, under the header). The row grows to fit it.
+     * Written as OOXML drawing parts (sheet -> xl/drawings/drawingN.xml -> xl/media/imageK.png|jpeg), one-cell anchor.
+     */
+    public record Picture(int row, int col, byte[] data, String ext, int widthPx, int heightPx) {
+    }
+
     private static String esc(Object value) {
         String s = String.valueOf(value);
         StringBuilder sb = new StringBuilder(s.length() + 16);
@@ -258,6 +265,14 @@ public final class Xlsx {
     }
 
     private static String sheetXml(OutSheet s) {
+        return sheetXml(s, List.of());
+    }
+
+    private static String sheetXml(OutSheet s, List<Picture> pics) {
+        java.util.Map<Integer, Integer> rowPx = new java.util.HashMap<>();
+        for (Picture p : pics) {
+            rowPx.merge(p.row() + 1, p.heightPx() + 8, Math::max);
+        }
         StringBuilder x = new StringBuilder();
         x.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
                 .append("<worksheet xmlns=\"").append(NS_MAIN).append("\" xmlns:r=\"").append(NS_REL).append("\">")
@@ -273,7 +288,12 @@ public final class Xlsx {
         all.add(new ArrayList<>(s.header()));
         all.addAll(s.rows());
         for (int r = 0; r < all.size(); r++) {
-            x.append("<row r=\"").append(r + 1).append("\">");
+            Integer px = rowPx.get(r);
+            x.append("<row r=\"").append(r + 1).append('"');
+            if (px != null) {
+                x.append(" ht=\"").append(Math.round(px * 0.75)).append("\" customHeight=\"1\"");
+            }
+            x.append('>');
             List<Object> row = all.get(r);
             for (int c = 0; c < row.size(); c++) {
                 Object raw = row.get(c);
@@ -301,12 +321,46 @@ public final class Xlsx {
             x.append("</row>");
         }
         x.append("</sheetData><autoFilter ref=\"A1:").append(column(s.header().size() - 1))
-                .append(s.rows().size() + 1).append("\"/></worksheet>");
+                .append(s.rows().size() + 1).append("\"/>");
+        if (!pics.isEmpty()) {
+            x.append("<drawing r:id=\"rId1\"/>");
+        }
+        x.append("</worksheet>");
         return x.toString();
     }
 
+    private static final long EMU_PER_PX = 9525L;
+
+    private static String drawingXml(List<Picture> pics) {
+        StringBuilder d = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                + "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+                + "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"" + NS_REL + "\">");
+        for (int i = 0; i < pics.size(); i++) {
+            Picture p = pics.get(i);
+            long cx = p.widthPx() * EMU_PER_PX;
+            long cy = p.heightPx() * EMU_PER_PX;
+            d.append("<xdr:oneCellAnchor><xdr:from><xdr:col>").append(p.col()).append("</xdr:col><xdr:colOff>38100</xdr:colOff>")
+                    .append("<xdr:row>").append(p.row() + 1).append("</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from>")
+                    .append("<xdr:ext cx=\"").append(cx).append("\" cy=\"").append(cy).append("\"/>")
+                    .append("<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"").append(i + 2).append("\" name=\"Ảnh ").append(i + 1)
+                    .append("\"/><xdr:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></xdr:cNvPicPr></xdr:nvPicPr>")
+                    .append("<xdr:blipFill><a:blip r:embed=\"rId").append(i + 1).append("\"/><a:stretch><a:fillRect/></a:stretch>")
+                    .append("</xdr:blipFill><xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"").append(cx)
+                    .append("\" cy=\"").append(cy).append("\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>")
+                    .append("</xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>");
+        }
+        return d.append("</xdr:wsDr>").toString();
+    }
+
     public static byte[] write(List<OutSheet> sheets) throws IOException {
+        return write(sheets, List.of());
+    }
+
+    /** @param pictures pictures per sheet (same index as {@code sheets}; missing / empty = none) */
+    public static byte[] write(List<OutSheet> sheets, List<List<Picture>> pictures) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        int media = 0;
+        int drawings = 0;
         try (ZipOutputStream z = new ZipOutputStream(buf)) {
             StringBuilder overrides = new StringBuilder()
                     .append("<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/")
@@ -319,7 +373,31 @@ public final class Xlsx {
             for (int i = 0; i < sheets.size(); i++) {
                 OutSheet s = sheets.get(i);
                 String name = s.name().length() > 31 ? s.name().substring(0, 31) : s.name();
-                put(z, "xl/worksheets/sheet" + (i + 1) + ".xml", sheetXml(s));
+                List<Picture> pics = i < pictures.size() && pictures.get(i) != null ? pictures.get(i) : List.of();
+                put(z, "xl/worksheets/sheet" + (i + 1) + ".xml", sheetXml(s, pics));
+                if (!pics.isEmpty()) {
+                    drawings++;
+                    put(z, "xl/worksheets/_rels/sheet" + (i + 1) + ".xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" "
+                            + "standalone=\"yes\"?><Relationships xmlns=\"" + NS_PKG + "\"><Relationship Id=\"rId1\" Type=\""
+                            + NS_REL + "/drawing\" Target=\"../drawings/drawing" + drawings + ".xml\"/></Relationships>");
+                    put(z, "xl/drawings/drawing" + drawings + ".xml", drawingXml(pics));
+                    StringBuilder drels = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                            + "<Relationships xmlns=\"" + NS_PKG + "\">");
+                    for (int k = 0; k < pics.size(); k++) {
+                        Picture p = pics.get(k);
+                        media++;
+                        String ext = "jpeg".equals(p.ext()) || "jpg".equals(p.ext()) ? "jpeg" : "png";
+                        String file = "image" + media + "." + ext;
+                        z.putNextEntry(new ZipEntry("xl/media/" + file));
+                        z.write(p.data());
+                        z.closeEntry();
+                        drels.append("<Relationship Id=\"rId").append(k + 1).append("\" Type=\"").append(NS_REL)
+                                .append("/image\" Target=\"../media/").append(file).append("\"/>");
+                    }
+                    put(z, "xl/drawings/_rels/drawing" + drawings + ".xml.rels", drels.append("</Relationships>").toString());
+                    overrides.append("<Override PartName=\"/xl/drawings/drawing").append(drawings)
+                            .append(".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.drawing+xml\"/>");
+                }
                 overrides.append("<Override PartName=\"/xl/worksheets/sheet").append(i + 1)
                         .append(".xml\" ContentType=\"application/")
                         .append("vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
@@ -337,7 +415,9 @@ public final class Xlsx {
             put(z, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
                     + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
                     + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
-                    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" + overrides + "</Types>");
+                    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+                    + "<Default Extension=\"png\" ContentType=\"image/png\"/>"
+                    + "<Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/>" + overrides + "</Types>");
             put(z, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\""
                     + NS_PKG + "\"><Relationship Id=\"rId1\" Type=\"" + NS_REL
                     + "/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");

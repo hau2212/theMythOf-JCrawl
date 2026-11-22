@@ -49,6 +49,11 @@ final class MontoyaBridge implements Bridge {
     }
 
     @Override
+    public Sent sendQuiet(Service s, byte[] req) {
+        return themythofcrawl.app.DirectHttp.send(s, req);
+    }
+
+    @Override
     public void toRepeater(Service s, byte[] req, String tabName) {
         api.repeater().sendToRepeater(request(s, req), tabName);
     }

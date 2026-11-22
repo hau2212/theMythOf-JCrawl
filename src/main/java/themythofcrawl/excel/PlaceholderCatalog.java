@@ -18,8 +18,26 @@ import themythofcrawl.core.Text;
  */
 public final class PlaceholderCatalog {
 
+    public static final String ID_LIKE_REGEX = "(?=[^/]*\\d)[^/]+"
+            + "|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+            + "|[0-9a-fA-F]{16,}"
+            + "|(?=[^/]*[A-Z])(?=[^/]*[a-z])[A-Za-z0-9_\\-]{16,}";
+
+    /** {orderId}, {user_id}, :uuid, {guid}... are IDs too. */
+    public static boolean idLikeName(String name) {
+        String raw = sanitizeName(name);
+        String n = raw.toLowerCase(Locale.ROOT);
+        return n.equals("id") || n.equals("uuid") || n.equals("guid") || n.endsWith("_id") || n.endsWith("-id")
+                || raw.matches(".*[a-z0-9]Id") || raw.matches(".*[a-z0-9]ID");
+    }
+
     public enum MatchKind {
         ANY_SEGMENT("Bất kỳ chuỗi (không chứa /)", "[^/]+"),
+        /**
+         * Values that LOOK like an ID: contain a digit (15, a1b2, ORD-2024), a UUID, a long hex string or a long random
+         * mixed-case token. Optional (not the default: some systems use words as IDs).
+         */
+        ID_LIKE("Trông giống ID (có chữ số, UUID, hex, chuỗi ngẫu nhiên dài)", ID_LIKE_REGEX),
         NUMERIC("Chỉ chữ số (0-9)", "\\d+"),
         UUID("UUID chuẩn (8-4-4-4-12)", "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"),
         RANDOM_TOKEN("Chuỗi ngẫu nhiên / Session (>= 6 ký tự)", "[A-Za-z0-9._~\\-]{6,}"),
@@ -103,7 +121,7 @@ public final class PlaceholderCatalog {
 
     private void seedDefaults() {
         defs.clear();
-        putBuiltIn("id", MatchKind.ANY_SEGMENT, "ID bản ghi (số, UUID hoặc chuỗi bất kỳ)");
+        putBuiltIn("id", MatchKind.ANY_SEGMENT, "ID bản ghi: số hoặc chữ (15, new, old...). Path cùng mẫu là CÙNG 1 API (bản trùng); dòng Excel ghi path cụ thể luôn được ưu tiên");
         putBuiltIn("session", MatchKind.ANY_SEGMENT, "Mã phiên ngẫu nhiên (VD: /api/a/{session}/c)");
         putBuiltIn("token", MatchKind.ANY_SEGMENT, "Token động trong đường dẫn URL");
         putBuiltIn("uuid", MatchKind.UUID, "Định dạng UUID 36 ký tự");
@@ -170,12 +188,15 @@ public final class PlaceholderCatalog {
 
     public synchronized String regexForToken(String tokenName) {
         PlaceholderDef d = byName(tokenName);
-        return d == null ? "[^/]+" : d.effectiveRegex();
+        if (d == null) {
+            return "[^/]+";
+        }
+        return d.effectiveRegex();
     }
 
     public synchronized String toJson() {
         Map<String, Object> root = new LinkedHashMap<>();
-        root.put("version", 1);
+        root.put("version", 3);
         List<Object> list = new ArrayList<>();
         for (PlaceholderDef d : defs.values()) {
             list.add(d.toMap());
@@ -198,6 +219,9 @@ public final class PlaceholderCatalog {
                     if (d != null) {
                         String key = d.name().toLowerCase(Locale.ROOT);
                         boolean builtIn = defs.containsKey(key) && defs.get(key).builtIn();
+                        if (builtIn && key.equals("id") && d.kind() == MatchKind.ID_LIKE && Json.num(root, "version", 1) == 2) {
+                            continue;   // V_10.4 test build defaulted {id} to ID_LIKE; IDs can be words, back to "any value"
+                        }
                         defs.put(key, new PlaceholderDef(d.name(), d.kind(), d.customRegex(), d.description(), builtIn));
                     }
                 }

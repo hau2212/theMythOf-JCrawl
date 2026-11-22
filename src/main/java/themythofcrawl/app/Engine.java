@@ -181,6 +181,15 @@ public final class Engine {
     private final LinkedHashMap<Integer, ApiGroup> hidden = new LinkedHashMap<>();
     private final Map<String, List<ApiGroup>> copies = new HashMap<>();
     private final Set<String> seenKeys = new HashSet<>();
+    /** V_10.4: user path patterns "GET /api/a/b/{id}": requests matching one are the same API (IDs may be words). */
+    private final List<String> pathPatterns = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Map<String, String> canonCache = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<String, String>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, String> e) {
+                    return size() > 4000;
+                }
+            });
     private final Map<String, Integer> seenGid = new HashMap<>();
     private final List<String> recentDest = new ArrayList<>();
     private volatile List<ApiGroup> snapshot = List.of();
@@ -659,6 +668,22 @@ public final class Engine {
         originalProfile = new Role(Role.ORIGINAL_PROFILE_NAME, profile.enabled(), profile.rules());
         prefs.set(PREF_ORIGINAL, Json.write(originalProfile.toMap()));
         changes.status();
+    }
+
+    /** V_9.3.1: apply the crawl account's header rules to every API already captured (like editing a role). */
+    public int applyOriginalProfileToAll() {
+        int n = 0;
+        for (ApiGroup g : groups()) {
+            synchronized (g) {
+                applyOriginalProfile(g);
+            }
+            Audit.recalc(g);
+            touch(g);
+            n++;
+        }
+        changes.structure();
+        log("Đã áp luật của tài khoản crawl cho " + n + " API đã bắt.", null);
+        return n;
     }
 
     // =================================================================== branches
@@ -1168,6 +1193,153 @@ public final class Engine {
         changes.structure();
     }
 
+    // =================================================================== V_10.4 Q&A / Info
+    public record QaRow(ApiGroup group, themythofcrawl.model.QaItem item) {
+    }
+
+    /** Adds or updates a Q&A / Info item; keeps the Q&A / INFO tags in sync. */
+    public void putQa(ApiGroup g, themythofcrawl.model.QaItem q) {
+        if (g == null || q == null) {
+            return;
+        }
+        for (ApiTagCatalog.TagDef d : ApiTagCatalog.defaults()) {
+            if ((ApiTagCatalog.TAG_QA.equals(d.id()) || ApiTagCatalog.TAG_INFO.equals(d.id())) && tagCatalog.byId(d.id()) == null) {
+                tagCatalog.upsert(d);
+                saveTagCatalog();
+            }
+        }
+        g.putQa(q);
+        syncQaTags(g);
+        log(q.kind().label + ": " + Text.shortPath(q.question(), 60) + " — " + g.method() + " " + g.path(), g.gid());
+    }
+
+    public boolean removeQa(ApiGroup g, String id) {
+        if (g == null || !g.removeQa(id)) {
+            return false;
+        }
+        syncQaTags(g);
+        return true;
+    }
+
+    private void syncQaTags(ApiGroup g) {
+        if (g.hasQa(themythofcrawl.model.QaItem.Kind.QA)) {
+            g.addTag(ApiTagCatalog.TAG_QA);
+        } else {
+            g.removeTag(ApiTagCatalog.TAG_QA);
+        }
+        if (g.hasQa(themythofcrawl.model.QaItem.Kind.INFO)) {
+            g.addTag(ApiTagCatalog.TAG_INFO);
+        } else {
+            g.removeTag(ApiTagCatalog.TAG_INFO);
+        }
+        synchronized (this) {
+            stateDirty = true;
+            dirtyGroups.add(g);
+        }
+        changes.dirty(g);
+        changes.structure();
+    }
+
+    public List<QaRow> qaRows() {
+        List<QaRow> out = new ArrayList<>();
+        List<ApiGroup> all = new ArrayList<>(groups());
+        all.addAll(hiddenGroups());
+        for (ApiGroup g : all) {
+            for (themythofcrawl.model.QaItem q : g.qa()) {
+                out.add(new QaRow(g, q));
+            }
+        }
+        out.sort(Comparator.comparingLong((QaRow r) -> r.item().atMs()));
+        return out;
+    }
+
+    /** Stores a screenshot with the API (converted to PNG unless it already is PNG / JPEG); returns its stored name. */
+    public String addQaImage(ApiGroup g, byte[] image) {
+        if (g == null || image == null || image.length == 0) {
+            return null;
+        }
+        byte[] data = image;
+        String ext = "png";
+        boolean png = image.length > 4 && (image[0] & 0xFF) == 0x89 && image[1] == 'P';
+        boolean jpg = image.length > 3 && (image[0] & 0xFF) == 0xFF && (image[1] & 0xFF) == 0xD8;
+        if (jpg) {
+            ext = "jpeg";
+        } else if (!png) {
+            try {
+                java.awt.image.BufferedImage bi = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(image));
+                if (bi == null) {
+                    return null;
+                }
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(bi, "png", bo);
+                data = bo.toByteArray();
+            } catch (java.io.IOException e) {
+                return null;
+            }
+        }
+        String name = "qa-img-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "." + ext;
+        storage.put(g.gid(), name, data);
+        return name;
+    }
+
+    public byte[] qaImage(ApiGroup g, String name) {
+        if (g == null || Text.blank(name)) {
+            return null;
+        }
+        try {
+            Blob b = storage.blob(g.gid(), name);
+            return b == null ? null : b.bytes();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    // =================================================================== V_10.4 workspace for the next account
+    /**
+     * State for a child workspace (next account, crawled from the highest account down): the branch tree, branch
+     * rules, node types and the Excel list are kept; APIs, dedup memory, places, groups and hits start empty.
+     */
+    public String templateStateJson() {
+        Map<String, Object> m;
+        synchronized (this) {
+            m = Json.parseObject(stateJson());
+        }
+        for (String k : List.of("seen", "seen_gid", "clusters", "skipped", "hits", "places")) {
+            m.remove(k);
+        }
+        m.put("next_gid", 1);
+        m.put("next_cluster_id", 1);
+        return Json.write(m);
+    }
+
+    /** Endpoint keys of a reference (parent) workspace, to mark APIs "có ở <tài khoản cha>" / "mới" in this one. */
+    private volatile Set<String> referenceKeys = Set.of();
+    private volatile String referenceLabel;
+
+    public void setReference(String label, Set<String> keys) {
+        referenceLabel = Text.blank(label) ? null : label;
+        referenceKeys = keys == null ? Set.of() : Set.copyOf(keys);
+        changes.structure();
+    }
+
+    public String referenceLabel() {
+        return referenceLabel;
+    }
+
+    /** null = no reference workspace; true = the parent account also reached this endpoint. */
+    public Boolean inReference(ApiGroup g) {
+        if (referenceLabel == null || g == null) {
+            return null;
+        }
+        return referenceKeys.contains(endpointKey(g.method(), g.path()))
+                || g.service() != null && referenceKeys.contains(endpointKey(g.method(), canonicalPath(g.method(), g.path(), g.host())));
+    }
+
+    /** Host-independent endpoint identity used to compare accounts: METHOD + path with IDs as {id}, no query. */
+    public static String endpointKey(String method, String path) {
+        return Text.nz(method).toUpperCase(java.util.Locale.ROOT) + " " + Text.normalizePathIds(Text.nz(path));
+    }
+
     /** Every bug mark of every API (hidden ones included), newest first. */
     public List<BugRow> bugRows() {
         List<BugRow> out = new ArrayList<>();
@@ -1580,9 +1752,152 @@ public final class Engine {
         return themythofcrawl.core.AccessMatrix.build(this, gs);
     }
 
+    /** V_10.4: what a held request is, before the user decides: new API, another capture of API n, or a deleted place. */
+    public String classifyHeld(themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr) {
+        if (pr == null || pr.service() == null) {
+            return "API mới";
+        }
+        String key = placeKey(pr.method(), pr.service(), pr.path());
+        List<ApiGroup> cps = copiesOf(key);
+        if (!cps.isEmpty()) {
+            ApiGroup o = originOf(key);
+            return "Trùng " + Text.apiLabel(o != null ? o.gid() : cps.get(0).gid()) + " · " + cps.size() + " lần bắt"
+                    + (o != null && !Text.blank(o.branch()) ? " · " + o.branch() : "");
+        }
+        themythofcrawl.place.PlacementBook.Record rec = book.get(key);
+        if (rec != null && !Text.blank(rec.place)) {
+            return "Đã xóa trước đây · chỗ cũ " + rec.place;
+        }
+        return "API mới";
+    }
+
     // =================================================================== capture
     public String placeKey(String method, Service s, String path) {
-        return Text.dedupKey(method, s.protocol(), s.host(), s.port(), path, config.dedupNormalizeIds);
+        return Text.dedupKey(method, s.protocol(), s.host(), s.port(), canonicalPath(method, path, s.host()),
+                config.dedupNormalizeIds);
+    }
+
+    /**
+     * V_10.4: the path that decides "same API or not". When the request falls on an Excel row with a placeholder
+     * ({@code /api/a/b/{ID}}) or on a user path pattern, the placeholder segment is replaced, so {@code /api/a/b/new}
+     * and {@code /api/a/b/old} are ONE API (the second is a duplicate), whatever the ID looks like (number or word).
+     * An Excel row with the literal path ({@code /api/a/b/export}) wins and stays its own API. Cached.
+     */
+    public String canonicalPath(String method, String path, String host) {
+        String ck = PathMatch.catalogVersion() + "|" + method + "|" + host + "|" + path;
+        String hit = canonCache.get(ck);
+        if (hit != null) {
+            return hit;
+        }
+        String out = null;
+        TargetEntry t = targets == null ? null : targetMatch(method, path, host);
+        if (t != null) {
+            out = PathMatch.canonical(t.path(), path, config.targetIdsAsParams);
+        }
+        if (out == null && !pathPatterns.isEmpty()) {
+            String norm = PathMatch.normalize(path);
+            for (String pp : pathPatterns) {
+                int sp = pp.indexOf(' ');
+                String pm = sp > 0 ? pp.substring(0, sp) : "*";
+                String ptpl = sp > 0 ? pp.substring(sp + 1) : pp;
+                if (!"*".equals(pm) && !pm.equalsIgnoreCase(method)) {
+                    continue;
+                }
+                if (PathMatch.template(ptpl, false).exact().matcher(norm).matches()) {
+                    out = PathMatch.canonical(ptpl, path, false);
+                    if (out != null) {
+                        break;
+                    }
+                }
+            }
+        }
+        String res = out != null ? out : Text.stripQuery(Text.nz(path));
+        canonCache.put(ck, res);
+        return res;
+    }
+
+    public List<String> pathPatterns() {
+        return List.copyOf(pathPatterns);
+    }
+
+    /** Adds "METHOD /path/{id}" and merges the APIs already captured. Returns how many APIs became duplicates. */
+    public int addPathPattern(String method, String template) {
+        String m = Text.blank(method) ? "*" : method.trim().toUpperCase(java.util.Locale.ROOT);
+        String pp = m + " " + template.trim();
+        if (!pathPatterns.contains(pp)) {
+            pathPatterns.add(pp);
+        }
+        synchronized (this) {
+            stateDirty = true;
+        }
+        canonCache.clear();
+        themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.CONFIG, "Mẫu path: " + pp, "");
+        return regroup();
+    }
+
+    public int removePathPattern(String pp) {
+        pathPatterns.remove(pp);
+        synchronized (this) {
+            stateDirty = true;
+        }
+        canonCache.clear();
+        return regroup();
+    }
+
+    /**
+     * V_10.4: recompute "same API" for every captured API after the Excel list, a placeholder or a path pattern
+     * changed: APIs that fall on the same template become captures of one API (the earliest is the bản gốc,
+     * the others Lần 2, 3...); the next request of that template is recognised as a duplicate. Returns how many
+     * APIs moved.
+     */
+    public int regroup() {
+        canonCache.clear();
+        Map<String, List<ApiGroup>> moved = new LinkedHashMap<>();
+        Config c = config;
+        for (ApiGroup g : allGroups()) {
+            String old = g.bookKey();
+            if (old == null || g.service() == null) {
+                continue;
+            }
+            String nk = placeKey(g.method(), g.service(), g.path());
+            String raw = Text.dedupKey(g.method(), g.service().protocol(), g.service().host(), g.service().port(), g.path(),
+                    c.dedupNormalizeIds);
+            if (nk.equals(old) || !(old.equals(raw) || nk.equals(raw) || old.contains("{"))) {
+                continue;
+            }
+            synchronized (this) {
+                dropCopy(g);
+                g.setBookKey(nk);
+                addCopy(g);
+                String base = c.dedupPerBranch ? "F" + g.branchId() + "|" + nk : nk;
+                seenKeys.add(base);
+                seenGid.putIfAbsent(base, g.gid());
+                stateDirty = true;
+            }
+            PlacementBook.Record oldRec = book.get(old);
+            PlacementBook.Record rec = book.ensure(nk, g.method(), g.host(), g.path());
+            if (rec.place == null && oldRec != null && oldRec.place != null) {
+                book.setPlace(nk, oldRec.place);
+            }
+            moved.computeIfAbsent(nk, k -> new ArrayList<>()).add(g);
+            touch(g);
+        }
+        int n = 0;
+        for (String k : moved.keySet()) {
+            List<ApiGroup> cps = copiesOf(k);
+            if (cps.size() > 1) {
+                ApiGroup first = cps.stream().min(Comparator.comparingInt(ApiGroup::gid)).orElse(cps.get(0));
+                promoteToOrigin(first);
+                for (ApiGroup g : moved.get(k)) {
+                    n += isOrigin(g) ? 0 : 1;
+                }
+            }
+        }
+        if (!moved.isEmpty()) {
+            changes.structure();
+            log("Gộp API theo mẫu path: " + n + " API thành lần bắt trùng", null);
+        }
+        return n;
     }
 
     public TargetEntry targetMatch(String method, String path, String host) {
@@ -1938,7 +2253,7 @@ public final class Engine {
                 return null;
             }
             if (c.dedup) {
-                String base = Text.dedupKey(method, svc.protocol(), svc.host(), svc.port(), path, c.dedupNormalizeIds);
+                String base = pkey;
                 key = c.dedupPerBranch ? "F" + feat.id() + "|" + base : base;
                 boolean seen;
                 Integer earlier;
@@ -2347,9 +2662,13 @@ public final class Engine {
     }
     // =================================================================== sending
     /** A request waiting in / running from the send queue. */
-    public record Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw) {
+    public record Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw, boolean quiet) {
         public Work(ApiGroup group, RoleResult result) {
-            this(group, result, null, "", false);
+            this(group, result, null, "", false, false);
+        }
+
+        public Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw) {
+            this(group, result, override, note, forceRaw, false);
         }
     }
 
@@ -2563,6 +2882,12 @@ public final class Engine {
         String[] rl = Text.requestLine(editedRequest);
         synchronized (g) {
             if (targetRow == null || targetRow.original()) {
+                if (!g.originalEdited()) {
+                    byte[] firstCapture = Blob.bytesOf(g.origRequest());
+                    if (firstCapture != null) {   // keep the request as captured: "Khôi phục" can always go back to it
+                        g.setCaptured(storage.put(g.gid(), GroupCodec.CAPTURED_REQ, firstCapture), g.service());
+                    }
+                }
                 if (newService != null) {
                     g.setService(newService);
                 }
@@ -2605,9 +2930,39 @@ public final class Engine {
         Audit.recalc(g);
         touch(g);
         changes.structure();
-        log("Composer: Đã lưu đè Request cho API #" + g.gid()
-                + (targetRow != null && !targetRow.original() ? " [" + targetRow.roleName() + "]" : " (API gốc)"),
+        log("Đã lưu request đã sửa cho API #" + g.gid()
+                + (targetRow != null && !targetRow.original() ? " [" + targetRow.roleName() + "]"
+                        : " (tài khoản crawl; mọi vai trò dựng lại từ request này; khôi phục được bản lúc bắt)"),
                 g.gid());
+        return true;
+    }
+
+    /** V_9.3.1: put the crawl account's request back exactly as first captured (method, path, host, headers, body). */
+    public boolean restoreCapturedRequest(ApiGroup g) {
+        if (g == null || !g.originalEdited()) {
+            return false;
+        }
+        byte[] captured = Blob.bytesOf(g.capturedRequest());
+        if (captured == null || captured.length == 0) {
+            return false;
+        }
+        synchronized (g) {
+            if (g.capturedService() != null) {
+                g.setService(g.capturedService());
+            }
+            String[] rl = Text.requestLine(captured);
+            if (rl != null) {
+                g.setMethod(rl[0]);
+                g.setPathAndUrl(rl[1], g.service().protocol() + "://" + g.service().hostLabel() + rl[1]);
+            }
+            g.setOriginal(storage.put(g.gid(), GroupCodec.ORIG_REQ, captured), g.origResponse());
+            g.origResult().setCustomRequest(null);
+            g.setCaptured(null, null);
+        }
+        Audit.recalc(g);
+        touch(g);
+        changes.structure();
+        log("Đã khôi phục request lúc bắt cho API #" + g.gid() + " (tài khoản crawl).", g.gid());
         return true;
     }
 
@@ -3074,6 +3429,15 @@ public final class Engine {
         replayInternal(g, results, false);
     }
 
+    /** V_10.4 "Gửi riêng": like a normal send but outside Burp, so Logger / Logger++ do not log it. */
+    public void replayQuiet(ApiGroup g, Collection<RoleResult> results) {
+        List<Work> works = new ArrayList<>();
+        for (RoleResult r : results) {
+            works.add(new Work(g, r, null, "", false, true));
+        }
+        submitWorks(g, works);
+    }
+
     /** forceRaw: send exactly the built request (the ID was already chosen), no automatic ID change / retry. */
     private void replayInternal(ApiGroup g, Collection<RoleResult> results, boolean forceRaw) {
         List<Work> works = new ArrayList<>();
@@ -3265,13 +3629,14 @@ public final class Engine {
             }
             byte[] request = work.override() != null ? work.override()
                     : forceRaw ? baseReq : prepareActionRequestBeforeSend(g, baseReq, mode);
-            Bridge.Sent sent = bridge.send(g.service(), request);
+            boolean quiet = work.quiet() || config.quietSend;
+            Bridge.Sent sent = quiet ? bridge.sendQuiet(g.service(), request) : bridge.send(g.service(), request);
             byte[] resp = sent.response();
             Integer firstSt = HttpBytes.statusCode(resp);
             if (!forceRaw && firstSt != null) {
                 byte[] healedReq = autoHealActionRequestOn4xx(g, request, firstSt, mode);
                 if (healedReq != null) {
-                    Bridge.Sent retrySent = bridge.send(g.service(), healedReq);
+                    Bridge.Sent retrySent = quiet ? bridge.sendQuiet(g.service(), healedReq) : bridge.send(g.service(), healedReq);
                     if (retrySent.response() != null && retrySent.response().length > 0) {
                         request = healedReq;
                         sent = retrySent;
@@ -3352,7 +3717,7 @@ public final class Engine {
                 Text.apiLabel(g.gid()) + " " + g.method() + " " + g.path() + " · " + (r.original() ? CRAWL_ACCOUNT : r.roleName())
                         + " -> " + (r.status() != null ? r.status() + " (" + r.length() + " B, " + r.elapsedMs() + " ms)" : r.state())
                         + (Text.blank(r.sentNote()) ? "" : " · " + r.sentNote()) + (Text.blank(r.error()) ? "" : " · lỗi: " + r.error())
-                        + " · chế độ " + mode.label,
+                        + " · chế độ " + mode.label + (work.quiet() || config.quietSend ? " · gửi riêng" : ""),
                 "");
         Audit.recalc(g);   // before done(): a retry of this row can only start after these colours are set
         boolean finished = dispatcher.done(job, status, retryAfter);
@@ -3860,6 +4225,58 @@ public final class Engine {
         changes.structure();
     }
 
+    /** V_10.4: what deleting these APIs means, for the confirm text. */
+    public record DeletePlan(List<ApiGroup> duplicates, List<ApiGroup> originsWithCopies, List<ApiGroup> onlyCopies) {
+        public boolean needsConfirm() {
+            return !originsWithCopies.isEmpty() || !onlyCopies.isEmpty();
+        }
+    }
+
+    public DeletePlan deletePlan(Collection<ApiGroup> gs) {
+        Set<Integer> ids = new HashSet<>();
+        for (ApiGroup g : gs) {
+            ids.add(g.gid());
+        }
+        List<ApiGroup> dups = new ArrayList<>();
+        List<ApiGroup> origins = new ArrayList<>();
+        List<ApiGroup> single = new ArrayList<>();
+        for (ApiGroup g : gs) {
+            if (!isOrigin(g)) {
+                dups.add(g);
+                continue;
+            }
+            boolean othersLeft = g.bookKey() != null
+                    && copiesOf(g.bookKey()).stream().anyMatch(c -> !ids.contains(c.gid()));
+            (othersLeft ? origins : single).add(g);
+        }
+        return new DeletePlan(dups, origins, single);
+    }
+
+    /**
+     * V_10.4 "Xóa API": a duplicate capture is simply removed; when a bản gốc is removed and other captures of the
+     * same endpoint remain, the earliest one left becomes the new bản gốc (numbering 1, 2, 3 again).
+     */
+    public int removeSmart(Collection<ApiGroup> gs, String note) {
+        List<ApiGroup> list = new ArrayList<>(gs);
+        Set<Integer> ids = new HashSet<>();
+        Set<String> originKeys = new LinkedHashSet<>();
+        for (ApiGroup g : list) {
+            ids.add(g.gid());
+            if (g.bookKey() != null && isOrigin(g)) {
+                originKeys.add(g.bookKey());
+            }
+        }
+        remove(list, note);
+        for (String key : originKeys) {
+            List<ApiGroup> left = copiesOf(key).stream().filter(c -> !ids.contains(c.gid()))
+                    .sorted(Comparator.comparingInt(ApiGroup::dupNo).thenComparingInt(ApiGroup::gid)).toList();
+            if (!left.isEmpty()) {
+                promoteToOrigin(left.get(0));
+            }
+        }
+        return list.size();
+    }
+
     /** Deleted APIs are captured again the next time (their dedup keys are dropped). */
     public int forgetDedup(Collection<ApiGroup> gs) {
         int n = 0;
@@ -4018,6 +4435,7 @@ public final class Engine {
 
     /** Match every captured API against the current list (after load / option change). */
     public void retag() {
+        canonCache.clear();
         for (ApiGroup g : allGroups()) {
             TargetEntry e = targets == null ? null : targetMatch(g.method(), g.path(), g.host());
             if (e != g.target()) {
@@ -4025,6 +4443,7 @@ public final class Engine {
                 touch(g);
             }
         }
+        regroup();
         changes.structure();
     }
 
@@ -4199,6 +4618,7 @@ public final class Engine {
         m.put("next_gid", nextGid);
         m.put("recent_dest", new ArrayList<>(recentDest));
         m.put("seen", new ArrayList<>(seenKeys));
+        m.put("path_patterns", new ArrayList<>(pathPatterns));
         Map<String, Object> sg = new LinkedHashMap<>(seenGid);
         m.put("seen_gid", sg);
         List<Object> rules = new ArrayList<>();
@@ -4293,6 +4713,11 @@ public final class Engine {
             for (Object o : Json.list(m, "seen")) {
                 seenKeys.add(String.valueOf(o));
             }
+            pathPatterns.clear();
+            for (Object o : Json.list(m, "path_patterns")) {
+                pathPatterns.add(String.valueOf(o));
+            }
+            canonCache.clear();
             Json.obj(m, "seen_gid").forEach((k, v) -> {
                 if (v instanceof Number n) {
                     seenGid.put(k, n.intValue());
@@ -4342,6 +4767,7 @@ public final class Engine {
         for (ApiGroup g : loaded) {
             Audit.recalc(g);
         }
+        regroup();
         if (old != next) {
             old.close();
         }

@@ -161,8 +161,10 @@ final class RolesTab {
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int r = table.getSelectedRow();
-                if (r >= 0) {
-                    load(r);
+                if (r == 0) {
+                    editOriginal();          // V_9.3.1: row 0 = Tài khoản crawl, edited like any role
+                } else if (r > 0) {
+                    load(r - 1);
                 }
             }
         });
@@ -757,10 +759,13 @@ final class RolesTab {
 
     private void editOriginal() {
         editing = -2;
-        table.clearSelection();
+        if (table.getSelectedRow() != 0 && model.getRowCount() > 0) {
+            table.setRowSelectionInterval(0, 0);   // fires the listener, which comes back here with row 0 selected
+            return;
+        }
         Role p = engine.originalProfile();
         title.setText("Tài khoản crawl:");
-        name.setText(Role.ORIGINAL_PROFILE_NAME);
+        name.setText(Role.ORIGINAL_LABEL);
         name.setEditable(false);
         tierBox.setEnabled(false);
         tierBox.setSelectedItem(Role.Tier.CUSTOM);
@@ -775,8 +780,8 @@ final class RolesTab {
     }
 
     void selectRole(int idx) {
-        if (idx >= 0 && idx < model.getRowCount()) {
-            MainPanel.selectRow(table, idx);
+        if (idx >= 0 && idx + 1 < model.getRowCount()) {
+            MainPanel.selectRow(table, idx + 1);
             load(idx);
         }
     }
@@ -795,7 +800,13 @@ final class RolesTab {
         if (editing == -2) {
             engine.saveOriginalProfile(new Role(Role.ORIGINAL_PROFILE_NAME, enabledState, clean, Role.Tier.CUSTOM));
             refreshProfile();
-            ui.flash("Đã lưu profile tài khoản crawl (" + clean.size() + " rule)");
+            int apis = engine.groups().size();
+            if (apis > 0 && ui.confirmDialog("Áp " + clean.size() + " luật của tài khoản crawl cho cả " + apis
+                    + " API đã bắt?\n(Không: chỉ áp cho API bắt từ giờ.)")) {
+                engine.applyOriginalProfileToAll();
+            }
+            reload();
+            ui.flash("Đã lưu tài khoản crawl (" + clean.size() + " luật)");
         } else if (editing >= 0) {
             String n = name.getText().trim();
             if (n.isEmpty()) {
@@ -806,7 +817,7 @@ final class RolesTab {
             engine.roles().update(editing, new Role(n, enabledState, clean, chosenTier));
             engine.saveRoles();
             reload();
-            MainPanel.selectRow(table, editing);
+            MainPanel.selectRow(table, editing + 1);
             ui.flash("Đã lưu vai trò " + n + " [" + chosenTier.badge + "] (" + clean.size() + " rule)");
         }
         dirty.setIcon(Icons.themed(t -> Icons.check(t.success.text(), 12)));
@@ -819,7 +830,7 @@ final class RolesTab {
             int i = engine.roles().add(new Role(n.trim(), true, List.of()));
             engine.saveRoles();
             reload();
-            MainPanel.selectRow(table, i);
+            MainPanel.selectRow(table, i + 1);
         }
     }
 
@@ -830,7 +841,13 @@ final class RolesTab {
         }
         List<Integer> idx = new ArrayList<>();
         for (int r : rows) {
-            idx.add(r);
+            if (r > 0) {
+                idx.add(r - 1);   // row 0 (tài khoản crawl) cannot be deleted
+            }
+        }
+        if (idx.isEmpty()) {
+            ui.info("Tài khoản crawl không xóa được; tắt nó hoặc xóa các luật của nó.");
+            return;
         }
         engine.roles().remove(idx);
         engine.saveRoles();
@@ -1308,11 +1325,12 @@ final class RolesTab {
         m.add(Ui.item("Nhân bản vai trò đang chọn", t -> Icons.copy(t.muted), () -> {
             int r = table.getSelectedRow();
             if (r >= 0) {
-                Role src = engine.roles().get(r);
+                Role src = r == 0 ? new Role("Vai trò mới (từ tài khoản crawl)", true, engine.originalProfile().rules())
+                        : engine.roles().get(r - 1);
                 int i = engine.roles().add(src.withName(src.name() + "_copy"));
                 engine.saveRoles();
                 reload();
-                MainPanel.selectRow(table, i);
+                MainPanel.selectRow(table, i + 1);
             }
         }));
         if (onTable) {
@@ -1349,11 +1367,11 @@ final class RolesTab {
 
     private void moveRole(int delta) {
         int r = table.getSelectedRow();
-        if (r >= 0) {
-            int j = engine.roles().move(r, delta);
+        if (r > 0) {
+            int j = engine.roles().move(r - 1, delta);
             engine.saveRoles();
             reload();
-            MainPanel.selectRow(table, j);
+            MainPanel.selectRow(table, j + 1);
         }
     }
 
@@ -1535,7 +1553,7 @@ final class RolesTab {
 
         @Override
         public int getRowCount() {
-            return engine.roles().count();
+            return engine.roles().count() + 1;   // row 0 = Tài khoản crawl
         }
 
         @Override
@@ -1560,30 +1578,50 @@ final class RolesTab {
 
         @Override
         public void setValueAt(Object v, int r, int c) {
-            if (c == 1) {
-                engine.roles().setEnabled(r, Boolean.TRUE.equals(v));
+            if (c != 1) {
+                return;
+            }
+            boolean on = Boolean.TRUE.equals(v);
+            if (r == 0) {
+                engine.saveOriginalProfile(engine.originalProfile().withEnabled(on));
+                refreshProfile();
+                if (editing == -2) {
+                    setEnabledState(on);
+                }
+            } else {
+                engine.roles().setEnabled(r - 1, on);
                 engine.saveRoles();
-                fireTableRowsUpdated(r, r);
-                updateSummaryStrip();
-                if (editing == r) {
-                    setEnabledState(Boolean.TRUE.equals(v));
+                if (editing == r - 1) {
+                    setEnabledState(on);
                 }
             }
+            fireTableRowsUpdated(r, r);
+            updateSummaryStrip();
         }
 
         @Override
         public Object getValueAt(int r, int c) {
-            if (r >= engine.roles().count()) {
+            Role role = roleAtRow(r);
+            if (role == null) {
                 return null;
             }
-            Role role = engine.roles().get(r);
             return switch (c) {
-                case 0 -> String.valueOf(r + 1);
+                case 0 -> r == 0 ? "00" : String.valueOf(r);
                 case 1 -> role.enabled();
-                case 2 -> role.name();
-                default -> role.rules().isEmpty() ? "(giống tài khoản crawl)" : role.rulesSummary();
+                case 2 -> r == 0 ? Role.ORIGINAL_LABEL : role.name();
+                default -> role.rules().isEmpty() ? (r == 0 ? "(giữ nguyên request lúc bắt)" : "(giống tài khoản crawl)")
+                        : role.rulesSummary();
             };
         }
+    }
+
+    /** Row 0 = the crawl account's profile; row i = role i - 1. */
+    Role roleAtRow(int row) {
+        if (row == 0) {
+            return engine.originalProfile();
+        }
+        int i = row - 1;
+        return i >= 0 && i < engine.roles().count() ? engine.roles().get(i) : null;
     }
 
     private static final class RuleModel extends AbstractTableModel {
@@ -1758,9 +1796,9 @@ final class RolesTab {
             this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
             this.selected = sel;
             this.modelRow = t != null && row >= 0 ? t.convertRowIndexToModel(row) : row;
-            Role r = modelRow >= 0 && modelRow < engine.roles().count() ? engine.roles().get(modelRow) : null;
+            Role r = modelRow >= 0 ? roleAtRow(modelRow) : null;
             this.roleEnabled = r == null || r.enabled();
-            this.roleName = r != null ? r.name() : (v == null ? "" : v.toString());
+            this.roleName = modelRow == 0 ? Role.ORIGINAL_LABEL : r != null ? r.name() : (v == null ? "" : v.toString());
             this.tier = r != null ? r.tier() : Role.Tier.CUSTOM;
             setToolTipText("[" + tier.badge + "] " + roleName + " — " + tier.label);
             return this;
@@ -1838,9 +1876,10 @@ final class RolesTab {
             this.theme = t != null ? Theme.of(t.getBackground(), t.getForeground()) : Theme.current();
             this.selected = sel;
             this.modelRow = t != null && row >= 0 ? t.convertRowIndexToModel(row) : row;
-            this.role = modelRow >= 0 && modelRow < engine.roles().count() ? engine.roles().get(modelRow) : null;
+            this.role = modelRow >= 0 ? roleAtRow(modelRow) : null;
             this.ruleList = role != null ? role.rules() : List.of();
-            setToolTipText(role != null && !role.rules().isEmpty() ? role.rulesSummary() : "Không đổi gì: gửi giống tài khoản crawl");
+            setToolTipText(role != null && !role.rules().isEmpty() ? role.rulesSummary()
+                    : modelRow == 0 ? "Không đổi gì: gửi đúng request lúc bắt" : "Không đổi gì: gửi giống tài khoản crawl");
             return this;
         }
 
@@ -1895,7 +1934,7 @@ final class RolesTab {
                     FontMetrics ifm = g2.getFontMetrics();
                     g2.setColor(selected ? th.selectionFg : th.muted);
                     int ty = (h - ifm.getHeight()) / 2 + ifm.getAscent();
-                    g2.drawString("(giống tài khoản crawl)", x, ty);
+                    g2.drawString(modelRow == 0 ? "(giữ nguyên request lúc bắt)" : "(giống tài khoản crawl)", x, ty);
                     return;
                 }
 

@@ -131,6 +131,29 @@ final class TreeMenus {
             case HELD_PENDING -> {
                 var pr = BranchTree.heldOf(n);
                 if (pr != null) {
+                    m.add(Ui.item(engine.classifyHeld(pr), false, () -> { }));
+                    m.addSeparator();
+                    m.add(Ui.item("Gửi riêng (không qua Logger++)", t -> Icons.send(t.info.text(), 13), () -> {
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD_QUIET, pr.originalRequest());
+                        ui.syncHeader();
+                        ui.flash("Đã gửi riêng: " + pr.method() + " " + Text.shortPath(pr.path(), 40));
+                    }));
+                    int heldAll = engine.proxyQueue().pendingCount();
+                    List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> heldSel = tree.selectedHeld();
+                    if (heldSel.size() > 1) {
+                        m.add(Ui.item("Gửi " + heldSel.size() + " request đang chọn", t -> Icons.sendAll(t.accent.text()),
+                                () -> ui.forwardHeld(heldSel, false)));
+                        m.add(Ui.item("Gửi riêng " + heldSel.size() + " request đang chọn", t -> Icons.sendAll(t.info.text()),
+                                () -> ui.forwardHeld(heldSel, true)));
+                    }
+                    if (heldAll > 1) {
+                        m.add(Ui.item("Gửi tất cả " + heldAll + " request đang chờ", t -> Icons.sendAll(t.accent.text()),
+                                () -> ui.forwardHeld(engine.proxyQueue().pending(), false)));
+                        m.add(Ui.item("Gửi riêng tất cả " + heldAll + " request đang chờ", t -> Icons.sendAll(t.info.text()),
+                                () -> ui.forwardHeld(engine.proxyQueue().pending(), true)));
+                    }
+                    m.addSeparator();
                     m.add(Ui.item("Gửi lên server ngay", t -> Icons.send(t.accent.text(), 13), () -> {
                         engine.proxyQueue().resolve(pr.id(),
                                 themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest());
@@ -185,22 +208,22 @@ final class TreeMenus {
             }
             case CLUSTER -> {
                 GroupCluster cl = (GroupCluster) n.payload;
-                m.add(Ui.item(cl.collapsed() ? "Mở rộng Cụm [" + cl.name() + "]" : "Thu gọn Cụm [" + cl.name() + "]",
+                m.add(Ui.item(cl.collapsed() ? "Mở rộng Nhóm [" + cl.name() + "]" : "Thu gọn Nhóm [" + cl.name() + "]",
                         Icons::cluster, () -> {
                             engine.toggleClusterCollapsed(cl.id());
                             ui.tick(true);
                         }));
-                m.add(Ui.item("Đổi tên Cụm hiển thị...", Icons::edit, () -> ui.editClusterDialog(cl)));
-                m.add(Ui.item("Gỡ Cụm (giữ nguyên toàn bộ API trong nhánh)", Icons::undo, () -> {
+                m.add(Ui.item("Đổi tên Nhóm...", Icons::edit, () -> ui.editClusterDialog(cl)));
+                m.add(Ui.item("Gỡ Nhóm (giữ nguyên toàn bộ API trong nhánh)", Icons::undo, () -> {
                     engine.dissolveCluster(cl.id());
                     ui.tick(true);
-                    ui.flash("Đã gỡ Cụm [" + cl.name() + "] — các API giữ nguyên vị trí");
+                    ui.flash("Đã gỡ Nhóm [" + cl.name() + "] — các API giữ nguyên vị trí");
                 }));
                 m.addSeparator();
-                m.add(Ui.item("Gửi tất cả " + many.size() + " API trong Cụm", t -> Icons.send(t.critical.text()),
+                m.add(Ui.item("Gửi tất cả " + many.size() + " API trong Nhóm", t -> Icons.send(t.critical.text()),
                         () -> ui.send(many)));
-                m.add(Ui.item("Đẩy Cụm sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
-                m.add(Ui.item("Copy STT + Path của Cụm (" + many.size() + " API)", t -> Icons.copy(t.muted),
+                m.add(Ui.item("Đẩy Nhóm sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
+                m.add(Ui.item("Copy STT + Path của Nhóm (" + many.size() + " API)", t -> Icons.copy(t.muted),
                         () -> ui.copy(many)));
                 m.add(ui.tagMenu(many));
             }
@@ -212,9 +235,25 @@ final class TreeMenus {
                         : "Gửi API #" + g.gid() + " (" + g.results().size() + " vai trò)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
                 m.add(SendMenus.build(ui, targetGs, nodeRole));
+                if (n.kind == Node.Kind.ORIG || n.kind == Node.Kind.GROUP) {
+                    m.add(Ui.item("Sửa request gốc (tài khoản crawl)...", t -> Icons.edit(t.info.text()),
+                            () -> RequestComposerDialog.showFloating(c, engine, g, g.origResult(), () -> ui.tick(true))));
+                    m.add(Ui.item("Khôi phục request lúc bắt", Icons::undo, g.originalEdited(), () -> {
+                        if (ui.confirmDialog("Khôi phục request lúc bắt cho " + Text.apiLabel(g.gid())
+                                + "?\nBản đã sửa của tài khoản crawl sẽ bị thay bằng bản lúc bắt.")) {
+                            engine.restoreCapturedRequest(g);
+                            ui.tick(true);
+                            ui.flash("Đã khôi phục request lúc bắt của " + Text.apiLabel(g.gid()) + ".");
+                        }
+                    }));
+                }
                 m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
+                m.add(Ui.item("Hỏi đáp (Q&A / Info)..." + (g.qa().isEmpty() ? "" : "   (đang có " + g.qa().size() + ")"),
+                        t -> Icons.info(t.info.text()), () -> QaDialog.open(ui, g, null)));
+                m.add(Ui.item(targetGs.size() > 1 ? "Cùng 1 API (" + targetGs.size() + " path khác nhau ở ID)..." : "Cùng 1 API: đoạn path này là ID...",
+                        Icons::dup, () -> PathPatternDialog.open(ui, targetGs)));
                 m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
                         t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
                                 nodeRole != null && !nodeRole.original() ? nodeRole.roleKey() : "", "")));
@@ -226,6 +265,9 @@ final class TreeMenus {
                         () -> ui.pushDialog(false, List.of(g), Text.apiLabel(g.gid()))));
                 m.add(Ui.item("Bật / Tắt vai trò cho API #" + g.gid() + "...", Icons::sliders,
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, targetGs, null)));
+                boolean dup = targetGs.size() == 1 && !engine.isOrigin(g);
+                m.add(Ui.item(targetGs.size() > 1 ? "Xóa " + targetGs.size() + " API..." : dup ? "Xóa lần bắt trùng này"
+                                : "Xóa API (bản gốc)...", t -> Icons.trash(t.danger.text()), () -> ui.delete(targetGs)));
                 m.addSeparator();
                 m.add(ui.clusterMenu(targetGs));
                 m.add(ui.tagMenu(targetGs));

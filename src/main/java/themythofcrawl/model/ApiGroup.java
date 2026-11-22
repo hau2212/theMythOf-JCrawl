@@ -116,6 +116,14 @@ public final class ApiGroup {
     }
 
     public Blob origRequest() { return origRequest; }
+
+    // V_9.3.1: the request as first captured, kept the first time the user edits the crawl account's request
+    private volatile Blob capturedRequest;
+    private volatile Service capturedService;
+    public Blob capturedRequest() { return capturedRequest; }
+    public Service capturedService() { return capturedService; }
+    public void setCaptured(Blob request, Service svc) { capturedRequest = request; capturedService = svc; }
+    public boolean originalEdited() { return capturedRequest != null; }
     public Blob origResponse() { return origResponse; }
 
     public void setOriginal(Blob req, Blob resp) {
@@ -234,6 +242,34 @@ public final class ApiGroup {
 
     public synchronized boolean removeBug(String bugId) {
         return bugs.removeIf(b -> b.id().equals(bugId));
+    }
+
+    // V_10.4: questions / notes (Q&A, Info) with screenshots
+    private final java.util.ArrayList<QaItem> qa = new java.util.ArrayList<>();
+
+    public synchronized java.util.List<QaItem> qa() {
+        return java.util.List.copyOf(qa);
+    }
+
+    public synchronized void putQa(QaItem q) {
+        if (q == null) {
+            return;
+        }
+        for (int i = 0; i < qa.size(); i++) {
+            if (qa.get(i).id().equals(q.id())) {
+                qa.set(i, q);
+                return;
+            }
+        }
+        qa.add(q);
+    }
+
+    public synchronized boolean removeQa(String id) {
+        return qa.removeIf(q -> q.id().equals(id));
+    }
+
+    public synchronized boolean hasQa(QaItem.Kind kind) {
+        return qa.stream().anyMatch(q -> q.kind() == kind && q.status() != QaItem.Status.CLOSED);
     }
 
     public synchronized Set<String> seenBy() {

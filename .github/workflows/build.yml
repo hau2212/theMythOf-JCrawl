@@ -86,17 +86,17 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: thay đổi giao diện / tên gọi -> tăng MINOR: **\`V_9.3\`**, kênh stable.
+          > Theo \`VERSIONING.md\`: họ workspace + thuật toán khớp path mới -> **\`V_10.4\`** (kênh stable).
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Một khái niệm, một tên**: Tài khoản crawl · Vai trò · API 12 · Nhánh · Gửi lại · Sửa & gửi · Chặn & gửi lại · Các lần bắt (bảng từ điển trong README); test tự động chặn tên cũ.
-          2. **Chữ kết quả dễ đọc**: Gọi được 200 · Bị chặn 403 · Chưa đăng nhập 401 · Nghi BAC · Chưa kết luận; bỏ tiền tố OK: / INFO: / WARN:.
-          3. **Chip có chữ**: Lần 5 · gốc API 492 · Giữ lần 5? · Gốc · 3 lần · Excel 200 · Tải lại? · 7 chờ · 1 đã xóa · 3/12 cần xem.
-          4. **Tab gọn**: Cây · API · Phân quyền · Lỗi · Excel · Vai trò · Cần xử lý · Cài đặt; Lịch sử thành chế độ "Theo thời gian" của Cây.
-          5. **Chặn & gửi lại** gộp Bảo vệ dữ liệu + Luật chặn thành 1 cửa sổ có trang Tổng quan.
-          6. Thanh trên: Tắt | Bắt · Không gửi | Tự gửi · Chờ gửi chỉ hiện khi bận; không còn chữ viết hoa toàn bộ.
-          7. Kế thừa V_9.2: gửi lại theo vai trò, mỗi vai trò 1 bản ghi, kết luận BAC trên Cây, Nhật ký cho Claude.
+          1. **Crawl từng tài khoản**: workspace con cho tài khoản tiếp theo (giữ cây nhánh + Excel), chip "Có ở / Mới so với", Excel > Tài khoản (ma trận, chuyển tài khoản, báo cáo tổng hợp).
+          2. **Hỏi đáp Q&A / Info**: câu hỏi, nhiều ảnh (dán Ctrl+V), câu trả lời của khách hàng; Excel Q&A có ảnh chèn thật.
+          3. **Request bị chặn**: nhãn API mới / Trùng / Đã xóa; gửi đồng loạt; **Gửi riêng** không qua Logger++.
+          4. **ID dạng chữ**: path cùng dòng Excel {ID} (new, old...) là cùng 1 API, lần sau là bản trùng; không có Excel thì chuột phải > Cùng 1 API.
+          5. **Cây**: xóa API thông minh (bản gốc hỏi + chuyển gốc), Mở hết / Thu hết, Nhóm.
+          6. **Nhật ký**: thời gian phản hồi, chậm / đứng, thói quen, Báo lỗi ở mọi cửa sổ, xuất Markdown / JSONL.
+          7. Kế thừa V_9.4 (tài khoản crawl là dòng 00 của Vai trò, sửa request gốc an toàn) và V_9.3.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

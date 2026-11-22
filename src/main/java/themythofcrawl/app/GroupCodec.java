@@ -19,6 +19,8 @@ import themythofcrawl.model.Service;
 public final class GroupCodec {
     public static final String ORIG_REQ = "orig.req";
     public static final String ORIG_RESP = "orig.resp";
+    /** V_9.3.1: the crawl account's request as first captured (kept once it is edited). */
+    public static final String CAPTURED_REQ = "orig.captured.req";
 
     private GroupCodec() {
     }
@@ -78,6 +80,12 @@ public final class GroupCodec {
         m.put("orig_status", g.origStatus());
         m.put("orig_length", g.origLength());
         m.put("has_orig_resp", g.origResponse() != null);
+        if (g.capturedRequest() != null && g.capturedService() != null) {
+            m.put("captured_req", true);
+            m.put("captured_host", g.capturedService().host());
+            m.put("captured_port", g.capturedService().port());
+            m.put("captured_secure", g.capturedService().secure());
+        }
         m.put("target_row", g.target() != null ? g.target().rowNo() : null);
         m.put("overrides", g.roleOverrides());
         m.put("copy_stt", g.copyStt());
@@ -96,6 +104,11 @@ public final class GroupCodec {
             bugList.add(b.toMap());
         }
         m.put("bugs", bugList);
+        List<Object> qaList = new ArrayList<>();
+        for (themythofcrawl.model.QaItem q : g.qa()) {
+            qaList.add(q.toMap());
+        }
+        m.put("qa", qaList);
         m.put("suspected_refresh", g.suspectedRefresh());
         m.put("triggered_by_action", g.triggeredByAction());
         PlaceHint h = g.placeHint();
@@ -156,6 +169,10 @@ public final class GroupCodec {
         Object os = m.get("orig_status");
         Object ol = m.get("orig_length");
         g.setOrigMeta(os instanceof Number n ? n.intValue() : null, ol instanceof Number n2 ? n2.intValue() : null);
+        if (Json.bool(m, "captured_req", false)) {
+            g.setCaptured(st.blob(gid, CAPTURED_REQ), new Service(Json.str(m, "captured_host", svc.host()),
+                    (int) Json.num(m, "captured_port", svc.port()), Json.bool(m, "captured_secure", svc.secure())));
+        }
         Object row = m.get("target_row");
         if (row instanceof Number n && targetByRow != null) {
             g.setTarget(targetByRow.apply(n.intValue()));
@@ -191,6 +208,13 @@ public final class GroupCodec {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> mm = (Map<String, Object>) bm;
                 g.putBug(themythofcrawl.model.BugMark.fromMap(mm));
+            }
+        }
+        for (Object o : Json.list(m, "qa")) {
+            if (o instanceof Map<?, ?> qm) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mm = (Map<String, Object>) qm;
+                g.putQa(themythofcrawl.model.QaItem.fromMap(mm));
             }
         }
         g.setSuspectedRefresh(Json.bool(m, "suspected_refresh", false));

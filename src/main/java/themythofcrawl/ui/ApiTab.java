@@ -1105,6 +1105,11 @@ final class ApiTab {
                 refreshBar();
             }));
             RoleResult curRole = selectedResult();
+            m.add(Ui.item("Hỏi đáp (Q&A / Info)..." + (g.qa().isEmpty() ? "" : "   (đang có " + g.qa().size() + ")"),
+                    t -> Icons.info(t.info.text()), () -> QaDialog.open(ui, g, null)));
+            List<ApiGroup> sameSel = selectedGroups().contains(g) ? selectedGroups() : List.of(g);
+            m.add(Ui.item(sameSel.size() > 1 ? "Cùng 1 API (" + sameSel.size() + " path khác nhau ở ID)..." : "Cùng 1 API: đoạn path này là ID...",
+                    Icons::dup, () -> PathPatternDialog.open(ui, sameSel)));
             m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
                     t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
                             curRole != null && !curRole.original() ? curRole.roleKey() : "", "")));
@@ -1816,8 +1821,8 @@ final class ApiTab {
                 showHeldRequest(null);
                 GroupCluster cl = (GroupCluster) n.payload;
                 int sz = tree.selectedGroups().size();
-                findSendBranch.setText("Gửi Cụm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
-                findSendBranch.setToolTipText("Cụm hiển thị trực quan: " + cl.name() + " (không đổi đường dẫn API)");
+                findSendBranch.setText("Gửi Nhóm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
+                findSendBranch.setToolTipText("Nhóm trực quan: " + cl.name() + " (không đổi đường dẫn API)");
             }
             case HELD_PENDING -> {
                 ProxyInterceptQueue.PendingRequest pr = BranchTree.heldOf(n);
@@ -1911,10 +1916,17 @@ final class ApiTab {
     private void resetRequest() {
         ApiGroup g = currentGroup();
         RoleResult r = selectedResult();
-        if (g != null && r != null) {
+        if (g != null && r != null && r.original() && g.originalEdited()) {
+            if (ui.confirmDialog("Khôi phục request lúc bắt cho " + Text.apiLabel(g.gid())
+                    + "?\nBản đã sửa của tài khoản crawl sẽ bị thay bằng bản lúc bắt.")) {
+                engine.restoreCapturedRequest(g);
+                showResult(r);
+                ui.flash("Đã khôi phục request lúc bắt của " + Text.apiLabel(g.gid()) + ".");
+            }
+        } else if (g != null && r != null) {
             engine.setCustomRequest(g, r, null);
             showResult(r);
-            ui.flash("Đã khôi phục Request ban đầu của " + r.roleName() + ".");
+            ui.flash("Đã khôi phục request ban đầu của " + r.roleName() + ".");
         } else {
             ui.flash("Chọn 1 API và 1 vai trò trước rồi bấm Khôi phục.");
         }
