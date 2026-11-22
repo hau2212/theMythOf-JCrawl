@@ -86,14 +86,15 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: bản thiết kế lại giao diện & kiến trúc hiển thị lên **\`V_7.0_beta\`**. Kế hoạch đầy đủ: \`docs/V7_PLAN.md\`.
+          > Theo \`VERSIONING.md\`: đổi thuật toán lõi (gửi lại theo vai trò, kết luận lỗi phân quyền) -> **\`V_9.2\`**, kênh stable (bản chính thức).
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Cổng chặn Proxy gọn**: chọn lựa chọn nào thì mới hiện cấu hình của lựa chọn đó; giải thích đúng cách chặn đang chọn; phần Thử & luật khác thu gọn; không tràn ngang.
-          2. **Cuộn chuột nhanh** trong mọi cửa sổ và tab.
-          3. **Action Workbench** ghi rõ là màn hình nâng cao của cùng danh sách luật; tab CRUD đổi tên "Danh sách luật (thêm / sửa / xóa)"; form tạo luật chỉ mở khi cần.
-          4. Kế thừa V_7.1_beta (Cổng chặn Proxy, mọi nút có phản hồi) và V_7.0_beta.
+          1. **Gửi lại** (chuột phải API): Tất cả · Chỉ vai trò · Chỉ tài khoản crawl · Chỉ 1 vai trò · Chỉ dòng lỗi / nghi BAC · Chọn vai trò · **Mỗi vai trò 1 bản ghi riêng**.
+          2. **DELETE / PUT cho N vai trò**: mỗi vai trò 1 bản ghi do tài khoản crawl tạo trước (API tạo cùng họ) hoặc 1 ID khác trong Kho ID; tài khoản crawl gửi cuối làm đối chứng; mỗi dòng ghi ID đã dùng và request thật đã gửi.
+          3. **Kết luận BAC ngay trên Cây**: NGHI BAC / VI PHẠM thay cho "OK" xanh; 404 do ID đã dùng hiện "Chưa kết luận".
+          4. **Nhật ký cho Claude**: mọi thao tác, lần gửi, đổi cài đặt, lỗi kèm stack; xuất Markdown đã che token / cookie.
+          5. Kế thừa V_8.2_beta: tab Lỗi (OWASP API Top 10 2023), Kho ID theo họ API, thanh trên thu gọn, tên gọi ngắn, tab Vai trò mới.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

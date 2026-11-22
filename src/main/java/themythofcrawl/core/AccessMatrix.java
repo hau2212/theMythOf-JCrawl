@@ -254,13 +254,20 @@ public final class AccessMatrix {
     }
 
     /** Re-evaluate every role row of one API (right after a send) so the Cây / API colours show the verdict. */
-    public static void refreshBadges(Engine engine, ApiGroup g) {
+    public static void refreshBadges(Engine engine, ApiGroup g, RoleResult changed) {
         byte[] origResp = engine.responseOf(g, g.origResult());
         Set<String> crawled = engine.crawledRoles();
         ExpectedAccess.Rule rule = engine.expectedAccess().match(g.branch());
+        boolean all = changed == null || changed.original();
         for (RoleResult r : g.results()) {
             if (r.status() == null) {
                 r.setAccessBadge(null);
+                continue;
+            }
+            // body similarity only for the row that changed (or every row when the crawl account's response changed);
+            // other 404 / 410 rows are re-checked for "ID đã dùng", which is cheap
+            boolean recheck = all || r == changed || r.status() == 404 || r.status() == 410;
+            if (!recheck) {
                 continue;
             }
             Cell c = evaluate(engine, g, r, r.roleKey(), origResp, crawled, rule);

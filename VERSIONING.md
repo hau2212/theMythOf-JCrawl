@@ -12,6 +12,9 @@ Mọi phiên bản được quản lý tập trung tại file [`version.properti
    - Nếu nâng cấp thuật toán dựa trên bản `2.2` → đặt tên **`V_3.2_beta`** (hoặc `V_3.2`).
    - Nếu nâng cấp thuật toán dựa trên bản `2.3` → đặt tên **`V_3.3_beta`** (hoặc `V_3.3`).
 
+3. **Kênh phát hành** (`channel` trong `version.properties`): `beta` / `alpha` / `rc` = bản thử (GitHub đánh dấu pre-release, tag
+   `V_<MAJOR>.<MINOR>_beta`); `stable` = **bản chính thức** dùng lâu dài (tag `V_<MAJOR>.<MINOR>`, ví dụ `V_9.2`, không pre-release).
+
 ## 2. Nguyên tắc Release Bất Biến (Cấm tuyệt đối sửa bản cũ)
 
 - **Mỗi phiên bản mới phải có Tag mới + GitHub Release mới + File JAR tên riêng** (ví dụ `theMythOf-JCrawl_V_2.2_beta.jar`).

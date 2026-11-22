@@ -1524,12 +1524,23 @@ public final class Engine {
         });
     }
 
-    /** ASCII-only marker value: API#12;role=01_Admin;branch=Toppage>Orders;by=A */
+    /** ASCII-only marker value: API#12;role=01_Admin;branch=Toppage>Orders;bug=API1,API5;by=A (bug = open bug marks). */
     public String markerValue(ApiGroup g, RoleResult r) {
         String role = r == null || r.original() ? CRAWL_ACCOUNT : r.roleKey();
         String branch = java.text.Normalizer.normalize(Text.nz(g.branch()), java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "").replace('đ', 'd').replace('Đ', 'D').replaceAll("\\s*>\\s*", ">");
+        StringBuilder bugs = new StringBuilder();
+        for (themythofcrawl.model.BugMark b : g.bugs()) {
+            if (b.status().open()) {
+                String code = b.type().code.startsWith("API") ? b.type().code.substring(0, b.type().code.indexOf(' ') > 0
+                        ? b.type().code.indexOf(' ') : b.type().code.length()) : b.type().name();
+                if (bugs.indexOf(code) < 0) {
+                    bugs.append(bugs.length() == 0 ? "" : ",").append(code);
+                }
+            }
+        }
         String v = "API#" + g.gid() + ";role=" + role + ";branch=" + branch
+                + (bugs.length() > 0 ? ";bug=" + bugs : "")
                 + ";by=" + inventoryCatalog.memberName();
         return v.replaceAll("[^\\x20-\\x7E]", "").replace("\r", "").replace("\n", "");
     }
@@ -3332,7 +3343,7 @@ public final class Engine {
         }
         try {
             synchronized (g) {
-                themythofcrawl.core.AccessMatrix.refreshBadges(this, g);
+                themythofcrawl.core.AccessMatrix.refreshBadges(this, g, r);
             }
         } catch (RuntimeException ignored) {
             // colours fall back to plain HTTP status

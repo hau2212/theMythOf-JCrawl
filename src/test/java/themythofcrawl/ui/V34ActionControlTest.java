@@ -156,7 +156,7 @@ final class V34ActionControlTest {
         String tag = props.getProperty("releaseTag");
         String ver = props.getProperty("versionName");
         String jar = props.getProperty("jarName");
-        assertTrue(tag != null && tag.matches("V_\\d+\\.\\d+_\\w+"));
+        assertTrue(tag != null && tag.matches("V_\\d+\\.\\d+(_\\w+)?"));
         assertEquals("theMythOf-JCrawl_" + tag + ".jar", jar);
         assertEquals(ver, Extension.VERSION);
         assertEquals(ver, Diagnostics.VERSION);

@@ -104,7 +104,7 @@ final class V22BetaTest {
         String tag = props.getProperty("releaseTag");
         String ver = props.getProperty("versionName");
         String jar = props.getProperty("jarName");
-        assertTrue(tag != null && tag.matches("V_\\d+\\.\\d+_\\w+"), "releaseTag must follow V_<major>.<minor>_<channel> convention");
+        assertTrue(tag != null && tag.matches("V_\\d+\\.\\d+(_\\w+)?"), "releaseTag must follow V_<major>.<minor>_<channel> convention");
         assertEquals("theMythOf-JCrawl_" + tag + ".jar", jar);
         assertEquals(ver, Extension.VERSION);
         assertEquals(ver, Diagnostics.VERSION);

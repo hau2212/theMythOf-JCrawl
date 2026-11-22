@@ -137,8 +137,9 @@ final class V35TreeFirstUxTest {
         String major = props.getProperty("major");
         String minor = props.getProperty("minor");
         String channel = props.getProperty("channel");
-        String expectedVer = major + "." + minor + "-" + channel;
-        String expectedTag = "V_" + major + "." + minor + "_" + channel;
+        boolean stable = "stable".equals(channel);   // official release: V_9.2 / 9.2 (VERSIONING.md 1.3)
+        String expectedVer = major + "." + minor + (stable ? "" : "-" + channel);
+        String expectedTag = "V_" + major + "." + minor + (stable ? "" : "_" + channel);
         assertEquals(expectedTag, props.getProperty("releaseTag"));
         assertEquals(expectedVer, props.getProperty("versionName"));
         assertEquals("theMythOf-JCrawl_" + expectedTag + ".jar", props.getProperty("jarName"));

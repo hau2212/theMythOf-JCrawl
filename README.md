@@ -1,9 +1,59 @@
-# theMythOf-JCrawl (Java / Montoya) - V_8.2_beta
+# theMythOf-JCrawl (Java / Montoya) - V_9.2 (bản chính thức)
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_9.2 (bản chính thức)
+
+Bản dùng lâu dài: gom V_8.2_beta + nâng thuật toán gửi lại theo vai trò và cách kết luận lỗi phân quyền (theo `VERSIONING.md`:
+đổi thuật toán lõi -> tăng MAJOR, 8.2 -> 9.2; kênh `stable`, không còn nhãn beta).
+
+### Gửi lại theo vai trò (chuột phải API trên Cây / API -> **Gửi lại**)
+
+| Mục | Gửi những dòng nào |
+|---|---|
+| Tất cả | tài khoản crawl + mọi vai trò đang bật |
+| Chỉ vai trò | mọi vai trò (như nút Gửi) |
+| Chỉ tài khoản crawl | chỉ request gốc |
+| Chỉ &lt;vai trò&gt; | đúng vai trò đang chọn trên Cây |
+| Chỉ dòng lỗi / nghi BAC | dòng 4xx / 5xx / lệch / NGHI BAC để kiểm tra lại |
+| Chọn vai trò... | hộp chọn vai trò (như trước) |
+| **Mỗi vai trò 1 bản ghi riêng** | DELETE / PUT / PATCH / POST cho N vai trò, mỗi vai trò 1 ID khác nhau |
+
+### DELETE gửi cho 10 vai trò: làm sao cả 10 lần đều có kết quả thật?
+
+Gửi cùng 1 ID thì vai trò đầu tiên xóa mất bản ghi, 9 vai trò sau chỉ nhận 404 - trông như "bị chặn đúng" nhưng thật ra server
+chưa hề kiểm tra quyền (dễ bỏ sót BOLA). **Mỗi vai trò 1 bản ghi** làm như sau:
+
+1. Tìm API tạo **cùng họ API** (vd `POST /api/orders` cho `DELETE /api/orders/{id}`); có thì **tài khoản crawl tạo trước** 1 bản ghi
+   cho mỗi vai trò (bản ghi thuộc tài khoản crawl = nạn nhân), lấy ID từ response 2xx.
+2. Không có API tạo: lấy các ID **khác nhau** còn dùng được trong **Kho ID** cùng họ API.
+3. Gửi DELETE của từng vai trò với ID riêng; **tài khoản crawl gửi cuối** với bản ghi riêng làm dòng đối chứng (mong đợi 2xx).
+4. Mỗi dòng ghi lại **ID đã dùng** (cột *Ghi chú* bảng API, chip trên Cây) và **request thật đã gửi** (khung Request hiện đúng
+   request ra response đó; HAR / Repeater cũng dùng request này).
+
+Chế độ **Tự động / Đổi ID / Tạo trước** (Luật chặn -> Chế độ, hoặc Bảo vệ dữ liệu câu 2) dùng đúng cách này mỗi khi gửi nhiều vai trò
+cùng lúc. Chế độ **Tắt** gửi y nguyên; dòng 404 / 410 do ID đã bị dòng khác dùng sẽ hiện **"Chưa kết luận: ID đã dùng"** thay vì "bị chặn".
+
+### Kết luận lỗi phân quyền ngay trên Cây
+
+Trước đây vai trò thấp gọi được API admin vẫn hiện xanh "OK: Thành công". Nay dòng vai trò hiện kết luận của tab Phân quyền:
+**NGHI BAC** (vai trò không thấy chức năng khi crawl mà vẫn gọi được, nội dung giống tài khoản crawl), **VI PHẠM** (trái Quyền mong đợi),
+**Chưa kết luận: ID đã dùng**. Dòng nghi BAC -> chuột phải -> *Đánh dấu lỗi...* để đưa vào tab Lỗi.
+
+### Nhật ký cho Claude (Menu / Tùy chọn / Cài đặt mục 8)
+
+Mọi thao tác được ghi theo thứ tự: bấm nút, chọn menu, đổi tab, đổi cài đặt (giá trị trước -> sau), từng lần gửi (API, vai trò, status,
+ID đã dùng, chế độ), thông báo của app, lỗi kèm stack trace. **Nhật ký cho Claude** tạo 1 file Markdown gồm Môi trường, Trạng thái
+hiện tại, Lỗi gần đây, Dòng thời gian - Copy hoặc Lưu .md rồi gửi cho Claude để nhờ phân tích. Token, cookie, JWT, mật khẩu, tham số
+`token=` đều bị che **trước khi** ghi; không có body request / response. File `activity.jsonl` được ghi vào thư mục workspace khi đóng /
+đổi workspace hoặc khi mở Nhật ký.
+
+### Logger++ / server quản lý test case
+
+Header đánh dấu `X-JCrawl-Ref` có thêm `bug=API1,API5` khi API có lỗi đang mở (mã OWASP API Top 10 2023), để server gắn test case.
 
 ## Điểm mới V_8.2_beta
 
