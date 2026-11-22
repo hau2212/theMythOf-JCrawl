@@ -61,7 +61,7 @@ final class LoggerPushDialog {
             Engine.LoggerPushOptions opt = new Engine.LoggerPushOptions(only2xx.isSelected(), actions.isSelected(),
                     roles.isSelected(), marker.isSelected(), ((Number) delay.getValue()).longValue());
             engine.pushToLogger(groups, opt, null);
-            ui.flash("Đang đẩy " + groups.size() + " API sang Logger++ (xem kết quả ở tab Log)");
+            ui.flash("Đang đẩy " + groups.size() + " API sang Logger++ (xem kết quả ở Cài đặt > Hoạt động)");
         } else if (choice == 1) {
             File f = ui.save("JCrawl_apis.har", "HAR", "har");
             if (f == null) {

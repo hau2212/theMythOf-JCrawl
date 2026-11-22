@@ -189,8 +189,8 @@ final class RolesTab {
                 "Quản lý vai trò, Ping Session, So sánh 2 vai trò, Bật/Tắt phạm vi, Import/Export",
                 () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
         moreRef[0] = more;
-        JButton pingBtn = Ui.secondaryBtn("Ping", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
-        pingBtn.setToolTipText("Ping kiểm tra Session còn sống (200 LIVE) hay hết hạn (401 DEAD) trên tất cả vai trò đang bật");
+        JButton pingBtn = Ui.secondaryBtn("Kiểm tra phiên", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
+        pingBtn.setToolTipText("Gửi thử 1 request bằng mỗi vai trò đang bật: phiên còn dùng được (2xx) hay đã hết hạn (401)");
         JButton diffBtn = Ui.secondaryBtn("So sánh", Icons::compare, this::compareRolesDialog);
         diffBtn.setToolTipText("So sánh trực tiếp bảng Header/Cookie giữa 2 vai trò bất kỳ");
 
@@ -1063,13 +1063,13 @@ final class RolesTab {
                 setFont(th.smallBoldFont);
                 setHorizontalAlignment(CENTER);
                 if (!sel) {
-                    if (s.contains("LIVE")) {
+                    if (s.startsWith("Còn hạn")) {
                         setBackground(th.success.fill());
                         setForeground(th.success.text());
-                    } else if (s.contains("DEAD") || s.contains("ERR")) {
+                    } else if (s.startsWith("Hết hạn") || s.startsWith("Lỗi")) {
                         setBackground(th.danger.fill());
                         setForeground(th.danger.text());
-                    } else if (s.contains("DENY")) {
+                    } else if (s.startsWith("Bị chặn")) {
                         setBackground(th.warning.fill());
                         setForeground(th.warning.text());
                     } else {

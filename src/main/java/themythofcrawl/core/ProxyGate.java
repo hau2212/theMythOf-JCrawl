@@ -115,7 +115,7 @@ public final class ProxyGate {
         /** "Chặn POST/PUT/PATCH/DELETE tới api.shop.vn/api/orders/* -> Hỏi tôi trước". */
         public String sentence() {
             if (!on) {
-                return "Cổng chặn đang TẮT — mọi request đi thẳng lên Server như bình thường.";
+                return "Chặn đang tắt: mọi request đi thẳng lên server như bình thường.";
             }
             String ms = methods.isEmpty() ? "mọi method" : String.join("/", ordered(methods));
             String where = switch (scope) {

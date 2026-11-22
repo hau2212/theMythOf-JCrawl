@@ -80,7 +80,7 @@ final class DataProtectionDialog {
         banner.add(migrate, BorderLayout.EAST);
 
         // ---------------------------------------------------------------- question 1 = Cổng chặn Proxy
-        JPanel q1 = section("1. Khi trình duyệt gửi request: chặn hay cho đi?");
+        JPanel q1 = section("Khi crawl: request từ trình duyệt bị chặn hay cho đi?");
         JLabel gateLine = Ui.bold(" ");
         JButton openGate = Ui.solidPrimary("Thiết lập chặn (host / path / method / cách chặn)...",
                 t -> Icons.strategyShield(t.accent.onSolid(), 12));
@@ -140,7 +140,7 @@ final class DataProtectionDialog {
         testSec.add(tResult, BorderLayout.SOUTH);
 
         // ---------------------------------------------------------------- question 2
-        JPanel q2 = section("2. Khi GỬI LẠI theo vai trò mà ID trong request đã bị xóa / dùng hết:");
+        JPanel q2 = section("Khi gửi lại: ID trong request đã bị xóa / đã dùng thì làm gì?");
         JComboBox<DataProtection.Resend> defResend = new JComboBox<>(DataProtection.Resend.values());
         defResend.setSelectedItem(DataProtection.Resend.of(engine.config().actionMode));
         defResend.addActionListener(Ui.safe(e -> {
@@ -169,7 +169,7 @@ final class DataProtectionDialog {
         JPanel q2rows = new JPanel(new GridLayout(0, 1, 0, 4));
         q2rows.setOpaque(false);
         q2rows.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Mặc định cho mọi API:"), defResend,
-                Ui.muted("Tự động = giữ kết quả 2xx, gặp 4xx thì thử thay ID còn sống hoặc tạo bản ghi mới.")));
+                Ui.muted("Gửi nhiều vai trò: Tự động / Đổi ID / Tạo trước cho mỗi vai trò 1 bản ghi riêng.")));
         if (focus != null) {
             JComboBox<DataProtection.Resend> apiResend = new JComboBox<>(DataProtection.Resend.values());
             apiResend.setSelectedItem(DataProtection.Resend.of(engine.effectiveActionMode(focus)));

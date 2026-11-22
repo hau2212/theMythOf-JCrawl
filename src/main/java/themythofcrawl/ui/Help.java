@@ -18,7 +18,7 @@ public final class Help {
             + "• API mới chờ xác nhận vị trí (màu xám).\n"
             + "• API đã xóa quay lại chỗ cũ (kể cả khi path cũ đã bị xóa).\n"
             + "• API trùng gặp ở chỗ mới (chấm / nhãn tím): giữ thêm ở chỗ mới hay ẩn đi.\n\n"
-            + "Chi tiết, thẻ giải thích và các nút xử lý nằm ở tab Audit > Cần xử lý.";
+            + "Chi tiết, thẻ giải thích và các nút xử lý nằm ở tab Cần xử lý.";
     public static final String COLORS = "Màu ngữ nghĩa & chip lọc của API:\n\n"
             + "• Xanh lá: OK (mọi vai trò đều hợp lệ / 2xx)\n"
             + "• Vàng / hổ phách: INFO (có vai trò bị chặn 401/403 hoặc lệch trạng thái)\n"

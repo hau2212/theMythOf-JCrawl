@@ -209,17 +209,17 @@ final class SettingsTab {
         copyFormat.putClientProperty("JTextField.placeholderText", "{stt}. {path}");
         regexError.setFont(Theme.current().smallBoldFont);
 
-        sections.add(section("1.  Bắt API từ Proxy", t -> t.info,
+        sections.add(section("Bắt API", t -> t.info,
                 "Request qua Proxy được bắt và nhân bản theo vai trò. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
                 row(scope), pair(ignoreStatic, staticExt), pair(regexOn, regex), pair(null, regexError), row(options)));
-        sections.add(section("2.  Chống trùng lặp, vị trí & API REFRESH", t -> t.dup,
+        sections.add(section("Trùng lặp & vị trí", t -> t.dup,
                 "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại / API REFRESH được xử lý.",
                 row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts),
                 field("Chính sách API [REFRESH]:", refreshPolicyBox, null),
                 row(autoDetectRefreshChk),
                 pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
                         Ui.muted("Danh mục Tag & hành vi M1-M4"))));
-        sections.add(section("3.  Gửi request & chống lỗi 429", t -> t.success,
+        sections.add(section("Gửi request", t -> t.success,
                 "Hàng đợi theo host chống 429 / 503; chế độ cho API thao tác (POST / PUT / PATCH / DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
                 field("Dao động (%):", jitter, Ui.muted("nghỉ = khoảng nghỉ +/- %")),
@@ -237,13 +237,13 @@ final class SettingsTab {
                                     ui.syncHeader();
                                 })),
                         Ui.muted("Chế độ, Luật, Kiểm tra, Kho ID"))));
-        sections.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
+        sections.add(section("File Excel đầu vào", t -> t.pink,
                 "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} {session} [id] (id) <id> :id * là giá trị động.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
                 row(targetPrefix), row(targetIds), field("Query trong Excel:", queryMode, null)));
-        sections.add(section("5.  Burp Repeater & tên tab", t -> t.critical, "Cách đặt tên tab khi đẩy sang Burp Repeater.",
+        sections.add(section("Repeater", t -> t.critical, "Cách đặt tên tab khi đẩy sang Burp Repeater.",
                 row(number), row(branchInTab), field("Độ dài tối đa path:", pathLen, null)));
-        sections.add(section("6.  Copy STT + Path (server / báo cáo)", t -> t.teal,
+        sections.add(section("Copy STT + path", t -> t.teal,
                 "Mẫu dùng được {stt} {path} {method} {endpoint} {url} {api}.",
                 field("Mẫu copy:", copyFormat, Ui.muted("mặc định: {stt}. {path}")),
                 field("Khi không có STT Excel:", copyFallback, copyCounter),
@@ -253,7 +253,7 @@ final class SettingsTab {
                         load();
                     }
                 }), new JLabel(" ")), row(positionCopy)));
-        sections.add(section("7.  Workspace (lưu dữ liệu)", t -> t.slate, Help.WORKSPACE.split("\n")[0],
+        sections.add(section("Workspace", t -> t.slate, Help.WORKSPACE.split("\n")[0],
                 pair(Ui.button("Mở thư mục", t -> Icons.folder(t.fg), () -> {
                     try {
                         java.awt.Desktop.getDesktop().open(new java.io.File(engine.workspaceLocation()));
@@ -267,7 +267,7 @@ final class SettingsTab {
         displayModeBox.setToolTipText("Chuyển đổi 3 chế độ thanh công cụ: Chỉ Icon (+ Thẻ mô tả khi rê chuột), Icon + Chữ, hoặc Chỉ Chữ");
         fontScaleBox.setToolTipText("Đổi cỡ chữ toàn bộ giao diện theMythOf-JCrawl (90% / 100% / 110% / 115% / 120%)");
         animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
-        sections.add(section("8.  Giao diện & Font", t -> t.info,
+        sections.add(section("Giao diện", t -> t.info,
                 "Phông chữ, kiểu nút, cỡ chữ. Phần \"Thông tin\" bên dưới chỉ để xem: màu và sáng / tối lấy theo Burp. Rê chuột để xem chi tiết.",
                 field("Kiểu nút:", displayModeBox, Ui.muted("icon / icon + chữ / chữ")),
                 field("Font giao diện:", uiFontBox, Ui.muted("Be Vietnam Pro / IBM Plex")),

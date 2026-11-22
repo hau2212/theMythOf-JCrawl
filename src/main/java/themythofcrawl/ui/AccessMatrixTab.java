@@ -89,12 +89,12 @@ final class AccessMatrixTab {
         for (AccessMatrix.Verdict v : new AccessMatrix.Verdict[] {AccessMatrix.Verdict.SEEN_OK, AccessMatrix.Verdict.DENIED_OK,
             AccessMatrix.Verdict.BAC, AccessMatrix.Verdict.VIOLATION, AccessMatrix.Verdict.DIFF, AccessMatrix.Verdict.SEEN_DENIED,
             AccessMatrix.Verdict.UNKNOWN_OK}) {
-            JLabel l = new JLabel(" " + v.shortLabel + " = " + v.label + " ");
+            JLabel l = new JLabel(" " + v.shortLabel + " ");
             l.setOpaque(true);
             Theme th = Theme.current();
             l.setBackground(th.audit(v.level).fill());
             l.setForeground(th.audit(v.level).text());
-            l.setToolTipText(v.explain);
+            l.setToolTipText(v.label + ": " + v.explain);
             legend.add(l);
         }
         JPanel north = new JPanel(new BorderLayout());

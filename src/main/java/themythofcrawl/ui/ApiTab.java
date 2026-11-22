@@ -188,7 +188,7 @@ final class ApiTab {
         TreeColumns.enable(tree.tree);
         treeScroll = MainPanel.scroll(tree.tree);
         leftTabs.addTab("Cây nhánh", treeScroll);
-        leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
+        leftTabs.addTab("Danh sách nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
         JPanel left = new JPanel(new BorderLayout(0, 0));
         left.add(leftTabs, BorderLayout.CENTER);
@@ -884,7 +884,7 @@ final class ApiTab {
                 "Ctrl+Enter", t -> Icons.send(t.critical.text()), t -> t.critical, null));
         findSendBranch = Ui.button("Gửi Nhánh", t -> Icons.sendAll(t.fg), this::sendBranchSelection);
         JButton[] sendRef = new JButton[1];
-        JButton sendMenu = Ui.dropdown("Tùy chọn Gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg),
+        JButton sendMenu = Ui.dropdown("Tùy chọn gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg),
                 "Tùy chọn gửi request, chọn vai trò, gửi chưa gửi, hủy hàng đợi (Ctrl+Enter)",
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
@@ -1170,27 +1170,27 @@ final class ApiTab {
         filterAll.setToolTipText("Hiển thị tất cả API (bỏ lọc trạng thái)");
         filterAll.onClick(this::clearAuditFilters);
 
-        registerFilterPill(AuditLevel.OK, "OK", "Lọc API: Tất cả vai trò 2xx (OK)", t -> t.success, t -> Icons.check(t.success.text(), 11));
-        registerFilterPill(AuditLevel.INFO, "Lệch", "Lọc API: Có vai trò lỗi / lệch body", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 11));
-        registerFilterPill(AuditLevel.WARN, "Bypass", "Lọc API: Nghi vấn Bypass (Guest 2xx)", t -> t.critical, t -> Icons.warn(t.critical.text(), 11));
-        registerFilterPill(AuditLevel.ERROR, "Lỗi", "Lọc API: Có lỗi 5xx / Mất kết nối", t -> t.danger, t -> Icons.error(t.danger.text(), 11));
-        registerFilterPill(AuditLevel.NONE, "Chưa gửi", "Lọc API: Chưa gửi / chưa replay", t -> t.neutral, t -> Icons.statusDot(t.dotNone, 9));
-        registerFilterPill(AuditLevel.PENDING, "Chờ XN", "Lọc API: Chờ xác nhận vị trí / trùng", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 10));
+        registerFilterPill(AuditLevel.OK, "Đúng hết", "API mà mọi vai trò cho kết quả đúng mong đợi", t -> t.success, t -> Icons.check(t.success.text(), 11));
+        registerFilterPill(AuditLevel.INFO, "Cần xem", "API có vai trò lỗi, bị chặn hoặc nội dung khác nhau", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 11));
+        registerFilterPill(AuditLevel.WARN, "Nghi BAC", "API có vai trò nghi lỗi phân quyền", t -> t.critical, t -> Icons.warn(t.critical.text(), 11));
+        registerFilterPill(AuditLevel.ERROR, "Lỗi", "API có lỗi server 5xx hoặc lỗi kết nối", t -> t.danger, t -> Icons.error(t.danger.text(), 11));
+        registerFilterPill(AuditLevel.NONE, "Chưa gửi", "API chưa gửi bằng vai trò nào", t -> t.neutral, t -> Icons.statusDot(t.dotNone, 9));
+        registerFilterPill(AuditLevel.PENDING, "Chờ xác nhận", "API chờ xác nhận chỗ trên Cây", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 10));
     }
 
     private JPopupMenu filterPopupMenu() {
         JPopupMenu m = new JPopupMenu();
-        javax.swing.JCheckBoxMenuItem allItem = new javax.swing.JCheckBoxMenuItem("Hiển thị Tất cả trạng thái (Bỏ lọc)", activeFilters.isEmpty());
+        javax.swing.JCheckBoxMenuItem allItem = new javax.swing.JCheckBoxMenuItem("Tất cả (bỏ lọc)", activeFilters.isEmpty());
         allItem.addActionListener(Ui.safe(e -> clearAuditFilters()));
         m.add(allItem);
         m.addSeparator();
         Object[][] defs = {
-                {AuditLevel.NONE, "Chưa gửi (Chưa replay)"},
-                {AuditLevel.OK, "OK (Tất cả vai trò 2xx)"},
-                {AuditLevel.INFO, "Lệch (Có vai trò lỗi / lệch body)"},
-                {AuditLevel.WARN, "Bypass (Nghi vấn Guest/vai trò thấp 2xx)"},
-                {AuditLevel.ERROR, "Lỗi (5xx / Mất kết nối)"},
-                {AuditLevel.PENDING, "Chờ XN (Chờ xác nhận vị trí / trùng)"}
+                {AuditLevel.NONE, "Chưa gửi"},
+                {AuditLevel.OK, "Đúng hết"},
+                {AuditLevel.INFO, "Cần xem"},
+                {AuditLevel.WARN, "Nghi BAC"},
+                {AuditLevel.ERROR, "Lỗi"},
+                {AuditLevel.PENDING, "Chờ xác nhận"}
         };
         for (Object[] d : defs) {
             AuditLevel lvl = (AuditLevel) d[0];

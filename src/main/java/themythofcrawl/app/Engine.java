@@ -4361,21 +4361,21 @@ public final class Engine {
 
         public String badge() {
             if (error != null && !error.isBlank()) {
-                return "ERR";
+                return "Lỗi kết nối";
             }
             if (status == null) {
-                return "ERR";
+                return "Lỗi kết nối";
             }
             if (status >= 200 && status < 400) {
-                return status + " LIVE";
+                return "Còn hạn " + status;
             }
             if (status == 401) {
-                return "401 DEAD";
+                return "Hết hạn 401";
             }
             if (status == 403) {
-                return "403 DENY";
+                return "Bị chặn 403";
             }
-            return String.valueOf(status);
+            return "Mã " + status;
         }
     }
 

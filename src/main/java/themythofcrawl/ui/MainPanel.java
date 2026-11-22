@@ -1338,7 +1338,7 @@ public final class MainPanel {
             }));
         }
         if (st.hidden() > 0) {
-            m.add(Ui.item("API trùng đang ẩn: " + st.hidden() + "  (mở Audit > Trùng & ẩn)", t -> Icons.hide(t.muted, 12),
+            m.add(Ui.item("API trùng đang ẩn: " + st.hidden() + "  (mở Cần xử lý > Lần bắt trùng)", t -> Icons.hide(t.muted, 12),
                     () -> showAudit(2)));
         }
         int sk = engine.skippedCount();

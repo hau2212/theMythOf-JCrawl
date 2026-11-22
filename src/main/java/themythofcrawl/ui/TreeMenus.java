@@ -248,7 +248,7 @@ final class TreeMenus {
                 m.add(Ui.item("Các lần bắt...", Icons::dup, () -> ui.openLineage(g, c, x, y)));
                 m.add(Ui.item("Lịch sử vị trí của API này", Icons::compass, () -> ui.showPlaceOf(g.bookKey())));
             }
-            case GHOSTS -> m.add(Ui.item("Xem các API đã xóa trong tab Audit > Giữ chỗ", Icons::compass, () -> {
+            case GHOSTS -> m.add(Ui.item("Xem API đã xóa trong Cần xử lý > Giữ chỗ", Icons::compass, () -> {
                 ui.showPlaceOf(null);
                 ui.audit.placeView(2);
             }));

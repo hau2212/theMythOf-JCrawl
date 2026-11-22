@@ -99,7 +99,7 @@ final class BugsTab {
         Ui.widths(table, 56, 64, 300, 150, 130, 96, 104, 110, 260, 60, 110);
         Ui.onDoubleClick(table, this::openSelected);
         panel.add(MainPanel.scroll(table), BorderLayout.CENTER);
-        panel.add(Ui.muted("Đánh dấu lỗi: chuột phải 1 API ở tab Cây / API, hoặc nút \"Đánh dấu lỗi\" ở tab Ma trận vai trò."
+        panel.add(Ui.muted("Đánh dấu lỗi: chuột phải 1 API ở tab Cây / API, hoặc nút \"Đánh dấu lỗi\" ở tab Phân quyền."
                 + " Nhấp đúp 1 dòng để mở API."), BorderLayout.SOUTH);
     }
 
