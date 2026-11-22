@@ -130,11 +130,49 @@ public final class Workspaces {
                 }
             }
             String parent = Json.str(m, "parent", "");
+            Path parentPath = parent.isBlank() ? null : Paths.get(parent);
+            if (parentPath != null && !Files.isRegularFile(parentPath.resolve(FileStorage.META)) && parentPath.getFileName() != null
+                    && dir.toAbsolutePath().getParent() != null) {
+                // V_11.0: the project folder was moved (e.g. into OneDrive): the parent is the sibling with the same name
+                Path sib = dir.toAbsolutePath().getParent().resolve(parentPath.getFileName().toString());
+                if (Files.isRegularFile(sib.resolve(FileStorage.META))) {
+                    parentPath = sib;
+                }
+            }
             return new Info(dir, Json.str(m, "project", dir.getParent().getFileName().toString()),
                     Json.str(m, "name", dir.getFileName().toString()), Json.str(m, "created", ""), apis,
-                    parent.isBlank() ? null : Paths.get(parent), Json.str(m, "account", ""));
+                    parentPath, Json.str(m, "account", ""));
         } catch (IOException | RuntimeException e) {
             return null;
+        }
+    }
+
+    /** V_11.0: one value of a workspace's meta file (letter, project id...), or "". */
+    public static String metaValue(Path dir, String key) {
+        try {
+            Path meta = dir.resolve(FileStorage.META);
+            if (!Files.isRegularFile(meta)) {
+                return "";
+            }
+            return Json.str(Json.parseObject(Files.readString(meta, StandardCharsets.UTF_8)), key, "");
+        } catch (IOException | RuntimeException e) {
+            return "";
+        }
+    }
+
+    public static void setMeta(Path dir, String key, String value) {
+        Path meta = dir.resolve(FileStorage.META);
+        try {
+            Map<String, Object> m = Files.isRegularFile(meta)
+                    ? new LinkedHashMap<>(Json.parseObject(Files.readString(meta, StandardCharsets.UTF_8))) : new LinkedHashMap<>();
+            if (value == null) {
+                m.remove(key);
+            } else {
+                m.put(key, value);
+            }
+            FileStorage.writeAtomic(meta, Json.pretty(m).getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

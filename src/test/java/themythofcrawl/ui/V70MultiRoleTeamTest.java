@@ -41,11 +41,11 @@ import themythofcrawl.rolereq.RoleRules;
  * HAR export, shared-folder team sync, team workbook merge, Bảo vệ dữ liệu migration and the Cây
  * tree-table column alignment.
  */
-class V70MultiRoleTeamTest {
+public class V70MultiRoleTeamTest {
     static final Service SVC = new Service("shop.test", 443, true);
 
     /** Server: /api/admin/users answers the same list to Admin AND User (a BAC bug); Guest gets 401. */
-    static final class Server implements Bridge {
+    public static final class Server implements Bridge {
         final List<String> sent = new CopyOnWriteArrayList<>();
 
         @Override public boolean inScope(String url) { return true; }
