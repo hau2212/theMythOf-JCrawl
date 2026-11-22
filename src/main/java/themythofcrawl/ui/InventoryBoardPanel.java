@@ -50,7 +50,7 @@ final class InventoryBoardPanel extends JPanel {
     private final List<Pill> contextPills = new ArrayList<>();
     private ViewContext activeContext = ViewContext.TIMELINE;
     private final JComboBox<String> statusCombo = new JComboBox<>(new String[] {
-            "Mọi trạng thái", "Done (Xanh)", "Info (Vàng)", "Missing (Đỏ)", "OOS (Xám)", "Conflict (Cam)", "Doing (Xanh dương)"
+            "Mọi trạng thái", "Đã bắt", "Cần xem", "Chưa bắt", "Ngoài phạm vi", "Xung đột", "Đang làm"
     });
     private final JComboBox<String> tagCombo = new JComboBox<>();
     private final JTextField searchField = new JTextField(18);
@@ -99,7 +99,7 @@ final class InventoryBoardPanel extends JPanel {
                 t -> Icons.arrowRight(t.accent.text()), t -> t.accent, () -> jumpSelected(false));
         jumpBtn.setToolTipText("Chuyển sang Tab Cây và mở đúng Nhánh/API đang chọn");
 
-        JButton focusBranchBtn = Ui.secondaryBtn("Focus Nhánh",
+        JButton focusBranchBtn = Ui.secondaryBtn("Tập trung nhánh",
                 t -> Icons.focus(t.accent.text(), 13), () -> jumpSelected(true));
         focusBranchBtn.setToolTipText("Mở Tab Cây và bật Tập trung (kèm nhánh con) vào đúng nhánh chứa API này");
 
@@ -232,7 +232,7 @@ final class InventoryBoardPanel extends JPanel {
             model.addRow(new Object[] {
                     r.stt(),
                     r.groupBucket(),
-                    r.statusDisplay(),
+                    r.status().vi + r.statusDisplay().substring(Math.min(r.statusDisplay().length(), r.status().shortLabel.length())),
                     r.method(),
                     r.host(),
                     r.path(),

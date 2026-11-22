@@ -278,7 +278,7 @@ final class AuditTab {
         p.add(Ui.flow(FlowLayout.LEFT, keep,
                 Ui.button("Chuyển sang chỗ mới", Icons::move, () -> decide("found")),
                 Ui.button("Chọn hết", Icons::check, decideTable::selectAll),
-                Ui.button("Nhãn & Tự tải lại...", Icons::tag, ui::openTagManager),
+                Ui.button("Tag...", Icons::tag, ui::openTagManager),
                 moreDecide), BorderLayout.NORTH);
         p.add(split, BorderLayout.CENTER);
         explain();

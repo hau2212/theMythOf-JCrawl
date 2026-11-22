@@ -43,19 +43,23 @@ public final class InventoryCatalog {
             DateTimeFormatter.ofPattern("HH:mm:ss dd/MM").withZone(ZoneId.systemDefault());
 
     public enum ItemStatus {
-        DONE("Done", "Tìm thấy & gọi thành công (2xx)", Xlsx.CellTone.DONE_GREEN),
-        INFO("Info", "Tìm thấy nhưng gọi lỗi (4xx/5xx/Timeout) hoặc cần xem lại", Xlsx.CellTone.INFO_YELLOW),
-        MISSING("Missing", "Có trong danh sách Excel nhưng chưa tìm ra", Xlsx.CellTone.MISSING_RED),
-        OOS("OOS", "Out of Scope — ngoài phạm vi kiểm thử", Xlsx.CellTone.OOS_GRAY),
-        CONFLICT("Conflict", "Xung đột giữa 2 thành viên — cần chọn bản chuẩn", Xlsx.CellTone.CONFLICT_ORANGE),
-        DOING("Doing", "Đang thực hiện / Đang giữ tại Proxy", Xlsx.CellTone.DOING_BLUE);
+        // shortLabel = shared code written to Excel / Google Sheets / team files (kept in English for compatibility);
+        // vi = what the app shows (V_9.3)
+        DONE("Done", "Đã bắt", "Tìm thấy & gọi được (2xx)", Xlsx.CellTone.DONE_GREEN),
+        INFO("Info", "Cần xem", "Tìm thấy nhưng gọi lỗi (4xx / 5xx / lỗi kết nối) hoặc cần xem lại", Xlsx.CellTone.INFO_YELLOW),
+        MISSING("Missing", "Chưa bắt", "Có trong file Excel nhưng chưa bắt được", Xlsx.CellTone.MISSING_RED),
+        OOS("OOS", "Ngoài phạm vi", "Ngoài phạm vi kiểm thử", Xlsx.CellTone.OOS_GRAY),
+        CONFLICT("Conflict", "Xung đột", "Hai thành viên ghi khác nhau: cần chọn bản đúng", Xlsx.CellTone.CONFLICT_ORANGE),
+        DOING("Doing", "Đang làm", "Đang làm / đang giữ ở Burp", Xlsx.CellTone.DOING_BLUE);
 
+        public final String vi;
         public final String shortLabel;
         public final String description;
         public final Xlsx.CellTone xlsxTone;
 
-        ItemStatus(String shortLabel, String description, Xlsx.CellTone xlsxTone) {
+        ItemStatus(String shortLabel, String vi, String description, Xlsx.CellTone xlsxTone) {
             this.shortLabel = shortLabel;
+            this.vi = vi;
             this.description = description;
             this.xlsxTone = xlsxTone;
         }
@@ -96,13 +100,13 @@ public final class InventoryCatalog {
 
     /** 7 analytical synthesis contexts usable even when NO Excel file is loaded. */
     public enum ViewContext {
-        TIMELINE("1. Thứ tự Crawl", "Sắp xếp theo đúng trình tự thời gian crawl được"),
-        PATH_TEMPLATE("2. Mẫu Path {id}", "Gom các URL giống nhau chỉ khác ID/UUID thành mẫu /orders/{id}"),
-        CRUD_RESOURCE("3. Nhóm CRUD", "Gom các API cùng tài nguyên (GET/POST/PUT/PATCH/DELETE) & chỉ ra thiếu gì"),
-        BRANCH_SCREEN("4. Nhánh / Màn hình", "Gom theo vị trí nhánh cây UI tìm thấy & đánh dấu Shared API"),
-        HOST_PREFIX("5. Host / Tiền tố", "Gom theo Domain & nhóm prefix API (/api/v1/...)"),
-        STATUS_AUDIT("6. Trạng thái & Lỗi", "Gom theo Done / Info / OOS / Missing / Conflict / Rủi ro"),
-        OWNER_CONFLICT("7. Thành viên & Conflict", "Gom theo người tìm (A, B...) và các mục đang xung đột");
+        TIMELINE("Thứ tự crawl", "Theo đúng thứ tự thời gian crawl"),
+        PATH_TEMPLATE("Mẫu path", "Gom URL chỉ khác ID / UUID thành mẫu /orders/{id}"),
+        CRUD_RESOURCE("Nhóm CRUD", "Gom API cùng tài nguyên (GET / POST / PUT / PATCH / DELETE) và chỉ ra thiếu gì"),
+        BRANCH_SCREEN("Nhánh", "Gom theo nhánh trên Cây, đánh dấu API dùng chung"),
+        HOST_PREFIX("Host", "Gom theo domain và tiền tố API (/api/v1/...)"),
+        STATUS_AUDIT("Trạng thái", "Gom theo Đã bắt / Cần xem / Ngoài phạm vi / Chưa bắt / Xung đột"),
+        OWNER_CONFLICT("Thành viên", "Gom theo người tìm (A, B...) và các mục xung đột");
 
         public final String label;
         public final String description;

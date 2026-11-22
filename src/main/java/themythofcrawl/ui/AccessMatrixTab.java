@@ -47,7 +47,7 @@ final class AccessMatrixTab {
     private final Engine engine;
     private final MatrixModel model = new MatrixModel();
     final JTable table = new ThemedTable(model);
-    private final JCheckBox onlyFindings = new JCheckBox("Chỉ hiện NGHI BAC / Vi phạm");
+    private final JCheckBox onlyFindings = new JCheckBox("Chỉ hiện Nghi BAC / Vi phạm");
     private final JLabel summary = Ui.muted(" ");
     private final JLabel explain = new JLabel(" ");
     private AccessMatrix matrix;
@@ -191,7 +191,7 @@ final class AccessMatrixTab {
         Set<String> crawled = matrix.crawledRoles();
         summary.setText(matrix.rows().size() + " API · " + matrix.roles().size() + " Vai trò · Đã crawl bằng: "
                 + (crawled.isEmpty() ? "(chưa có)" : String.join(", ", crawled))
-                + " · NGHI BAC: " + bac + " · Vi phạm quyền mong đợi: " + vio
+                + " · Nghi BAC: " + bac + " · Vi phạm: " + vio
                 + " · " + engine.expectedAccess().rules().size() + " luật quyền mong đợi");
     }
 

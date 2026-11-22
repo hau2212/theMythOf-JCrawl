@@ -331,7 +331,7 @@ public final class Decisions {
     public record Row<T>(T payload, AuditLevel level, List<Object> cells) {
     }
 
-    public static final List<String> DECIDE_COLS = List.of("Loại xử lý", "API", "Endpoint", "Đang đặt tại", "Đích lúc bắt");
+    public static final List<String> DECIDE_COLS = List.of("Loại xử lý", "API", "Endpoint", "Đang đặt tại", "Nhánh lúc bắt");
     public static final List<String> DUP_COLS = List.of("Endpoint", "Bản", "Vai trò", "Mã API", "Vị trí trong cây", "Trạng thái", "Nhãn", "STT / Excel", "Bắt lúc");
     public static final List<String> PLACE_COLS = List.of("Method", "Path", "Host", "Vị trí giữ chỗ", "API hiện tại",
             "Trạng thái", "Đã xóa (lần)", "Lần gặp", "Bỏ qua do trùng", "Gặp lần cuối", "Gặp lần cuối tại (đích lúc đó)",

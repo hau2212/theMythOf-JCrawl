@@ -57,7 +57,7 @@ final class ExcelTab {
     final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final MainPanel ui;
     private final Engine engine;
-    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt trong DS");
+    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong file");
     private final List<Pill> filterPills = new ArrayList<>();
     private int filterIndex;
     private final JButton clear;
