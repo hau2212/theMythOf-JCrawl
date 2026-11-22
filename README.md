@@ -34,11 +34,15 @@ Theo `VERSIONING.md`: thêm kiến trúc họ workspace và đổi thuật toán
   (theo PortSwigger: request không đi qua networking của Burp thì Logger không thấy). Có ở menu **Gửi lại**, ở request đang chờ
   (trình duyệt vẫn nhận response thật) và công tắc trong **Cài đặt > Gửi request** cho mọi lần gửi.
 
-### Khớp path với Excel
+### ID dạng chữ: cùng 1 API
 
-- `{id}`, `{orderId}`, `:user_id`, `{uuid}` chỉ khớp giá trị **trông giống ID**: có chữ số (15, a1b2, ORD-2024), UUID, chuỗi hex dài,
-  chuỗi ngẫu nhiên dài. Từ thường như `new`, `old`, `export`, `me` **không** khớp, nên `/api/a/b/old` không bị gán vào dòng
-  `/api/a/b/{id}`. Dòng ghi path cụ thể vẫn luôn thắng dòng có placeholder. Đổi được trong **Excel > {...} Placeholder** (kiểu "Trông giống ID").
+- Dòng Excel `/api/a/b/{ID}`: `{ID}` khớp **mọi giá trị**, số hoặc chữ (`15`, `new`, `old`...). Request rơi vào cùng dòng `{ID}` là
+  **cùng 1 API**: lần bắt đầu là bản gốc, `/api/a/b/old` sau `/api/a/b/new` là **bản trùng** (request đang chờ hiện "Trùng API n").
+  API bắt trước khi nạp Excel được gộp lại tự động khi nạp / sửa Excel.
+- Dòng Excel ghi path cụ thể (`/api/a/b/export`) luôn thắng dòng `{ID}`: API đó đứng riêng.
+- Không có dòng Excel: chọn các API trên Cây / API -> chuột phải -> **Cùng 1 API...** -> tích đoạn path là ID -> **Gộp thành 1 API**.
+  Quản lý / xóa mẫu ở **Cài đặt > Trùng lặp & vị trí > Mẫu path (ID dạng chữ)**.
+- Muốn `{id}` chỉ khớp giá trị có chữ số / UUID: **Excel > {...} Placeholder** -> kiểu "Trông giống ID".
 
 ### Cây
 

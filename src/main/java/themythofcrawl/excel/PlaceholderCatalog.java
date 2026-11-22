@@ -34,9 +34,8 @@ public final class PlaceholderCatalog {
     public enum MatchKind {
         ANY_SEGMENT("Bất kỳ chuỗi (không chứa /)", "[^/]+"),
         /**
-         * V_10.4: values that LOOK like an ID: contain a digit (15, a1b2, ORD-2024), a UUID, a long hex string or a long
-         * random mixed-case token. Plain words (new, old, export, me, search) do not match, so /api/a/b/old is not
-         * mapped to /api/a/b/{id}. Heuristics as in API spec inference tools: type checks + "words are not IDs".
+         * Values that LOOK like an ID: contain a digit (15, a1b2, ORD-2024), a UUID, a long hex string or a long random
+         * mixed-case token. Optional (not the default: some systems use words as IDs).
          */
         ID_LIKE("Trông giống ID (có chữ số, UUID, hex, chuỗi ngẫu nhiên dài)", ID_LIKE_REGEX),
         NUMERIC("Chỉ chữ số (0-9)", "\\d+"),
@@ -122,7 +121,7 @@ public final class PlaceholderCatalog {
 
     private void seedDefaults() {
         defs.clear();
-        putBuiltIn("id", MatchKind.ID_LIKE, "ID bản ghi: chỉ khớp giá trị trông giống ID (15, a1b2, UUID...), không khớp từ thường như new / old");
+        putBuiltIn("id", MatchKind.ANY_SEGMENT, "ID bản ghi: số hoặc chữ (15, new, old...). Path cùng mẫu là CÙNG 1 API (bản trùng); dòng Excel ghi path cụ thể luôn được ưu tiên");
         putBuiltIn("session", MatchKind.ANY_SEGMENT, "Mã phiên ngẫu nhiên (VD: /api/a/{session}/c)");
         putBuiltIn("token", MatchKind.ANY_SEGMENT, "Token động trong đường dẫn URL");
         putBuiltIn("uuid", MatchKind.UUID, "Định dạng UUID 36 ký tự");
@@ -190,14 +189,14 @@ public final class PlaceholderCatalog {
     public synchronized String regexForToken(String tokenName) {
         PlaceholderDef d = byName(tokenName);
         if (d == null) {
-            return idLikeName(tokenName) ? "(?:" + ID_LIKE_REGEX + ")" : "[^/]+";
+            return "[^/]+";
         }
         return d.effectiveRegex();
     }
 
     public synchronized String toJson() {
         Map<String, Object> root = new LinkedHashMap<>();
-        root.put("version", 2);
+        root.put("version", 3);
         List<Object> list = new ArrayList<>();
         for (PlaceholderDef d : defs.values()) {
             list.add(d.toMap());
@@ -220,8 +219,8 @@ public final class PlaceholderCatalog {
                     if (d != null) {
                         String key = d.name().toLowerCase(Locale.ROOT);
                         boolean builtIn = defs.containsKey(key) && defs.get(key).builtIn();
-                        if (builtIn && key.equals("id") && d.kind() == MatchKind.ANY_SEGMENT && Json.num(root, "version", 1) < 2) {
-                            continue;   // V_10.4: old default "{id} = anything" upgrades to ID_LIKE
+                        if (builtIn && key.equals("id") && d.kind() == MatchKind.ID_LIKE && Json.num(root, "version", 1) == 2) {
+                            continue;   // V_10.4 test build defaulted {id} to ID_LIKE; IDs can be words, back to "any value"
                         }
                         defs.put(key, new PlaceholderDef(d.name(), d.kind(), d.customRegex(), d.description(), builtIn));
                     }

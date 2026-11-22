@@ -119,7 +119,9 @@ public final class FamilyReport {
                 String path = Json.str(g, "path", "/");
                 Object row = g.get("target_row");
                 Object os = g.get("orig_status");
-                Api a = new Api(Engine.endpointKey(method, path), (int) Json.num(g, "gid", 0), method, path,
+                String bk = Json.str(g, "book_key", null);
+                String keyPath = bk != null && bk.lastIndexOf('|') >= 0 ? bk.substring(bk.lastIndexOf('|') + 1) : path;
+                Api a = new Api(Engine.endpointKey(method, keyPath), (int) Json.num(g, "gid", 0), method, path,
                         Json.str(g, "host", ""), Json.str(g, "branch", ""), os instanceof Number n ? n.intValue() : null,
                         row instanceof Number n ? sttByRow.getOrDefault(n.intValue(), "") : "");
                 apis.add(a);

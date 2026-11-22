@@ -146,7 +146,7 @@ public final class PathMatch {
     public static Segment segment(String seg, boolean idsAsParams, PlaceholderCatalog catalog) {
         if (seg.startsWith(":") && seg.length() > 1) {
             String rx = catalog != null ? catalog.regexForToken(seg.substring(1))
-                    : PlaceholderCatalog.idLikeName(seg.substring(1)) ? "(?:" + PlaceholderCatalog.ID_LIKE_REGEX + ")" : "[^/]+";
+                    : "[^/]+";
             return new Segment(rx, false);
         }
         if (idsAsParams && Text.isIdSegment(seg)) {
@@ -166,7 +166,7 @@ public final class PathMatch {
                 sb.append(cleanName.isEmpty() ? "[^/]+" : catalog.regexForToken(cleanName));
             } else {
                 String cleanName = PlaceholderCatalog.sanitizeName(token);
-                sb.append(PlaceholderCatalog.idLikeName(cleanName) ? "(?:" + PlaceholderCatalog.ID_LIKE_REGEX + ")" : "[^/]+");
+                sb.append("[^/]+");
             }
             pos = m.end();
             param = true;
@@ -195,6 +195,39 @@ public final class PathMatch {
         int flags = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
         return new Template(Pattern.compile("^" + body + "/?$", flags),
                 Pattern.compile("^(?:/[^/]+)*" + body + "/?$", flags), literal);
+    }
+
+    /**
+     * V_10.4: the request path with every segment that falls on a placeholder of {@code templatePath} replaced by
+     * that placeholder, e.g. template {@code /api/a/b/{ID}} + {@code /api/a/b/old} -> {@code /api/a/b/{ID}}. Two
+     * requests with the same result are the same API (the second one is a duplicate). Null when the template has
+     * no placeholder or does not match.
+     */
+    public static String canonical(String templatePath, String requestPath, boolean idsAsParams) {
+        List<String> tpl = segments(templatePath);
+        String reqNoQuery = Text.stripQuery(Text.nz(requestPath));
+        List<String> req = segments(reqNoQuery);
+        if (tpl.isEmpty() || req.size() < tpl.size()) {
+            return null;
+        }
+        int offset = req.size() - tpl.size();
+        List<String> out = new ArrayList<>(req);
+        boolean any = false;
+        for (int i = 0; i < tpl.size(); i++) {
+            Segment s = segment(tpl.get(i), idsAsParams);
+            if (s.literal()) {
+                continue;
+            }
+            if (!Pattern.compile("^" + s.regex() + "$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+                    .matcher(req.get(offset + i)).matches()) {
+                return null;
+            }
+            String t = tpl.get(i);
+            String name = t.matches(".*[{:<\\[*].*") ? PlaceholderCatalog.sanitizeName(t).toLowerCase(java.util.Locale.ROOT) : "id";
+            out.set(offset + i, "{" + (name.isEmpty() ? "id" : name) + "}");
+            any = true;
+        }
+        return any ? "/" + String.join("/", out) : null;
     }
 
     /** Result of verifying a sample request path against a template path, including extracted {placeholder} values. */

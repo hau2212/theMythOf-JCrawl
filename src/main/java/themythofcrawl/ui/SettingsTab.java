@@ -218,7 +218,9 @@ final class SettingsTab {
                 row(dedup), row(dedupIds), row(dedupBranch), row(confirmNew), row(restore), row(dupNew), row(ghosts),
                 field("API tải lại:", refreshPolicyBox, null),
                 row(autoDetectRefreshChk),
-                pair(Ui.button("Quản lý tag...", Icons::tag, ui::openTagManager),
+pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternDialog.open(ui, List.of())),
+                        Ui.muted("/api/a/b/new và /api/a/b/old là cùng 1 API khi new, old là ID")),
+                                pair(Ui.button("Quản lý tag...", Icons::tag, ui::openTagManager),
                         Ui.muted("Tag và cách xử lý API tải lại"))));
         sections.add(section("Gửi request", t -> t.success,
                 "Hàng đợi theo host chống 429 / 503; chế độ cho API thao tác (POST / PUT / PATCH / DELETE).",

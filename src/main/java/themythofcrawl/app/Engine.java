@@ -181,6 +181,15 @@ public final class Engine {
     private final LinkedHashMap<Integer, ApiGroup> hidden = new LinkedHashMap<>();
     private final Map<String, List<ApiGroup>> copies = new HashMap<>();
     private final Set<String> seenKeys = new HashSet<>();
+    /** V_10.4: user path patterns "GET /api/a/b/{id}": requests matching one are the same API (IDs may be words). */
+    private final List<String> pathPatterns = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Map<String, String> canonCache = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<String, String>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, String> e) {
+                    return size() > 4000;
+                }
+            });
     private final Map<String, Integer> seenGid = new HashMap<>();
     private final List<String> recentDest = new ArrayList<>();
     private volatile List<ApiGroup> snapshot = List.of();
@@ -1322,7 +1331,8 @@ public final class Engine {
         if (referenceLabel == null || g == null) {
             return null;
         }
-        return referenceKeys.contains(endpointKey(g.method(), g.path()));
+        return referenceKeys.contains(endpointKey(g.method(), g.path()))
+                || g.service() != null && referenceKeys.contains(endpointKey(g.method(), canonicalPath(g.method(), g.path(), g.host())));
     }
 
     /** Host-independent endpoint identity used to compare accounts: METHOD + path with IDs as {id}, no query. */
@@ -1763,7 +1773,131 @@ public final class Engine {
 
     // =================================================================== capture
     public String placeKey(String method, Service s, String path) {
-        return Text.dedupKey(method, s.protocol(), s.host(), s.port(), path, config.dedupNormalizeIds);
+        return Text.dedupKey(method, s.protocol(), s.host(), s.port(), canonicalPath(method, path, s.host()),
+                config.dedupNormalizeIds);
+    }
+
+    /**
+     * V_10.4: the path that decides "same API or not". When the request falls on an Excel row with a placeholder
+     * ({@code /api/a/b/{ID}}) or on a user path pattern, the placeholder segment is replaced, so {@code /api/a/b/new}
+     * and {@code /api/a/b/old} are ONE API (the second is a duplicate), whatever the ID looks like (number or word).
+     * An Excel row with the literal path ({@code /api/a/b/export}) wins and stays its own API. Cached.
+     */
+    public String canonicalPath(String method, String path, String host) {
+        String ck = PathMatch.catalogVersion() + "|" + method + "|" + host + "|" + path;
+        String hit = canonCache.get(ck);
+        if (hit != null) {
+            return hit;
+        }
+        String out = null;
+        TargetEntry t = targets == null ? null : targetMatch(method, path, host);
+        if (t != null) {
+            out = PathMatch.canonical(t.path(), path, config.targetIdsAsParams);
+        }
+        if (out == null && !pathPatterns.isEmpty()) {
+            String norm = PathMatch.normalize(path);
+            for (String pp : pathPatterns) {
+                int sp = pp.indexOf(' ');
+                String pm = sp > 0 ? pp.substring(0, sp) : "*";
+                String ptpl = sp > 0 ? pp.substring(sp + 1) : pp;
+                if (!"*".equals(pm) && !pm.equalsIgnoreCase(method)) {
+                    continue;
+                }
+                if (PathMatch.template(ptpl, false).exact().matcher(norm).matches()) {
+                    out = PathMatch.canonical(ptpl, path, false);
+                    if (out != null) {
+                        break;
+                    }
+                }
+            }
+        }
+        String res = out != null ? out : Text.stripQuery(Text.nz(path));
+        canonCache.put(ck, res);
+        return res;
+    }
+
+    public List<String> pathPatterns() {
+        return List.copyOf(pathPatterns);
+    }
+
+    /** Adds "METHOD /path/{id}" and merges the APIs already captured. Returns how many APIs became duplicates. */
+    public int addPathPattern(String method, String template) {
+        String m = Text.blank(method) ? "*" : method.trim().toUpperCase(java.util.Locale.ROOT);
+        String pp = m + " " + template.trim();
+        if (!pathPatterns.contains(pp)) {
+            pathPatterns.add(pp);
+        }
+        synchronized (this) {
+            stateDirty = true;
+        }
+        canonCache.clear();
+        themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.CONFIG, "Mẫu path: " + pp, "");
+        return regroup();
+    }
+
+    public int removePathPattern(String pp) {
+        pathPatterns.remove(pp);
+        synchronized (this) {
+            stateDirty = true;
+        }
+        canonCache.clear();
+        return regroup();
+    }
+
+    /**
+     * V_10.4: recompute "same API" for every captured API after the Excel list, a placeholder or a path pattern
+     * changed: APIs that fall on the same template become captures of one API (the earliest is the bản gốc,
+     * the others Lần 2, 3...); the next request of that template is recognised as a duplicate. Returns how many
+     * APIs moved.
+     */
+    public int regroup() {
+        canonCache.clear();
+        Map<String, List<ApiGroup>> moved = new LinkedHashMap<>();
+        Config c = config;
+        for (ApiGroup g : allGroups()) {
+            String old = g.bookKey();
+            if (old == null || g.service() == null) {
+                continue;
+            }
+            String nk = placeKey(g.method(), g.service(), g.path());
+            String raw = Text.dedupKey(g.method(), g.service().protocol(), g.service().host(), g.service().port(), g.path(),
+                    c.dedupNormalizeIds);
+            if (nk.equals(old) || !(old.equals(raw) || nk.equals(raw) || old.contains("{"))) {
+                continue;
+            }
+            synchronized (this) {
+                dropCopy(g);
+                g.setBookKey(nk);
+                addCopy(g);
+                String base = c.dedupPerBranch ? "F" + g.branchId() + "|" + nk : nk;
+                seenKeys.add(base);
+                seenGid.putIfAbsent(base, g.gid());
+                stateDirty = true;
+            }
+            PlacementBook.Record oldRec = book.get(old);
+            PlacementBook.Record rec = book.ensure(nk, g.method(), g.host(), g.path());
+            if (rec.place == null && oldRec != null && oldRec.place != null) {
+                book.setPlace(nk, oldRec.place);
+            }
+            moved.computeIfAbsent(nk, k -> new ArrayList<>()).add(g);
+            touch(g);
+        }
+        int n = 0;
+        for (String k : moved.keySet()) {
+            List<ApiGroup> cps = copiesOf(k);
+            if (cps.size() > 1) {
+                ApiGroup first = cps.stream().min(Comparator.comparingInt(ApiGroup::gid)).orElse(cps.get(0));
+                promoteToOrigin(first);
+                for (ApiGroup g : moved.get(k)) {
+                    n += isOrigin(g) ? 0 : 1;
+                }
+            }
+        }
+        if (!moved.isEmpty()) {
+            changes.structure();
+            log("Gộp API theo mẫu path: " + n + " API thành lần bắt trùng", null);
+        }
+        return n;
     }
 
     public TargetEntry targetMatch(String method, String path, String host) {
@@ -2119,7 +2253,7 @@ public final class Engine {
                 return null;
             }
             if (c.dedup) {
-                String base = Text.dedupKey(method, svc.protocol(), svc.host(), svc.port(), path, c.dedupNormalizeIds);
+                String base = pkey;
                 key = c.dedupPerBranch ? "F" + feat.id() + "|" + base : base;
                 boolean seen;
                 Integer earlier;
@@ -4301,6 +4435,7 @@ public final class Engine {
 
     /** Match every captured API against the current list (after load / option change). */
     public void retag() {
+        canonCache.clear();
         for (ApiGroup g : allGroups()) {
             TargetEntry e = targets == null ? null : targetMatch(g.method(), g.path(), g.host());
             if (e != g.target()) {
@@ -4308,6 +4443,7 @@ public final class Engine {
                 touch(g);
             }
         }
+        regroup();
         changes.structure();
     }
 
@@ -4482,6 +4618,7 @@ public final class Engine {
         m.put("next_gid", nextGid);
         m.put("recent_dest", new ArrayList<>(recentDest));
         m.put("seen", new ArrayList<>(seenKeys));
+        m.put("path_patterns", new ArrayList<>(pathPatterns));
         Map<String, Object> sg = new LinkedHashMap<>(seenGid);
         m.put("seen_gid", sg);
         List<Object> rules = new ArrayList<>();
@@ -4576,6 +4713,11 @@ public final class Engine {
             for (Object o : Json.list(m, "seen")) {
                 seenKeys.add(String.valueOf(o));
             }
+            pathPatterns.clear();
+            for (Object o : Json.list(m, "path_patterns")) {
+                pathPatterns.add(String.valueOf(o));
+            }
+            canonCache.clear();
             Json.obj(m, "seen_gid").forEach((k, v) -> {
                 if (v instanceof Number n) {
                     seenGid.put(k, n.intValue());
@@ -4625,6 +4767,7 @@ public final class Engine {
         for (ApiGroup g : loaded) {
             Audit.recalc(g);
         }
+        regroup();
         if (old != next) {
             old.close();
         }

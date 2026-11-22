@@ -252,6 +252,8 @@ final class TreeMenus {
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
                 m.add(Ui.item("Hỏi đáp (Q&A / Info)..." + (g.qa().isEmpty() ? "" : "   (đang có " + g.qa().size() + ")"),
                         t -> Icons.info(t.info.text()), () -> QaDialog.open(ui, g, null)));
+                m.add(Ui.item(targetGs.size() > 1 ? "Cùng 1 API (" + targetGs.size() + " path khác nhau ở ID)..." : "Cùng 1 API: đoạn path này là ID...",
+                        Icons::dup, () -> PathPatternDialog.open(ui, targetGs)));
                 m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
                         t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
                                 nodeRole != null && !nodeRole.original() ? nodeRole.roleKey() : "", "")));
