@@ -2254,7 +2254,7 @@ public final class Engine {
         Role prof = originalProfile;
         List<HeaderRule> rules = prof.enabled() ? prof.rules() : List.of();
         g.origResult().setRules(rules);
-        g.origResult().setRoleName(Role.ORIGINAL_LABEL + (rules.isEmpty() ? "" : "  + profile (" + rules.size() + " rule)"));
+        g.origResult().setRoleName(Role.ORIGINAL_LABEL + (rules.isEmpty() ? "" : " + " + rules.size() + " luật"));
     }
 
     // =================================================================== requests

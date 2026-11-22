@@ -44,17 +44,17 @@ final class DataProtectionDialog {
     private DataProtectionDialog() {
     }
 
+    /** V_9.3: opens the single "Chặn & gửi lại" window on its Tổng quan page. */
     static void show(Component parent, Engine engine, ApiGroup focus, Runnable onChanged) {
-        Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Bảo vệ dữ liệu khi crawl", java.awt.Dialog.ModalityType.MODELESS);
-        dlg.setContentPane(build(dlg, engine, focus, onChanged));
-        dlg.setSize(new Dimension(980, 720));
-        dlg.setLocationRelativeTo(parent);
-        Ui.fastScroll(dlg.getContentPane());
-        dlg.setVisible(true);
+        ActionWorkbenchDialog.show(parent, engine, focus, null, ActionWorkbenchDialog.TAB_OVERVIEW, onChanged);
     }
 
     static JPanel build(Component parent, Engine engine, ApiGroup focus, Runnable onChanged) {
+        return build(parent, engine, focus, onChanged, null);
+    }
+
+    /** @param openMore when embedded in Chặn & gửi lại: jumps to its Chế độ page instead of opening a window */
+    static JPanel build(Component parent, Engine engine, ApiGroup focus, Runnable onChanged, Runnable openMore) {
         Theme th = Theme.current();
         ActionPolicyLedger ledger = engine.actionEngine().policyLedger();
         Runnable changed = () -> {
@@ -218,7 +218,7 @@ final class DataProtectionDialog {
             changed.run();
             reload.run();
             JOptionPane.showMessageDialog(Ui.ownerWindow(parent), "Đã gộp " + n + " cấu hình cũ thành luật. Hành vi chặn giữ nguyên.",
-                    "Bảo vệ dữ liệu", JOptionPane.INFORMATION_MESSAGE);
+                    "Chặn & gửi lại", JOptionPane.INFORMATION_MESSAGE);
         }));
         add.addActionListener(Ui.safe(e -> {
             ActionPolicy p = askRule(parent, engine, focus);
@@ -280,9 +280,9 @@ final class DataProtectionDialog {
         JPanel bottom = new JPanel(new BorderLayout(0, 8));
         bottom.add(testSec, BorderLayout.NORTH);
         bottom.add(q2, BorderLayout.CENTER);
-        JButton advanced = Ui.secondaryBtn("Mở Chặn & gửi lại (Kho ID, Bằng chứng 200, Kiểm tra)...",
-                t -> Icons.workbench(t.fg, 13), () -> ActionWorkbenchDialog.show((JComponent) root, engine, focus, null,
-                        ActionWorkbenchDialog.TAB_STRATEGY, onChanged));
+        JButton advanced = Ui.secondaryBtn("Chế độ, Kho ID, Kiểm tra",
+                t -> Icons.workbench(t.fg, 13), openMore != null ? openMore : () -> ActionWorkbenchDialog.show((JComponent) root, engine,
+                        focus, null, ActionWorkbenchDialog.TAB_STRATEGY, onChanged));
         bottom.add(Ui.flow(FlowLayout.RIGHT, advanced), BorderLayout.SOUTH);
         root.add(top, BorderLayout.NORTH);
         root.add(rulesSec, BorderLayout.CENTER);

@@ -325,7 +325,7 @@ final class V21BetaTest {
                 applyLaf(false);
                 JMenu m = ActionMenus.buildForApi(null, engine, delGroup, null, null);
                 assertTrue(m.getItemCount() <= 9, "Streamlined ActionMenus must be concise, got " + m.getItemCount());
-                assertTrue(m.getItem(2).getText().contains("Luật chặn"));
+                assertTrue(m.getItem(2).getText().contains("Chặn & gửi lại"));
 
                 for (boolean dark : new boolean[] {false, true}) {
                     applyLaf(dark);

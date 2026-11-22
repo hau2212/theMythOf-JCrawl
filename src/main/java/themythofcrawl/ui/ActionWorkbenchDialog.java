@@ -75,12 +75,14 @@ import themythofcrawl.ui.theme.Theme;
  * </ol>
  */
 public final class ActionWorkbenchDialog {
-    public static final int TAB_STRATEGY = 0;
-    public static final int TAB_LEDGER = 1;
+    /** V_9.3: "Chặn & gửi lại" = old Bảo vệ dữ liệu (Tổng quan) + old Luật chặn tabs, one window. */
+    public static final int TAB_OVERVIEW = 0;
+    public static final int TAB_STRATEGY = 1;
+    public static final int TAB_LEDGER = 2;
     public static final int TAB_INTERCEPT_RULES = TAB_LEDGER;
-    public static final int TAB_PROTOCOL_AUDIT = 2;
-    public static final int TAB_ADVANCED = 3;
-    public static final int TAB_GUIDE = 4;
+    public static final int TAB_PROTOCOL_AUDIT = 3;
+    public static final int TAB_ADVANCED = 4;
+    public static final int TAB_GUIDE = 5;
 
     /** Legacy direct-open indices routed automatically to Tab 4 (Nâng cao) + the matching sub-tab. */
     public static final int TAB_POOL = 100;
@@ -146,8 +148,8 @@ public final class ActionWorkbenchDialog {
         // Top header + live status bar
         JPanel topWrap = new JPanel(new BorderLayout());
         String headTitle = focusGroup != null
-                ? "Luật chặn · " + Text.apiLabel(focusGroup.gid()) + "  " + focusGroup.method() + " " + focusGroup.path()
-                : "Luật chặn";
+                ? "Chặn & gửi lại · " + Text.apiLabel(focusGroup.gid()) + "  " + focusGroup.method() + " " + focusGroup.path()
+                : "Chặn & gửi lại";
         String headSub = "Cùng một danh sách với nút \"Chặn\" trên thanh trên: sửa ở đâu cũng đồng bộ."
                 + " Rê chuột lên tên tab hoặc thẻ để xem giải thích.";
         topWrap.add(Ui.dialogHeader(headTitle, headSub), BorderLayout.NORTH);
@@ -251,6 +253,13 @@ public final class ActionWorkbenchDialog {
         advancedTabs.addTab("Tạo trước", buildChainTab(dialogParent, engine, focusGroup, targets, refreshBanner, onAfterAction));
         advancedTabs.addTab("Bằng chứng 200", buildLock200Tab(engine, focusGroup, targets, refreshBanner, onAfterAction));
 
+        tabs.addTab("Tổng quan", DataProtectionDialog.build(dialogParent, engine, focusGroup, () -> {
+            refreshBanner.run();
+            if (onAfterAction != null) {
+                onAfterAction.run();
+            }
+        }, () -> tabs.setSelectedIndex(TAB_STRATEGY)));
+        tabs.setToolTipTextAt(0, "Hai câu hỏi: khi crawl chặn hay cho đi; khi gửi lại mà ID đã bị xóa thì làm gì");
         tabs.addTab("Chế độ", buildStrategyTab(dialogParent, engine, focusGroup, refreshBanner, onAfterAction));
         tabs.addTab("Luật", ActionLedgerTabBuilder.build(dialogParent, engine, focusGroup, prefillBranch, refreshBanner, onAfterAction));
         tabs.addTab("Kiểm tra", ActionProtocolAuditTabBuilder.build(dialogParent, engine, refreshBanner, onAfterAction));
@@ -654,7 +663,7 @@ public final class ActionWorkbenchDialog {
                 t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     int vr = poolTable.getSelectedRow();
                     if (focusGroup == null || vr < 0) {
-                        Ui.hint(poolTable, focusGroup == null ? "Mở Luật chặn từ 1 API cụ thể để gửi"
+                        Ui.hint(poolTable, focusGroup == null ? "Mở Chặn & gửi lại từ 1 API cụ thể để gửi"
                                 : "Chọn 1 ID trong bảng trước");
                         return;
                     }

@@ -93,7 +93,7 @@ public final class MainPanel {
     final Prefs uiPrefs;
     private SegmentedToggle captureToggle;
     private SegmentedToggle sendModeToggle;
-    private final Pill queue = new Pill("Hàng đợi: 0", t -> t.neutral, t -> Icons.clock(t.muted, 12));
+    private final Pill queue = new Pill("Chờ gửi 0", t -> t.neutral, t -> Icons.clock(t.muted, 12));
     final Breadcrumb dest = new Breadcrumb();
     private final Pill todo = new Pill("Cần xử lý: 0", t -> t.pending, t -> Icons.hourglass(t.pending.text(), 12));
     private static final java.util.WeakHashMap<Engine, java.lang.ref.WeakReference<MainPanel>> BY_ENGINE =
@@ -161,7 +161,11 @@ public final class MainPanel {
     final ToastPane toastPane = new ToastPane(main);
     final JTabbedPane tabs = new JTabbedPane();
     /** V_7.0 grouped tabs: Báo cáo = Lịch sử + Excel; Cài đặt = Cấu hình + Log. */
-    final JTabbedPane reportTabs = new JTabbedPane();
+    final JTabbedPane reportTabs = new JTabbedPane();   // kept empty for older callers; V_9.3 has no Báo cáo group
+    /** V_9.3: the Cây tab shows the branch tree or the same APIs by time (old Lịch sử tab). */
+    final JPanel treeViews = new JPanel(new java.awt.CardLayout());
+    private boolean timeView;
+    private final List<SegmentedToggle> viewSwitches = new ArrayList<>();
     final JTabbedPane settingsTabs = new JTabbedPane();
     private final Timer timer;
     private JFrame window;
@@ -224,19 +228,19 @@ public final class MainPanel {
         matrix = new AccessMatrixTab(this);
         bugs = new BugsTab(this);
         // V_7.0 tab groups: Cây first (where most of the work happens), reports and settings grouped
-        reportTabs.addTab("Lịch sử", null, history.panel, "Cây lịch sử theo nhánh và báo cáo trực quan");
-        reportTabs.addTab("Excel", null, excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu");
+        treeViews.add(treeTab.panel, "branch");
+        treeViews.add(history.panel, "time");
         settingsTabs.addTab("Cấu hình", null, settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace");
-        settingsTabs.addTab("Log", null, log.panel, "Nhật ký theo nhánh / API, xuất Excel");
+        settingsTabs.addTab("Hoạt động", null, log.panel, "Hoạt động của app theo nhánh / API, xuất Excel");
         Object[][] t = {
-            {"Cây", treeTab.panel, "Cây nhánh: mọi API thẳng cột Method | Path | Status | Length | Kết quả vai trò (Alt+1)"},
-            {"API", api.panel, "Bảng API kiểu Burp HTTP History, kết quả từng vai trò (Alt+2)"},
-            {"Phân quyền", matrix.panel, "Ma trận vai trò: Thấy trong UI x Gọi được -> nghi lỗi phân quyền (Alt+3)"},
-            {"Lỗi", bugs.panel, "Các API đã đánh dấu lỗi: thống kê theo loại / mức độ / trạng thái, xuất báo cáo (Alt+4)"},
-            {"Báo cáo", reportTabs, "Lịch sử trực quan và độ phủ Excel (Alt+5)"},
+            {"Cây", treeViews, "Mọi API theo nhánh (hoặc theo thời gian): Method, Path, Status, kết quả từng vai trò (Alt+1)"},
+            {"API", api.panel, "Bảng API kiểu Burp HTTP history, kết quả từng vai trò (Alt+2)"},
+            {"Phân quyền", matrix.panel, "Vai trò nào thấy / gọi được API nào: tìm lỗi phân quyền (Alt+3)"},
+            {"Lỗi", bugs.panel, "API đã đánh dấu lỗi: thống kê theo loại, mức độ, trạng thái; xuất báo cáo (Alt+4)"},
+            {"Excel", excel.panel, "Xuất Excel, làm việc nhóm, đối chiếu danh sách API từ file Excel (Alt+5)"},
             {"Vai trò", roles.panel, "Tài khoản test: token / cookie / JWT của từng vai trò (Alt+6)"},
-            {"Duyệt", audit.panel, "API mới cần xác nhận vị trí, giữ chỗ, API trùng & ẩn (Alt+7)"},
-            {"Cài đặt", settingsTabs, "Cấu hình và Log (Alt+8)"}};
+            {"Cần xử lý", audit.panel, "API mới chờ xác nhận chỗ, giữ chỗ, lần bắt trùng, hoạt động (Alt+7)"},
+            {"Cài đặt", settingsTabs, "Cấu hình và hoạt động của app (Alt+8)"}};
         for (Object[] x : t) {
             tabs.addTab((String) x[0], null, (Component) x[1], (String) x[2]);
         }
@@ -333,12 +337,48 @@ public final class MainPanel {
         if (sel instanceof JTabbedPane sub && (sub == reportTabs || sub == settingsTabs)) {
             return sub.getSelectedComponent();
         }
+        if (sel == treeViews) {
+            return timeView ? history.panel : treeTab.panel;
+        }
         return sel;
     }
 
-    /** Selects the tab showing {@code c}, opening its group (Báo cáo / Cài đặt) when needed. */
+    /** V_9.3: a "Theo nhánh | Theo thời gian" switch for the Cây tab (one per toolbar, kept in sync). */
+    SegmentedToggle newTreeViewSwitch() {
+        SegmentedToggle sw = new SegmentedToggle(
+                new SegmentedToggle.Option("Theo nhánh", "Cây nhánh: API xếp theo nơi bạn crawl", t -> t.accent, (t, sel) -> null, false),
+                new SegmentedToggle.Option("Theo thời gian", "Các nhánh theo thứ tự crawl, có thẻ tóm tắt và độ phủ Excel",
+                        t -> t.accent, (t, sel) -> null, false));
+        sw.setFixedHeight(24);
+        sw.setSelectedIndex(timeView ? 1 : 0);
+        sw.onChange(idx -> showTreeView(idx == 1));
+        viewSwitches.add(sw);
+        return sw;
+    }
+
+    void showTreeView(boolean time) {
+        if (timeView != time) {
+            themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.TAB,
+                    "Cây: xem " + (time ? "theo thời gian" : "theo nhánh"), "");
+        }
+        timeView = time;
+        ((java.awt.CardLayout) treeViews.getLayout()).show(treeViews, time ? "time" : "branch");
+        for (SegmentedToggle sw : viewSwitches) {
+            if (sw.selectedIndex() != (time ? 1 : 0)) {
+                sw.setSelectedIndex(time ? 1 : 0, false);
+            }
+        }
+        tick(true);
+    }
+
+    /** Selects the tab showing {@code c}, opening its group (Cài đặt) or view (Cây) when needed. */
     void selectTab(Component c) {
         if (c == null) {
+            return;
+        }
+        if (c == treeTab.panel || c == history.panel) {
+            showTreeView(c == history.panel);
+            tabs.setSelectedComponent(treeViews);
             return;
         }
         if (tabs.indexOfComponent(c) >= 0) {
@@ -460,9 +500,9 @@ public final class MainPanel {
         Config c = engine.config();
         int h24 = Theme.current().scaled(24);
         captureToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("Dừng", "Tạm dừng Capture Proxy", t -> t.slate,
+                new SegmentedToggle.Option("Tắt", "Bắt request: TẮT. Request qua Proxy không được ghi lại.", t -> t.slate,
                         (t, sel) -> Icons.circle(sel ? t.slate.onSolid() : t.muted, false), false),
-                new SegmentedToggle.Option("Capture", "Bật / tắt bắt request từ Proxy", t -> t.danger,
+                new SegmentedToggle.Option("Bắt", "Bắt request: BẬT. Mọi request API qua Proxy được ghi vào Cây.", t -> t.danger,
                         (t, sel) -> {
                             Color dot = sel ? (pulseDim ? t.danger.border() : t.danger.base()) : t.muted;
                             return Icons.statusDot(dot, 10);
@@ -472,15 +512,16 @@ public final class MainPanel {
         captureToggle.onChange(idx -> update(x -> x.captureEnabled = idx == 1));
 
         sendModeToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("Crawl", "Chỉ ghi lại API từ Proxy, không tự gửi vai trò", t -> t.slate,
+                new SegmentedToggle.Option("Không gửi", "Chỉ ghi lại API, không tự gửi bằng vai trò.", t -> t.slate,
                         (t, sel) -> Icons.hide(sel ? t.slate.onSolid() : t.muted, 12), false),
-                new SegmentedToggle.Option("Gửi", "Tự động gửi ngay mọi vai trò khi bắt được API", t -> t.success,
+                new SegmentedToggle.Option("Tự gửi", "Bắt xong tự gửi ngay bằng mọi vai trò đang bật.", t -> t.success,
                         (t, sel) -> Icons.send(sel ? t.success.onSolid() : t.success.text(), 12), false));
         sendModeToggle.setFixedHeight(24);
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
         sendModeToggle.onChange(idx -> setSendMode(idx == 1));
 
         queue.setPadding(2, 3, 2, 3);
+        queue.setVisible(false);   // V_9.3: shown only while requests wait to be sent
         queue.setFixedHeight(24);
         queue.onClick(() -> {
             if (queue.isEnabled()) {
@@ -677,7 +718,7 @@ public final class MainPanel {
         compactControlsBtn.setMargin(new Insets(0, 5, 0, 5));
         compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(88), h24));
         compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(96), h24));
-        compactControlsBtn.setToolTipText("Menu: Đích, Trạng thái, Hàng đợi, Tìm nhanh, Luật chặn, Tùy chọn, Workspace");
+        compactControlsBtn.setToolTipText("Menu: Nhánh đang crawl, Trạng thái, Hàng đợi, Tìm, Chặn & gửi lại, Tùy chọn, Workspace");
         compactControlsBtn.addActionListener(Ui.safe(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight())));
 
         // Strict single-row horizontal BoxLayout — NEVER wraps onto 2-3 broken lines on Burp!
@@ -694,7 +735,7 @@ public final class MainPanel {
         headerLeftZone.add(queue);
 
         // Crisp 24px height-matched vertically centered Dich prefix aligned with Doi and Breadcrumb
-        JLabel destLabel = new JLabel("Đích", SwingConstants.CENTER) {
+        JLabel destLabel = new JLabel("Nhánh", SwingConstants.CENTER) {
             @Override
             public void updateUI() {
                 super.updateUI();
@@ -820,7 +861,7 @@ public final class MainPanel {
         Engine.Stats st = engine.stats();
         SendDispatcher.Snapshot q = engine.queue();
         int waiting = q.queued() + q.inFlight();
-        m.add(Ui.item("Đích: " + engine.activeBranch().name() + "...", Icons::folder, this::destinationMenu));
+        m.add(Ui.item("Nhánh đang crawl: " + engine.activeBranch().name() + "...", Icons::folder, this::destinationMenu));
         m.add(Ui.item("Trạng thái: " + status.getText() + " · " + todo.getText()
                 + (waiting > 0 ? " · Đợi: " + waiting : ""), Icons::api, this::statusMenu));
         if (st.pending() > 0) {
@@ -840,7 +881,7 @@ public final class MainPanel {
                 t -> Icons.strategyShield(pendingIntercept > 0 ? t.danger.text() : (waitOn ? t.success.text() : t.fg), 14),
                 () -> ProxyInterceptDialog.showFloating(this)));
         int blockRules = engine.actionEngine().activeBlockRuleCount();
-        m.add(Ui.item("Luật chặn" + (blockRules > 0 ? " (" + blockRules + " bật)" : "") + "...",
+        m.add(Ui.item("Chặn & gửi lại" + (blockRules > 0 ? " (" + blockRules + " bật)" : "") + "...",
                 Icons::workbench, () -> ActionWorkbenchDialog.show(root, engine,
                         api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                             syncHeader();
@@ -1042,7 +1083,7 @@ public final class MainPanel {
         String name = b.name();
         if (!dest.path().equals(name)) {
             dest.setPath(name);
-            dest.setToolTipText("Request mới sẽ vào: " + name + "  (bấm ô cấp để chọn, bấm nút mũi tên mở menu, bấm + thêm mục con)");
+            dest.setToolTipText("Nhánh đang crawl: " + name + ". Request mới vào nhánh này. Bấm 1 cấp để chọn, mũi tên mở menu, + thêm nhánh con.");
         } else {
             dest.refresh();
         }
@@ -1062,8 +1103,14 @@ public final class MainPanel {
         } else if (waiting == 0) {
             queuePeak = 0;
         }
-        queue.setText(q.waitSeconds() > 0.5 ? String.format("Gửi %d (%.0fs)", waiting, q.waitSeconds())
-                : "Gửi " + waiting);
+        queue.setText(q.waitSeconds() > 0.5 ? String.format("Chờ gửi %d (%.0fs)", waiting, q.waitSeconds())
+                : "Chờ gửi " + waiting);
+        if (queue.isVisible() != (waiting > 0)) {
+            queue.setVisible(waiting > 0);   // V_9.3: only shown while something is waiting to be sent
+            if (headerPanel != null) {
+                headerPanel.revalidate();
+            }
+        }
         queue.setEnabled(waiting > 0);
         queue.setActive(waiting > 0);
         queue.setToken(waiting > 0 ? (q.waitSeconds() > 0.5 ? t -> t.critical : t -> t.info) : t -> t.neutral);
@@ -1281,7 +1328,7 @@ public final class MainPanel {
         Engine.Stats st = engine.stats();
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Tổng API đã bắt: " + st.apis() + "  (mở tab API)", Icons::api, () -> selectTab(api.panel)));
-        m.add(Ui.item("Nhánh nhánh: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> selectTab(history.panel)));
+        m.add(Ui.item("Nhánh: " + st.branches() + "  (xem theo thời gian)", Icons::branch, () -> selectTab(history.panel)));
         m.add(Ui.item("Vai trò đang bật: " + engine.roles().enabledCount() + "/" + engine.roles().count() + "  (mở tab vai trò)",
                 t -> Icons.role(t.fg, 12), () -> selectTab(roles.panel)));
         if (st.info() > 0) {

@@ -121,7 +121,7 @@ final class TreeMenus {
                                         ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [CHỜ DUYỆT]!"
                                         : "Đã TẮT Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
                             }));
-                    m.add(Ui.item("Luật chặn cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (CRUD)...", Icons::strategyShield,
+                    m.add(Ui.item("Luật cho nhánh \"" + Hierarchy.leaf(prefix) + "\"...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),

@@ -238,8 +238,8 @@ final class ExcelTab {
 
         inventoryBoard = new InventoryBoardPanel(ui);
         javax.swing.JTabbedPane excelModeTabs = new javax.swing.JTabbedPane();
-        excelModeTabs.addTab("1. Tổng hợp & Đồng bộ (7 Ngữ cảnh · Auto-Inventory)", inventoryBoard);
-        excelModeTabs.addTab("2. Đối chiếu File Excel & Timeline", deck);
+        excelModeTabs.addTab("Xuất & làm việc nhóm", inventoryBoard);
+        excelModeTabs.addTab("Đối chiếu file Excel", deck);
         panel.add(excelModeTabs, BorderLayout.CENTER);
 
         controls(engine.groups());

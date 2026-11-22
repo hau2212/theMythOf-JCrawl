@@ -295,7 +295,7 @@ public final class ProxyInterceptDialog {
 
         JButton pinBranchBtn = Ui.secondaryBtn("+ Chặn nhánh hiện tại", t -> Icons.branch(t.accent.text()), null);
         JButton pinApiBtn = Ui.secondaryBtn("+ Chặn API đang chọn", t -> Icons.api(t.warning.text()), null);
-        JButton rulesBtn = Ui.secondaryBtn("Luật chặn...", t -> Icons.sliders(t.fg), null);
+        JButton rulesBtn = Ui.secondaryBtn("Chặn & gửi lại...", t -> Icons.sliders(t.fg), null);
 
         JPanel row2 = new JPanel(new BorderLayout(8, 0));
         row2.setOpaque(false);

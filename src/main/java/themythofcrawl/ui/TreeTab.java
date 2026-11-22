@@ -130,7 +130,8 @@ final class TreeTab {
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
         javax.swing.JComboBox<String> crawlRole = AccessMatrixTab.crawlRoleCombo(engine);
         crawlRole.setPrototypeDisplayValue("Tự nhận diện (token/cookie)");
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn, more, windowBtn);
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, ui.newTreeViewSwitch(), Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn,
+                more, windowBtn);
 
         JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         head.setOpaque(false);
@@ -168,8 +169,8 @@ final class TreeTab {
         resetApiBtn.addActionListener(Ui.safe(e -> restoreOriginalRequest()));
 
         JButton[] qaRef = new JButton[1];
-        quickActionBtn = Ui.secondaryBtn("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
-        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Tắt chặn hoặc mở Luật chặn cho API này");
+        quickActionBtn = Ui.secondaryBtn("Chặn & gửi lại", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
+        quickActionBtn.setToolTipText("Chờ duyệt, Giữ lại, Cho đi thẳng cho API này, hoặc mở Chặn & gửi lại");
         quickActionBtn.addActionListener(Ui.safe(e -> {
             JPopupMenu m = new JPopupMenu();
             if (shownGroup != null) {
@@ -722,7 +723,7 @@ final class TreeTab {
         int held = engine.proxyQueue().pendingCount();
         headerMeta.setText(engine.branches().size() + " nhánh, " + engine.groups().size() + " API"
                 + (held > 0 ? ", " + held + " chờ duyệt" : "")
-                + "  ·  Đích mới: " + engine.activeBranch().name());
+                + "  ·  Nhánh đang crawl: " + engine.activeBranch().name());
         if (window != null) {
             window.setTitle(detachedTitle());
         }

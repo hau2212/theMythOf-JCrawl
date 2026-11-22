@@ -336,8 +336,8 @@ final class ApiTab {
         });
         composerBtn.setToolTipText("Mở trình soạn thảo Request để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
         JButton[] repActionRef = new JButton[1];
-        JButton repActionBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Bảo vệ dữ liệu: chặn / hỏi trước / giữ lại khi crawl, cách gửi lại khi ID đã bị xóa, Thử luật", () -> {
+        JButton repActionBtn = Ui.dropdown("Chặn & gửi lại", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+                "Chặn & gửi lại: chặn / hỏi trước / giữ lại khi crawl, cách gửi lại khi ID đã bị xóa, Thử luật", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ApiGroup cur = currentGroup();
                     if (cur != null) {
@@ -889,7 +889,7 @@ final class ApiTab {
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
-        JButton actionMenuBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
+        JButton actionMenuBtn = Ui.dropdown("Chặn & gửi lại", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
                 "Mở Chặn & gửi lại: chế độ, luật, Kho ID, kiểm tra", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {

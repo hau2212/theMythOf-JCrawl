@@ -229,7 +229,7 @@ final class SettingsTab {
                 field("Chế độ thao tác:", actionModeBox, Ui.muted("rê chuột để xem")),
                 field("Gửi lại khi có 200:", lock2xxStrategyBox, null),
                 row(holdActionProxyChk),
-                pair(Ui.accent("Luật chặn...",
+                pair(Ui.accent("Chặn & gửi lại...",
                         t -> Icons.workbench(t.accent.onSolid(), 14), t -> t.accent,
                         () -> ActionWorkbenchDialog.show(panel, engine, ui.api != null ? ui.api.currentGroup() : null,
                                 null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {

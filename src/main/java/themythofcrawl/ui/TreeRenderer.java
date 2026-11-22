@@ -673,7 +673,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         // Clickable Excel badge
         if (g.target() != null && !g.target().sttText().isBlank()) {
             nl.excelX0 = x;
-            x = addChip(th, nl, "#" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
+            x = addChip(th, nl, "Excel " + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
                     th.info.text(), Icons.excel(th.info.text(), 11), true, x, th.scaled(4));
             nl.excelX1 = x - th.scaled(4);
         }
@@ -833,7 +833,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         // Clickable Excel badge
         if (g.target() != null && !g.target().sttText().isBlank()) {
             nl.excelX0 = x;
-            x = addChip(th, nl, "#" + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
+            x = addChip(th, nl, "Excel " + g.target().sttText(), th.smallBoldFont, th.info.fill(), th.info.border(),
                     th.info.text(), Icons.excel(th.info.text(), 11), true, x, th.scaled(4));
             nl.excelX1 = x - th.scaled(4);
         }

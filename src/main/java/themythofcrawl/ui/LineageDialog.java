@@ -209,7 +209,7 @@ final class LineageDialog {
         }
 
         StructuredAdviceCard adviceCard = new StructuredAdviceCard();
-        Pill headerBadge = Pill.badge("Bản Gốc & Trùng", t -> t.dup);
+        Pill headerBadge = Pill.badge("Các lần bắt", t -> t.dup);
 
         JToggleButton pinBtn = new JToggleButton("Ghim") {
             @Override
@@ -248,7 +248,7 @@ final class LineageDialog {
                 "Đổi dòng đang chọn trở thành Bản Gốc (#1) chuẩn cho endpoint này.", () -> { });
         JButton keepCopyBtn = Ui.button("Giữ bản này", t -> Icons.check(t.success.text(), 14),
                 "Xác nhận giữ bản trùng này hiển thị song song tại vị trí mới.", () -> { });
-        JButton toggleRefreshBtn = Ui.button("Nhãn Tự tải lại", Icons::refresh,
+        JButton toggleRefreshBtn = Ui.button("Gắn tag Tải lại", Icons::refresh,
                 "Đánh dấu endpoint này là API tự tải lại dữ liệu (REFRESH) sau thao tác.", () -> { });
         JButton openBtn = Ui.button("Mở API", Icons::search, "Nhảy tới đúng dòng API này trong tab API.", () -> { });
         JButton editSttBtn = Ui.button("Sửa STT...", Icons::edit, "Đặt lại số thứ tự (STT) hiển thị khi copy báo cáo.", () -> { });

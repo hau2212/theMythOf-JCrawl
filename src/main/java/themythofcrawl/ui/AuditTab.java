@@ -94,10 +94,10 @@ final class AuditTab {
         ColumnMemory.install(placeTable, "audit_places_v21", ui.uiPrefs);
         ColumnMemory.install(dupTable, "audit_dups_v21", ui.uiPrefs);
         ColumnMemory.install(logTable, "audit_log_v21", ui.uiPrefs);
-        tabs.addTab("Cần xử lý (0)", decidePanel());
+        tabs.addTab("Chờ xác nhận (0)", decidePanel());
         tabs.addTab("Giữ chỗ (0)", placesPanel());
-        tabs.addTab("API trùng & ẩn (0)", dupsPanel());
-        tabs.addTab("Nhật ký (0)", logPanel());
+        tabs.addTab("Lần bắt trùng (0)", dupsPanel());
+        tabs.addTab("Lịch sử chỗ (0)", logPanel());
         tabs.addChangeListener(e -> reload());
         panel.add(tabs, BorderLayout.CENTER);
     }
@@ -175,7 +175,7 @@ final class AuditTab {
 
     // ================================================================== Cần xử lý
     private JPanel decidePanel() {
-        JButton keep = Ui.accent("Giữ chỗ hiện tại", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
+        JButton keep = Ui.accent("Giữ chỗ này", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
         decideTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && !reloading) {
                 explain();
@@ -206,7 +206,7 @@ final class AuditTab {
                 ui.tick(true);
             }));
             m.addSeparator();
-            m.add(Ui.item("Giữ chỗ hiện tại", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> decide("keep")));
+            m.add(Ui.item("Giữ chỗ này", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> decide("keep")));
             m.add(Ui.item("Về nơi vừa gặp", Icons::move, !gs.isEmpty(), () -> decide("found")));
             m.add(Ui.item("Path khác...", Icons::folder, !gs.isEmpty(), () -> decide("other")));
             m.add(Ui.item("Không giữ (ẩn)", Icons::hide, !gs.isEmpty(), () -> decide("hide")));
@@ -218,12 +218,12 @@ final class AuditTab {
             m.show(e.getComponent(), e.getX(), e.getY());
         });
 
-        cardKeep = Ui.accent("Xác nhận chỗ hiện tại", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
-        cardFound = Ui.button("Giữ ở chỗ mới gặp", Icons::move, () -> decide("found"));
+        cardKeep = Ui.accent("Giữ chỗ này", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> decide("keep"));
+        cardFound = Ui.button("Chuyển sang chỗ mới", Icons::move, () -> decide("found"));
         cardOther = Ui.button("Chọn nhánh khác...", Icons::folder, () -> decide("other"));
-        cardHide = Ui.button("Ẩn bản lặp", Icons::hide, () -> decide("hide"));
+        cardHide = Ui.button("Ẩn lần bắt này", Icons::hide, () -> decide("hide"));
         cardDelete = Ui.button("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete"));
-        JButton cardLineage = Ui.button("Bản Gốc & Trùng...", Icons::lineageGraph, () -> {
+        JButton cardLineage = Ui.button("Các lần bắt...", Icons::lineageGraph, () -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
             if (gs.isEmpty()) {
                 Ui.hint(decideTable, "Chọn 1 dòng trong bảng Cần xử lý trước");
@@ -231,7 +231,7 @@ final class AuditTab {
                 LineageDialog.show(ui, gs.get(0));
             }
         });
-        JButton cardTagRefresh = Ui.button("Nhãn Tự tải lại", Icons::refresh, () -> {
+        JButton cardTagRefresh = Ui.button("Gắn tag Tải lại", Icons::refresh, () -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
             if (gs.isEmpty()) {
                 Ui.hint(decideTable, "Chọn ít nhất 1 dòng trong bảng Cần xử lý trước");
@@ -264,9 +264,9 @@ final class AuditTab {
             }));
             m.add(Ui.item("Quản lý Nhãn & Tự tải lại...", Icons::tag, ui::openTagManager));
             m.addSeparator();
-            m.add(Ui.item("Giữ ở chỗ mới gặp", Icons::move, () -> decide("found")));
+            m.add(Ui.item("Chuyển sang chỗ mới", Icons::move, () -> decide("found")));
             m.add(Ui.item("Chuyển sang nhánh khác...", Icons::folder, () -> decide("other")));
-            m.add(Ui.item("Ẩn bản lặp", Icons::hide, () -> decide("hide")));
+            m.add(Ui.item("Ẩn lần bắt này", Icons::hide, () -> decide("hide")));
             m.add(Ui.item("Xóa", t -> Icons.trash(t.danger.text()), () -> decide("delete")));
             m.addSeparator();
             m.add(Ui.item("Hướng dẫn Cần xử lý...", Icons::info,
@@ -276,7 +276,7 @@ final class AuditTab {
         moreDecideRef[0] = moreDecide;
         JPanel p = new JPanel(new BorderLayout());
         p.add(Ui.flow(FlowLayout.LEFT, keep,
-                Ui.button("Giữ ở chỗ mới gặp", Icons::move, () -> decide("found")),
+                Ui.button("Chuyển sang chỗ mới", Icons::move, () -> decide("found")),
                 Ui.button("Chọn hết", Icons::check, decideTable::selectAll),
                 Ui.button("Nhãn & Tự tải lại...", Icons::tag, ui::openTagManager),
                 moreDecide), BorderLayout.NORTH);
@@ -825,9 +825,9 @@ final class AuditTab {
             placesLabel.setText(recs.size() + " endpoint · " + live + " đang có API · " + deleted
                     + " đã xóa (giữ chỗ) · bấm đúp để sửa chỗ");
             int dupCount = (int) engine.copies().values().stream().filter(l -> l.size() > 1).count();
-            String[] titles = {"Cần xử lý (" + pending.size() + ")", "Giữ chỗ (" + recs.size() + ")",
-                "API trùng & ẩn (" + dupCount + " trùng · " + engine.hiddenGroups().size() + " ẩn)",
-                "Nhật ký (" + engine.book().log().size() + ")"};
+            String[] titles = {"Chờ xác nhận (" + pending.size() + ")", "Giữ chỗ (" + recs.size() + ")",
+                "Lần bắt trùng (" + dupCount + " · " + engine.hiddenGroups().size() + " ẩn)",
+                "Lịch sử chỗ (" + engine.book().log().size() + ")"};
             for (int i = 0; i < titles.length; i++) {
                 if (!tabs.getTitleAt(i).equals(titles[i])) {
                     tabs.setTitleAt(i, titles[i]);

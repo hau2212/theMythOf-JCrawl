@@ -500,7 +500,7 @@ class RoleRulesTest {
         assertFalse(lines.stream().anyMatch(l -> l.toLowerCase().startsWith("cookie:")));
         assertEquals("POST /v1/transfer?x=1 HTTP/1.1", lines.get(0));
         assertArrayEquals("{\"amount\":10}".getBytes(StandardCharsets.ISO_8859_1), bodyOf(modifiedOrig));
-        assertTrue(g1.origResult().roleName().contains("profile (2 rule)"));
+        assertTrue(g1.origResult().roleName().contains("+ 2 luật"), g1.origResult().roleName());
 
         // The captured original request bytes themselves stay untouched
         assertTrue(headerLinesOf(Blob.bytesOf(g1.origRequest())).contains("Cookie: sid=orig"));

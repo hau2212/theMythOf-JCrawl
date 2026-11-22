@@ -95,7 +95,7 @@ final class HistoryTab {
                 });
         actIdRef[0] = actIdBtn;
 
-        JPanel bar = Ui.flow(FlowLayout.LEFT,
+        JPanel bar = Ui.flow(FlowLayout.LEFT, ui.newTreeViewSwitch(),
                 Ui.accent("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()), t -> t.accent, () -> {
                     ui.useSource(tree);
                     ui.send(ui.scope().groups());

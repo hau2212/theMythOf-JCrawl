@@ -17,10 +17,10 @@ import themythofcrawl.model.PlaceHint;
 /** The 'Cần xử lý', 'Giữ chỗ', 'API trùng & ẩn' and 'Nhật ký' rows and clear Vietnamese advice for the Audit tab. */
 public final class Decisions {
     public enum Kind {
-        DUP("Trùng ở vị trí mới"),
-        RETURN_MISSING("Quay về chỗ cũ (đã xóa nhánh)"),
-        RETURN("Quay về chỗ cũ"),
-        NEW("API mới cần xác nhận");
+        DUP("Trùng ở chỗ mới"),
+        RETURN_MISSING("Về chỗ cũ (nhánh đã xóa)"),
+        RETURN("Về chỗ cũ"),
+        NEW("API mới");
 
         public final String label;
 
