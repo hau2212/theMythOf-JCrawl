@@ -179,6 +179,7 @@ public final class RequestComposerDialog {
         dlg.setMinimumSize(new Dimension(920, 580));
         dlg.setSize(UiPrefs.composerSize(prefs));
         dlg.setLocationRelativeTo(owner);
+        Ui.fastScroll(dlg.getContentPane());
         dlg.setVisible(true);
     }
 
@@ -303,9 +304,9 @@ public final class RequestComposerDialog {
         roleCombo.setPreferredSize(new Dimension(265, 26));
 
         JComboBox<String> actionModeCombo = new JComboBox<>(new String[] {
-                "Nguyên bản (Không can thiệp — gửi đúng từng byte)",
+                "Gửi y nguyên (đúng từng byte)",
                 "Tự đổi ID sống từ Kho (nếu ID đã tiêu thụ)",
-                "Chạy Producer tạo ID mới trước khi gửi"
+                "Tạo trước: gọi API tạo lấy ID mới rồi gửi"
         });
         actionModeCombo.setPreferredSize(new Dimension(320, 26));
 
@@ -334,7 +335,7 @@ public final class RequestComposerDialog {
             private void updateCount() {
                 byte[] b = requestArea.getText().getBytes(StandardCharsets.ISO_8859_1);
                 boolean modified = !requestArea.getText().equals(originalReqText);
-                byteCounter.setText(b.length + " bytes" + (modified ? " · Đã chỉnh sửa" : " · Nguyên bản"));
+                byteCounter.setText(b.length + " bytes" + (modified ? " · Đã chỉnh sửa" : " · y nguyên"));
             }
             @Override public void insertUpdate(DocumentEvent e) { updateCount(); }
             @Override public void removeUpdate(DocumentEvent e) { updateCount(); }

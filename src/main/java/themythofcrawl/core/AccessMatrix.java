@@ -42,6 +42,9 @@ public final class AccessMatrix {
                 AuditLevel.INFO, false),
         UNKNOWN_OK("2xx ?", "Gọi được (role chưa crawl)", "Role chưa crawl nên chưa biết UI có cho thấy không — crawl role này để kết luận",
                 AuditLevel.REDIRECT, false),
+        STALE_ID("ID đã dùng", "Chưa kết luận: ID đã dùng",
+                "404 / 410 vì ID đã bị xóa bởi lần gửi trước (cùng ID), không phải vì bị chặn. Gửi lại bằng 'Mỗi vai trò 1 bản ghi'.",
+                AuditLevel.INFO, false),
         ERROR("Lỗi", "Lỗi", "Lỗi gọi API / 5xx", AuditLevel.ERROR, false),
         NOT_SENT("-", "Chưa gửi", "Chưa gửi request của role này", AuditLevel.NONE, false);
 
@@ -147,12 +150,14 @@ public final class AccessMatrix {
                 }
                 Cell c = evaluate(engine, g, r, role, origResp, crawled, rule);
                 cells.put(role, c);
+                r.setAccessBadge(badgeOf(c.verdict(), c.status(), c.similarity()));
                 if (c.verdict().finding) {
                     findings.add(new Finding(g.gid(), g.method(), g.service().hostLabel(), g.path(), g.branch(), role,
                             g.seenBy(), c.status(), c.similarity(), c.verdict()));
                 }
             }
             rows.add(new Row(g, cells));
+            Audit.recalc(g);
         }
         return new AccessMatrix(List.copyOf(roleNames), rows, findings, crawled);
     }
@@ -167,6 +172,9 @@ public final class AccessMatrix {
             return new Cell(role, Verdict.NOT_SENT, null, -1);
         }
         boolean ok = st >= 200 && st < 300;
+        if ((st == 404 || st == 410) && staleId(engine, g, r)) {
+            return new Cell(role, Verdict.STALE_ID, st, -1);
+        }
         boolean seen = g.seenBy(role);
         double sim = ok ? similarity(origResp, engine.responseOf(g, r)) : -1;
         boolean same = sim >= SAME_CONTENT;
@@ -192,6 +200,79 @@ public final class AccessMatrix {
             v = seen ? Verdict.SEEN_DENIED : Verdict.DENIED_OK;
         }
         return new Cell(role, v, st, sim);
+    }
+
+    /**
+     * V_8.2: a DELETE-like row that got 404 / 410 for an ID another row (or the captured request) already used
+     * successfully: the object was simply gone, the server never had to decide about this role.
+     */
+    static boolean staleId(Engine engine, ApiGroup g, RoleResult r) {
+        if (!ActionEngine.isActionMethod(g.method())) {
+            return false;
+        }
+        String used = usedId(engine, g, r);
+        if (used == null) {
+            return false;
+        }
+        for (RoleResult o : g.entries()) {
+            if (o == r || o.status() == null || o.status() < 200 || o.status() >= 300) {
+                continue;
+            }
+            if (o.original() && g.heldAtProxy()) {
+                continue;   // captured while held: the server never executed it
+            }
+            if (used.equals(usedId(engine, g, o))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static String usedId(Engine engine, ApiGroup g, RoleResult r) {
+        byte[] req = engine.shownRequestOf(g, r);
+        if (req == null) {
+            return null;
+        }
+        String head = new String(req, 0, Math.min(req.length, 2048), StandardCharsets.ISO_8859_1);
+        int sp1 = head.indexOf(' ');
+        int sp2 = sp1 < 0 ? -1 : head.indexOf(' ', sp1 + 1);
+        String path = sp1 > 0 && sp2 > sp1 ? head.substring(sp1 + 1, sp2) : g.path();
+        List<String> ids = engine.actionEngine().detectIds(path, req);
+        return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    /** Text cached on a row for the Cây / API colours; null = nothing to say beyond the HTTP status. */
+    public static String badgeOf(Verdict v, Integer st, double sim) {
+        if (v == null) {
+            return null;
+        }
+        return switch (v) {
+            case BAC, VIOLATION -> v.shortLabel + ": " + st + (sim >= 0 ? " ~" + Math.round(sim * 100) + "% giống" : "");
+            case STALE_ID -> "Chưa kết luận: ID đã dùng (" + st + ")";
+            default -> null;
+        };
+    }
+
+    /** Re-evaluate every role row of one API (right after a send) so the Cây / API colours show the verdict. */
+    public static void refreshBadges(Engine engine, ApiGroup g, RoleResult changed) {
+        byte[] origResp = engine.responseOf(g, g.origResult());
+        Set<String> crawled = engine.crawledRoles();
+        ExpectedAccess.Rule rule = engine.expectedAccess().match(g.branch());
+        boolean all = changed == null || changed.original();
+        for (RoleResult r : g.results()) {
+            if (r.status() == null) {
+                r.setAccessBadge(null);
+                continue;
+            }
+            // body similarity only for the row that changed (or every row when the crawl account's response changed);
+            // other 404 / 410 rows are re-checked for "ID đã dùng", which is cheap
+            boolean recheck = all || r == changed || r.status() == 404 || r.status() == 410;
+            if (!recheck) {
+                continue;
+            }
+            Cell c = evaluate(engine, g, r, r.roleKey(), origResp, crawled, rule);
+            r.setAccessBadge(badgeOf(c.verdict(), c.status(), c.similarity()));
+        }
     }
 
     /**

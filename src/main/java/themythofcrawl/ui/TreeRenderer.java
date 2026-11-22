@@ -725,6 +725,19 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         return Math.max(x, vx + th.scaled(20));
     }
 
+    /** V_8.2: which ID this row really used ("ID 91"), when it differs from the captured request. */
+    private int addSentNoteChip(Theme th, NodeLayout nl, RoleResult r, int x) {
+        String note = r.sentNote();
+        if (note == null || note.isBlank() || r.status() == null) {
+            return x;
+        }
+        int cut = note.indexOf(" · ");
+        String shortNote = cut > 0 ? note.substring(0, cut) : note;
+        Theme.Token tok = th.info;
+        return addChip(th, nl, Text.shortPath(shortNote, 22), th.smallFont, tok.fill(), tok.border(), tok.text(),
+                null, false, x, th.scaled(4));
+    }
+
     private int layoutRoleGrid(Node n, Theme th, NodeLayout nl, int x, int gap) {
         boolean isOrig = n.kind == Node.Kind.ORIG;
         if (!(n.payload instanceof Object[] arr) || arr.length < 2 || !(arr[0] instanceof ApiGroup g)
@@ -765,7 +778,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
-        return x;
+        return addSentNoteChip(th, nl, r, x);
     }
 
     private int layoutHeldGrid(Node n, Theme th, NodeLayout nl, int x, int gap) {
@@ -978,7 +991,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Icons.stripLeadingSymbol(badge), th.smallBoldFont, tok.fill(), tok.border(), tok.text(),
                     ic, false, x, th.scaled(4));
         }
-        return x;
+        return addSentNoteChip(th, nl, r, x);
     }
 
     private int layoutGhost(Node n, Theme th, NodeLayout nl, int x, int gap) {

@@ -81,18 +81,18 @@ public final class DataProtection {
     /** Answer to question 2 ("Cách gửi lại"), mapped onto the existing per-API Action modes. */
     public enum Resend {
         AUTO("Tự động", ActionEngine.ActionMode.AUTO_SMART,
-                "Kết quả lần gửi đầu + Kho ID sống + API tạo mới (nếu đã nhận ra)",
-                "Lần đầu 2xx mà giờ 4xx -> thử thay ID còn sống; không có thì gọi API tạo mới lấy ID mới rồi gửi lại"),
-        RAW("Gửi nguyên bản", ActionEngine.ActionMode.NONE,
+                "Kho ID cùng họ API + API tạo (POST cùng họ, nếu đã crawl)",
+                "Gửi nhiều vai trò: mỗi vai trò 1 bản ghi riêng (tạo trước hoặc ID khác trong Kho ID). Gửi 1 dòng: ID đã dùng thì đổi ID / tạo mới"),
+        RAW("Gửi y nguyên", ActionEngine.ActionMode.NONE,
                 "Request y nguyên như lúc crawl",
-                "Gửi y nguyên lên Server; ID đã bị xóa thì nhận 404/400 thật (trung thực nhất)"),
-        LIVE_ID("Thay ID còn sống", ActionEngine.ActionMode.LIVE_ID_POOL,
-                "Kho ID sống: ID tự thu từ response trước đó (vd GET /orders trả về 77, 78)",
-                "DELETE /orders/15 (15 đã xóa) -> gửi DELETE /orders/78"),
-        RECREATE("Tạo bản ghi mới rồi gửi", ActionEngine.ActionMode.PRODUCER_RECREATE,
-                "API tạo mới của cùng tài nguyên (vd POST /orders, tự nhận ra khi crawl)",
+                "Gửi y nguyên lên server; ID đã bị xóa thì nhận 404 / 400 (dòng đó hiện 'Chưa kết luận: ID đã dùng')"),
+        LIVE_ID("Đổi ID", ActionEngine.ActionMode.LIVE_ID_POOL,
+                "Kho ID cùng họ API: ID từ response 2xx (vd POST /orders tạo 77, GET /orders trả 78)",
+                "DELETE /orders/15 cho 2 vai trò -> vai trò A xóa 77, vai trò B xóa 78 (mỗi vai trò 1 ID khác nhau)"),
+        RECREATE("Tạo trước", ActionEngine.ActionMode.PRODUCER_RECREATE,
+                "API tạo của cùng họ API (vd POST /orders, tự nhận ra khi crawl), gửi bằng tài khoản crawl",
                 "Gọi POST /orders -> nhận id 91 -> gửi DELETE /orders/91 (mỗi role xóa bản ghi của riêng nó)"),
-        REUSE_200("Dùng lại kết quả 200 cũ", ActionEngine.ActionMode.LOCK_2XX,
+        REUSE_200("Bằng chứng 200", ActionEngine.ActionMode.LOCK_2XX,
                 "Response 2xx đầu tiên đã được lưu lại",
                 "KHÔNG gửi lại lên Server; hiển thị lại 200 cũ (tránh xóa / thanh toán 2 lần)");
 

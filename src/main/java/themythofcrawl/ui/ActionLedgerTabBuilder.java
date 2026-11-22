@@ -128,8 +128,8 @@ final class ActionLedgerTabBuilder {
         JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         topRight.setOpaque(false);
         JButton trashBtn = Ui.secondaryBtn("Thùng rác / Hoàn tác (0)", t -> Icons.undo(t.fg));
-        JButton resetAllBtn = Ui.dangerBtn("Nhả toàn bộ -> Nguyên bản", t -> Icons.trash(t.danger.text()), null);
-        resetAllBtn.setToolTipText("Đưa toàn bộ chính sách vào Thùng rác Undo, tắt mọi chặn Proxy và chuyển về chế độ Nguyên bản");
+        JButton resetAllBtn = Ui.dangerBtn("Đặt lại", t -> Icons.trash(t.danger.text()), null);
+        resetAllBtn.setToolTipText("Đưa mọi luật vào Thùng rác (khôi phục được) và tắt mọi chặn");
         topRight.add(trashBtn);
         topRight.add(resetAllBtn);
 
@@ -180,6 +180,10 @@ final class ActionLedgerTabBuilder {
         JButton exportBtn = Ui.secondaryBtn("Export JSON", null);
         JButton clearHitsBtn = Ui.secondaryBtn("Reset Hits", null);
 
+        JButton newRuleBtn = Ui.solidPrimary("Tạo luật mới", t -> Icons.plus(t.accent.onSolid()));
+        newRuleBtn.setToolTipText("Mở form bên dưới để tạo 1 luật mới (form chỉ hiện khi cần)");
+        tableBtns.add(newRuleBtn);
+        tableBtns.add(Box.createHorizontalStrut(6));
         tableBtns.add(toggleSelBtn);
         tableBtns.add(dupBtn);
         tableBtns.add(upBtn);
@@ -399,10 +403,13 @@ final class ActionLedgerTabBuilder {
         JButton updateBtn = Ui.solidPrimary("Lưu thay đổi", t -> Icons.check(t.accent.onSolid()), null);
         updateBtn.setVisible(false);
         JButton createBtn = Ui.solidPrimary("Lưu chính sách mới (Ctrl+S)", t -> Icons.save(t.accent.onSolid()), null);
-        createBtn.setToolTipText("Tạo và lưu ngay 1 bản ghi chính sách mới vào Sổ cái (Phím tắt: Ctrl+S)");
+        createBtn.setToolTipText("Lưu luật mới (Ctrl+S)");
 
         JPanel formBtnsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         formBtnsRight.setOpaque(false);
+        JButton hideFormBtn = Ui.secondaryBtn("Ẩn form", null);
+        hideFormBtn.setToolTipText("Thu form lại để bảng luật chiếm hết chỗ");
+        formBtnsRight.add(hideFormBtn);
         formBtnsRight.add(clearFormBtn);
         formBtnsRight.add(updateBtn);
         formBtnsRight.add(createBtn);
@@ -435,6 +442,28 @@ final class ActionLedgerTabBuilder {
         centerSplit.setDividerSize(6);
         centerSplit.setBorder(null);
         root.add(centerSplit, BorderLayout.CENTER);
+        // V_7.2: progressive disclosure — the form only appears when creating or editing a rule
+        Runnable showForm = () -> {
+            if (!formCard.isVisible()) {
+                formCard.setVisible(true);
+                centerSplit.setDividerLocation(0.42);
+                root.revalidate();
+            }
+        };
+        formCard.setVisible(focusGroup != null || (prefillBranch != null && !prefillBranch.isBlank()));
+        newRuleBtn.addActionListener(Ui.safe(e -> {
+            clearFormBtn.doClick();
+            showForm.run();
+        }));
+        hideFormBtn.addActionListener(Ui.safe(e -> {
+            formCard.setVisible(false);
+            root.revalidate();
+        }));
+        ledgerTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && ledgerTable.getSelectedRow() >= 0) {
+                showForm.run();
+            }
+        });
 
         // ---- Bottom Per-API Effective Policy Explainer (when focusGroup != null)
         JPanel explainerPanel = new JPanel(new BorderLayout(8, 4));
@@ -448,7 +477,7 @@ final class ActionLedgerTabBuilder {
         explainerBtns.setOpaque(false);
 
         if (focusGroup != null) {
-            JButton releaseApiBtn = Ui.secondaryBtn("Nhả API này về Nguyên bản", t -> Icons.undo(t.fg));
+            JButton releaseApiBtn = Ui.secondaryBtn("Cho API này đi thẳng", t -> Icons.undo(t.fg));
             JButton allowApiBtn = Ui.secondaryBtn("+ Cho qua luôn (ALLOW)", t -> Icons.check(t.success.text()));
             JButton composerBtn = Ui.secondaryBtn("Sửa & Gửi lại Request", t -> Icons.edit(t.accent.text()));
             explainerBtns.add(releaseApiBtn);
@@ -533,7 +562,7 @@ final class ActionLedgerTabBuilder {
                         focusGroup.branch(), focusGroup.host(), focusGroup.method(), focusGroup.path(), focusGroup.gid());
                 ActionMode effReplay = engine.effectiveActionMode(focusGroup);
                 String chain = pEv.allMatched().isEmpty()
-                        ? "Không có luật Proxy nào chạm vào " + Text.apiLabel(focusGroup.gid()) + " -> Đi thẳng Nguyên bản."
+                        ? "Không có luật Proxy nào chạm vào " + Text.apiLabel(focusGroup.gid()) + " -> đi thẳng."
                         : "Hiệu lực cho " + Text.apiLabel(focusGroup.gid()) + ": THẮNG = [" + pEv.winningPolicy().name()
                                 + " (" + pEv.effectiveProxyEffect().label + ")]"
                                 + (pEv.allMatched().size() > 1
@@ -626,7 +655,7 @@ final class ActionLedgerTabBuilder {
                     sc, branches, subBranchChk.isSelected(), hostField.getText().trim(),
                     pt, pathField.getText().trim(), apiGid, selectedMethods,
                     st, pe, rm, 200, null, null, "",
-                    now, now, existingId == null ? "Sổ cái CRUD" : "Chỉnh sửa CRUD", 0L, "", 0);
+                    now, now, existingId == null ? "Tab Luật" : "Sửa ở tab Luật", 0L, "", 0);
         };
 
         Runnable doCreate = () -> {
@@ -783,7 +812,7 @@ final class ActionLedgerTabBuilder {
                 Ui.hint((java.awt.Component) e.getSource(), "Chọn ít nhất 1 luật trong bảng trước");
                 return;
             }
-            ledger.bulkDelete(ids, "Xóa từ Sổ cái");
+            ledger.bulkDelete(ids, "Xóa ở tab Luật");
             engine.saveActionPolicies();
             refreshAll.run();
             if (onAfterAction != null) onAfterAction.run();
@@ -814,8 +843,8 @@ final class ActionLedgerTabBuilder {
                             "Chọn cách nhập bộ Chính sách Action từ file JSON:",
                             "Import JSON Chính sách",
                             JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
-                            new String[] {"Gộp thêm vào Sổ cái", "Thay thế toàn bộ (cũ vào Thùng rác)", "Hủy"},
-                            "Gộp thêm vào Sổ cái");
+                            new String[] {"Gộp thêm", "Thay thế (cũ vào Thùng rác)", "Hủy"},
+                            "Gộp thêm");
                     if (choice == 0 || choice == 1) {
                         int n = ledger.importJson(json, choice == 1);
                         engine.saveActionPolicies();
@@ -854,9 +883,9 @@ final class ActionLedgerTabBuilder {
 
         resetAllBtn.addActionListener(Ui.safe(e -> {
             int ok = JOptionPane.showConfirmDialog(Ui.ownerWindow(dialogParent),
-                    "Nhả toàn bộ cấu hình Action về Nguyên bản (NONE)?\n"
-                            + "Mọi chính sách hiện có sẽ được chuyển an toàn vào Thùng rác Hoàn tác để khôi phục khi cần.",
-                    "Xác nhận Nhả toàn bộ (Reset All)", JOptionPane.YES_NO_OPTION);
+                    "Tắt mọi chặn và chế độ?\n"
+                            + "Luật hiện có vào Thùng rác, khôi phục được khi cần.",
+                    "Đặt lại", JOptionPane.YES_NO_OPTION);
             if (ok == JOptionPane.YES_OPTION) {
                 engine.resetAllActionControls();
                 refreshAll.run();

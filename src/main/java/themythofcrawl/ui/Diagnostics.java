@@ -23,7 +23,7 @@ public final class Diagnostics {
     private static String resolveVersion() {
         Package pkg = Diagnostics.class.getPackage();
         String v = pkg != null ? pkg.getImplementationVersion() : null;
-        return v != null && !v.isBlank() ? v : "7.1-beta";
+        return v != null && !v.isBlank() ? v : "9.2";
     }
 
     public static String lafName() {
@@ -69,6 +69,20 @@ public final class Diagnostics {
             return measured != null ? prop + " (hệ thống: " + measured + ")" : prop;
         }
         return measured != null ? measured + " (sun.java2d.uiScale chưa đặt)" : "(mặc định)";
+    }
+
+    /** V_8.2: screen zoom as a person reads it ("100%", "150%"), technical detail stays in {@link #uiScale()}. */
+    public static String screenZoom() {
+        try {
+            if (!GraphicsEnvironment.isHeadless()) {
+                AffineTransform tx = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                        .getDefaultScreenDevice().getDefaultConfiguration().getDefaultTransform();
+                return Math.round(tx.getScaleX() * 100) + "%";
+            }
+        } catch (Throwable ignored) {
+            // headless or no display device
+        }
+        return "100%";
     }
 
     /** Shown in Workspace / status tooltips: version + LAF + dark + font. */

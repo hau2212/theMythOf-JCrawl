@@ -35,6 +35,12 @@ public final class Audit {
             }
             return;
         }
+        String access = res.accessBadge();
+        if (access != null && res.status() != null) {
+            // V_8.2: the access-control verdict wins over the plain HTTP colour (a low role's 200 is a finding, not "OK")
+            res.setAudit(access.startsWith("Chưa kết luận") ? AuditLevel.INFO : AuditLevel.WARN, access);
+            return;
+        }
         if (ResultState.ERROR.equals(res.state())) {
             String msg = Text.blank(res.error()) ? "Timeout / Connection Error" : res.error();
             if (msg.length() > 34) {

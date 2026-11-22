@@ -25,6 +25,9 @@ public final class RoleResult {
     private volatile String error = "";
     private volatile int sentCount;
     private volatile String tabName = "";
+    private volatile Blob sentRequest;    // V_8.2: the request really sent last time, when it differs (ID swapped...)
+    private volatile String sentNote = ""; // V_8.2: e.g. "ID 91 · tạo mới bởi API #3"
+    private volatile String accessBadge;   // V_8.2: "NGHI BAC: 200 ~92% giống" / "Chưa kết luận: ID đã dùng (404)"
     private volatile AuditLevel auditLevel;
     private volatile String auditBadge;
     private volatile int id;           // stable id inside its API (names its stored messages)
@@ -69,6 +72,12 @@ public final class RoleResult {
     public void setSentCount(int n) { sentCount = n; }
     public String tabName() { return tabName; }
     public void setTabName(String t) { tabName = t == null ? "" : t; }
+    public Blob sentRequest() { return sentRequest; }
+    public void setSentRequest(Blob b) { sentRequest = b; }
+    public String sentNote() { return sentNote; }
+    public String accessBadge() { return accessBadge; }
+    public void setAccessBadge(String b) { accessBadge = b; }
+    public void setSentNote(String n) { sentNote = n == null ? "" : n; }
     public AuditLevel auditLevel() { return auditLevel; }
     public String auditBadge() { return auditBadge; }
 

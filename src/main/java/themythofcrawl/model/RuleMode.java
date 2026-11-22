@@ -17,6 +17,17 @@ public enum RuleMode {
         this.hint = hint;
     }
 
+    /** V_8.2: short Vietnamese name shown in the Vai trò editor. */
+    public String label() {
+        return switch (this) {
+            case REPLACE -> "Thay";
+            case ADD -> "Thêm";
+            case REMOVE -> "Xóa";
+            case COOKIE_SET -> "Đặt cookie";
+            case COOKIE_REMOVE -> "Xóa cookie";
+        };
+    }
+
     public boolean cookie() {
         return this == COOKIE_SET || this == COOKIE_REMOVE;
     }

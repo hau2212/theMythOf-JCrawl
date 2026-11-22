@@ -103,7 +103,7 @@ final class SettingsTab {
     private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả API gốc (áp profile API gốc) cùng các role");
     private final JComboBox<String> actionModeBox = new JComboBox<>();
     private final JComboBox<String> lock2xxStrategyBox = new JComboBox<>();
-    private final JCheckBox holdActionProxyChk = new JCheckBox("Bật Chặn tại Proxy cho mọi Action API khi Crawl (Giữ nguyên ID trên Server)");
+    private final JCheckBox holdActionProxyChk = new JCheckBox("Giữ lại mọi API thao tác khi crawl (server không đổi)");
     private final JCheckBox number = new JCheckBox("Thêm số thứ tự role vào tên tab (01_, 02_ ...) nếu tên chưa có");
     private final JCheckBox branchInTab = new JCheckBox("Gắn mã Nhánh vào tên tab: [F01-G01:POST /v1/...] thay vì [G01:POST /v1/...]");
     private final JTextField pathLen = new JTextField(6);
@@ -142,6 +142,23 @@ final class SettingsTab {
         for (themythofcrawl.core.ActionEngine.ActionMode am : themythofcrawl.core.ActionEngine.ActionMode.values()) {
             actionModeBox.addItem(am.label);
         }
+        // V_8.2: short names in the box, one-line meaning on hover of each item.
+        actionModeBox.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                   boolean sel, boolean focus) {
+                super.getListCellRendererComponent(list, value, index, sel, focus);
+                for (themythofcrawl.core.ActionEngine.ActionMode am : themythofcrawl.core.ActionEngine.ActionMode.values()) {
+                    if (am.label.equals(value)) {
+                        setToolTipText(am.description);
+                        if (index < 0) {
+                            actionModeBox.setToolTipText(am.description);
+                        }
+                    }
+                }
+                return this;
+            }
+        });
         for (themythofcrawl.core.ActionEngine.Lock2xxStrategy ls : themythofcrawl.core.ActionEngine.Lock2xxStrategy.values()) {
             lock2xxStrategyBox.addItem(ls.label);
         }
@@ -202,24 +219,24 @@ final class SettingsTab {
                 row(autoDetectRefreshChk),
                 pair(Ui.button("Quản lý API Tag & REFRESH...", Icons::tag, ui::openTagManager),
                         Ui.muted("Danh mục Tag & hành vi M1-M4"))));
-        sections.add(section("3.  Gửi request, Bảo vệ Action API & chống lỗi 429", t -> t.success,
-                "Hàng đợi theo host chống 429/503; quản lý trực quan Chiến lược bảo vệ, Luật Chặn Proxy & Kho ID cho Action API.",
+        sections.add(section("3.  Gửi request & chống lỗi 429", t -> t.success,
+                "Hàng đợi theo host chống 429 / 503; chế độ cho API thao tác (POST / PUT / PATCH / DELETE).",
                 field("Chế độ gửi:", profile, null), field("Khoảng nghỉ (ms):", delay, pacing),
                 field("Dao động (%):", jitter, Ui.muted("nghỉ = khoảng nghỉ +/- %")),
                 field("Song song mỗi host:", concurrency, Ui.muted("1 = tuần tự")),
                 field("Tự gửi lại 429/503:", retries, null), field("Tổng luồng gửi:", threads, null),
                 row(sendOriginal),
-                field("Chiến lược Action:", actionModeBox, null),
-                field("Khi gửi lại Khóa 200 OK:", lock2xxStrategyBox, null),
+                field("Chế độ thao tác:", actionModeBox, Ui.muted("rê chuột để xem")),
+                field("Gửi lại khi có 200:", lock2xxStrategyBox, null),
                 row(holdActionProxyChk),
-                pair(Ui.accent("Mở Action Workbench...",
+                pair(Ui.accent("Luật chặn...",
                         t -> Icons.workbench(t.accent.onSolid(), 14), t -> t.accent,
                         () -> ActionWorkbenchDialog.show(panel, engine, ui.api != null ? ui.api.currentGroup() : null,
                                 null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                                     load();
                                     ui.syncHeader();
                                 })),
-                        Ui.muted("Chiến lược, Luật Chặn Proxy & Kho ID"))));
+                        Ui.muted("Chế độ, Luật, Kiểm tra, Kho ID"))));
         sections.add(section("4.  Danh sách API từ file Excel (tùy chọn)", t -> t.pink,
                 "Cột STT | PROTOCOL | PATH | POSITION. Tham số {id} {session} [id] (id) <id> :id * là giá trị động.",
                 pair(Ui.button("Nạp file Excel (.xlsx)...", () -> ui.excel.load()), targetInfo), row(targetOnly), row(targetPosition),
@@ -250,18 +267,20 @@ final class SettingsTab {
         displayModeBox.setToolTipText("Chuyển đổi 3 chế độ thanh công cụ: Chỉ Icon (+ Thẻ mô tả khi rê chuột), Icon + Chữ, hoặc Chỉ Chữ");
         fontScaleBox.setToolTipText("Đổi cỡ chữ toàn bộ giao diện theMythOf-JCrawl (90% / 100% / 110% / 115% / 120%)");
         animationsBox.setToolTipText("Bật / tắt hiệu ứng trượt toast và mở/đóng thẻ (<= 150 ms)");
-        sections.add(section("8.  Giao diện, Font chữ & Chẩn đoán", t -> t.info,
-                "Tùy chỉnh phông chữ tiếng Việt, chế độ hiển thị nút 3 trạng thái, cỡ chữ, hiệu ứng nhẹ và thông tin chẩn đoán.",
-                field("Chế độ nút công cụ:", displayModeBox, Ui.muted("3 trạng thái")),
+        sections.add(section("8.  Giao diện & Font", t -> t.info,
+                "Phông chữ, kiểu nút, cỡ chữ. Phần \"Thông tin\" bên dưới chỉ để xem: màu và sáng / tối lấy theo Burp. Rê chuột để xem chi tiết.",
+                field("Kiểu nút:", displayModeBox, Ui.muted("icon / icon + chữ / chữ")),
                 field("Font giao diện:", uiFontBox, Ui.muted("Be Vietnam Pro / IBM Plex")),
-                field("Font URL & Mã:", monoFontBox, Ui.muted("JetBrains Mono")),
-                field("Cỡ chữ giao diện:", fontScaleBox, Ui.muted("áp dụng ngay")),
+                field("Font mã / URL:", monoFontBox, Ui.muted("JetBrains Mono")),
+                field("Cỡ chữ:", fontScaleBox, Ui.muted("áp dụng ngay")),
                 row(animationsBox),
                 field("Phiên bản:", diagVersion, null),
-                field("Look & Feel (LAF):", diagLaf, null),
-                field("Màu theme:", diagColors, null),
-                field("Scale / Font:", diagScale, null),
-                pair(Ui.button("Copy thông tin chẩn đoán", () -> {
+                field("Sáng / tối:", diagLaf, Ui.muted("theo Burp")),
+                field("Màu:", diagColors, Ui.muted("tự động")),
+                field("Cỡ hiển thị:", diagScale, null),
+                pair(Ui.accent("Nhật ký cho Claude...", t -> Icons.copy(t.accent.onSolid()), t -> t.accent, ui::openClaudeLog),
+                        Ui.muted("mọi thao tác, lần gửi, lỗi; token / cookie đã che")),
+                pair(Ui.button("Copy chẩn đoán (gửi khi báo lỗi)", () -> {
                     Ui.copyToClipboard(Diagnostics.fullReport(engine.workspaceName(), engine.workspaceLocation()));
                     diagCopyNote.setText("Đã copy thông tin chẩn đoán");
                     ui.flash("Đã copy thông tin chẩn đoán");
@@ -558,20 +577,20 @@ final class SettingsTab {
             dl.setFont(sf);
             dl.setMinimumSize(new Dimension(40, dl.getPreferredSize().height));
         }
-        diagVersion.setText(Text.EXT_NAME + " " + Diagnostics.VERSION);
-        String lafFull = Diagnostics.lafName() + " (" + Diagnostics.lafClass() + ") · dark=" + Diagnostics.isDark();
-        diagLaf.setText(Diagnostics.lafName() + " · dark=" + Diagnostics.isDark());
-        diagLaf.setToolTipText(lafFull);
-        String colorsFull = "Panel.background=" + Diagnostics.colorHex("Panel.background")
+        // V_8.2: human values first; the raw technical keys live in the hover tooltip and in "Copy chẩn đoán".
+        diagVersion.setText(Diagnostics.VERSION);
+        diagVersion.setToolTipText(Text.EXT_NAME + " " + Diagnostics.VERSION);
+        diagLaf.setText((Diagnostics.isDark() ? "Tối" : "Sáng") + " · theo Burp (" + Diagnostics.lafName() + ")");
+        diagLaf.setToolTipText("Đổi sáng / tối ở Burp: Settings > User interface > Appearance.  Kỹ thuật: "
+                + Diagnostics.lafClass() + " · Panel.background=" + Diagnostics.colorHex("Panel.background")
                 + " · Table.background=" + Diagnostics.colorHex("Table.background")
-                + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor");
-        diagColors.setText("Panel.background=" + Diagnostics.colorHex("Panel.background")
-                + " · Table.background=" + Diagnostics.colorHex("Table.background")
-                + " · Accent=" + Diagnostics.colorHex("Component.accentColor"));
-        diagColors.setToolTipText(colorsFull);
+                + " · Component.accentColor=" + Diagnostics.colorHex("Component.accentColor"));
+        diagColors.setText("Nền " + Diagnostics.colorHex("Panel.background") + " · Nhấn " + Diagnostics.colorHex("Component.accentColor"));
+        diagColors.setToolTipText("Màu lấy tự động từ theme Burp, không cần chỉnh.");
         int scalePct = ui != null ? UiPrefs.fontScalePercent(ui.uiPrefs) : 100;
-        diagScale.setText("sun.java2d.uiScale=" + Diagnostics.uiScale()
-                + " · font=" + Diagnostics.fontSummary() + " · " + scalePct + "%");
+        diagScale.setText("Màn hình " + Diagnostics.screenZoom() + " · chữ JCrawl " + scalePct + "% · " + Diagnostics.fontSummary());
+        diagScale.setToolTipText("Đổi cỡ chữ JCrawl ở ô \"Cỡ chữ\" phía trên. Độ phóng màn hình do hệ điều hành / Burp quyết định."
+                + "  Kỹ thuật: sun.java2d.uiScale=" + Diagnostics.uiScale());
     }
 
     private int num(JTextField f, int def) {

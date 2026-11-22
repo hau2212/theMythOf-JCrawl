@@ -140,6 +140,8 @@ public final class MainPanel {
     private JPanel headerLeftZone;
     private JPanel headerRightFull;
     private JPanel headerRightCompact;
+    /** V_8.2: breadcrumb (Đích) zone — hidden when the top bar is collapsed. */
+    private JPanel headerCenterZone;
     private JPanel rightWrapper;
     private boolean userTopCompact;
     private boolean effectiveHeaderCompact;
@@ -191,6 +193,7 @@ public final class MainPanel {
     final ExcelTab excel;
     final AuditTab audit;
     final AccessMatrixTab matrix;
+    final BugsTab bugs;
 
     public MainPanel(Engine engine, Workspaces workspaces, UiHost host, String projectId) {
         this.engine = engine;
@@ -219,27 +222,37 @@ public final class MainPanel {
         treeTab = new TreeTab(this);
         audit = new AuditTab(this);
         matrix = new AccessMatrixTab(this);
+        bugs = new BugsTab(this);
         // V_7.0 tab groups: Cây first (where most of the work happens), reports and settings grouped
         reportTabs.addTab("Lịch sử", null, history.panel, "Cây lịch sử theo nhánh và báo cáo trực quan");
         reportTabs.addTab("Excel", null, excel.panel, "Đối chiếu file Excel: dòng nào đã bắt, số lần gặp, ở đâu");
         settingsTabs.addTab("Cấu hình", null, settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace");
         settingsTabs.addTab("Log", null, log.panel, "Nhật ký theo nhánh / API, xuất Excel");
         Object[][] t = {
-            {"Cây", treeTab.panel, "Cây nhánh dạng bảng thẳng hàng: Nhánh | Method | Path | Status | Length | Kết quả Role (Alt+1)"},
-            {"API", api.panel, "Bảng API kiểu Burp HTTP History, kết quả từng role, Repeater gộp (Alt+2)"},
-            {"Ma trận Role", matrix.panel, "Crawl N role không trùng: Thấy bởi x Gọi được -> NGHI BAC, test case (Alt+3)"},
-            {"Báo cáo", reportTabs, "Lịch sử trực quan và độ phủ Excel (Alt+4)"},
-            {"Roles", roles.panel, "Các role / profile (header, cookie, JWT) và profile API gốc (Alt+5)"},
-            {"Cần xử lý", audit.panel, "Xác nhận vị trí, giữ chỗ, API trùng & ẩn, nhật ký vị trí (Alt+6)"},
-            {"Cài đặt", settingsTabs, "Cấu hình và Log (Alt+7)"}};
+            {"Cây", treeTab.panel, "Cây nhánh: mọi API thẳng cột Method | Path | Status | Length | Kết quả Role (Alt+1)"},
+            {"API", api.panel, "Bảng API kiểu Burp HTTP History, kết quả từng vai trò (Alt+2)"},
+            {"Phân quyền", matrix.panel, "Ma trận vai trò: Thấy trong UI x Gọi được -> nghi lỗi phân quyền (Alt+3)"},
+            {"Lỗi", bugs.panel, "Các API đã đánh dấu lỗi: thống kê theo loại / mức độ / trạng thái, xuất báo cáo (Alt+4)"},
+            {"Báo cáo", reportTabs, "Lịch sử trực quan và độ phủ Excel (Alt+5)"},
+            {"Vai trò", roles.panel, "Tài khoản test: token / cookie / JWT của từng vai trò (Alt+6)"},
+            {"Duyệt", audit.panel, "API mới cần xác nhận vị trí, giữ chỗ, API trùng & ẩn (Alt+7)"},
+            {"Cài đặt", settingsTabs, "Cấu hình và Log (Alt+8)"}};
         for (Object[] x : t) {
             tabs.addTab((String) x[0], null, (Component) x[1], (String) x[2]);
         }
-        tabs.addChangeListener(e -> tick(true));
+        tabs.addChangeListener(e -> {
+            int i = tabs.getSelectedIndex();
+            if (i >= 0) {
+                themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.TAB, "Mở tab " + tabs.getTitleAt(i), "");
+            }
+            tick(true);
+        });
+        installClickLog();
         reportTabs.addChangeListener(e -> tick(true));
         settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
         root.add(toastPane, BorderLayout.CENTER);
+        Ui.fastScroll(root);
         root.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
@@ -345,8 +358,74 @@ public final class MainPanel {
         return headerPanel != null && headerPanel.isVisible();
     }
 
+    /**
+     * V_8.2: record every button / menu click inside JCrawl (main panel and its dialogs) in the activity log,
+     * including buttons wired without Ui.safe. Only the label is recorded, never field contents.
+     */
+    private java.awt.event.AWTEventListener clickLog;
+
+    private void installClickLog() {
+        clickLog = ev -> {
+            if (!(ev instanceof java.awt.event.MouseEvent me) || me.getID() != java.awt.event.MouseEvent.MOUSE_RELEASED
+                    || !(me.getComponent() instanceof javax.swing.AbstractButton b) || !b.isEnabled()
+                    || !b.contains(me.getPoint())) {
+                return;
+            }
+            java.awt.Component anchor = b;
+            while (anchor != null) {   // a popup menu item belongs to whoever opened the popup
+                java.awt.Container parent = anchor.getParent();
+                if (parent instanceof javax.swing.JPopupMenu pm) {
+                    anchor = pm.getInvoker();
+                } else if (parent == null) {
+                    break;
+                } else {
+                    anchor = parent;
+                    if (javax.swing.SwingUtilities.isDescendingFrom(anchor, root)) {
+                        break;
+                    }
+                }
+            }
+            java.awt.Window w = javax.swing.SwingUtilities.getWindowAncestor(b);
+            java.awt.Window rootWin = javax.swing.SwingUtilities.getWindowAncestor(root);
+            boolean ours = (anchor != null && javax.swing.SwingUtilities.isDescendingFrom(anchor, root))
+                    || (w instanceof javax.swing.JDialog d && w != rootWin && d.getOwner() == rootWin && rootWin != null);
+            if (!ours) {
+                return;
+            }
+            String where = w instanceof javax.swing.JDialog d && d.getTitle() != null && !d.getTitle().isBlank()
+                    ? " [" + d.getTitle() + "]" : (javax.swing.SwingUtilities.isDescendingFrom(b, root) ? " [tab " + selectedTabTitle() + "]" : "");
+            String kind = b instanceof javax.swing.JMenuItem ? "Menu: " : b instanceof javax.swing.JToggleButton || b instanceof javax.swing.JCheckBox
+                    ? "Bật/tắt: " : "Bấm: ";
+            String state = b instanceof javax.swing.JToggleButton || b instanceof javax.swing.JCheckBoxMenuItem
+                    ? (b.isSelected() ? " (bật)" : " (tắt)") : "";
+            themythofcrawl.core.ActivityLog.ui(kind + Ui.describe(b) + state + where);
+        };
+        try {
+            java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(clickLog, java.awt.AWTEvent.MOUSE_EVENT_MASK);
+        } catch (SecurityException | java.awt.HeadlessException ignored) {
+            clickLog = null;
+        }
+    }
+
+    private String selectedTabTitle() {
+        int i = tabs.getSelectedIndex();
+        return i >= 0 ? tabs.getTitleAt(i) : "";
+    }
+
+    void openClaudeLog() {
+        ClaudeLogDialog.show(root, engine);
+    }
+
     public void dispose() {
         timer.stop();
+        if (clickLog != null) {
+            try {
+                java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(clickLog);
+            } catch (RuntimeException ignored) {
+                // headless
+            }
+            clickLog = null;
+        }
         if (proxyQueueListener != null) {
             engine.proxyQueue().removeListener(proxyQueueListener);
             proxyQueueListener = null;
@@ -465,7 +544,7 @@ public final class MainPanel {
         actionStatusBtn.setFont(Theme.current().smallBoldFont);
         actionStatusBtn.addActionListener(Ui.safe(e -> ProxyGateDialog.show(this)));
         themythofcrawl.ui.kit.RichHoverCard.install(actionStatusBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Cổng chặn Proxy (bấm để thiết lập)",
+                "Chặn (bấm để thiết lập)",
                 "Chọn rõ: chặn request nào (mọi host / 1 host / host + path / nhánh), method nào, và làm gì với request bị chặn"
                         + " (Hỏi tôi trước / Giữ lại + trả 200 giả cho trình duyệt / Chặn hẳn). Có sơ đồ và ô Thử với 1 URL.",
                 null,
@@ -482,7 +561,7 @@ public final class MainPanel {
                 () -> engine.proxyGate().sentence()));
 
         actionQuickSwitch.onToken(t -> engine.proxyQueue().pendingCount() > 0 ? t.danger : t.accent);
-        actionQuickSwitch.setToolTipText("Bật / Tắt Cổng chặn Proxy (BẬT = dùng thiết lập đã lưu; TẮT = tắt mọi chặn, request đi thẳng)");
+        actionQuickSwitch.setToolTipText("Bật / tắt chặn. Bật: dùng thiết lập đã lưu. Tắt: mọi request đi thẳng.");
         actionQuickSwitch.onChange(on -> {
             if (syncingActionSwitch) {
                 return;
@@ -585,20 +664,20 @@ public final class MainPanel {
         topChromeToggleBtn.setMaximumSize(new Dimension(h24, h24));
         topChromeToggleBtn.addActionListener(Ui.safe(e -> setTopCompact(!effectiveHeaderCompact)));
         themythofcrawl.ui.kit.RichHoverCard.install(topChromeToggleBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Thu gọn / Mở rộng thanh công cụ phía trên",
-                "Rút gọn các nút điều khiển vào menu thả xuống để tối ưu diện tích làm việc (hữu ích cho cả màn hình thường và chia đôi màn hình).",
+                "Thu gọn thanh trên",
+                "Thu gọn: chỉ giữ Capture, Crawl/Gửi và Chặn. Mọi thứ khác vào nút Menu. Bấm lại để mở rộng.",
                 null,
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.accent.text(), 12) : Icons.chevronUp(t.accent.text(), 12),
                 t -> t.accent,
                 () -> effectiveHeaderCompact ? "Đang ở chế độ thu gọn (bấm để mở rộng)" : "Đang hiện đầy đủ (bấm để thu gọn)"));
 
-        compactControlsBtn.setText("Điều khiển");
+        compactControlsBtn.setText("Menu");
         compactControlsBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.sliders(t.fg), t.fg)));
         compactControlsBtn.setHorizontalTextPosition(SwingConstants.LEADING);
         compactControlsBtn.setMargin(new Insets(0, 5, 0, 5));
-        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(96), h24));
-        compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(104), h24));
-        compactControlsBtn.setToolTipText("Mở menu điều khiển nhanh (Trạng thái, Action Workbench, Tùy chọn, Workspace...)");
+        compactControlsBtn.setPreferredSize(new Dimension(Theme.current().scaled(88), h24));
+        compactControlsBtn.setMaximumSize(new Dimension(Theme.current().scaled(96), h24));
+        compactControlsBtn.setToolTipText("Menu: Đích, Trạng thái, Hàng đợi, Tìm nhanh, Luật chặn, Tùy chọn, Workspace");
         compactControlsBtn.addActionListener(Ui.safe(e -> compactControlsMenu().show(compactControlsBtn, 0, compactControlsBtn.getHeight())));
 
         // Strict single-row horizontal BoxLayout — NEVER wraps onto 2-3 broken lines on Burp!
@@ -652,6 +731,7 @@ public final class MainPanel {
         destPrefix.add(Box.createHorizontalStrut(2));
 
         JPanel centerZone = new JPanel(new BorderLayout(0, 0));
+        headerCenterZone = centerZone;
         centerZone.setOpaque(false);
         centerZone.add(destPrefix, BorderLayout.WEST);
         centerZone.add(dest, BorderLayout.CENTER);
@@ -740,42 +820,44 @@ public final class MainPanel {
         Engine.Stats st = engine.stats();
         SendDispatcher.Snapshot q = engine.queue();
         int waiting = q.queued() + q.inFlight();
+        m.add(Ui.item("Đích: " + engine.activeBranch().name() + "...", Icons::folder, this::destinationMenu));
         m.add(Ui.item("Trạng thái: " + status.getText() + " · " + todo.getText()
                 + (waiting > 0 ? " · Đợi: " + waiting : ""), Icons::api, this::statusMenu));
         if (st.pending() > 0) {
-            m.add(Ui.item("Mở danh sách chờ xử lý (" + st.pending() + ")", Icons::hourglass, this::todoMenu));
+            m.add(Ui.item("Việc chờ (" + st.pending() + ")", Icons::hourglass, this::todoMenu));
         }
         if (waiting > 0) {
-            m.add(Ui.item("Hủy hàng đợi gửi (" + waiting + ")", Icons::stop, () -> engine.cancelPending("Đã hủy")));
+            m.add(Ui.item("Hủy hàng đợi (" + waiting + ")", Icons::stop, () -> engine.cancelPending("Đã hủy")));
         }
         m.addSeparator();
-        m.add(Ui.item("Tìm kiếm toàn cục (Spotlight · Ctrl+K)", Icons::search, () -> spotlight.open()));
+        m.add(Ui.item("Tìm nhanh (Ctrl+K)", Icons::search, () -> spotlight.open()));
         int pendingIntercept = engine.proxyQueue().pendingCount();
         boolean waitOn = engine.actionEngine().isInterceptWaitEnabled();
         String waitLabel = pendingIntercept > 0
-                ? "Hàng chờ Chặn Proxy trực tiếp (" + pendingIntercept + " đang đợi)..."
-                : (waitOn ? "Hàng chờ Chặn Proxy trực tiếp (Đang BẬT)..." : "Hàng chờ Chặn Proxy trực tiếp (Đang TẮT)...");
+                ? "Hàng chặn (" + pendingIntercept + " đang chờ)..."
+                : (waitOn ? "Hàng chặn (bật)..." : "Hàng chặn (tắt)...");
         m.add(Ui.item(waitLabel,
                 t -> Icons.strategyShield(pendingIntercept > 0 ? t.danger.text() : (waitOn ? t.success.text() : t.fg), 14),
                 () -> ProxyInterceptDialog.showFloating(this)));
         int blockRules = engine.actionEngine().activeBlockRuleCount();
-        m.add(Ui.item("Action Workbench & Luật Chặn Proxy" + (blockRules > 0 ? " (" + blockRules + " luật bật)" : "") + "...",
+        m.add(Ui.item("Luật chặn" + (blockRules > 0 ? " (" + blockRules + " bật)" : "") + "...",
                 Icons::workbench, () -> ActionWorkbenchDialog.show(root, engine,
                         api != null ? api.currentGroup() : null, null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                             syncHeader();
                             if (settings != null) settings.load();
                         })));
-        m.add(Ui.item("Chế độ nút công cụ: " + UiDisplayMode.current().label + " (Đổi)", Icons::displayMode, () -> {
+        m.add(Ui.item("Kiểu nút: " + UiDisplayMode.current().label, Icons::displayMode, () -> {
             UiDisplayMode next = UiDisplayMode.cycle();
             UiPrefs.setDisplayMode(uiPrefs, next);
             if (settings != null) settings.load();
             flash("Chế độ nút công cụ: " + next.label);
         }));
-        m.add(Ui.item("Tùy chọn nhanh & Danh mục...", Icons::gear, this::optionsMenu));
+        m.add(Ui.item("Tùy chọn...", Icons::gear, this::optionsMenu));
         m.add(Ui.item("Workspace: " + engine.workspaceName() + "...", Icons::folder, this::workspaceMenu));
         m.add(Ui.item(window != null ? "Gắn lại vào tab Burp" : "Tách cửa sổ riêng", Icons::window, this::toggleDetach));
+        m.add(Ui.item("Nhật ký cho Claude...", Icons::copy, this::openClaudeLog));
         m.addSeparator();
-        m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh công cụ phía trên" : "Thu gọn thanh công cụ phía trên",
+        m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh trên" : "Thu gọn thanh trên",
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12),
                 () -> setTopCompact(!effectiveHeaderCompact)));
         return m;
@@ -841,17 +923,22 @@ public final class MainPanel {
                 dest.setMaxSegments(1);
                 dest.setCellWidth(Math.max(48, Math.min(72, (w - 360) / 2)));
             } else {
-                // Collapsed compact mode (split-screen default OR user collapsed): crisp 1-row bar keeping Action unit visible!
+                // V_8.2 collapsed bar: ONLY the live status controls stay (Capture, Crawl/Gửi, Chặn) + Menu + expand.
+                // Everything else (Đích, Hàng đợi, Trạng thái, Spotlight, Tùy chọn, Workspace...) folds into Menu.
                 headerDrawerRow.setVisible(false);
-                if (queue.getParent() != headerLeftZone && !narrow) {
-                    headerLeftZone.add(queue);
-                } else if (narrow && queue.getParent() == headerLeftZone) {
+                if (queue.getParent() == headerLeftZone) {
                     headerLeftZone.remove(queue);
                 }
                 headerRightFull.setVisible(false);
                 headerRightCompact.setVisible(true);
+                if (headerCenterZone != null) {
+                    headerCenterZone.setVisible(false);
+                }
                 dest.setMaxSegments(narrow ? 1 : 2);
                 dest.setCellWidth(narrow ? 54 : 68);
+            }
+            if (headerCenterZone != null && !compact) {
+                headerCenterZone.setVisible(true);
             }
             topChromeToggleBtn.setIcon(Icons.themed(t -> effectiveHeaderCompact
                     ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12)));
@@ -1074,7 +1161,8 @@ public final class MainPanel {
                 m.add(Ui.item("   " + p, t -> Icons.nodeIcon(engine.nodeTypeOf(p), t, 12), () -> setDestination(p)));
             }
         }
-        m.show(dest, 0, dest.getHeight());
+        java.awt.Component anchor = dest.isShowing() ? dest : (compactControlsBtn.isShowing() ? compactControlsBtn : root);
+        m.show(anchor, 0, anchor.getHeight());
     }
 
     void setDestination(String path) {
@@ -1183,6 +1271,7 @@ public final class MainPanel {
         m.add(helpMenu);
         m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> selectTab(settings.panel)));
         m.add(Ui.item("Reset Dedup Cache (Cho phép bắt lại API cũ)", Icons::refresh, engine::resetDedup));
+        m.add(Ui.item("Nhật ký cho Claude (báo lỗi / nhờ phân tích)...", Icons::copy, this::openClaudeLog));
         m.addSeparator();
         m.add(Ui.item(diagBadge.getText(), false, () -> { }));
         m.show(options, 0, options.getHeight());
@@ -1358,6 +1447,7 @@ public final class MainPanel {
             audit.stale = true;
             log.stale = true;
             matrix.stale = true;
+            bugs.stale = true;
         }
         if (!b.dirty().isEmpty()) {
             treeTab.stale = true;
@@ -1365,6 +1455,7 @@ public final class MainPanel {
             excel.stale |= b.dirty().stream().anyMatch(g -> g.target() != null);
             audit.stale = true;
             matrix.stale = true;
+            bugs.stale = true;
         }
         api.refreshVisible(force);
         treeTab.refreshIfVisible();
@@ -1373,6 +1464,7 @@ public final class MainPanel {
         audit.refreshIfVisible();
         log.refreshIfVisible();
         matrix.refreshIfVisible();
+        bugs.refreshIfVisible();
         boolean queueActive = queuePeak > 0 || engine.queue().queued() + engine.queue().inFlight() > 0;
         if (b.status() || b.structure() || force || !b.added().isEmpty()) {
             syncHeader();

@@ -37,7 +37,7 @@ public final class HarExport {
                 rows.addAll(g.results());
             }
             for (RoleResult r : rows) {
-                byte[] req = engine.requestOf(g, r);
+                byte[] req = engine.shownRequestOf(g, r);
                 byte[] resp = engine.responseOf(g, r);
                 if (req == null) {
                     continue;
@@ -62,7 +62,7 @@ public final class HarExport {
         }
         Map<String, Object> log = new LinkedHashMap<>();
         log.put("version", "1.2");
-        log.put("creator", Map.of("name", "theMythOf-JCrawl", "version", "7.1-beta"));
+        log.put("creator", Map.of("name", "theMythOf-JCrawl", "version", "9.2"));
         log.put("entries", entries);
         return Json.write(Map.of("log", log));
     }

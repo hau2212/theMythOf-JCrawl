@@ -150,7 +150,7 @@ final class TreeMenus {
                         ui.flash("Đã hủy bỏ (Drop): " + pr.method() + " " + Text.shortPath(pr.path(), 40));
                     }));
                     m.addSeparator();
-                    m.add(Ui.item("+ Cho qua luôn Endpoint này (ALLOW ưu tiên đầu) & Gửi", t -> Icons.check(t.success.text(), 13), () -> {
+                    m.add(Ui.item("+ Cho API này đi thẳng & Gửi", t -> Icons.check(t.success.text(), 13), () -> {
                         String host = pr.service() != null ? pr.service().host() : "";
                         engine.actionEngine().policyLedger().createAtTop(
                                 themythofcrawl.model.ActionPolicy.quickAllowPath(host, pr.path(), List.of(pr.method()), "Cây chính"));
@@ -208,12 +208,16 @@ final class TreeMenus {
                 ApiGroup g = BranchTree.groupOf(n);
                 themythofcrawl.model.RoleResult nodeRole = n.kind == Node.Kind.ROLE && n.payload instanceof themythofcrawl.model.RoleResult rr ? rr : null;
                 List<ApiGroup> targetGs = many.isEmpty() ? List.of(g) : many;
-                m.add(Ui.item(g.results().isEmpty() ? "Gửi API #" + g.gid() + " (API gốc - 0 role)"
-                        : "Gửi API #" + g.gid() + " (" + g.results().size() + " Roles)", t -> Icons.send(t.critical.text()),
+                m.add(Ui.item(g.results().isEmpty() ? "Gửi API #" + g.gid() + " (tài khoản crawl)"
+                        : "Gửi API #" + g.gid() + " (" + g.results().size() + " vai trò)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
+                m.add(SendMenus.build(ui, targetGs, nodeRole));
                 m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
+                m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
+                        t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
+                                nodeRole != null && !nodeRole.original() ? nodeRole.roleKey() : "", "")));
                 m.add(Ui.item("Đẩy API #" + g.gid() + " sang Burp Repeater (Gọn)", Icons::repeater, () -> ui.push(g)));
                 String label = engine.copyLabel(g, false);
                 m.add(Ui.item("Copy STT + Path   (" + (label.length() > 60 ? label.substring(0, 60) : label) + ")",

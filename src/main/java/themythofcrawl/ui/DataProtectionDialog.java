@@ -50,6 +50,7 @@ final class DataProtectionDialog {
         dlg.setContentPane(build(dlg, engine, focus, onChanged));
         dlg.setSize(new Dimension(980, 720));
         dlg.setLocationRelativeTo(parent);
+        Ui.fastScroll(dlg.getContentPane());
         dlg.setVisible(true);
     }
 
@@ -79,9 +80,9 @@ final class DataProtectionDialog {
         banner.add(migrate, BorderLayout.EAST);
 
         // ---------------------------------------------------------------- question 1 = Cổng chặn Proxy
-        JPanel q1 = section("1. Khi trình duyệt gửi request — chặn ở Proxy hay cho đi? (Cổng chặn Proxy)");
+        JPanel q1 = section("1. Khi trình duyệt gửi request: chặn hay cho đi?");
         JLabel gateLine = Ui.bold(" ");
-        JButton openGate = Ui.solidPrimary("Thiết lập Cổng chặn Proxy (host / path / method / cách chặn)...",
+        JButton openGate = Ui.solidPrimary("Thiết lập chặn (host / path / method / cách chặn)...",
                 t -> Icons.strategyShield(t.accent.onSolid(), 12));
         openGate.addActionListener(Ui.safe(e -> {
             MainPanel mp = MainPanel.forEngine(engine);

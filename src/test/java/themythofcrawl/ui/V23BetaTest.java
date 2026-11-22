@@ -181,8 +181,8 @@ final class V23BetaTest {
                 JTable tbl = ui.roles.roleTable();
                 assertEquals(Theme.current().scaled(36), tbl.getRowHeight());
                 assertInstanceOf(RolesTab.SquareStatusRenderer.class, tbl.getColumnModel().getColumn(1).getCellRenderer());
-                assertTrue(tbl.getColumnModel().getColumn(1).getPreferredWidth() >= 90,
-                        "Status column must fit the 2-cell [BẬT | TẮT] control");
+                assertTrue(tbl.getColumnModel().getColumn(1).getPreferredWidth() >= 64,
+                        "Bật column must fit the switch + label");
 
                 TableCellEditor ed = tbl.getColumnModel().getColumn(1).getCellEditor();
                 assertNotNull(ed, "Column 1 must use a custom TableCellEditor");
