@@ -26,6 +26,10 @@ public final class GroupCodec {
         return r.original() ? "orig.custom.req" : "r" + r.id() + ".req";
     }
 
+    public static String sentReqName(RoleResult r) {
+        return r.original() ? "orig.sent.req" : "r" + r.id() + ".sent.req";
+    }
+
     public static String respName(RoleResult r) {
         return r.original() ? "orig.sent.resp" : "r" + r.id() + ".resp";
     }
@@ -50,6 +54,8 @@ public final class GroupCodec {
         m.put("sent", r.sentCount());
         m.put("tab", r.tabName());
         m.put("custom_req", r.customRequest() != null);
+        m.put("sent_req", r.sentRequest() != null);
+        m.put("sent_note", r.sentNote());
         m.put("resp", r.responseBlob() != null);
         return m;
     }
@@ -131,6 +137,10 @@ public final class GroupCodec {
         if (Json.bool(m, "resp", false)) {
             r.setResponse(st.blob(gid, respName(r)));
         }
+        if (Json.bool(m, "sent_req", false)) {
+            r.setSentRequest(st.blob(gid, sentReqName(r)));
+        }
+        r.setSentNote(Json.str(m, "sent_note", ""));
     }
 
     @SuppressWarnings("unchecked")

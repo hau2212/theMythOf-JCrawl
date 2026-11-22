@@ -240,7 +240,14 @@ public final class MainPanel {
         for (Object[] x : t) {
             tabs.addTab((String) x[0], null, (Component) x[1], (String) x[2]);
         }
-        tabs.addChangeListener(e -> tick(true));
+        tabs.addChangeListener(e -> {
+            int i = tabs.getSelectedIndex();
+            if (i >= 0) {
+                themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.TAB, "Mở tab " + tabs.getTitleAt(i), "");
+            }
+            tick(true);
+        });
+        installClickLog();
         reportTabs.addChangeListener(e -> tick(true));
         settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
@@ -351,8 +358,74 @@ public final class MainPanel {
         return headerPanel != null && headerPanel.isVisible();
     }
 
+    /**
+     * V_8.2: record every button / menu click inside JCrawl (main panel and its dialogs) in the activity log,
+     * including buttons wired without Ui.safe. Only the label is recorded, never field contents.
+     */
+    private java.awt.event.AWTEventListener clickLog;
+
+    private void installClickLog() {
+        clickLog = ev -> {
+            if (!(ev instanceof java.awt.event.MouseEvent me) || me.getID() != java.awt.event.MouseEvent.MOUSE_RELEASED
+                    || !(me.getComponent() instanceof javax.swing.AbstractButton b) || !b.isEnabled()
+                    || !b.contains(me.getPoint())) {
+                return;
+            }
+            java.awt.Component anchor = b;
+            while (anchor != null) {   // a popup menu item belongs to whoever opened the popup
+                java.awt.Container parent = anchor.getParent();
+                if (parent instanceof javax.swing.JPopupMenu pm) {
+                    anchor = pm.getInvoker();
+                } else if (parent == null) {
+                    break;
+                } else {
+                    anchor = parent;
+                    if (javax.swing.SwingUtilities.isDescendingFrom(anchor, root)) {
+                        break;
+                    }
+                }
+            }
+            java.awt.Window w = javax.swing.SwingUtilities.getWindowAncestor(b);
+            java.awt.Window rootWin = javax.swing.SwingUtilities.getWindowAncestor(root);
+            boolean ours = (anchor != null && javax.swing.SwingUtilities.isDescendingFrom(anchor, root))
+                    || (w instanceof javax.swing.JDialog d && w != rootWin && d.getOwner() == rootWin && rootWin != null);
+            if (!ours) {
+                return;
+            }
+            String where = w instanceof javax.swing.JDialog d && d.getTitle() != null && !d.getTitle().isBlank()
+                    ? " [" + d.getTitle() + "]" : (javax.swing.SwingUtilities.isDescendingFrom(b, root) ? " [tab " + selectedTabTitle() + "]" : "");
+            String kind = b instanceof javax.swing.JMenuItem ? "Menu: " : b instanceof javax.swing.JToggleButton || b instanceof javax.swing.JCheckBox
+                    ? "Bật/tắt: " : "Bấm: ";
+            String state = b instanceof javax.swing.JToggleButton || b instanceof javax.swing.JCheckBoxMenuItem
+                    ? (b.isSelected() ? " (bật)" : " (tắt)") : "";
+            themythofcrawl.core.ActivityLog.ui(kind + Ui.describe(b) + state + where);
+        };
+        try {
+            java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(clickLog, java.awt.AWTEvent.MOUSE_EVENT_MASK);
+        } catch (SecurityException | java.awt.HeadlessException ignored) {
+            clickLog = null;
+        }
+    }
+
+    private String selectedTabTitle() {
+        int i = tabs.getSelectedIndex();
+        return i >= 0 ? tabs.getTitleAt(i) : "";
+    }
+
+    void openClaudeLog() {
+        ClaudeLogDialog.show(root, engine);
+    }
+
     public void dispose() {
         timer.stop();
+        if (clickLog != null) {
+            try {
+                java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(clickLog);
+            } catch (RuntimeException ignored) {
+                // headless
+            }
+            clickLog = null;
+        }
         if (proxyQueueListener != null) {
             engine.proxyQueue().removeListener(proxyQueueListener);
             proxyQueueListener = null;
@@ -782,6 +855,7 @@ public final class MainPanel {
         m.add(Ui.item("Tùy chọn...", Icons::gear, this::optionsMenu));
         m.add(Ui.item("Workspace: " + engine.workspaceName() + "...", Icons::folder, this::workspaceMenu));
         m.add(Ui.item(window != null ? "Gắn lại vào tab Burp" : "Tách cửa sổ riêng", Icons::window, this::toggleDetach));
+        m.add(Ui.item("Nhật ký cho Claude...", Icons::copy, this::openClaudeLog));
         m.addSeparator();
         m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh trên" : "Thu gọn thanh trên",
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12),
@@ -1197,6 +1271,7 @@ public final class MainPanel {
         m.add(helpMenu);
         m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> selectTab(settings.panel)));
         m.add(Ui.item("Reset Dedup Cache (Cho phép bắt lại API cũ)", Icons::refresh, engine::resetDedup));
+        m.add(Ui.item("Nhật ký cho Claude (báo lỗi / nhờ phân tích)...", Icons::copy, this::openClaudeLog));
         m.addSeparator();
         m.add(Ui.item(diagBadge.getText(), false, () -> { }));
         m.show(options, 0, options.getHeight());

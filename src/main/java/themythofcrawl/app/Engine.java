@@ -152,7 +152,6 @@ public final class Engine {
     private final themythofcrawl.collab.InventoryCatalog inventoryCatalog = new themythofcrawl.collab.InventoryCatalog();
     private final themythofcrawl.collab.TeamSyncService teamSync = new themythofcrawl.collab.TeamSyncService(inventoryCatalog);
     private final themythofcrawl.collab.GoogleSheetsBridge googleSheets = new themythofcrawl.collab.GoogleSheetsBridge(inventoryCatalog);
-    private final Set<Integer> forceRawGids = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final ExecutorService captureExec;
     private final ThreadPoolExecutor sendExec;
     private final ScheduledExecutorService scheduler;
@@ -532,6 +531,8 @@ public final class Engine {
     }
 
     public void log(String text, Integer gid) {
+        themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.ENGINE,
+                (gid != null ? "[" + Text.apiLabel(gid) + "] " : "") + text, "");
         Logbook.Line l = logbook.add(text, gid);
         changes.log(l);
         try {
@@ -592,9 +593,28 @@ public final class Engine {
     }
 
     /** Store a new configuration; returns the API regex error, if any. */
+    private static void logConfigDiff(Config before, Config after) {
+        if (before == null || after == null) {
+            return;
+        }
+        Map<String, Object> a = before.toMap();
+        Map<String, Object> b = after.toMap();
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Object> e : b.entrySet()) {
+            if (!java.util.Objects.equals(String.valueOf(a.get(e.getKey())), String.valueOf(e.getValue()))) {
+                sb.append(sb.length() == 0 ? "" : " · ").append(e.getKey()).append(": ").append(Text.shortPath(String.valueOf(a.get(e.getKey())), 40))
+                        .append(" -> ").append(Text.shortPath(String.valueOf(e.getValue()), 40));
+            }
+        }
+        if (sb.length() > 0) {
+            themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.CONFIG, "Đổi cài đặt: " + sb, "");
+        }
+    }
+
     public String applyConfig(Config next) {
         Config c = next.copy();
         Config old = config;
+        logConfigDiff(old, c);
         String err = compileFilters(c);
         config = c;
         syncActionEngine(c);
@@ -2242,6 +2262,17 @@ public final class Engine {
         return builder.build(orig, r.rules());
     }
 
+    /** The request that produced the shown response: the one really sent if it differed, else the built one. */
+    public byte[] shownRequestOf(ApiGroup g, RoleResult r) {
+        if (r.sentRequest() != null && r.responseBlob() != null) {
+            byte[] b = r.sentRequest().bytes();
+            if (b != null) {
+                return b;
+            }
+        }
+        return requestOf(g, r);
+    }
+
     public byte[] responseOf(ApiGroup g, RoleResult r) {
         if (r.responseBlob() != null) {
             return r.responseBlob().bytes();
@@ -2305,7 +2336,10 @@ public final class Engine {
     }
     // =================================================================== sending
     /** A request waiting in / running from the send queue. */
-    public record Work(ApiGroup group, RoleResult result) {
+    public record Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw) {
+        public Work(ApiGroup group, RoleResult result) {
+            this(group, result, null, "", false);
+        }
     }
 
     private static final Set<String> BUSY = Set.of(ResultState.QUEUED, ResultState.SENDING, ResultState.RETRY);
@@ -2715,12 +2749,10 @@ public final class Engine {
      */
     public void forceRawReplay(ApiGroup g, Collection<RoleResult> targets) {
         if (g == null) return;
-        forceRawGids.add(g.gid());
-        g.setActiveIdNote("Gửi cưỡng bức nguyên bản");
+        g.setActiveIdNote("Gửi y nguyên");
         Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
-        log("Khóa 2xx (Cách 2 - Cưỡng bức gửi lại): Đẩy nguyên bản API #" + g.gid()
-                + " lên Server (bản Snapshot 200 OK vẫn được lưu để khôi phục khi cần).", g.gid());
-        replayInternal(g, rows);
+        log("Gửi y nguyên API #" + g.gid() + " (bằng chứng 200 cũ vẫn được giữ).", g.gid());
+        replayInternal(g, rows, true);
     }
 
     /**
@@ -2765,8 +2797,7 @@ public final class Engine {
         touch(g);
         log("Phương pháp 3 (Đổi ID sống): Đã thay ID [" + targetOldId + "] -> [" + newId.trim() + "] cho API #" + g.gid() + " và gửi lên Server.", g.gid());
         Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
-        forceRawGids.add(g.gid());
-        replayInternal(g, rows);
+        replayInternal(g, rows, true);
         return true;
     }
 
@@ -2829,6 +2860,139 @@ public final class Engine {
         });
     }
 
+    // =================================================================== V_8.2: one object per role
+    /** Where the per-role IDs will come from, for the menu / dialog (no network). */
+    public record PerRolePlan(boolean hasId, String currentId, ApiGroup producer, int poolIds, int needed) {
+        public boolean enough() {
+            return producer != null || poolIds >= needed;
+        }
+
+        public String sentence() {
+            if (!hasId) {
+                return "API không có ID trên path / body: gửi bình thường.";
+            }
+            if (producer != null) {
+                return "Mỗi vai trò nhận 1 bản ghi MỚI: tài khoản crawl gọi API #" + producer.gid() + " " + producer.method() + " "
+                        + producer.path() + " để tạo trước (" + needed + " lần).";
+            }
+            if (poolIds >= needed) {
+                return "Mỗi vai trò nhận 1 ID khác nhau từ Kho ID cùng họ API (" + poolIds + " ID, cần " + needed + ").";
+            }
+            return "Chỉ đủ ID riêng cho " + (poolIds + 1) + "/" + needed + " lần gửi: thêm ID vào Kho ID (crawl thêm POST / GET"
+                    + " danh sách cùng họ API) hoặc chỉ định API tạo.";
+        }
+    }
+
+    public PerRolePlan perRolePlan(ApiGroup g, int needed) {
+        byte[] base = Blob.bytesOf(g.origRequest());
+        List<String> ids = base == null ? List.of() : actionEngine.detectIds(g.path(), base);
+        String cur = ids.isEmpty() ? null : ids.get(0);
+        if (cur == null) {
+            return new PerRolePlan(false, null, null, 0, needed);
+        }
+        int pool = 0;
+        for (String id : actionEngine.getAvailableLiveIds(g.path(), cur)) {
+            if (!actionEngine.isConsumed(id)) {
+                pool++;
+            }
+        }
+        return new PerRolePlan(true, cur, resolveProducer(g), pool, needed);
+    }
+
+    private ApiGroup resolveProducer(ApiGroup g) {
+        Integer prodGid = g.producerGid() != null ? g.producerGid() : actionEngine.findProducerGid(g.path());
+        ApiGroup producer = prodGid != null ? group(prodGid) : null;
+        if (producer != null && producer.gid() != g.gid()) {
+            return producer;
+        }
+        String fam = ActionEngine.familyKey(g.path());
+        for (ApiGroup cand : groups()) {
+            if (cand.gid() != g.gid() && "POST".equalsIgnoreCase(cand.method())
+                    && fam.equalsIgnoreCase(ActionEngine.familyKey(cand.path()))) {
+                return cand;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * V_8.2 "Mỗi vai trò 1 bản ghi": sending DELETE / PUT to N roles with the SAME ID only works once (the
+     * first role deletes it; every other role gets 404, which hides real access-control bugs). Here each role
+     * gets its OWN object, owned by the crawl account: created just before (API tạo cùng họ, sent with the crawl
+     * account's session) or a distinct live ID from Kho ID. Roles are sent first, the crawl account last as the
+     * control row (its own fresh object, expected 2xx). Every row records which ID it used.
+     */
+    public void sendEachRoleOwnObject(ApiGroup g, Collection<RoleResult> targets) {
+        if (g == null) {
+            return;
+        }
+        List<RoleResult> rows = new ArrayList<>(targets == null || targets.isEmpty() ? defaultTargets(g, true) : targets);
+        rows.sort(Comparator.comparing(RoleResult::original)); // roles first, crawl account (control) last
+        PerRolePlan plan = perRolePlan(g, rows.size());
+        if (!plan.hasId()) {
+            log("Mỗi vai trò 1 bản ghi: API #" + g.gid() + " không có ID -> gửi bình thường.", g.gid());
+            replayInternal(g, rows, false);
+            return;
+        }
+        for (RoleResult r : rows) {
+            r.setState(ResultState.QUEUED);
+        }
+        changes.dirty(g);
+        activeSends.incrementAndGet();   // the ID preparation counts as work in flight (header / waiters see it)
+        sendExec.execute(() -> {
+          try {
+            String cur = plan.currentId();
+            Set<String> used = new HashSet<>();
+            List<String> pool = new ArrayList<>();
+            for (String id : actionEngine.getAvailableLiveIds(g.path(), cur)) {
+                if (!actionEngine.isConsumed(id)) {
+                    pool.add(id);
+                }
+            }
+            List<Work> works = new ArrayList<>();
+            StringBuilder summary = new StringBuilder();
+            for (RoleResult r : rows) {
+                String id = null;
+                String how;
+                if (plan.producer() != null) {
+                    id = executeProducerForNewId(plan.producer(), g.gid());
+                }
+                if (id != null) {
+                    how = "tạo mới (API #" + plan.producer().gid() + ")";
+                } else {
+                    id = pool.stream().filter(x -> !used.contains(x)).findFirst().orElse(null);
+                    how = "Kho ID";
+                }
+                if (id == null && !used.contains(cur)) {
+                    id = cur;
+                    how = "ID gốc";
+                }
+                String who = r.original() ? CRAWL_ACCOUNT + " (đối chứng)" : r.roleName();
+                if (id == null) {
+                    id = cur;
+                    how = "THIẾU ID riêng, dùng lại";
+                }
+                used.add(id);
+                byte[] base = requestOf(g, r);
+                byte[] req = base == null ? null : ActionEngine.replaceIdInRequest(base, cur, id);
+                String note = "ID " + id + " · " + how;
+                works.add(new Work(g, r, req, note, true));
+                summary.append(summary.length() == 0 ? "" : " · ").append(who).append(" -> ").append(id);
+            }
+            for (RoleResult r : rows) {
+                r.setState(r.status() != null ? ResultState.DONE : ResultState.NOT_SENT);
+            }
+            g.setActiveIdNote("Mỗi vai trò 1 bản ghi");
+            log("Mỗi vai trò 1 bản ghi: API #" + g.gid() + " " + g.method() + " " + g.path() + ": " + summary, g.gid());
+            submitWorks(g, works);
+          } finally {
+            if (activeSends.updateAndGet(n -> Math.max(0, n - 1)) == 0) {
+                changes.structure();
+            }
+          }
+        });
+    }
+
     /**
      * Phương pháp 4B: Làm mới các trường Unique (email, username, code, phone, nonce...) trong body rồi Gửi.
      */
@@ -2843,8 +3007,7 @@ public final class Engine {
         touch(g);
         log("Phương pháp 4 (Làm mới Unique): Đã sinh giá trị mới cho các trường Unique (email/code/nonce...) của API #" + g.gid() + " và gửi.", g.gid());
         Collection<RoleResult> rows = (targets == null || targets.isEmpty()) ? defaultTargets(g, true) : targets;
-        forceRawGids.add(g.gid());
-        replayInternal(g, rows);
+        replayInternal(g, rows, true);
         return true;
     }
 
@@ -2876,7 +3039,7 @@ public final class Engine {
 
     /** Queue requests on the paced dispatcher; never blocks. */
     public void replay(ApiGroup g, Collection<RoleResult> results) {
-        if (g != null && ActionEngine.isActionMethod(g.method()) && !forceRawGids.contains(g.gid())) {
+        if (g != null && ActionEngine.isActionMethod(g.method())) {
             ActionEngine.ActionMode mode = effectiveActionMode(g);
             if (mode == ActionEngine.ActionMode.LOCK_2XX
                     && config.lock2xxStrategy == ActionEngine.Lock2xxStrategy.INHERIT_200
@@ -2884,25 +3047,46 @@ public final class Engine {
                 inheritInitial2xx(g, results);
                 return;
             }
+            // V_8.2: modes that promise a fresh ID give EACH role its own ID when several rows are sent at once
+            // (otherwise the first role consumes the ID and every other role only sees 404).
+            long idle = results.stream().filter(r -> !BUSY.contains(r.state())).count();
+            if (idle > 1 && (mode == ActionEngine.ActionMode.AUTO_SMART || mode == ActionEngine.ActionMode.LIVE_ID_POOL
+                    || mode == ActionEngine.ActionMode.PRODUCER_RECREATE)) {
+                sendEachRoleOwnObject(g, results);
+                return;
+            }
         }
-        replayInternal(g, results);
+        replayInternal(g, results, false);
     }
 
     private void replayInternal(ApiGroup g, Collection<RoleResult> results) {
-        List<RoleResult> todo = results.stream().filter(r -> !BUSY.contains(r.state())).toList();
+        replayInternal(g, results, false);
+    }
+
+    /** forceRaw: send exactly the built request (the ID was already chosen), no automatic ID change / retry. */
+    private void replayInternal(ApiGroup g, Collection<RoleResult> results, boolean forceRaw) {
+        List<Work> works = new ArrayList<>();
+        for (RoleResult r : results) {
+            works.add(new Work(g, r, null, "", forceRaw));
+        }
+        submitWorks(g, works);
+    }
+
+    private void submitWorks(ApiGroup g, List<Work> works) {
+        List<Work> todo = works.stream().filter(w -> !BUSY.contains(w.result().state())).toList();
         if (todo.isEmpty()) {
             return;
         }
         activeSends.addAndGet(todo.size());
-        for (RoleResult r : todo) {
-            r.setState(ResultState.QUEUED);
-            r.setError("");
+        for (Work w : todo) {
+            w.result().setState(ResultState.QUEUED);
+            w.result().setError("");
         }
         Audit.recalc(g);
         changes.dirty(g);
         List<SendDispatcher.Job<Work>> jobs = new ArrayList<>();
-        for (RoleResult r : todo) {
-            jobs.add(new SendDispatcher.Job<>(new Work(g, r), g.service().key()));
+        for (Work w : todo) {
+            jobs.add(new SendDispatcher.Job<>(w, g.service().key()));
         }
         dispatcher.submit(jobs);
     }
@@ -3060,14 +3244,16 @@ public final class Engine {
         changes.dirty(g);
         Double retryAfter = null;
         long started = System.currentTimeMillis();
-        boolean forceRaw = forceRawGids.remove(g.gid());
+        Work work = job.payload;
+        boolean forceRaw = work.forceRaw() || work.override() != null;
         ActionEngine.ActionMode mode = effectiveActionMode(g);
         try {
             byte[] baseReq = requestOf(g, r);
             if (baseReq == null) {
                 throw new IllegalStateException("request could not be built");
             }
-            byte[] request = forceRaw ? baseReq : prepareActionRequestBeforeSend(g, baseReq, mode);
+            byte[] request = work.override() != null ? work.override()
+                    : forceRaw ? baseReq : prepareActionRequestBeforeSend(g, baseReq, mode);
             Bridge.Sent sent = bridge.send(g.service(), request);
             byte[] resp = sent.response();
             Integer firstSt = HttpBytes.statusCode(resp);
@@ -3084,6 +3270,15 @@ public final class Engine {
             }
             r.setElapsedMs(sent.elapsedMs() > 0 ? sent.elapsedMs() : System.currentTimeMillis() - started);
             r.incSent();
+            // V_8.2: keep what was REALLY sent when it differs from the built request (ID swapped, unique refresh...),
+            // so the viewer, HAR and Repeater show the request that produced this response.
+            if (java.util.Arrays.equals(request, baseReq)) {
+                r.setSentRequest(null);
+                r.setSentNote(work.note());
+            } else {
+                r.setSentRequest(storage.put(g.gid(), GroupCodec.sentReqName(r), request));
+                r.setSentNote(!Text.blank(work.note()) ? work.note() : Text.nz(g.activeIdNote()));
+            }
             Blob stored = resp == null || resp.length == 0 ? null : storage.put(g.gid(), GroupCodec.respName(r), resp);
             synchronized (g) {   // a result is written whole before anyone evaluates it (see Audit.recalc)
                 if (resp == null || resp.length == 0) {
@@ -3135,6 +3330,12 @@ public final class Engine {
                         + config.maxRetries + ")");
             }
         }
+        themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.SEND,
+                Text.apiLabel(g.gid()) + " " + g.method() + " " + g.path() + " · " + (r.original() ? CRAWL_ACCOUNT : r.roleName())
+                        + " -> " + (r.status() != null ? r.status() + " (" + r.length() + " B, " + r.elapsedMs() + " ms)" : r.state())
+                        + (Text.blank(r.sentNote()) ? "" : " · " + r.sentNote()) + (Text.blank(r.error()) ? "" : " · lỗi: " + r.error())
+                        + " · chế độ " + mode.label,
+                "");
         Audit.recalc(g);   // before done(): a retry of this row can only start after these colours are set
         boolean finished = dispatcher.done(job, status, retryAfter);
         if (finished && activeSends.updateAndGet(n -> Math.max(0, n - 1)) == 0) {
@@ -4026,6 +4227,13 @@ public final class Engine {
         synchronized (this) {
             old = storage;
             storage = next;
+            try {
+                java.nio.file.Path wsDir = java.nio.file.Path.of(next.location());
+                themythofcrawl.core.ActivityLog.attach(java.nio.file.Files.isDirectory(wsDir) ? wsDir : null);
+            } catch (RuntimeException ignored) {
+                themythofcrawl.core.ActivityLog.attach(null);
+            }
+            themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.ENGINE, "Mở workspace: " + next.name(), "");
             groups.clear();
             hidden.clear();
             copies.clear();

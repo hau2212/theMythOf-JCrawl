@@ -37,7 +37,7 @@ public final class HarExport {
                 rows.addAll(g.results());
             }
             for (RoleResult r : rows) {
-                byte[] req = engine.requestOf(g, r);
+                byte[] req = engine.shownRequestOf(g, r);
                 byte[] resp = engine.responseOf(g, r);
                 if (req == null) {
                     continue;

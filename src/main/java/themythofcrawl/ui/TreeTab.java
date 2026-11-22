@@ -570,7 +570,7 @@ final class TreeTab {
             ui.flash("Đã khôi phục Request gốc đang chờ duyệt.");
         } else if (shownGroup != null) {
             RoleResult r = shown != null ? shown : shownGroup.origResult();
-            req.show(shownGroup.service(), engine.requestOf(shownGroup, r));
+            req.show(shownGroup.service(), engine.shownRequestOf(shownGroup, r));
             ui.flash("Đã khôi phục Request gốc của " + Text.apiLabel(shownGroup.gid()) + ".");
         } else {
             ui.flash("Chọn 1 API / Role trong cây trước rồi bấm Khôi phục.");
@@ -758,7 +758,7 @@ final class TreeTab {
         Object st = r.status() != null ? r.status() : r.state();
         reqLabel.setText(" Request [" + Text.groupId(g.gid()) + " | " + r.roleName() + " — sửa trực tiếp tại đây]  " + g.endpoint());
         respLabel.setText(" Response [" + r.roleName() + " | Status: " + st + " | Length: " + (r.length() != null ? r.length() : "-") + "]");
-        req.show(g.service(), engine.requestOf(g, r));
+        req.show(g.service(), engine.shownRequestOf(g, r));
         resp.show(g.service(), engine.responseOf(g, r));
         shownState = r.state() + "/" + r.responseBlob();
         syncQuickButtons();

@@ -208,9 +208,10 @@ final class TreeMenus {
                 ApiGroup g = BranchTree.groupOf(n);
                 themythofcrawl.model.RoleResult nodeRole = n.kind == Node.Kind.ROLE && n.payload instanceof themythofcrawl.model.RoleResult rr ? rr : null;
                 List<ApiGroup> targetGs = many.isEmpty() ? List.of(g) : many;
-                m.add(Ui.item(g.results().isEmpty() ? "Gửi API #" + g.gid() + " (API gốc - 0 role)"
-                        : "Gửi API #" + g.gid() + " (" + g.results().size() + " Roles)", t -> Icons.send(t.critical.text()),
+                m.add(Ui.item(g.results().isEmpty() ? "Gửi API #" + g.gid() + " (tài khoản crawl)"
+                        : "Gửi API #" + g.gid() + " (" + g.results().size() + " vai trò)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
+                m.add(SendMenus.build(ui, targetGs, nodeRole));
                 m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));

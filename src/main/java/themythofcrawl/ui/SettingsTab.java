@@ -278,6 +278,8 @@ final class SettingsTab {
                 field("Sáng / tối:", diagLaf, Ui.muted("theo Burp")),
                 field("Màu:", diagColors, Ui.muted("tự động")),
                 field("Cỡ hiển thị:", diagScale, null),
+                pair(Ui.accent("Nhật ký cho Claude...", t -> Icons.copy(t.accent.onSolid()), t -> t.accent, ui::openClaudeLog),
+                        Ui.muted("mọi thao tác, lần gửi, lỗi; token / cookie đã che")),
                 pair(Ui.button("Copy chẩn đoán (gửi khi báo lỗi)", () -> {
                     Ui.copyToClipboard(Diagnostics.fullReport(engine.workspaceName(), engine.workspaceLocation()));
                     diagCopyNote.setText("Đã copy thông tin chẩn đoán");

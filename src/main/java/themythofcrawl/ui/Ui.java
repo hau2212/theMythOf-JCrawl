@@ -57,6 +57,7 @@ public final class Ui {
         }
         return e -> {
             try {
+                themythofcrawl.core.ActivityLog.ui("Bấm: " + describe(e == null ? null : e.getSource()));
                 l.actionPerformed(e);
             } catch (VirtualMachineError fatal) {
                 throw fatal;
@@ -68,6 +69,7 @@ public final class Ui {
 
     static void runSafe(Object source, Runnable action) {
         try {
+            themythofcrawl.core.ActivityLog.ui((source instanceof javax.swing.JMenuItem ? "Menu: " : "Bấm: ") + describe(source));
             action.run();
         } catch (VirtualMachineError fatal) {
             throw fatal;
@@ -76,7 +78,26 @@ public final class Ui {
         }
     }
 
+    /** V_8.2: a human label for a clicked component (button text, tooltip, accessible name). */
+    static String describe(Object source) {
+        if (source instanceof AbstractButton b) {
+            if (b.getText() != null && !b.getText().isBlank()) {
+                return b.getText().trim();
+            }
+            if (b.getToolTipText() != null && !b.getToolTipText().isBlank()) {
+                String tip = b.getToolTipText().trim();
+                return tip.length() > 80 ? tip.substring(0, 80) + "..." : tip;
+            }
+            if (b.getAccessibleContext() != null && b.getAccessibleContext().getAccessibleName() != null) {
+                return b.getAccessibleContext().getAccessibleName();
+            }
+        }
+        return source == null ? "" : source.getClass().getSimpleName();
+    }
+
     static void reportClickError(Object source, Throwable ex) {
+        themythofcrawl.core.ActivityLog.error("Lỗi khi bấm \"" + describe(source) + "\": "
+                + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()), ex);
         String what = source instanceof AbstractButton b && b.getText() != null && !b.getText().isBlank()
                 ? "\"" + b.getText().trim() + "\"" : "thao tác này";
         String msg = "Không thực hiện được " + what + ": " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());

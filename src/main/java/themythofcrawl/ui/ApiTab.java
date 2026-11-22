@@ -1108,8 +1108,9 @@ final class ApiTab {
             m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
                     t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
                             curRole != null && !curRole.original() ? curRole.roleKey() : "", "")));
-            m.add(Ui.item("Gửi toàn bộ Roles của Group (" + g.results().size() + ")", Icons::sendAll,
+            m.add(Ui.item("Gửi API (" + g.results().size() + " vai trò)", Icons::sendAll,
                     () -> ui.send(listOf(g))));
+            m.add(SendMenus.build(ui, listOf(g), curRole));
             m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
             m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
             m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
@@ -1879,7 +1880,7 @@ final class ApiTab {
             return;
         }
         reqHeader.setText(" Request · " + Text.groupId(g.gid()) + " · " + r.roleName());
-        reqViewer.show(g.service(), engine.requestOf(g, r));
+        reqViewer.show(g.service(), engine.shownRequestOf(g, r));
         showResponse(r);
     }
 
@@ -2005,8 +2006,9 @@ final class ApiTab {
                 resultModel.refresh();
                 refreshBar();
             }));
-            m.add(Ui.item("Gửi (Send) toàn bộ " + g.results().size() + " Roles của " + Text.groupId(g.gid()),
+            m.add(Ui.item("Gửi API (" + g.results().size() + " vai trò)",
                     Icons::sendAll, () -> engine.replay(g, engine.defaultTargets(g, false))));
+            m.add(SendMenus.build(ui, listOf(g), selectedResult()));
             m.add(Ui.item("Đẩy Group " + Text.groupId(g.gid()) + " sang Burp Repeater (Tên gọn + Copy tên Group)",
                     Icons::repeater, () -> ui.push(g)));
             m.addSeparator();
@@ -2073,7 +2075,8 @@ final class ApiTab {
         int n = Math.max(1, gs.size());
         ApiGroup primary = gs.isEmpty() ? currentGroup() : gs.get(0);
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Gửi " + n + " API đang chọn (N Roles)", Icons::send, () -> ui.send(gs)));
+        m.add(Ui.item("Gửi " + n + " API đang chọn (mọi vai trò)", Icons::send, () -> ui.send(gs)));
+        m.add(SendMenus.build(ui, gs.isEmpty() && primary != null ? listOf(primary) : gs, null));
         if (primary != null) {
             m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
                     () -> RequestComposerDialog.showFloating(panel, engine, primary, null, () -> {
