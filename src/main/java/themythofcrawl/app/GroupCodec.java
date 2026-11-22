@@ -104,6 +104,11 @@ public final class GroupCodec {
             bugList.add(b.toMap());
         }
         m.put("bugs", bugList);
+        List<Object> qaList = new ArrayList<>();
+        for (themythofcrawl.model.QaItem q : g.qa()) {
+            qaList.add(q.toMap());
+        }
+        m.put("qa", qaList);
         m.put("suspected_refresh", g.suspectedRefresh());
         m.put("triggered_by_action", g.triggeredByAction());
         PlaceHint h = g.placeHint();
@@ -203,6 +208,13 @@ public final class GroupCodec {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> mm = (Map<String, Object>) bm;
                 g.putBug(themythofcrawl.model.BugMark.fromMap(mm));
+            }
+        }
+        for (Object o : Json.list(m, "qa")) {
+            if (o instanceof Map<?, ?> qm) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mm = (Map<String, Object>) qm;
+                g.putQa(themythofcrawl.model.QaItem.fromMap(mm));
             }
         }
         g.setSuspectedRefresh(Json.bool(m, "suspected_refresh", false));

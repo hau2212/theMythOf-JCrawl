@@ -1184,6 +1184,152 @@ public final class Engine {
         changes.structure();
     }
 
+    // =================================================================== V_10.4 Q&A / Info
+    public record QaRow(ApiGroup group, themythofcrawl.model.QaItem item) {
+    }
+
+    /** Adds or updates a Q&A / Info item; keeps the Q&A / INFO tags in sync. */
+    public void putQa(ApiGroup g, themythofcrawl.model.QaItem q) {
+        if (g == null || q == null) {
+            return;
+        }
+        for (ApiTagCatalog.TagDef d : ApiTagCatalog.defaults()) {
+            if ((ApiTagCatalog.TAG_QA.equals(d.id()) || ApiTagCatalog.TAG_INFO.equals(d.id())) && tagCatalog.byId(d.id()) == null) {
+                tagCatalog.upsert(d);
+                saveTagCatalog();
+            }
+        }
+        g.putQa(q);
+        syncQaTags(g);
+        log(q.kind().label + ": " + Text.shortPath(q.question(), 60) + " — " + g.method() + " " + g.path(), g.gid());
+    }
+
+    public boolean removeQa(ApiGroup g, String id) {
+        if (g == null || !g.removeQa(id)) {
+            return false;
+        }
+        syncQaTags(g);
+        return true;
+    }
+
+    private void syncQaTags(ApiGroup g) {
+        if (g.hasQa(themythofcrawl.model.QaItem.Kind.QA)) {
+            g.addTag(ApiTagCatalog.TAG_QA);
+        } else {
+            g.removeTag(ApiTagCatalog.TAG_QA);
+        }
+        if (g.hasQa(themythofcrawl.model.QaItem.Kind.INFO)) {
+            g.addTag(ApiTagCatalog.TAG_INFO);
+        } else {
+            g.removeTag(ApiTagCatalog.TAG_INFO);
+        }
+        synchronized (this) {
+            stateDirty = true;
+            dirtyGroups.add(g);
+        }
+        changes.dirty(g);
+        changes.structure();
+    }
+
+    public List<QaRow> qaRows() {
+        List<QaRow> out = new ArrayList<>();
+        List<ApiGroup> all = new ArrayList<>(groups());
+        all.addAll(hiddenGroups());
+        for (ApiGroup g : all) {
+            for (themythofcrawl.model.QaItem q : g.qa()) {
+                out.add(new QaRow(g, q));
+            }
+        }
+        out.sort(Comparator.comparingLong((QaRow r) -> r.item().atMs()));
+        return out;
+    }
+
+    /** Stores a screenshot with the API (converted to PNG unless it already is PNG / JPEG); returns its stored name. */
+    public String addQaImage(ApiGroup g, byte[] image) {
+        if (g == null || image == null || image.length == 0) {
+            return null;
+        }
+        byte[] data = image;
+        String ext = "png";
+        boolean png = image.length > 4 && (image[0] & 0xFF) == 0x89 && image[1] == 'P';
+        boolean jpg = image.length > 3 && (image[0] & 0xFF) == 0xFF && (image[1] & 0xFF) == 0xD8;
+        if (jpg) {
+            ext = "jpeg";
+        } else if (!png) {
+            try {
+                java.awt.image.BufferedImage bi = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(image));
+                if (bi == null) {
+                    return null;
+                }
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(bi, "png", bo);
+                data = bo.toByteArray();
+            } catch (java.io.IOException e) {
+                return null;
+            }
+        }
+        String name = "qa-img-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "." + ext;
+        storage.put(g.gid(), name, data);
+        return name;
+    }
+
+    public byte[] qaImage(ApiGroup g, String name) {
+        if (g == null || Text.blank(name)) {
+            return null;
+        }
+        try {
+            Blob b = storage.blob(g.gid(), name);
+            return b == null ? null : b.bytes();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    // =================================================================== V_10.4 workspace for the next account
+    /**
+     * State for a child workspace (next account, crawled from the highest account down): the branch tree, branch
+     * rules, node types and the Excel list are kept; APIs, dedup memory, places, groups and hits start empty.
+     */
+    public String templateStateJson() {
+        Map<String, Object> m;
+        synchronized (this) {
+            m = Json.parseObject(stateJson());
+        }
+        for (String k : List.of("seen", "seen_gid", "clusters", "skipped", "hits", "places")) {
+            m.remove(k);
+        }
+        m.put("next_gid", 1);
+        m.put("next_cluster_id", 1);
+        return Json.write(m);
+    }
+
+    /** Endpoint keys of a reference (parent) workspace, to mark APIs "có ở <tài khoản cha>" / "mới" in this one. */
+    private volatile Set<String> referenceKeys = Set.of();
+    private volatile String referenceLabel;
+
+    public void setReference(String label, Set<String> keys) {
+        referenceLabel = Text.blank(label) ? null : label;
+        referenceKeys = keys == null ? Set.of() : Set.copyOf(keys);
+        changes.structure();
+    }
+
+    public String referenceLabel() {
+        return referenceLabel;
+    }
+
+    /** null = no reference workspace; true = the parent account also reached this endpoint. */
+    public Boolean inReference(ApiGroup g) {
+        if (referenceLabel == null || g == null) {
+            return null;
+        }
+        return referenceKeys.contains(endpointKey(g.method(), g.path()));
+    }
+
+    /** Host-independent endpoint identity used to compare accounts: METHOD + path with IDs as {id}, no query. */
+    public static String endpointKey(String method, String path) {
+        return Text.nz(method).toUpperCase(java.util.Locale.ROOT) + " " + Text.normalizePathIds(Text.nz(path));
+    }
+
     /** Every bug mark of every API (hidden ones included), newest first. */
     public List<BugRow> bugRows() {
         List<BugRow> out = new ArrayList<>();

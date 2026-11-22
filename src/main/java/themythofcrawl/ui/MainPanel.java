@@ -252,6 +252,7 @@ public final class MainPanel {
             tick(true);
         });
         installClickLog();
+        FamilyTab.applyReference(this);
         reportTabs.addChangeListener(e -> tick(true));
         settingsTabs.addChangeListener(e -> tick(true));
         main.add(tabs, BorderLayout.CENTER);
@@ -1362,6 +1363,14 @@ public final class MainPanel {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Đang mở: " + engine.workspaceName() + " - " + engine.workspaceLocation(), false, () -> { }));
         m.addSeparator();
+        m.add(Ui.item("Tài khoản tiếp theo (workspace con, giữ cây nhánh + Excel)...", Icons::plus, () -> {
+            if (excel != null && excel.familyTab != null) {
+                excel.familyTab.createChild();
+            }
+        }));
+        m.add(Ui.item("So sánh tài khoản / báo cáo tổng hợp...", Icons::excel, () -> {
+            selectTab(excel.panel);
+        }));
         m.add(Ui.item("Workspace mới...", Icons::plus, () -> {
             String n = ask("Tên workspace mới (thuộc project '" + host.projectName() + "'):", "Workspace mới");
             if (n != null && !n.isBlank()) {
@@ -1420,9 +1429,19 @@ public final class MainPanel {
     private void openWorkspace(FileStorage st) {
         engine.open(st);
         workspaces.remember(projectId, st);
+        FamilyTab.applyReference(this);
         api.reloadAll();
         tick(true);
-        flash("Đang dùng workspace " + st.name() + " (" + engine.groups().size() + " API)");
+        flash("Đang dùng workspace " + st.name() + " (" + engine.groups().size() + " API)"
+                + (engine.referenceLabel() != null ? " · so với tài khoản " + engine.referenceLabel() : ""));
+    }
+
+    /** V_10.4: switch to another account's workspace of the same family. */
+    void openWorkspaceFromFamily(FileStorage st) {
+        openWorkspace(st);
+        if (excel != null && excel.familyTab != null) {
+            excel.familyTab.reload();
+        }
     }
 
     // =================================================================== detach

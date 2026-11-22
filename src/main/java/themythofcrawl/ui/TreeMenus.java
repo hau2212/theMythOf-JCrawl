@@ -250,6 +250,8 @@ final class TreeMenus {
                 m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
+                m.add(Ui.item("Hỏi đáp (Q&A / Info)..." + (g.qa().isEmpty() ? "" : "   (đang có " + g.qa().size() + ")"),
+                        t -> Icons.info(t.info.text()), () -> QaDialog.open(ui, g, null)));
                 m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
                         t -> Icons.alertMark(t.danger.text(), 13), () -> BugsTab.BugMarkDialog.mark(ui, g, null,
                                 nodeRole != null && !nodeRole.original() ? nodeRole.roleKey() : "", "")));

@@ -244,6 +244,34 @@ public final class ApiGroup {
         return bugs.removeIf(b -> b.id().equals(bugId));
     }
 
+    // V_10.4: questions / notes (Q&A, Info) with screenshots
+    private final java.util.ArrayList<QaItem> qa = new java.util.ArrayList<>();
+
+    public synchronized java.util.List<QaItem> qa() {
+        return java.util.List.copyOf(qa);
+    }
+
+    public synchronized void putQa(QaItem q) {
+        if (q == null) {
+            return;
+        }
+        for (int i = 0; i < qa.size(); i++) {
+            if (qa.get(i).id().equals(q.id())) {
+                qa.set(i, q);
+                return;
+            }
+        }
+        qa.add(q);
+    }
+
+    public synchronized boolean removeQa(String id) {
+        return qa.removeIf(q -> q.id().equals(id));
+    }
+
+    public synchronized boolean hasQa(QaItem.Kind kind) {
+        return qa.stream().anyMatch(q -> q.kind() == kind && q.status() != QaItem.Status.CLOSED);
+    }
+
     public synchronized Set<String> seenBy() {
         return new LinkedHashSet<>(seenBy);
     }

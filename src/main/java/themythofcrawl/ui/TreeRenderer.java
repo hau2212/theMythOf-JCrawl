@@ -704,6 +704,13 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             x = addChip(th, nl, Text.shortPath(g.activeIdNote(), 22), th.smallBoldFont,
                     th.accent.fill(), th.accent.border(), th.accent.text(), null, true, x, th.scaled(4));
         }
+        Boolean inRefGrid = engine != null ? engine.inReference(g) : null;
+        if (inRefGrid != null) {
+            Theme.Token rt = inRefGrid ? th.neutral : th.accent;
+            x = addChip(th, nl, inRefGrid ? "Có ở " + Text.shortPath(engine.referenceLabel(), 14)
+                    : "Mới so với " + Text.shortPath(engine.referenceLabel(), 14), th.smallFont, rt.fill(), rt.border(), rt.text(),
+                    null, true, x, th.scaled(4));
+        }
         int shownTags = 0;
         for (String tagId : g.tags()) {
             if (shownTags >= 2) {
@@ -894,6 +901,13 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
                     th.info.fill(), th.info.border(), th.info.text(), null, true, x, th.scaled(4));
         }
 
+        // V_10.4: compared with the account above (workspace cha): already reached there, or new for this account
+        Boolean inRef = engine != null ? engine.inReference(g) : null;
+        if (inRef != null) {
+            Theme.Token rt = inRef ? th.neutral : th.accent;
+            x = addChip(th, nl, inRef ? "Có ở " + Text.shortPath(engine.referenceLabel(), 14) : "Mới so với " + Text.shortPath(engine.referenceLabel(), 14),
+                    th.smallFont, rt.fill(), rt.border(), rt.text(), null, true, x, th.scaled(4));
+        }
         // API Tag chips (REFRESH / INIT / POLLING / custom) + Suspected Refresh hint
         int shownTags = 0;
         for (String tagId : g.tags()) {
