@@ -1555,8 +1555,8 @@ public final class MainPanel {
                 case APIS:
                     return new Scope(BranchTree.directGroups(n), "API trực tiếp của nhánh \"" + n.payload + "\"");
                 case CLUSTER: {
-                    String cname = n.payload instanceof themythofcrawl.model.GroupCluster cl ? cl.name() : "Cụm";
-                    return new Scope(BranchTree.directGroups(n), "Cụm \"" + cname + "\"");
+                    String cname = n.payload instanceof themythofcrawl.model.GroupCluster cl ? cl.name() : "Nhóm";
+                    return new Scope(BranchTree.directGroups(n), "Nhóm \"" + cname + "\"");
                 }
                 default:
                     ApiGroup g = BranchTree.groupOf(n);
@@ -1705,15 +1705,37 @@ public final class MainPanel {
         flash(n > 0 ? n + " API đã về vị trí trước" : "Không có vị trí trước để quay về");
     }
 
+    /**
+     * V_10.4: duplicates (lần bắt lại) go at once; a bản gốc asks first and the next capture left becomes the
+     * bản gốc; an API with no other capture asks first too. Deleted places are kept ('giữ chỗ').
+     */
     void delete(Collection<ApiGroup> gs) {
-        if (gs.isEmpty()) {
+        if (gs == null || gs.isEmpty()) {
             return;
         }
-        if (gs.size() > 1 && !confirmDialog("Xóa " + gs.size() + " API? (vị trí của chúng vẫn được giữ chỗ)")) {
-            return;
+        Engine.DeletePlan plan = engine.deletePlan(gs);
+        if (plan.needsConfirm()) {
+            StringBuilder q = new StringBuilder("Xóa " + gs.size() + " API?\n");
+            if (!plan.duplicates().isEmpty()) {
+                q.append("\n- ").append(plan.duplicates().size()).append(" lần bắt trùng: xóa luôn.");
+            }
+            if (!plan.originsWithCopies().isEmpty()) {
+                q.append("\n- ").append(plan.originsWithCopies().size())
+                        .append(" bản gốc: lần bắt kế tiếp còn lại sẽ thành bản gốc.");
+            }
+            if (!plan.onlyCopies().isEmpty()) {
+                q.append("\n- ").append(plan.onlyCopies().size())
+                        .append(" API không còn lần bắt nào khác: xóa hẳn (vẫn giữ chỗ, bắt lại sẽ về đúng chỗ).");
+            }
+            if (!confirmDialog(q.toString())) {
+                return;
+            }
         }
-        engine.remove(gs, "");
+        int n = engine.removeSmart(gs, "");
         api.showGroup(null);
+        tick(true);
+        flash("Đã xóa " + n + " API" + (plan.originsWithCopies().isEmpty() ? "" : " · đã đặt bản gốc mới cho "
+                + plan.originsWithCopies().size() + " API"));
     }
 
     void rebuild(Collection<ApiGroup> gs) {
@@ -1780,22 +1802,22 @@ public final class MainPanel {
 
     void createClusterDialog(List<ApiGroup> gs) {
         if (gs == null || gs.isEmpty()) {
-            info("Chọn ít nhất 1 API trước khi gom Cụm hiển thị.");
+            info("Chọn ít nhất 1 API trước khi gom Nhóm.");
             return;
         }
         String branch = gs.get(0).branch();
-        String name = ask("Tên Cụm hiển thị mới trong nhánh '" + branch + "'\n"
-                + "(Cụm chỉ gom gọn để dễ nhìn, không đổi đường dẫn nhánh / Copy STT / Excel):",
-                "Cụm " + (engine.clustersInBranch(branch).size() + 1));
+        String name = ask("Tên Nhóm mới trong nhánh '" + branch + "'\n"
+                + "(Nhóm chỉ gom gọn để dễ nhìn, không đổi đường dẫn nhánh / Copy STT / Excel):",
+                "Nhóm " + (engine.clustersInBranch(branch).size() + 1));
         if (name == null || name.isBlank()) {
             return;
         }
         themythofcrawl.model.GroupCluster cl = engine.createCluster(branch, name.trim(), "accent", gs);
         if (cl != null) {
             tick(true);
-            flash("Đã gom " + cl.size() + " API vào Cụm [" + cl.name() + "] (giữ nguyên đường dẫn nhánh)");
+            flash("Đã gom " + cl.size() + " API vào Nhóm [" + cl.name() + "] (giữ nguyên đường dẫn nhánh)");
         } else {
-            info("Các API cần thuộc cùng một nhánh để gom vào cùng Cụm hiển thị.");
+            info("Các API cần thuộc cùng một nhánh để gom vào cùng Nhóm.");
         }
     }
 
@@ -1803,42 +1825,42 @@ public final class MainPanel {
         if (cl == null) {
             return;
         }
-        String name = ask("Đổi tên Cụm hiển thị (nhánh " + cl.branchPath() + "):", cl.name());
+        String name = ask("Đổi tên Nhóm (nhánh " + cl.branchPath() + "):", cl.name());
         if (name != null && !name.isBlank()) {
             engine.renameCluster(cl.id(), name.trim(), null);
             tick(true);
-            flash("Đã đổi tên Cụm thành [" + name.trim() + "]");
+            flash("Đã đổi tên Nhóm thành [" + name.trim() + "]");
         }
     }
 
     JMenu clusterMenu(List<ApiGroup> gs) {
-        JMenu sub = new JMenu("Cụm hiển thị (Cluster)");
+        JMenu sub = new JMenu("Nhóm");
         sub.setIcon(Icons.themed(Icons::cluster));
         if (gs == null || gs.isEmpty()) {
             sub.setEnabled(false);
             return sub;
         }
         String branch = gs.get(0).branch();
-        sub.add(Ui.item("Gom " + gs.size() + " API vào Cụm mới...", Icons::plus, () -> createClusterDialog(gs)));
+        sub.add(Ui.item("Gom " + gs.size() + " API vào Nhóm mới...", Icons::plus, () -> createClusterDialog(gs)));
         List<themythofcrawl.model.GroupCluster> existing = engine.clustersInBranch(branch);
         if (!existing.isEmpty()) {
             sub.addSeparator();
             for (themythofcrawl.model.GroupCluster cl : existing) {
-                sub.add(Ui.item("Thêm vào Cụm [" + cl.name() + "] (" + cl.size() + " API)", Icons::cluster, () -> {
+                sub.add(Ui.item("Thêm vào Nhóm [" + cl.name() + "] (" + cl.size() + " API)", Icons::cluster, () -> {
                     if (engine.addToCluster(cl.id(), gs)) {
                         tick(true);
-                        flash("Đã thêm vào Cụm [" + cl.name() + "]");
+                        flash("Đã thêm vào Nhóm [" + cl.name() + "]");
                     }
                 }));
             }
         }
         boolean anyInCluster = gs.stream().anyMatch(g -> engine.clusterOf(g.gid()) != null);
         sub.addSeparator();
-        sub.add(Ui.item("Tách khỏi Cụm hiển thị", Icons::undo, anyInCluster, () -> {
+        sub.add(Ui.item("Tách khỏi Nhóm", Icons::undo, anyInCluster, () -> {
             int n = engine.removeFromCluster(gs);
             if (n > 0) {
                 tick(true);
-                flash("Đã tách " + n + " API khỏi Cụm hiển thị");
+                flash("Đã tách " + n + " API khỏi Nhóm");
             }
         }));
         return sub;
@@ -2015,12 +2037,7 @@ public final class MainPanel {
             if (spotlight.isVisible() || isTextEditingFocus()) {
                 return;
             }
-            List<ApiGroup> gs = shortcutTargetGroups();
-            if (!gs.isEmpty() && confirmDialog("Xóa " + gs.size() + " API? (vị trí của chúng vẫn được giữ chỗ)")) {
-                engine.remove(gs, "");
-                api.showGroup(null);
-                tick(true);
-            }
+            delete(shortcutTargetGroups());
         });
         // V_7.0 hideable layout
         registerRootShortcut("ctrl alt 1", "tmoc.layout.tree", () -> api.togglePane(ApiTab.Pane.TREE));

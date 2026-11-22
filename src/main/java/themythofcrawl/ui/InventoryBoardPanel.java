@@ -73,14 +73,14 @@ final class InventoryBoardPanel extends JPanel {
         // ---- Row 1: Action & Collaboration Strip
         JButton exportFinalBtn = Ui.solidPrimary("Xuất Excel Final (Có màu)...",
                 t -> Icons.excel(t.accent.onSolid()), this::exportFinalXlsx);
-        exportFinalBtn.setToolTipText("Xuất file .xlsx 4 sheet (Master + CRUD Matrix + Theo Nhánh + Tổng hợp Nhóm) có tô màu sẵn cho Microsoft Excel Online");
+        exportFinalBtn.setToolTipText("Xuất file .xlsx 4 sheet (Master + CRUD Matrix + Theo Nhánh + Tổng hợp đồng đội) có tô màu sẵn cho Microsoft Excel Online");
 
         JButton gsheetsBtn = Ui.tonalBtn("Google Sheets...",
                 t -> Icons.upload(t.success.text()), t -> t.success,
                 () -> TeamCollabDialog.show(this, engine, TeamCollabDialog.TAB_GSHEETS, this::reload));
         gsheetsBtn.setToolTipText("Kết nối đồng bộ 2 chiều Google Sheets Online (tự tô màu Xanh/Vàng/Đỏ/Xám)");
 
-        teamBtn = Ui.secondaryBtn("Nhóm: " + catalog.memberName(),
+        teamBtn = Ui.secondaryBtn("Đồng đội: " + catalog.memberName(),
                 t -> Icons.target(t.info.text()),
                 () -> TeamCollabDialog.show(this, engine, TeamCollabDialog.TAB_TEAM, this::reload));
         teamBtn.setToolTipText("Mở phòng / Tham gia đồng bộ Real-time giữa nhiều Extension & đặt tên thành viên");
@@ -249,7 +249,7 @@ final class InventoryBoardPanel extends JPanel {
         int openConf = catalog.conflictCount();
         conflictBtn.setText("Xung đột: " + openConf);
         int peers = engine.teamSync().activePeers().size();
-        teamBtn.setText("Nhóm: " + catalog.memberName() + (peers > 0 ? " (+" + peers + ")" : ""));
+        teamBtn.setText("Đồng đội: " + catalog.memberName() + (peers > 0 ? " (+" + peers + ")" : ""));
     }
 
     private void refreshTagCombo() {

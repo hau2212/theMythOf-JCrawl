@@ -185,22 +185,22 @@ final class TreeMenus {
             }
             case CLUSTER -> {
                 GroupCluster cl = (GroupCluster) n.payload;
-                m.add(Ui.item(cl.collapsed() ? "Mở rộng Cụm [" + cl.name() + "]" : "Thu gọn Cụm [" + cl.name() + "]",
+                m.add(Ui.item(cl.collapsed() ? "Mở rộng Nhóm [" + cl.name() + "]" : "Thu gọn Nhóm [" + cl.name() + "]",
                         Icons::cluster, () -> {
                             engine.toggleClusterCollapsed(cl.id());
                             ui.tick(true);
                         }));
-                m.add(Ui.item("Đổi tên Cụm hiển thị...", Icons::edit, () -> ui.editClusterDialog(cl)));
-                m.add(Ui.item("Gỡ Cụm (giữ nguyên toàn bộ API trong nhánh)", Icons::undo, () -> {
+                m.add(Ui.item("Đổi tên Nhóm...", Icons::edit, () -> ui.editClusterDialog(cl)));
+                m.add(Ui.item("Gỡ Nhóm (giữ nguyên toàn bộ API trong nhánh)", Icons::undo, () -> {
                     engine.dissolveCluster(cl.id());
                     ui.tick(true);
-                    ui.flash("Đã gỡ Cụm [" + cl.name() + "] — các API giữ nguyên vị trí");
+                    ui.flash("Đã gỡ Nhóm [" + cl.name() + "] — các API giữ nguyên vị trí");
                 }));
                 m.addSeparator();
-                m.add(Ui.item("Gửi tất cả " + many.size() + " API trong Cụm", t -> Icons.send(t.critical.text()),
+                m.add(Ui.item("Gửi tất cả " + many.size() + " API trong Nhóm", t -> Icons.send(t.critical.text()),
                         () -> ui.send(many)));
-                m.add(Ui.item("Đẩy Cụm sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
-                m.add(Ui.item("Copy STT + Path của Cụm (" + many.size() + " API)", t -> Icons.copy(t.muted),
+                m.add(Ui.item("Đẩy Nhóm sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
+                m.add(Ui.item("Copy STT + Path của Nhóm (" + many.size() + " API)", t -> Icons.copy(t.muted),
                         () -> ui.copy(many)));
                 m.add(ui.tagMenu(many));
             }
@@ -238,6 +238,9 @@ final class TreeMenus {
                         () -> ui.pushDialog(false, List.of(g), Text.apiLabel(g.gid()))));
                 m.add(Ui.item("Bật / Tắt vai trò cho API #" + g.gid() + "...", Icons::sliders,
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, targetGs, null)));
+                boolean dup = targetGs.size() == 1 && !engine.isOrigin(g);
+                m.add(Ui.item(targetGs.size() > 1 ? "Xóa " + targetGs.size() + " API..." : dup ? "Xóa lần bắt trùng này"
+                                : "Xóa API (bản gốc)...", t -> Icons.trash(t.danger.text()), () -> ui.delete(targetGs)));
                 m.addSeparator();
                 m.add(ui.clusterMenu(targetGs));
                 m.add(ui.tagMenu(targetGs));

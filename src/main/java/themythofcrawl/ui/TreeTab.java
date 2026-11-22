@@ -130,8 +130,14 @@ final class TreeTab {
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
         javax.swing.JComboBox<String> crawlRole = AccessMatrixTab.crawlRoleCombo(engine);
         crawlRole.setPrototypeDisplayValue("Tự nhận diện (token/cookie)");
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, ui.newTreeViewSwitch(), Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn,
-                more, windowBtn);
+        JButton expandAllBtn = Ui.secondaryBtn("Mở hết", t -> Icons.chevronDown(t.fg, 11));
+        expandAllBtn.setToolTipText("Mở tất cả nhánh, nhóm và API của nhánh");
+        expandAllBtn.addActionListener(Ui.safe(e -> tree.expandFolders(true)));
+        JButton collapseAllBtn = Ui.secondaryBtn("Thu hết", t -> Icons.chevronUp(t.fg, 11));
+        collapseAllBtn.setToolTipText("Thu gọn tất cả nhánh (chuột phải nền Cây: tùy chọn mở app là thu gọn hết)");
+        collapseAllBtn.addActionListener(Ui.safe(e -> tree.expandFolders(false)));
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, ui.newTreeViewSwitch(), expandAllBtn, collapseAllBtn, Ui.muted("Crawl bằng:"),
+                crawlRole, focusTreeBtn, sendSelBtn, more, windowBtn);
 
         JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         head.setOpaque(false);
@@ -630,6 +636,10 @@ final class TreeTab {
         m.addSeparator();
         m.add(Ui.item("Mở tất cả các nhánh", Icons::plus, () -> tree.expandFolders(true)));
         m.add(Ui.item("Thu gọn tất cả", Icons::minus, () -> tree.expandFolders(false)));
+        javax.swing.JCheckBoxMenuItem startCollapsed = new javax.swing.JCheckBoxMenuItem("Mở app: thu gọn hết Cây",
+                UiPrefs.treeStartCollapsed(ui.uiPrefs));
+        startCollapsed.addActionListener(Ui.safe(e -> UiPrefs.setTreeStartCollapsed(ui.uiPrefs, startCollapsed.isSelected())));
+        m.add(startCollapsed);
         m.addSeparator();
         m.add(Ui.item("Hướng dẫn Action & Ví dụ thực chiến...", Icons::info,
                 () -> ActionWorkbenchDialog.show(panel, engine, shownGroup, null, ActionWorkbenchDialog.TAB_GUIDE, ui::syncHeader)));
@@ -823,6 +833,12 @@ final class TreeTab {
         if (tree.tree.isShowing() || activeTab || window != null) {
             stale = false;
             tree.rebuild(engine.config().showGhosts);
+            if (!firstBuildDone) {
+                firstBuildDone = true;
+                if (UiPrefs.treeStartCollapsed(ui.uiPrefs)) {
+                    tree.expandFolders(false);
+                }
+            }
             if (grew && shownHeld == null && !pending.isEmpty()) {
                 tree.revealHeldNode(pending.get(pending.size() - 1).id());
             }
@@ -831,6 +847,8 @@ final class TreeTab {
             tree.tree.repaint();
         }
     }
+
+    private boolean firstBuildDone;
 
     void refreshIfVisible() {
         if (stale && tree.tree.isShowing()) {

@@ -445,7 +445,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.dashedEdge = true;
 
         x = addLeadIcon(nl, Icons.cluster(tok.text(), 14), x, th.scaled(4));
-        x = addChip(th, nl, "Cụm", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
+        x = addChip(th, nl, "Nhóm", th.smallBoldFont, tok.fillStrong(), tok.border(), tok.text(), null, true, x, gap);
 
         Node.FolderMeta m = n.folderMeta;
         String title = m != null ? m.name() : (cl != null ? cl.name() : Icons.stripLeadingSymbol(n.label));

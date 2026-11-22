@@ -3912,6 +3912,58 @@ public final class Engine {
         changes.structure();
     }
 
+    /** V_10.4: what deleting these APIs means, for the confirm text. */
+    public record DeletePlan(List<ApiGroup> duplicates, List<ApiGroup> originsWithCopies, List<ApiGroup> onlyCopies) {
+        public boolean needsConfirm() {
+            return !originsWithCopies.isEmpty() || !onlyCopies.isEmpty();
+        }
+    }
+
+    public DeletePlan deletePlan(Collection<ApiGroup> gs) {
+        Set<Integer> ids = new HashSet<>();
+        for (ApiGroup g : gs) {
+            ids.add(g.gid());
+        }
+        List<ApiGroup> dups = new ArrayList<>();
+        List<ApiGroup> origins = new ArrayList<>();
+        List<ApiGroup> single = new ArrayList<>();
+        for (ApiGroup g : gs) {
+            if (!isOrigin(g)) {
+                dups.add(g);
+                continue;
+            }
+            boolean othersLeft = g.bookKey() != null
+                    && copiesOf(g.bookKey()).stream().anyMatch(c -> !ids.contains(c.gid()));
+            (othersLeft ? origins : single).add(g);
+        }
+        return new DeletePlan(dups, origins, single);
+    }
+
+    /**
+     * V_10.4 "Xóa API": a duplicate capture is simply removed; when a bản gốc is removed and other captures of the
+     * same endpoint remain, the earliest one left becomes the new bản gốc (numbering 1, 2, 3 again).
+     */
+    public int removeSmart(Collection<ApiGroup> gs, String note) {
+        List<ApiGroup> list = new ArrayList<>(gs);
+        Set<Integer> ids = new HashSet<>();
+        Set<String> originKeys = new LinkedHashSet<>();
+        for (ApiGroup g : list) {
+            ids.add(g.gid());
+            if (g.bookKey() != null && isOrigin(g)) {
+                originKeys.add(g.bookKey());
+            }
+        }
+        remove(list, note);
+        for (String key : originKeys) {
+            List<ApiGroup> left = copiesOf(key).stream().filter(c -> !ids.contains(c.gid()))
+                    .sorted(Comparator.comparingInt(ApiGroup::dupNo).thenComparingInt(ApiGroup::gid)).toList();
+            if (!left.isEmpty()) {
+                promoteToOrigin(left.get(0));
+            }
+        }
+        return list.size();
+    }
+
     /** Deleted APIs are captured again the next time (their dedup keys are dropped). */
     public int forgetDedup(Collection<ApiGroup> gs) {
         int n = 0;

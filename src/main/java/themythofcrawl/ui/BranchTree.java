@@ -764,9 +764,9 @@ public final class BranchTree {
         }
         Audit.Verdict v = Audit.branch(gs);
         String count = gs.size() + " API";
-        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "Cụm", count, v.summary(),
+        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "Nhóm", count, v.summary(),
                 pending > 0 ? pending + " chờ" : null, null);
-        return new Node(Node.Kind.CLUSTER, cl, "[Cụm] " + cl.name() + " · " + count, v.level(),
+        return new Node(Node.Kind.CLUSTER, cl, "[Nhóm] " + cl.name() + " · " + count, v.level(),
                 "C" + cl.id(), folder.depth, meta);
     }
 

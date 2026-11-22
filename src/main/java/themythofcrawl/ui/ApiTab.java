@@ -1816,8 +1816,8 @@ final class ApiTab {
                 showHeldRequest(null);
                 GroupCluster cl = (GroupCluster) n.payload;
                 int sz = tree.selectedGroups().size();
-                findSendBranch.setText("Gửi Cụm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
-                findSendBranch.setToolTipText("Cụm hiển thị trực quan: " + cl.name() + " (không đổi đường dẫn API)");
+                findSendBranch.setText("Gửi Nhóm [" + Text.shortPath("/" + cl.name(), 16).substring(1) + "] (" + sz + " API)");
+                findSendBranch.setToolTipText("Nhóm trực quan: " + cl.name() + " (không đổi đường dẫn API)");
             }
             case HELD_PENDING -> {
                 ProxyInterceptQueue.PendingRequest pr = BranchTree.heldOf(n);
