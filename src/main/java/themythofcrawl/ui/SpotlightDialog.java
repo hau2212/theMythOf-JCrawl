@@ -58,7 +58,7 @@ public final class SpotlightDialog extends JPanel {
     private final MainPanel ui;
     private final Engine engine;
     private final Card card = new Card(t -> t.accent, false);
-    private final SearchField search = new SearchField("Tìm nhanh API (#, method, path), Nhánh hoặc Role...", 32);
+    private final SearchField search = new SearchField("Tìm nhanh API (#, method, path), Nhánh hoặc vai trò...", 32);
     private final Pill shortcutPill = new Pill("Ctrl+K", t -> t.accent);
     private final DefaultListModel<Match> model = new DefaultListModel<>();
     private final JList<Match> list = new JList<>(model);
@@ -249,14 +249,14 @@ public final class SpotlightDialog extends JPanel {
             int rank = q.isEmpty() ? 20 : scoreText(b.name(), q);
             if (rank >= 0) {
                 int count = engine.groupsUnder(b.name()).size();
-                hits.add(new Match(Kind.BRANCH, b.name(), "Nhánh Sub-folder · " + count + " API",
+                hits.add(new Match(Kind.BRANCH, b.name(), "Nhánh nhánh · " + count + " API",
                         count + " API", AuditLevel.NONE, rank + 2, () -> ui.jumpToBranch(b.name())));
             }
         }
 
         // 3. Roles + API gốc profile
         if (q.isEmpty() || "api gốc".contains(q) || "gốc".contains(q) || "original".contains(q)) {
-            hits.add(new Match(Kind.ROLE, "API gốc (Profile)", "Rule áp dụng riêng cho request gốc trước khi nhân bản",
+            hits.add(new Match(Kind.ROLE, "Tài khoản crawl (profile)", "Rule áp dụng riêng cho request gốc trước khi nhân bản",
                     engine.originalProfile().enabled() ? "Bật" : "Tắt", AuditLevel.REDIRECT, q.isEmpty() ? 30 : 6,
                     () -> ui.jumpToRole(-1)));
         }
@@ -459,7 +459,7 @@ public final class SpotlightDialog extends JPanel {
                 }
                 case ROLE -> {
                     icon.setIcon(Icons.role(selected ? th.selectionFg : th.dup.text(), 13));
-                    kindPill.setToken(t -> t.dup).setText("Role");
+                    kindPill.setToken(t -> t.dup).setText("Vai trò");
                     rightBadge.setToken(t -> t.audit(m.audit())).setText(m.badge());
                 }
             }

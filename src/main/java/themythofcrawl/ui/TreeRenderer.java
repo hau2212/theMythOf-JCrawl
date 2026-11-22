@@ -471,24 +471,17 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
      */
     static String compactVerdict(String raw) {
         String s = Icons.stripLeadingSymbol(raw == null ? "" : raw).trim();
-        s = s.replaceFirst("^[A-Za-zÀ-ỹ]+:\\s*", "");
-        s = s.replace(" API có Role lỗi/lệch", " lệch")
-                .replace(" API 2xx", " OK")
-                .replace("Role 2xx (Lệch Body)", "2xx lệch");
-        if (s.startsWith("Chưa Gửi")) {
+        if (s.startsWith("Chưa gửi")) {
             return "Chưa gửi";
         }
-        if (s.startsWith("Cả ") && s.endsWith(" Role 2xx")) {
-            return s.substring(3);
-        }
-        return s;
+        return s.replace("Tài khoản crawl · ", "");
     }
 
     static String compactPending(ApiGroup g) {
         if (g.dupPending()) {
-            return "Trùng #" + g.dupNo();
+            return "Giữ lần " + g.dupNo() + "?";
         }
-        return g.placeHint() != null ? "Về chỗ cũ?" : "Chờ XN";
+        return g.placeHint() != null ? "Về chỗ cũ?" : "Chờ xác nhận";
     }
 
     /** Muted plain-text counter after a name (e.g. "5 API"), Burp-style instead of a boxed chip. */
@@ -687,7 +680,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (g.dupTotal() > 1) {
             nl.dupX0 = x;
             if (nl.originFlag) {
-                x = addChip(th, nl, "GỐC · " + g.dupTotal(), th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
+                x = addChip(th, nl, "Gốc · " + g.dupTotal() + " lần", th.smallBoldFont, th.orig.fillStrong(), th.orig.border(),
                         th.orig.text(), Icons.star(th.orig.text(), 11), true, x, th.scaled(4));
             } else {
                 x = addChip(th, nl, "#" + g.dupNo() + "/" + g.dupTotal(), th.smallBoldFont, th.dup.fill(), th.dup.border(),
@@ -855,8 +848,8 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             } else {
                 ApiGroup orig = engine != null ? engine.originOf(g.bookKey()) : null;
                 String dupTxt = orig != null && orig.gid() != g.gid()
-                        ? "#" + g.dupNo() + " <- " + Text.groupId(orig.gid())
-                        : "#" + g.dupNo() + "/" + g.dupTotal();
+                        ? "Lần " + g.dupNo() + " · gốc " + Text.apiLabel(orig.gid())
+                        : "Lần " + g.dupNo() + " / " + g.dupTotal();
                 x = addChip(th, nl, dupTxt, th.smallBoldFont, th.dup.fill(), th.dup.border(),
                         th.dup.text(), Icons.dup(th.dup.text(), 11), true, x, th.scaled(4));
             }
@@ -902,7 +895,7 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
             shownTags++;
         }
         if (shownTags < 2 && g.suspectedRefresh() && !g.hasTag(ApiTagCatalog.TAG_REFRESH)) {
-            x = addChip(th, nl, "? Refresh", th.smallBoldFont, th.warning.fill(), th.warning.border(),
+            x = addChip(th, nl, "Tải lại?", th.smallBoldFont, th.warning.fill(), th.warning.border(),
                     th.warning.text(), Icons.refresh(th.warning.text(), 10), true, x, th.scaled(4));
         }
         return x;

@@ -190,11 +190,11 @@ final class AuditTab {
         Ui.onPopup(decideTable, e -> {
             List<ApiGroup> gs = selected(decideTable, decideModel);
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, gs.size() == 1,
+            m.add(Ui.item("Các lần bắt...", Icons::dup, gs.size() == 1,
                     () -> LineageDialog.show(ui, gs.get(0))));
-            m.add(Ui.item("Đặt làm API GỐC #1", Icons::star, gs.size() == 1, () -> {
+            m.add(Ui.item("Đặt làm bản gốc", Icons::star, gs.size() == 1, () -> {
                 if (engine.promoteToOrigin(gs.get(0))) {
-                    ui.flash("Đã đặt " + Text.groupId(gs.get(0).gid()) + " làm API GỐC #1");
+                    ui.flash("Đã đặt " + Text.groupId(gs.get(0).gid()) + " làm bản gốc");
                     stale = true;
                     ui.tick(true);
                 }
@@ -374,10 +374,10 @@ final class AuditTab {
         onText(placeFilter, this::reload);
         placeView.addActionListener(Ui.safe(e -> reload()));
         JButton[] moreRef = new JButton[1];
-        JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ, Lineage & Tag REFRESH", () -> {
+        JButton more = Ui.dropdown("Thao tác", null, "Thao tác giữ chỗ, các lần bắt & Tag REFRESH", () -> {
             PlacementBook.Record r = selectedPlace();
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, r != null,
+            m.add(Ui.item("Các lần bắt...", Icons::dup, r != null,
                     () -> LineageDialog.showByKey(ui, r.key, null)));
             m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
             m.addSeparator();
@@ -398,7 +398,7 @@ final class AuditTab {
         Ui.onPopup(placeTable, e -> {
             PlacementBook.Record r = selectedPlace();
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, r != null,
+            m.add(Ui.item("Các lần bắt...", Icons::dup, r != null,
                     () -> LineageDialog.showByKey(ui, r.key, null)));
             m.add(Ui.item("Bật / Tắt Tag [REFRESH]", Icons::tag, r != null, () -> {
                 boolean has = r.tags.contains(themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
@@ -423,10 +423,10 @@ final class AuditTab {
             }
         });
         placeAdvice.setEmpty("Chọn một endpoint để xem chi tiết giữ chỗ",
-                "Bảng trên hiển thị vị trí ghi nhớ của từng endpoint. Bấm đúp vào 1 dòng để đổi vị trí giữ chỗ hoặc mở chuỗi Lineage.");
+                "Bảng trên hiển thị vị trí ghi nhớ của từng endpoint. Bấm đúp vào 1 dòng để đổi vị trí giữ chỗ hoặc mở chuỗi các lần bắt.");
         JPanel top = Ui.flow(FlowLayout.LEFT, placeFilter, placeView,
                 Ui.button("Sửa chỗ...", Icons::edit, () -> editPlace(selectedPlace())),
-                Ui.button("Lineage...", Icons::lineageGraph, () -> {
+                Ui.button("Các lần bắt...", Icons::lineageGraph, () -> {
                     PlacementBook.Record r = selectedPlace();
                     if (r == null) {
                         Ui.hint(placeTable, "Chọn 1 dòng trong bảng Giữ chỗ trước");
@@ -448,7 +448,7 @@ final class AuditTab {
         PlacementBook.Record r = selectedPlace();
         if (r == null) {
             placeAdvice.setEmpty("Chọn một endpoint để xem chi tiết giữ chỗ",
-                    "Bảng trên hiển thị vị trí ghi nhớ của từng endpoint. Bấm đúp vào 1 dòng để đổi vị trí giữ chỗ hoặc mở chuỗi Lineage.");
+                    "Bảng trên hiển thị vị trí ghi nhớ của từng endpoint. Bấm đúp vào 1 dòng để đổi vị trí giữ chỗ hoặc mở chuỗi các lần bắt.");
             return;
         }
         placeAdvice.setAdvice(Decisions.adviseEndpoint(engine, r.key));
@@ -578,10 +578,10 @@ final class AuditTab {
             boolean one = gs.size() == 1 && first != null;
             boolean hasRefresh = first != null && engine.book().hasTag(first.bookKey(), themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, one, () -> dupAction("lineage")));
+            m.add(Ui.item("Các lần bắt...", Icons::dup, one, () -> dupAction("lineage")));
             m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
             m.addSeparator();
-            m.add(Ui.item("Đặt làm API GỐC #1", Icons::check, one, () -> dupAction("promote")));
+            m.add(Ui.item("Đặt làm bản gốc", Icons::check, one, () -> dupAction("promote")));
             m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
             m.add(Ui.item("Giữ (bản chờ)", t -> Icons.check(t.success.text()), !gs.isEmpty(), () -> dupAction("keep")));
             m.add(Ui.item("Hiện", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
@@ -594,16 +594,16 @@ final class AuditTab {
             m.show(e.getComponent(), e.getX(), e.getY());
         });
         JButton[] moreDupsRef = new JButton[1];
-        JButton moreDups = Ui.dropdown("Thao tác", null, "Lineage, Gốc #1, REFRESH Tag, xóa hoặc xem hướng dẫn", () -> {
+        JButton moreDups = Ui.dropdown("Thao tác", null, "các lần bắt, Gốc #1, REFRESH Tag, xóa hoặc xem hướng dẫn", () -> {
             List<ApiGroup> gs = selected(dupTable, dupModel);
             ApiGroup first = gs.isEmpty() ? null : gs.get(0);
             boolean one = gs.size() == 1 && first != null;
             boolean hasRefresh = first != null && engine.book().hasTag(first.bookKey(), themythofcrawl.model.ApiTagCatalog.TAG_REFRESH);
             JPopupMenu m = new JPopupMenu();
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, one, () -> dupAction("lineage")));
+            m.add(Ui.item("Các lần bắt...", Icons::dup, one, () -> dupAction("lineage")));
             m.add(Ui.item("Mở ở tab API", Icons::search, !gs.isEmpty(), () -> dupAction("open")));
             m.addSeparator();
-            m.add(Ui.item("Đặt làm API GỐC #1", Icons::check, one, () -> dupAction("promote")));
+            m.add(Ui.item("Đặt làm bản gốc", Icons::check, one, () -> dupAction("promote")));
             m.add(Ui.item("Chỉ giữ GỐC #1 & Ẩn #2+", Icons::hide, one, () -> dupAction("keep_origin")));
             m.add(Ui.item("Hiện bản đang chọn", Icons::show, !gs.isEmpty(), () -> dupAction("show")));
             m.add(Ui.item("Ẩn bản đang chọn", Icons::hide, !gs.isEmpty(), () -> dupAction("hide")));
@@ -631,7 +631,7 @@ final class AuditTab {
         sp.setBorder(null);
         JPanel p = new JPanel(new BorderLayout());
         p.add(Ui.flow(FlowLayout.LEFT, dupView,
-                Ui.button("Lineage...", Icons::lineageGraph, () -> dupAction("lineage")),
+                Ui.button("Các lần bắt...", Icons::lineageGraph, () -> dupAction("lineage")),
                 Ui.button("Đặt Bản Gốc #1", Icons::originCrown, () -> dupAction("promote")),
                 Ui.button("Giữ (bản chờ)", t -> Icons.check(t.success.text()), () -> dupAction("keep")),
                 Ui.button("Hiện", Icons::show, () -> dupAction("show")),
@@ -661,7 +661,7 @@ final class AuditTab {
             case "lineage" -> LineageDialog.show(ui, gs.get(0));
             case "promote" -> {
                 engine.promoteToOrigin(gs.get(0));
-                ui.flash("Đã đặt API #" + gs.get(0).gid() + " làm API GỐC #1");
+                ui.flash("Đã đặt API #" + gs.get(0).gid() + " làm bản gốc");
             }
             case "keep_origin" -> {
                 int hidden = engine.keepOnlyOriginAndHideOthers(gs.get(0).bookKey());

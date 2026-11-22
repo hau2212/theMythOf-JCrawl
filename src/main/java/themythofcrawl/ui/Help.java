@@ -7,7 +7,7 @@ public final class Help {
 
     public static final String CAPTURE = "Bắt request từ Proxy.\n\n"
             + "• Dừng / Capture: bật / tắt bắt (chấm đỏ nhấp nháy nhẹ khi đang bật).\n"
-            + "• CHỈ CRAWL / GỬI: chỉ ghi lại API, hoặc bắt xong tự gửi ngay các Role qua hàng đợi chống 429.\n"
+            + "• CHỈ CRAWL / GỬI: chỉ ghi lại API, hoặc bắt xong tự gửi ngay các vai trò qua hàng đợi chống 429.\n"
             + "• Hàng đợi: số request đang chờ gửi kèm thanh tiến độ mảnh; bấm để hủy hàng đợi.";
     public static final String DEST = "Đích (Breadcrumb): mọi request MỚI sẽ vào đường dẫn này.\n\n"
             + "Mỗi cấp hiển thị thành 1 chip màu; bấm vào một cấp để chuyển nhanh tới cấp đó, hoặc bấm mũi tên để "
@@ -20,9 +20,9 @@ public final class Help {
             + "• API trùng gặp ở chỗ mới (chấm / nhãn tím): giữ thêm ở chỗ mới hay ẩn đi.\n\n"
             + "Chi tiết, thẻ giải thích và các nút xử lý nằm ở tab Audit > Cần xử lý.";
     public static final String COLORS = "Màu ngữ nghĩa & chip lọc của API:\n\n"
-            + "• Xanh lá: OK (mọi role đều hợp lệ / 2xx)\n"
-            + "• Vàng / hổ phách: INFO (có role bị chặn 401/403 hoặc lệch trạng thái)\n"
-            + "• Cam: WARN - nghi bypass (Guest / role thấp vẫn được 2xx)\n"
+            + "• Xanh lá: OK (mọi vai trò đều hợp lệ / 2xx)\n"
+            + "• Vàng / hổ phách: INFO (có vai trò bị chặn 401/403 hoặc lệch trạng thái)\n"
+            + "• Cam: WARN - nghi bypass (Guest / vai trò thấp vẫn được 2xx)\n"
             + "• Đỏ: lỗi 5xx / mất kết nối\n"
             + "• Xanh dương: chuyển hướng 3xx hoặc đã bắt chưa gửi\n"
             + "• Xám: chờ xác nhận vị trí\n"
@@ -56,9 +56,9 @@ public final class Help {
     public static final String SELECT = "Chọn nhiều, kéo thả & phím tắt:\n\n"
             + "• Chọn nhiều: Ctrl + click (từng mục) hoặc Shift + click (một khoảng) trong cây hoặc bảng.\n"
             + "• Kéo thả: kéo API trong cây sang nhánh khác để chuyển nhanh (hiện nút Hoàn tác trên thông báo nổi).\n"
-            + "• Phím tắt: Ctrl+K tìm toàn cục (Spotlight) · Ctrl+F lọc tab hiện tại · Ctrl+Shift+C copy STT · "
+            + "• Phím tắt: Ctrl+K tìm toàn cục · Ctrl+F lọc tab hiện tại · Ctrl+Shift+C copy STT · "
             + "Ctrl+Enter gửi · Ctrl+R đẩy Repeater · Delete xóa · Alt+1..8 chuyển tab.";
-    public static final String WORKSPACE = "Workspace: toàn bộ API, kết quả role, cây nhánh, giữ chỗ, file Excel, bộ đếm và cấu hình cột "
+    public static final String WORKSPACE = "Workspace: toàn bộ API, kết quả vai trò, cây nhánh, giữ chỗ, file Excel, bộ đếm và cấu hình cột "
             + "bảng được lưu tự động vào thư mục theMythOfCrawl_workspace (mặc định cạnh file jar). Đóng Burp hay đổi project rồi "
             + "quay lại vẫn còn nguyên. Xem LAF / màu theme / cỡ chữ / thông tin chẩn đoán ở tab Cấu hình (mục 8).";
 }

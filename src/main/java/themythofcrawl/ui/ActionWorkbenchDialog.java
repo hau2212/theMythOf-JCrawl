@@ -104,10 +104,10 @@ public final class ActionWorkbenchDialog {
                                      int initialTab, Runnable onAfterAction) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         String title = focusGroup != null
-                ? "Action Workbench — " + Text.apiLabel(focusGroup.gid()) + " " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 44)
+                ? "Chặn & gửi lại — " + Text.apiLabel(focusGroup.gid()) + " " + focusGroup.method() + " " + Text.shortPath(focusGroup.path(), 44)
                 : (prefillBranch != null && !prefillBranch.isBlank()
-                        ? "Action Workbench — Luật & Phạm vi cho " + prefillBranch
-                        : "Action Workbench — Trung tâm Kiểm soát Action");
+                        ? "Chặn & gửi lại — Luật & Phạm vi cho " + prefillBranch
+                        : "Chặn & gửi lại");
         JDialog dlg = new JDialog(Ui.ownerWindow(owner), title, JDialog.ModalityType.APPLICATION_MODAL);
 
         JPanel content = buildWorkbenchPanel(dlg, engine, focusGroup, explicitTargets, prefillBranch, initialTab, () -> {
@@ -827,7 +827,7 @@ public final class ActionWorkbenchDialog {
             }
 
             if (focusGroup == null) {
-                diffPreview.setText("Hãy mở Action Workbench từ một API cụ thể (VD: DELETE /api/v1/orders/78) để xem bản xem trước Diff Request.");
+                diffPreview.setText("Hãy mở Chặn & gửi lại từ một API cụ thể (VD: DELETE /api/v1/orders/78) để xem bản xem trước Diff Request.");
                 return;
             }
             byte[] reqBytes = Blob.bytesOf(focusGroup.origRequest());
@@ -993,7 +993,7 @@ public final class ActionWorkbenchDialog {
 
         Runnable refreshCompare = () -> {
             if (focusGroup == null) {
-                snapArea.setText("Mở Action Workbench từ một API cụ thể để so sánh Snapshot 200 OK lúc crawl với kết quả gửi gần nhất.");
+                snapArea.setText("Mở Chặn & gửi lại từ một API cụ thể để so sánh Snapshot 200 OK lúc crawl với kết quả gửi gần nhất.");
                 curArea.setText("(Chưa chọn API)");
                 return;
             }
@@ -1021,7 +1021,7 @@ public final class ActionWorkbenchDialog {
         JPanel compareGrid = new JPanel(new GridLayout(1, 2, 10, 0));
         compareGrid.setOpaque(false);
         compareGrid.add(stepBox("Bản gốc 200 OK lúc Crawl (Snapshot được bảo vệ)", new JScrollPane(snapArea)));
-        compareGrid.add(stepBox("Kết quả hiện tại của API gốc", new JScrollPane(curArea)));
+        compareGrid.add(stepBox("Kết quả hiện tại của tài khoản crawl", new JScrollPane(curArea)));
         p.add(compareGrid, BorderLayout.CENTER);
 
         // 3 crystal-clear bottom action cards

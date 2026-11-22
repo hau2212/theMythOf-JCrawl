@@ -100,11 +100,11 @@ final class SettingsTab {
     private final JTextField retries = new JTextField(6);
     private final JTextField threads = new JTextField(6);
     private final JLabel pacing = Ui.muted(" ");
-    private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả API gốc (áp profile API gốc) cùng các role");
+    private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả tài khoản crawl cùng các vai trò");
     private final JComboBox<String> actionModeBox = new JComboBox<>();
     private final JComboBox<String> lock2xxStrategyBox = new JComboBox<>();
     private final JCheckBox holdActionProxyChk = new JCheckBox("Giữ lại mọi API thao tác khi crawl (server không đổi)");
-    private final JCheckBox number = new JCheckBox("Thêm số thứ tự role vào tên tab (01_, 02_ ...) nếu tên chưa có");
+    private final JCheckBox number = new JCheckBox("Thêm số thứ tự vai trò vào tên tab (01_, 02_ ...) nếu tên chưa có");
     private final JCheckBox branchInTab = new JCheckBox("Gắn mã Nhánh vào tên tab: [F01-G01:POST /v1/...] thay vì [G01:POST /v1/...]");
     private final JTextField pathLen = new JTextField(6);
     private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong danh sách Excel (thay cho bộ lọc Regex)");
@@ -210,7 +210,7 @@ final class SettingsTab {
         regexError.setFont(Theme.current().smallBoldFont);
 
         sections.add(section("1.  Bắt API từ Proxy", t -> t.info,
-                "Request qua Proxy được bắt và nhân bản theo Role. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
+                "Request qua Proxy được bắt và nhân bản theo vai trò. Bắt thủ công (chuột phải > " + Text.EXT_NAME + ") bỏ qua các bộ lọc này.",
                 row(scope), pair(ignoreStatic, staticExt), pair(regexOn, regex), pair(null, regexError), row(options)));
         sections.add(section("2.  Chống trùng lặp, vị trí & API REFRESH", t -> t.dup,
                 "Tránh nhân bản lại cùng một endpoint nhiều lần; quyết định nơi API mới / API bắt lại / API REFRESH được xử lý.",

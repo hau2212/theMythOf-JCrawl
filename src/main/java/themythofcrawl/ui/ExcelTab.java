@@ -556,7 +556,7 @@ final class ExcelTab {
                     ids.append(i > 0 ? ", " : "").append(Text.apiLabel(found.get(i).gid()));
                 }
                 if (found.size() > 4) {
-                    ids.append(" ...");
+                    ids.append("...");
                 }
                 String copied = found.stream().map(ApiGroup::copiedLabel).filter(java.util.Objects::nonNull).findFirst().orElse("");
                 String hint = "";

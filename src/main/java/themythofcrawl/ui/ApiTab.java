@@ -83,7 +83,7 @@ final class ApiTab {
     private final Pill resWarnPill = new Pill("Bypass 0", t -> t.critical, t -> Icons.warn(t.critical.text(), 12));
     private final Pill resErrPill = new Pill("Lỗi 0", t -> t.danger, t -> Icons.error(t.danger.text(), 12));
     private final JLabel resMetaLabel = Ui.muted("Chưa chọn API");
-    private final JButton pill = new JButton("Chưa chọn API Group") {
+    private final JButton pill = new JButton("Chưa chọn API") {
         @Override
         public void updateUI() {
             super.updateUI();
@@ -187,7 +187,7 @@ final class ApiTab {
         Ui.onPopup(branchTable, e -> branchMenu().show(e.getComponent(), e.getX(), e.getY()));
         TreeColumns.enable(tree.tree);
         treeScroll = MainPanel.scroll(tree.tree);
-        leftTabs.addTab("Cây Sub-folder", treeScroll);
+        leftTabs.addTab("Cây nhánh", treeScroll);
         leftTabs.addTab("Bảng Nhánh", MainPanel.scroll(branchTable));
         leftTabs.addChangeListener(e -> refreshVisible(true));
         JPanel left = new JPanel(new BorderLayout(0, 0));
@@ -324,7 +324,7 @@ final class ApiTab {
         tabsScroll.setPreferredSize(new Dimension(240, 26));
         tabsScroll.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 6));
         tabsScroll.getHorizontalScrollBar().setUnitIncrement(40);
-        JButton sendOne = Ui.accent("Send Tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
+        JButton sendOne = Ui.accent("Gửi tab này", t -> Icons.send(t.critical.onSolid()), t -> t.critical, this::sendCurrentTab);
         JButton composerBtn = Ui.button("Sửa & Gửi", t -> Icons.edit(t.info.text()), () -> {
             ApiGroup cur = currentGroup();
             if (cur != null) {
@@ -334,7 +334,7 @@ final class ApiTab {
                 });
             }
         });
-        composerBtn.setToolTipText("Mở trình soạn thảo Request (Composer) để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
+        composerBtn.setToolTipText("Mở trình soạn thảo Request để chỉnh sửa Raw HTTP và gửi lại trực tiếp");
         JButton[] repActionRef = new JButton[1];
         JButton repActionBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
                 "Bảo vệ dữ liệu: chặn / hỏi trước / giữ lại khi crawl, cách gửi lại khi ID đã bị xóa, Thử luật", () -> {
@@ -352,17 +352,17 @@ final class ApiTab {
                 });
         repActionRef[0] = repActionBtn;
         JButton[] barMoreRef = new JButton[1];
-        JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả Group, mở Composer, đẩy Repeater hoặc khôi phục Request", () -> {
+        JButton barMore = Ui.dropdown("Thao tác", null, "Gửi cả API, Sửa & gửi, đẩy Repeater hoặc khôi phục Request", () -> {
             JPopupMenu m = new JPopupMenu();
             ApiGroup cur = currentGroup();
             if (cur != null) {
-                m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(panel, engine, cur, selectedResult(), () -> {
                             resultModel.refresh();
                             refreshBar();
                         })));
             }
-            m.add(Ui.item("Gửi toàn bộ Roles của API Group này (Send Group)", Icons::sendAll,
+            m.add(Ui.item("Gửi toàn bộ vai trò của API này", Icons::sendAll,
                     () -> ui.send(listOf(currentGroup()))));
             if (cur != null) {
                 m.add(ActionMenus.buildForApi(panel, engine, cur, selectedResults(), () -> {
@@ -371,10 +371,10 @@ final class ApiTab {
                 }));
             }
             m.addSeparator();
-            m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
-            m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(currentGroup())));
+            m.add(Ui.item("Đẩy tab vai trò hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
+            m.add(Ui.item("Đẩy cả API -> Burp Repeater", Icons::repeater, () -> ui.push(currentGroup())));
             m.addSeparator();
-            m.add(Ui.item(expandedTabs ? "Ẩn dải nút Tab Role ngang (Gọn giao diện)" : "Hiện dải nút Tab Role ngang",
+            m.add(Ui.item(expandedTabs ? "Ẩn dải nút tab vai trò ngang (Gọn giao diện)" : "Hiện dải nút tab vai trò ngang",
                     Icons::sliders, () -> {
                         expandedTabs = !expandedTabs;
                         refreshBar();
@@ -417,7 +417,7 @@ final class ApiTab {
         expandInspectorBtn.setIcon(Icons.themed(t -> Icons.chevronRight(t.fg, 12)));
         expandInspectorBtn.setMargin(new Insets(0, 0, 0, 0));
         expandInspectorBtn.setPreferredSize(new Dimension(20, 20));
-        expandInspectorBtn.setToolTipText("Mở rộng đầy đủ thanh Request / Response & Tab Role");
+        expandInspectorBtn.setToolTipText("Mở rộng đầy đủ thanh Request / Response & tab vai trò");
         expandInspectorBtn.addActionListener(Ui.safe(e -> setInspectorExpanded(true)));
 
         compactSummaryBtn = new JButton("Chưa chọn API") {
@@ -433,7 +433,7 @@ final class ApiTab {
         compactSummaryBtn.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 6));
         compactSummaryBtn.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         compactSummaryBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        compactSummaryBtn.setToolTipText("Bấm để chọn nhanh Role / chuyển API Group");
+        compactSummaryBtn.setToolTipText("Bấm để chọn nhanh vai trò / chuyển API");
         compactSummaryBtn.addActionListener(Ui.safe(e -> pillMenu(compactSummaryBtn)));
 
         compactMiniStats = Ui.muted("");
@@ -442,14 +442,14 @@ final class ApiTab {
         JButton compactSendBtn = Ui.accent("Gửi", t -> Icons.send(t.critical.onSolid(), 11), t -> t.critical, this::sendCurrentTab);
         compactSendBtn.setMargin(new Insets(0, 6, 0, 6));
         compactSendBtn.setPreferredSize(new Dimension(Theme.current().scaled(54), 20));
-        compactSendBtn.setToolTipText("Gửi lại Tab Role đang chọn (Send Tab này)");
+        compactSendBtn.setToolTipText("Gửi lại tab vai trò đang chọn");
 
         JButton[] compactMoreRef = new JButton[1];
         JButton compactMoreBtn = new JButton();
         compactMoreBtn.setIcon(Icons.themed(t -> Icons.withChevron(Icons.menu(t.fg, 12), t.fg)));
         compactMoreBtn.setMargin(new Insets(0, 4, 0, 4));
         compactMoreBtn.setPreferredSize(new Dimension(Theme.current().scaled(32), 20));
-        compactMoreBtn.setToolTipText("Mở menu đầy đủ (Action/ID, Send Group, Repeater, Tab Role, Khôi phục)");
+        compactMoreBtn.setToolTipText("Mở menu đầy đủ (Action/ID, Gửi cả API, Repeater, tab vai trò, Khôi phục)");
         compactMoreBtn.addActionListener(Ui.safe(e -> buildCompactInspectorMenu().show(compactMoreRef[0], 0, compactMoreRef[0].getHeight())));
         compactMoreRef[0] = compactMoreBtn;
 
@@ -490,7 +490,7 @@ final class ApiTab {
         heldStrip = buildHeldStrip();
 
         JButton inlineSaveEditBtn = Ui.secondaryBtn("Lưu sửa", Icons::save, this::saveInlineRequestEdit);
-        inlineSaveEditBtn.setToolTipText("Lưu nội dung Request vừa chỉnh sửa vào Role đang chọn (không gửi ngay)");
+        inlineSaveEditBtn.setToolTipText("Lưu nội dung Request vừa chỉnh sửa vào vai trò đang chọn (không gửi ngay)");
         JButton inlineFmtJsonBtn = Ui.secondaryBtn("Format JSON", Icons::codeBraces, this::formatInlineRequestJson);
         inlineFmtJsonBtn.setToolTipText("Định dạng lại phần thân JSON trong khung Request cho dễ đọc");
         JPanel reqHeaderBar = new JPanel(new BorderLayout(6, 0));
@@ -679,7 +679,7 @@ final class ApiTab {
     JPopupMenu layoutMenu() {
         JPopupMenu m = new JPopupMenu();
         m.add(layoutCheck("Cây nhánh bên trái", "Ctrl+Alt+1", paneVisible(Pane.TREE), () -> togglePane(Pane.TREE)));
-        m.add(layoutCheck("Khung chi tiết (Role + Request/Response)", "Ctrl+Alt+2", paneVisible(Pane.DETAIL),
+        m.add(layoutCheck("Khung chi tiết (vai trò + Request/Response)", "Ctrl+Alt+2", paneVisible(Pane.DETAIL),
                 () -> togglePane(Pane.DETAIL)));
         m.add(layoutCheck("Thanh công cụ tab API", "Ctrl+Alt+3", paneVisible(Pane.TOOLBAR), () -> togglePane(Pane.TOOLBAR)));
         m.add(layoutCheck("Thanh trên cùng của extension", "Ctrl+Alt+H", ui.headerVisible(), () -> {
@@ -840,7 +840,7 @@ final class ApiTab {
         ApiGroup g = currentGroup();
         RoleResult r = selectedResult();
         if (g == null || r == null) {
-            ui.info("Chọn một API / Role trước khi lưu chỉnh sửa.");
+            ui.info("Chọn một API / vai trò trước khi lưu chỉnh sửa.");
             return;
         }
         byte[] edited = reqViewer.edited();
@@ -858,7 +858,7 @@ final class ApiTab {
     private void formatInlineRequestJson() {
         byte[] cur = reqViewer.edited();
         if (cur == null || cur.length == 0) {
-            ui.flash("Chọn 1 API / Role để hiện Request trước rồi bấm Format JSON.");
+            ui.flash("Chọn 1 API / vai trò để hiện Request trước rồi bấm Format JSON.");
             return;
         }
         String raw = new String(cur, java.nio.charset.StandardCharsets.ISO_8859_1);
@@ -879,18 +879,18 @@ final class ApiTab {
         JButton sendApi = Ui.accent("Gửi API", t -> Icons.send(t.critical.onSolid()), t -> t.critical,
                 () -> ui.send(selectedOrScope()));
         themythofcrawl.ui.kit.RichHoverCard.install(sendApi, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Gửi API với tất cả Roles",
-                "Thực thi các API đang chọn (hoặc phạm vi hiện tại) qua toàn bộ Role đang bật để so sánh phân quyền.",
+                "Gửi API với tất cả vai trò",
+                "Thực thi các API đang chọn (hoặc phạm vi hiện tại) qua toàn bộ vai trò đang bật để so sánh phân quyền.",
                 "Ctrl+Enter", t -> Icons.send(t.critical.text()), t -> t.critical, null));
         findSendBranch = Ui.button("Gửi Nhánh", t -> Icons.sendAll(t.fg), this::sendBranchSelection);
         JButton[] sendRef = new JButton[1];
         JButton sendMenu = Ui.dropdown("Tùy chọn Gửi", t -> Icons.withChevron(Icons.send(t.fg), t.fg),
-                "Tùy chọn gửi request, chọn Role, gửi chưa gửi, hủy hàng đợi (Ctrl+Enter)",
+                "Tùy chọn gửi request, chọn vai trò, gửi chưa gửi, hủy hàng đợi (Ctrl+Enter)",
                 () -> sendMenu().show(sendRef[0], 0, sendRef[0].getHeight()));
         sendRef[0] = sendMenu;
         JButton[] actionRef = new JButton[1];
         JButton actionMenuBtn = Ui.dropdown("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.workbench(t.accent.text(), 14), t.fg),
-                "Mở Action Workbench 5 tab, Luật Chặn Proxy, Kho ID Sống & Chuỗi Tạo Mới -> Hành Động", () -> {
+                "Mở Chặn & gửi lại: chế độ, luật, Kho ID, kiểm tra", () -> {
                     JPopupMenu m = new JPopupMenu();
                     ActionMenus.populateToolbarDropdown(m, panel, engine, this::currentGroup, () -> {
                         resultModel.refresh();
@@ -905,7 +905,7 @@ final class ApiTab {
         repRef[0] = repMenu;
         JButton[] branchRef = new JButton[1];
         JButton branchBtn = Ui.dropdown("Nhánh", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
-                "Thêm Sub-folder, đặt Đích, đổi tên/xóa Nhánh, xem tất cả",
+                "Thêm nhánh, đặt Đích, đổi tên/xóa Nhánh, xem tất cả",
                 () -> branchMenu().show(branchRef[0], 0, branchRef[0].getHeight()));
         branchRef[0] = branchBtn;
         JButton[] toolsRef = new JButton[1];
@@ -923,7 +923,7 @@ final class ApiTab {
 
         JButton[] compactToolsRef = new JButton[1];
         compactToolsDropdownBtn = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.menu(t.fg, 13), t.fg),
-                "Menu tổng hợp (Tùy chọn Gửi, Action Workbench & Luật Chặn Proxy, Repeater, Nhánh, Tập trung, Công cụ)",
+                "Menu tổng hợp: tùy chọn gửi, Chặn & gửi lại, Repeater, nhánh, tập trung, công cụ",
                 () -> buildCompactToolbarMenu().show(compactToolsRef[0], 0, compactToolsRef[0].getHeight()));
         compactToolsRef[0] = compactToolsDropdownBtn;
         compactToolsDropdownBtn.setVisible(false);
@@ -983,7 +983,7 @@ final class ApiTab {
         m.add(Ui.item("Hàng chờ Chặn Proxy trực tiếp (Đợi bấm Gửi)...",
                 t -> Icons.strategyShield(engine.proxyQueue().pendingCount() > 0 ? t.danger.text() : t.accent.text(), 14),
                 () -> ProxyInterceptDialog.showFloating(ui)));
-        m.add(Ui.item("Action Workbench (5 tab: Chiến lược, Luật CRUD, Dò Proxy, Hướng dẫn)...", Icons::workbench,
+        m.add(Ui.item("Chặn & gửi lại...", Icons::workbench,
                 () -> ActionWorkbenchDialog.show(panel, engine, currentGroup(), null, ActionWorkbenchDialog.TAB_STRATEGY, () -> {
                     resultModel.refresh();
                     refreshBar();
@@ -1006,7 +1006,7 @@ final class ApiTab {
             repSub.add(c);
         }
         m.add(repSub);
-        javax.swing.JMenu brSub = new javax.swing.JMenu("Nhánh & Sub-folder");
+        javax.swing.JMenu brSub = new javax.swing.JMenu("Nhánh & nhánh");
         for (java.awt.Component c : branchMenu().getComponents()) {
             brSub.add(c);
         }
@@ -1095,7 +1095,7 @@ final class ApiTab {
                         () -> MainPanel.selectRow(results, resultModel.rowOf(r))));
             }
             m.addSeparator();
-            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+            m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                     () -> RequestComposerDialog.showFloating(panel, engine, g, cur, () -> {
                         resultModel.refresh();
                         refreshBar();
@@ -1111,8 +1111,8 @@ final class ApiTab {
             m.add(Ui.item("Gửi API (" + g.results().size() + " vai trò)", Icons::sendAll,
                     () -> ui.send(listOf(g))));
             m.add(SendMenus.build(ui, listOf(g), curRole));
-            m.add(Ui.item("Đẩy Tab Role hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
-            m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
+            m.add(Ui.item("Đẩy tab vai trò hiện tại -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
+            m.add(Ui.item("Đẩy cả API -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
             m.add(Ui.item("Khôi phục Request về trạng thái ban đầu", Icons::undo, this::resetRequest));
             m.addSeparator();
         }
@@ -1170,8 +1170,8 @@ final class ApiTab {
         filterAll.setToolTipText("Hiển thị tất cả API (bỏ lọc trạng thái)");
         filterAll.onClick(this::clearAuditFilters);
 
-        registerFilterPill(AuditLevel.OK, "OK", "Lọc API: Tất cả Role 2xx (OK)", t -> t.success, t -> Icons.check(t.success.text(), 11));
-        registerFilterPill(AuditLevel.INFO, "Lệch", "Lọc API: Có Role lỗi / lệch body", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 11));
+        registerFilterPill(AuditLevel.OK, "OK", "Lọc API: Tất cả vai trò 2xx (OK)", t -> t.success, t -> Icons.check(t.success.text(), 11));
+        registerFilterPill(AuditLevel.INFO, "Lệch", "Lọc API: Có vai trò lỗi / lệch body", t -> t.warning, t -> Icons.alertMark(t.warning.text(), 11));
         registerFilterPill(AuditLevel.WARN, "Bypass", "Lọc API: Nghi vấn Bypass (Guest 2xx)", t -> t.critical, t -> Icons.warn(t.critical.text(), 11));
         registerFilterPill(AuditLevel.ERROR, "Lỗi", "Lọc API: Có lỗi 5xx / Mất kết nối", t -> t.danger, t -> Icons.error(t.danger.text(), 11));
         registerFilterPill(AuditLevel.NONE, "Chưa gửi", "Lọc API: Chưa gửi / chưa replay", t -> t.neutral, t -> Icons.statusDot(t.dotNone, 9));
@@ -1186,9 +1186,9 @@ final class ApiTab {
         m.addSeparator();
         Object[][] defs = {
                 {AuditLevel.NONE, "Chưa gửi (Chưa replay)"},
-                {AuditLevel.OK, "OK (Tất cả Role 2xx)"},
-                {AuditLevel.INFO, "Lệch (Có Role lỗi / lệch body)"},
-                {AuditLevel.WARN, "Bypass (Nghi vấn Guest/Role thấp 2xx)"},
+                {AuditLevel.OK, "OK (Tất cả vai trò 2xx)"},
+                {AuditLevel.INFO, "Lệch (Có vai trò lỗi / lệch body)"},
+                {AuditLevel.WARN, "Bypass (Nghi vấn Guest/vai trò thấp 2xx)"},
                 {AuditLevel.ERROR, "Lỗi (5xx / Mất kết nối)"},
                 {AuditLevel.PENDING, "Chờ XN (Chờ xác nhận vị trí / trùng)"}
         };
@@ -1916,7 +1916,7 @@ final class ApiTab {
             showResult(r);
             ui.flash("Đã khôi phục Request ban đầu của " + r.roleName() + ".");
         } else {
-            ui.flash("Chọn 1 API và 1 Role trước rồi bấm Khôi phục.");
+            ui.flash("Chọn 1 API và 1 vai trò trước rồi bấm Khôi phục.");
         }
     }
 
@@ -1933,7 +1933,7 @@ final class ApiTab {
         ApiGroup g = currentGroup();
         roleTabs.removeAll();
         if (g == null) {
-            pill.setText("Chưa chọn API Group");
+            pill.setText("Chưa chọn API");
             if (compactSummaryBtn != null) {
                 compactSummaryBtn.setText("Chưa chọn API — Bấm biểu tượng mũi tên để mở rộng");
             }
@@ -2009,11 +2009,11 @@ final class ApiTab {
             m.add(Ui.item("Gửi API (" + g.results().size() + " vai trò)",
                     Icons::sendAll, () -> engine.replay(g, engine.defaultTargets(g, false))));
             m.add(SendMenus.build(ui, listOf(g), selectedResult()));
-            m.add(Ui.item("Đẩy Group " + Text.groupId(g.gid()) + " sang Burp Repeater (Tên gọn + Copy tên Group)",
+            m.add(Ui.item("Đẩy API " + Text.groupId(g.gid()) + " sang Repeater (tên gọn)",
                     Icons::repeater, () -> ui.push(g)));
             m.addSeparator();
         }
-        m.add(Ui.item(expandedTabs ? "Thu gọn dải nút Tab Role ngang (Gọn giao diện)" : "Mở rộng dải nút Tab Role ngang",
+        m.add(Ui.item(expandedTabs ? "Thu gọn dải nút tab vai trò ngang (Gọn giao diện)" : "Mở rộng dải nút tab vai trò ngang",
                 t -> expandedTabs ? Icons.chevronDown(t.fg, 12) : Icons.chevronRight(t.fg, 12), () -> {
                     expandedTabs = !expandedTabs;
                     applyInspectorBarState(true);
@@ -2022,10 +2022,10 @@ final class ApiTab {
         List<ApiGroup> all = engine.groups();
         if (!all.isEmpty()) {
             m.addSeparator();
-            javax.swing.JMenu switchGroupMenu = new javax.swing.JMenu("Chuyển nhanh sang API Group khác (" + all.size() + ")");
+            javax.swing.JMenu switchGroupMenu = new javax.swing.JMenu("Chuyển nhanh sang API khác (" + all.size() + ")");
             for (ApiGroup x : all.subList(Math.max(0, all.size() - 25), all.size())) {
                 switchGroupMenu.add(Ui.item(Text.groupId(x.gid()) + " [" + x.branch() + "]: " + x.method() + " " + Text.shortPath(x.path(), 30)
-                        + " (" + x.results().size() + " Roles)", Icons::folder, () -> select(x, null)));
+                        + " (" + x.results().size() + " Vai trò)", Icons::folder, () -> select(x, null)));
             }
             m.add(switchGroupMenu);
         }
@@ -2078,7 +2078,7 @@ final class ApiTab {
         m.add(Ui.item("Gửi " + n + " API đang chọn (mọi vai trò)", Icons::send, () -> ui.send(gs)));
         m.add(SendMenus.build(ui, gs.isEmpty() && primary != null ? listOf(primary) : gs, null));
         if (primary != null) {
-            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+            m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                     () -> RequestComposerDialog.showFloating(panel, engine, primary, null, () -> {
                         resultModel.refresh();
                         refreshBar();
@@ -2090,23 +2090,23 @@ final class ApiTab {
         }
         m.add(Ui.item("Đẩy " + n + " API đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(gs)));
         m.add(Ui.item("Copy STT + Path (" + n + " API)     Ctrl+Shift+C", Icons::copy, () -> ui.copy(gs)));
-        m.add(Ui.item("Đẩy / Gửi " + n + " API có chọn Role (API gốc / role nào)...",
+        m.add(Ui.item("Đẩy / Gửi " + n + " API có chọn vai trò...",
                 Icons::target, () -> ui.pushDialog(false, gs, gs.size() + " API đang chọn")));
-        m.add(Ui.item("Bật / Tắt Role cho " + n + " API đang chọn...",
+        m.add(Ui.item("Bật / Tắt vai trò cho " + n + " API đang chọn...",
                 Icons::sliders, () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, gs, null)));
         m.addSeparator();
         m.add(ui.clusterMenu(gs));
         m.add(ui.tagMenu(gs));
         if (primary != null) {
-            m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup,
+            m.add(Ui.item("Các lần bắt...", Icons::dup,
                     () -> ui.openLineage(primary, table, 16, 16)));
         }
         m.addSeparator();
         ui.placeItems(m, gs);
         m.addSeparator();
-        m.add(Ui.item("Đổi Group Path cho API đang chọn...", Icons::folder, () -> ui.moveDialog(gs)));
-        m.add(Ui.item("Rebuild Roles cho API đang chọn", Icons::refresh, () -> ui.rebuild(gs)));
-        m.add(Ui.item("Xem API Gốc (Acc Crawl)", Icons::pin, this::showOriginal));
+        m.add(Ui.item("Đổi nhánh cho API đang chọn...", Icons::folder, () -> ui.moveDialog(gs)));
+        m.add(Ui.item("Tạo lại dòng vai trò cho API đang chọn", Icons::refresh, () -> ui.rebuild(gs)));
+        m.add(Ui.item("Xem request của tài khoản crawl", Icons::pin, this::showOriginal));
         m.addSeparator();
         m.add(Ui.item("Xóa API đang chọn", t -> Icons.trash(t.danger.text()), () -> ui.delete(gs)));
         return m;
@@ -2115,15 +2115,15 @@ final class ApiTab {
     private JPopupMenu resultMenu() {
         JPopupMenu m = new JPopupMenu();
         ApiGroup g = currentGroup();
-        m.add(Ui.item("Gửi lại Role đang chọn", Icons::send, () -> {
+        m.add(Ui.item("Gửi lại vai trò đang chọn", Icons::send, () -> {
             if (g != null) {
                 engine.replay(g, selectedResults());
             }
         }));
-        m.add(Ui.item("Gửi toàn bộ Roles của API này", Icons::sendAll, () -> ui.send(listOf(g))));
+        m.add(Ui.item("Gửi toàn bộ vai trò của API này", Icons::sendAll, () -> ui.send(listOf(g))));
         if (g != null) {
             RoleResult selRole = selectedResult();
-            m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+            m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                     () -> RequestComposerDialog.showFloating(panel, engine, g, selRole, () -> {
                         resultModel.refresh();
                         refreshBar();
@@ -2134,10 +2134,10 @@ final class ApiTab {
             }));
         }
         m.addSeparator();
-        m.add(Ui.item("Đẩy Role đang chọn -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
-        m.add(Ui.item("Đẩy cả API Group -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
+        m.add(Ui.item("Đẩy vai trò đang chọn -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
+        m.add(Ui.item("Đẩy cả API -> Burp Repeater", Icons::repeater, () -> ui.push(g)));
         m.addSeparator();
-        m.add(Ui.item("Xem API Gốc (Acc Crawl)", Icons::pin, this::showOriginal));
+        m.add(Ui.item("Xem request của tài khoản crawl", Icons::pin, this::showOriginal));
         return m;
     }
 
@@ -2149,10 +2149,10 @@ final class ApiTab {
 
     private JPopupMenu sendMenu() {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Gửi có chọn Role (API gốc / role nào / bỏ role nào)...", Icons::target, () -> ui.pushDialog(true, null, null)));
+        m.add(Ui.item("Gửi có chọn vai trò...", Icons::target, () -> ui.pushDialog(true, null, null)));
         m.addSeparator();
-        m.add(Ui.item("Gửi API đang chọn (Tất cả Roles)", Icons::send, () -> ui.send(selectedOrScope())));
-        m.add(Ui.item("Gửi lại Role đang chọn", Icons::send, () -> {
+        m.add(Ui.item("Gửi API đang chọn (Tất cả vai trò)", Icons::send, () -> ui.send(selectedOrScope())));
+        m.add(Ui.item("Gửi lại vai trò đang chọn", Icons::send, () -> {
             if (currentGroup() != null) {
                 engine.replay(currentGroup(), selectedResults());
             }
@@ -2168,10 +2168,10 @@ final class ApiTab {
 
     private JPopupMenu repeaterMenu() {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Đẩy có chọn Role (API gốc / role nào / bỏ role nào)...", Icons::target, () -> ui.pushDialog(false, null, null)));
+        m.add(Ui.item("Đẩy có chọn vai trò...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.addSeparator();
         m.add(Ui.item("Đẩy API đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(selectedOrScope())));
-        m.add(Ui.item("Đẩy Role đang chọn -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
+        m.add(Ui.item("Đẩy vai trò đang chọn -> Burp Repeater", Icons::repeater, this::pushSelectedRoles));
         m.add(Ui.item("Đẩy cả Nhánh đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
         m.addSeparator();
         for (int i = 0; i < MainPanel.REPEATER_MODES.length; i++) {
@@ -2186,9 +2186,9 @@ final class ApiTab {
     private JPopupMenu toolsMenu() {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Copy STT + Path (Ctrl+Shift+C)", Icons::copy, () -> ui.copy(selectedOrScope())));
-        m.add(Ui.item("Đổi Group Path cho API đang chọn...", Icons::folder, () -> ui.moveDialog(selectedOrScope())));
-        m.add(Ui.item("Rebuild Roles cho API đang chọn (Áp dụng lại cấu hình Role)", Icons::refresh, () -> ui.rebuild(selectedOrScope())));
-        m.add(Ui.item("Xem Request/Response của API Gốc (Acc Crawl)", Icons::pin, this::showOriginal));
+        m.add(Ui.item("Đổi nhánh cho API đang chọn...", Icons::folder, () -> ui.moveDialog(selectedOrScope())));
+        m.add(Ui.item("Tạo lại dòng vai trò cho API đang chọn (Áp dụng lại cấu hình vai trò)", Icons::refresh, () -> ui.rebuild(selectedOrScope())));
+        m.add(Ui.item("Xem request / response của tài khoản crawl", Icons::pin, this::showOriginal));
         m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, ui::openTagManager));
         m.add(Ui.item("Quản lý Loại mục con & Biểu tượng (Folder/Link/Button/Icon)...", Icons::sliders, ui::openNodeTypeManager));
         m.addSeparator();
@@ -2214,7 +2214,7 @@ final class ApiTab {
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Gửi toàn bộ Nhánh đang chọn", Icons::send, this::sendBranchSelection));
         m.add(Ui.item("Đẩy Nhánh đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
-        m.add(Ui.item("Đẩy / Gửi Nhánh có chọn Role...", Icons::target, () -> ui.pushDialog(false, null, null)));
+        m.add(Ui.item("Đẩy / Gửi Nhánh có chọn vai trò...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.addSeparator();
         if (focusPath != null) {
             m.add(Ui.item("Thoát chế độ Tập trung (" + Hierarchy.leaf(focusPath) + ")", Icons::focus, this::clearFocusBranch));
@@ -2257,7 +2257,7 @@ final class ApiTab {
                                 : "Đã tắt Chặn chờ duyệt cho nhánh " + Hierarchy.leaf(curBranchForWait));
                     }));
         }
-        m.add(Ui.item("Quản lý các cấp & Loại Sub-folder...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));
+        m.add(Ui.item("Quản lý các cấp & Loại nhánh...", Icons::gear, () -> LevelsDialog.show(ui.root(), engine)));
         m.add(Ui.item("Xóa Nhánh đang chọn...", t -> Icons.trash(t.danger.text()), () -> ui.deleteBranchDialog(ui.selectedBranch())));
         m.addSeparator();
         m.add(Ui.item("Xem tất cả API (Bỏ lọc Nhánh)", Icons::show, this::showAll));

@@ -154,7 +154,7 @@ final class ActionGuideTabBuilder {
 
         modesGrid.add(modeCard("Đổi ID", "Lúc gửi lại - nhiều vai trò", t -> t.success,
                 "Lấy ID từ response 2xx CÙNG họ API (POST tạo, GET danh sách / chi tiết) rồi thay vào request Xóa / Sửa.",
-                "Ví dụ: Test DELETE /orders/{id} với 3 Role (Admin, Staff, User) -> mỗi Role tự nhận 1 ID tươi khác nhau."));
+                "Ví dụ: Test DELETE /orders/{id} với 3 vai trò (Admin, Staff, User) -> mỗi vai trò tự nhận 1 ID tươi khác nhau."));
 
         modesGrid.add(modeCard("Tạo trước", "Lúc gửi lại - gửi nhiều lần", t -> t.accent,
                 "Trước DELETE / PUT, tự gọi POST cùng họ API để tạo bản ghi mới, lấy ID trả về rồi mới gửi.",

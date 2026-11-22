@@ -141,7 +141,7 @@ class EngineTest {
         e.roles().setAllEnabled(false);
         ApiGroup g = capture("POST", "/api/v1/a");
         assertTrue(g.results().isEmpty());
-        assertEquals("API gốc (200)", themythofcrawl.core.Audit.summary(g));
+        assertEquals("Tài khoản crawl · 200", themythofcrawl.core.Audit.summary(g));
         assertEquals(List.of(g.origResult()), e.defaultTargets(g, false));
         e.replay(g, e.defaultTargets(g, false));
         waitSends();

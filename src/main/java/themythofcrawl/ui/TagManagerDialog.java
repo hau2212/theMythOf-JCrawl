@@ -133,7 +133,7 @@ final class TagManagerDialog {
             }
         }));
 
-        JButton openLineageBtn = Ui.button("Xem Lineage...", Icons::dup, () -> {
+        JButton openLineageBtn = Ui.button("Xem các lần bắt...", Icons::dup, () -> {
             TaggedRow tr = taggedModel.rowAt(taggedTable.getSelectedRow());
             if (tr != null) {
                 LineageDialog.showByKey(ui, tr.bookKey, tr.sampleGroup);

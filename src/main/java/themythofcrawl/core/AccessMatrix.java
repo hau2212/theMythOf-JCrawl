@@ -32,21 +32,26 @@ public final class AccessMatrix {
     public static final double SAME_CONTENT = 0.75;
 
     public enum Verdict {
-        SEEN_OK("OK", "Thấy · Gọi được", "Role thấy chức năng trong UI và gọi được — hợp lệ", AuditLevel.OK, false),
-        DENIED_OK("Chặn", "Không thấy · Bị chặn", "Role không thấy chức năng và server chặn — hợp lệ", AuditLevel.OK, false),
-        BAC("NGHI BAC", "NGHI BAC", "Role KHÔNG thấy chức năng trong UI nhưng gọi được 2xx với cùng nội dung", AuditLevel.WARN, true),
-        VIOLATION("VI PHẠM", "VI PHẠM quyền", "Theo Quyền mong đợi role này không được dùng nhánh này nhưng vẫn gọi được", AuditLevel.WARN, true),
-        DIFF("2xx khác", "2xx · nội dung khác", "Gọi được 2xx nhưng nội dung khác bản gốc (trang lỗi/login/dữ liệu riêng) — xem lại",
+        // V_9.3: short label = what the cell shows; label = the meaning; explain = one sentence on hover
+        SEEN_OK("Đúng", "Thấy & gọi được", "Vai trò thấy chức năng khi crawl và gọi được: đúng mong đợi.", AuditLevel.OK, false),
+        DENIED_OK("Bị chặn", "Không thấy & bị chặn", "Vai trò không thấy chức năng và server chặn: đúng mong đợi.", AuditLevel.OK, false),
+        BAC("Nghi BAC", "Nghi lỗi phân quyền",
+                "Vai trò KHÔNG thấy chức năng khi crawl nhưng vẫn gọi được, nội dung giống tài khoản crawl.", AuditLevel.WARN, true),
+        VIOLATION("Vi phạm", "Vi phạm quyền mong đợi",
+                "Theo Quyền mong đợi, vai trò này không được dùng nhánh này nhưng vẫn gọi được.", AuditLevel.WARN, true),
+        DIFF("Khác nội dung", "Gọi được · nội dung khác",
+                "Gọi được nhưng nội dung khác tài khoản crawl (trang lỗi, trang đăng nhập hoặc dữ liệu riêng): mở xem lại.",
                 AuditLevel.INFO, false),
-        SEEN_DENIED("Thấy·bị chặn", "Thấy nhưng bị chặn", "Role thấy/được phép nhưng bị chặn — token hết hạn hoặc thiếu quyền?",
-                AuditLevel.INFO, false),
-        UNKNOWN_OK("2xx ?", "Gọi được (role chưa crawl)", "Role chưa crawl nên chưa biết UI có cho thấy không — crawl role này để kết luận",
+        SEEN_DENIED("Thấy · bị chặn", "Thấy nhưng bị chặn",
+                "Vai trò được phép nhưng bị chặn: token hết hạn hoặc thiếu quyền?", AuditLevel.INFO, false),
+        UNKNOWN_OK("Chưa rõ", "Gọi được · chưa crawl vai trò",
+                "Vai trò chưa crawl nên chưa biết giao diện có cho thấy chức năng không: crawl bằng vai trò này để kết luận.",
                 AuditLevel.REDIRECT, false),
         STALE_ID("ID đã dùng", "Chưa kết luận: ID đã dùng",
-                "404 / 410 vì ID đã bị xóa bởi lần gửi trước (cùng ID), không phải vì bị chặn. Gửi lại bằng 'Mỗi vai trò 1 bản ghi'.",
+                "404 / 410 vì ID đã bị lần gửi trước xóa, không phải vì bị chặn. Gửi lại bằng 'Mỗi vai trò 1 bản ghi'.",
                 AuditLevel.INFO, false),
-        ERROR("Lỗi", "Lỗi", "Lỗi gọi API / 5xx", AuditLevel.ERROR, false),
-        NOT_SENT("-", "Chưa gửi", "Chưa gửi request của role này", AuditLevel.NONE, false);
+        ERROR("Lỗi", "Lỗi", "Lỗi kết nối hoặc lỗi server 5xx.", AuditLevel.ERROR, false),
+        NOT_SENT("-", "Chưa gửi", "Chưa gửi request của vai trò này.", AuditLevel.NONE, false);
 
         /** Compact text for matrix cells. */
         public final String shortLabel;
@@ -69,7 +74,7 @@ public final class AccessMatrix {
             String st = status != null ? String.valueOf(status) : "";
             return switch (verdict) {
                 case NOT_SENT -> "-";
-                case BAC, VIOLATION -> "!! " + st + (similarity >= 0 ? " ~" + Math.round(similarity * 100) + "%" : "");
+                case BAC, VIOLATION -> verdict.shortLabel + " " + st + (similarity >= 0 ? " · " + Math.round(similarity * 100) + "%" : "");
                 default -> st;
             };
         }
@@ -94,8 +99,8 @@ public final class AccessMatrix {
         }
 
         public String evidence() {
-            return "Role " + role + " gọi " + method + " " + path + " -> HTTP " + status + ", giống bản gốc "
-                    + Math.round(similarity * 100) + "%; " + (seenBy.isEmpty() ? "chưa role nào thấy trong UI"
+            return "Vai trò " + role + " gọi " + method + " " + path + " -> HTTP " + status + ", giống bản gốc "
+                    + Math.round(similarity * 100) + "%; " + (seenBy.isEmpty() ? "chưa vai trò nào thấy trong UI"
                     : "chỉ " + String.join(", ", seenBy) + " thấy trong UI") + ".";
         }
     }
@@ -247,7 +252,7 @@ public final class AccessMatrix {
             return null;
         }
         return switch (v) {
-            case BAC, VIOLATION -> v.shortLabel + ": " + st + (sim >= 0 ? " ~" + Math.round(sim * 100) + "% giống" : "");
+            case BAC, VIOLATION -> v.shortLabel + " " + st + (sim >= 0 ? " · " + Math.round(sim * 100) + "% giống" : "");
             case STALE_ID -> "Chưa kết luận: ID đã dùng (" + st + ")";
             default -> null;
         };
@@ -323,7 +328,7 @@ public final class AccessMatrix {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", f.testCaseId());
             m.put("type", f.verdict() == Verdict.VIOLATION ? "Vertical/Horizontal BAC (vi phạm quyền mong đợi)"
-                    : "Nghi BAC (role không thấy trong UI)");
+                    : "Nghi BAC (vai trò không thấy trong UI)");
             m.put("api", f.gid());
             m.put("method", f.method());
             m.put("host", f.host());
@@ -377,7 +382,7 @@ public final class AccessMatrix {
     }
 
     public static List<String> findingHeader() {
-        return List.of("Test case", "Loại", "API #", "Method", "Host", "Path", "Nhánh", "Role tấn công", "Thấy bởi",
+        return List.of("Test case", "Loại", "API #", "Method", "Host", "Path", "Nhánh", "Vai trò tấn công", "Thấy bởi",
                 "HTTP", "Giống gốc", "Bằng chứng", "Trạng thái", "Người test");
     }
 }

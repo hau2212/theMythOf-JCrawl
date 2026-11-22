@@ -79,8 +79,8 @@ import themythofcrawl.ui.theme.Theme;
  */
 public final class MainPanel {
     public static final int TICK_MS = 200;
-    public static final String[] REPEATER_MODES = {"Repeater Gọn: G01•01_Admin (+Copy tên Group)",
-        "Repeater: Chỉ đẩy Role Lỗi/Lệch (Vàng/Cam)", "Repeater Đầy đủ: [G01:METHOD /path] 01_Admin"};
+    public static final String[] REPEATER_MODES = {"Repeater gọn: G01•01_Admin (copy tên nhóm tab)",
+        "Repeater: Chỉ đẩy vai trò Lỗi/Lệch (Vàng/Cam)", "Repeater Đầy đủ: [G01:METHOD /path] 01_Admin"};
 
     /** The APIs an action applies to, and how to call them. */
     public record Scope(List<ApiGroup> groups, String label) {
@@ -148,7 +148,7 @@ public final class MainPanel {
     private boolean syncingActionSwitch;
     private int lastChromeWidth = 1280;
 
-    private final Pill rolesChip = new Pill("Roles 0/0", t -> t.neutral, t -> Icons.role(t.muted, 12));
+    private final Pill rolesChip = new Pill("Vai trò 0/0", t -> t.neutral, t -> Icons.role(t.muted, 12));
     private final Pill branchChip = new Pill("Nhánh 1", t -> t.neutral, t -> Icons.branch(t.muted));
     final Pill status = new Pill("API 0", t -> t.neutral, t -> Icons.api(t.fg, 12));
     private final Pill infoChip = new Pill("0 lệch", t -> t.warning, t -> Icons.warn(t.warning.text(), 12));
@@ -229,7 +229,7 @@ public final class MainPanel {
         settingsTabs.addTab("Cấu hình", null, settings.panel, "Bộ lọc bắt, tốc độ gửi, Excel, copy, workspace");
         settingsTabs.addTab("Log", null, log.panel, "Nhật ký theo nhánh / API, xuất Excel");
         Object[][] t = {
-            {"Cây", treeTab.panel, "Cây nhánh: mọi API thẳng cột Method | Path | Status | Length | Kết quả Role (Alt+1)"},
+            {"Cây", treeTab.panel, "Cây nhánh: mọi API thẳng cột Method | Path | Status | Length | Kết quả vai trò (Alt+1)"},
             {"API", api.panel, "Bảng API kiểu Burp HTTP History, kết quả từng vai trò (Alt+2)"},
             {"Phân quyền", matrix.panel, "Ma trận vai trò: Thấy trong UI x Gọi được -> nghi lỗi phân quyền (Alt+3)"},
             {"Lỗi", bugs.panel, "Các API đã đánh dấu lỗi: thống kê theo loại / mức độ / trạng thái, xuất báo cáo (Alt+4)"},
@@ -472,9 +472,9 @@ public final class MainPanel {
         captureToggle.onChange(idx -> update(x -> x.captureEnabled = idx == 1));
 
         sendModeToggle = new SegmentedToggle(
-                new SegmentedToggle.Option("Crawl", "Chỉ ghi lại API từ Proxy, không tự gửi Role", t -> t.slate,
+                new SegmentedToggle.Option("Crawl", "Chỉ ghi lại API từ Proxy, không tự gửi vai trò", t -> t.slate,
                         (t, sel) -> Icons.hide(sel ? t.slate.onSolid() : t.muted, 12), false),
-                new SegmentedToggle.Option("Gửi", "Tự động gửi ngay 1..N Roles khi bắt được API", t -> t.success,
+                new SegmentedToggle.Option("Gửi", "Tự động gửi ngay mọi vai trò khi bắt được API", t -> t.success,
                         (t, sel) -> Icons.send(sel ? t.success.onSolid() : t.success.text(), 12), false));
         sendModeToggle.setFixedHeight(24);
         sendModeToggle.setSelectedIndex(c.autoSend ? 1 : 0);
@@ -527,8 +527,8 @@ public final class MainPanel {
         spotlightBtn.setPreferredSize(new Dimension(h24, h24));
         spotlightBtn.addActionListener(Ui.safe(e -> spotlight.open()));
         themythofcrawl.ui.kit.RichHoverCard.install(spotlightBtn, new themythofcrawl.ui.kit.RichHoverCard.Spec(
-                "Tìm kiếm toàn cục (Spotlight)",
-                "Nhảy nhanh tới bất kỳ API (#, method, path), Nhánh hoặc Role nào trong toàn bộ workspace.",
+                "Tìm",
+                "Nhảy nhanh tới bất kỳ API (#, method, path), Nhánh hoặc vai trò nào trong toàn bộ workspace.",
                 "Ctrl+K",
                 t -> Icons.search(t.info.text()),
                 t -> t.info,
@@ -653,7 +653,7 @@ public final class MainPanel {
         workspace.addActionListener(Ui.safe(e -> workspaceMenu()));
         themythofcrawl.ui.kit.RichHoverCard.install(workspace, new themythofcrawl.ui.kit.RichHoverCard.Spec(
                 "Workspace (Phiên làm việc)",
-                "Tạo mới, chuyển đổi hoặc mở thư mục lưu dữ liệu crawl & roles của dự án hiện tại.",
+                "Tạo mới, chuyển đổi hoặc mở thư mục lưu dữ liệu crawl & vai trò của dự án hiện tại.",
                 null,
                 t -> Icons.folder(t.info.text()),
                 t -> t.info,
@@ -1083,12 +1083,12 @@ public final class MainPanel {
         workspace.setText(wsName.length() <= 8 ? wsName : wsName.substring(0, 7) + "..");
         workspace.setToolTipText(diag + " | Workspace: " + engine.workspaceLocation());
 
-        rolesChip.setText("Roles " + engine.roles().enabledCount() + "/" + engine.roles().count());
+        rolesChip.setText("Vai trò " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
         status.setText("API " + st.apis() + " · " + st.branches() + " nhánh");
         status.setToolTipText(st.apis() + " API · " + st.branches() + " nhánh · "
                 + engine.roles().enabledCount() + "/" + engine.roles().count()
-                + " Roles — Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
+                + " Vai trò — Bấm để xem thống kê chi tiết & nhảy nhanh · " + diag);
 
         infoChip.setVisible(st.info() > 0);
         if (st.info() > 0) {
@@ -1239,7 +1239,7 @@ public final class MainPanel {
             {"In-Scope Only (Chỉ bắt API trong Target Scope)", c.inScopeOnly, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.inScopeOnly = v},
             {"API Path Regex (Chỉ bắt URL khớp Regex API)", c.apiRegexEnabled, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.apiRegexEnabled = v},
             null,
-            {"Cho phép Tự động Gửi ngầm (Auto-Send 1..N Roles)", c.autoSend, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.autoSend = v},
+            {"Cho phép Tự động Gửi ngầm (tự gửi mọi vai trò)", c.autoSend, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.autoSend = v},
             {"Tự động đẩy sang Burp Repeater khi bắt", c.autoRepeater, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.autoRepeater = v},
             null,
             {"Hỏi xác nhận vị trí API mới (màu xám)", c.confirmNewApis, (java.util.function.BiConsumer<Config, Boolean>) (x, v) -> x.confirmNewApis = v},
@@ -1263,8 +1263,8 @@ public final class MainPanel {
         m.add(Ui.item("Quản lý Loại Node & Icon (Folder / Link / Button...)...", Icons::sliders, this::openNodeTypeManager));
         m.add(Ui.item("Quản lý API Tag & Chính sách REFRESH...", Icons::tag, this::openTagManager));
         JMenu helpMenu = new JMenu("Hướng dẫn & Trợ giúp");
-        helpMenu.add(Ui.item("Bắt & gửi (Capture / Auto-Send)", Icons::info, () -> Ui.popover(options, "Bắt & gửi", Help.CAPTURE)));
-        helpMenu.add(Ui.item("Đích của request mới (Sub-folder)", Icons::info, () -> Ui.popover(options, "Đích của request mới", Help.DEST)));
+        helpMenu.add(Ui.item("Bắt & gửi", Icons::info, () -> Ui.popover(options, "Bắt & gửi", Help.CAPTURE)));
+        helpMenu.add(Ui.item("Đích của request mới (nhánh)", Icons::info, () -> Ui.popover(options, "Đích của request mới", Help.DEST)));
         helpMenu.add(Ui.item("Cần xử lý & Giữ chỗ", Icons::info, () -> Ui.popover(options, "Cần xử lý", Help.TODO)));
         helpMenu.add(Ui.item("Ý nghĩa Màu & Nhãn Audit", Icons::info, () -> Ui.popover(options, "Màu & nhãn", Help.COLORS)));
         helpMenu.add(Ui.item("Workspace & Lưu trữ", Icons::info, () -> Ui.popover(options, "Workspace", Help.WORKSPACE)));
@@ -1281,8 +1281,8 @@ public final class MainPanel {
         Engine.Stats st = engine.stats();
         JPopupMenu m = new JPopupMenu();
         m.add(Ui.item("Tổng API đã bắt: " + st.apis() + "  (mở tab API)", Icons::api, () -> selectTab(api.panel)));
-        m.add(Ui.item("Nhánh Sub-folder: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> selectTab(history.panel)));
-        m.add(Ui.item("Roles đang bật: " + engine.roles().enabledCount() + "/" + engine.roles().count() + "  (mở tab Roles)",
+        m.add(Ui.item("Nhánh nhánh: " + st.branches() + "  (mở tab Lịch sử)", Icons::branch, () -> selectTab(history.panel)));
+        m.add(Ui.item("Vai trò đang bật: " + engine.roles().enabledCount() + "/" + engine.roles().count() + "  (mở tab vai trò)",
                 t -> Icons.role(t.fg, 12), () -> selectTab(roles.panel)));
         if (st.info() > 0) {
             m.add(Ui.item("API lệch / lỗi quyền: " + st.info() + "  (lọc bảng API)", t -> Icons.warn(t.warning.text(), 12), () -> {
@@ -1561,7 +1561,7 @@ public final class MainPanel {
         } else if (repeaterMode == 0) {
             title = engine.toRepeater(g, engine.defaultTargets(g, false), true);
             Ui.copyToClipboard(title);
-            flash("Đã đẩy sang Repeater (copy tên Group '" + title + "')");
+            flash("Đã đẩy sang Repeater (đã copy tên nhóm tab '" + title + "')");
         } else {
             engine.toRepeater(g, engine.defaultTargets(g, false), false);
         }
@@ -1612,11 +1612,11 @@ public final class MainPanel {
         }
         List<String> parts = new ArrayList<>();
         if (c.original()) {
-            parts.add("API gốc");
+            parts.add("tài khoản crawl");
         }
         parts.addAll(c.roles().stream().sorted().toList());
         engine.log(label + ": " + (c.send() ? "gửi " + total + " request" : "đẩy " + total + " tab sang Repeater") + " cho " + apis
-                + " API (" + (parts.isEmpty() ? "-" : String.join(", ", parts)) + (c.onlyFlagged() ? ", chỉ role lỗi / lệch" : "") + ").", null);
+                + " API (" + (parts.isEmpty() ? "-" : String.join(", ", parts)) + (c.onlyFlagged() ? ", chỉ vai trò lỗi / lệch" : "") + ").", null);
     }
 
     void copy(Collection<ApiGroup> gs) {
@@ -1680,7 +1680,7 @@ public final class MainPanel {
         if (r != null) {
             int changed = engine.applyRoleScope(r.roles(), r.enable(), r.scope(), r.targets(), r.applyExisting());
             roles.reload();
-            flash((r.enable() ? "Bật " : "Tắt ") + r.roles().size() + " role · " + changed + " API cập nhật");
+            flash((r.enable() ? "Bật " : "Tắt ") + r.roles().size() + " Vai trò · " + changed + " API cập nhật");
         }
     }
 
@@ -1834,7 +1834,7 @@ public final class MainPanel {
     }
 
     void renameBranchDialog(String prefix) {
-        String n = ask("Đổi tên nhánh '" + prefix + "' (tự động cập nhật toàn bộ các sub-folder con bên dưới):", prefix);
+        String n = ask("Đổi tên nhánh '" + prefix + "' (tự động cập nhật toàn bộ các nhánh con bên dưới):", prefix);
         if (n != null && !n.isBlank()) {
             engine.renamePrefix(prefix, n);
         }
@@ -1846,7 +1846,7 @@ public final class MainPanel {
         }
         int n = engine.groupsUnder(prefix).size();
         Object[] opts = {"Chỉ xóa Nhánh (Chuyển API lên cấp cha)", "Xóa cả Nhánh lẫn " + n + " API", "Hủy"};
-        int c = JOptionPane.showOptionDialog(Ui.ownerWindow(root), "Bạn muốn xóa nhánh Sub-folder '" + prefix + "' (" + n + " API bên trong) như thế nào?",
+        int c = JOptionPane.showOptionDialog(Ui.ownerWindow(root), "Bạn muốn xóa nhánh nhánh '" + prefix + "' (" + n + " API bên trong) như thế nào?",
                 Text.EXT_NAME, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, opts, opts[0]);
         if (c == 0 || c == 1) {
             engine.deletePrefix(prefix, c == 1);

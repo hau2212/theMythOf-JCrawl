@@ -449,7 +449,7 @@ class RoleRulesTest {
         guest.setLength(g.origLength());
         Audit.recalc(g);
         assertEquals(AuditLevel.WARN, guest.auditLevel());
-        assertTrue(guest.auditBadge().contains("WARN: Guest"));
+        assertTrue(guest.auditBadge().startsWith("Không đăng nhập vẫn gọi được"), guest.auditBadge());
         guest.setStatus(401);
         guest.setLength(2);
         Audit.recalc(g);

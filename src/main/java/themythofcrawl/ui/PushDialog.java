@@ -45,13 +45,13 @@ public final class PushDialog {
 
     public static Choice show(Component parent, List<ApiGroup> groups, String label, Choice memory, boolean send) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        JDialog d = new JDialog(Ui.ownerWindow(owner), "Đẩy / Gửi có chọn Role - " + label, JDialog.ModalityType.APPLICATION_MODAL);
+        JDialog d = new JDialog(Ui.ownerWindow(owner), "Đẩy / Gửi có chọn vai trò - " + label, JDialog.ModalityType.APPLICATION_MODAL);
         d.setLayout(new BorderLayout(6, 6));
         Theme th = Theme.current();
         Choice mem = memory != null ? memory : new Choice(false, false, Set.of(), Set.of(), false, true);
         JPanel head = new JPanel(new BorderLayout(0, Theme.SPACE_1));
         long branches = groups.stream().map(ApiGroup::branch).distinct().count();
-        head.add(Ui.dialogHeader("Đẩy / Gửi có chọn Role - " + label,
+        head.add(Ui.dialogHeader("Đẩy / Gửi có chọn vai trò - " + label,
                 groups.size() + " API  ·  " + branches + " nhánh"), BorderLayout.NORTH);
         JRadioButton push = new JRadioButton("Đẩy sang Burp Repeater", !send);
         JRadioButton sendRb = new JRadioButton("Gửi request (hàng đợi chống 429)", send);
@@ -66,7 +66,7 @@ public final class PushDialog {
         JPanel listing = new JPanel();
         listing.setLayout(new BoxLayout(listing, BoxLayout.Y_AXIS));
         listing.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-        JCheckBox orig = new JCheckBox("API GỐC (Acc Crawl) - request đã bắt, áp profile API gốc nếu bật", mem.original());
+        JCheckBox orig = new JCheckBox("Tài khoản crawl: request đã bắt (áp profile tài khoản crawl nếu bật)", mem.original());
         orig.setFont(th.boldFont);
         orig.setForeground(th.orig.text());
         listing.add(orig);
@@ -74,7 +74,7 @@ public final class PushDialog {
         List<Map.Entry<String, Integer>> names = Engine.roleNamesIn(groups);
         List<Object[]> boxes = new ArrayList<>();
         if (names.isEmpty()) {
-            listing.add(Ui.muted("   (Các API này không có role nào - chỉ có thể đẩy / gửi API gốc)"));
+            listing.add(Ui.muted("   (Các API này chưa có vai trò nào: chỉ đẩy / gửi được tài khoản crawl)"));
         }
         for (Map.Entry<String, Integer> n : names) {
             JCheckBox b = new JCheckBox(n.getKey() + "      (có ở " + n.getValue() + "/" + groups.size() + " API)",
@@ -83,10 +83,10 @@ public final class PushDialog {
             listing.add(b);
         }
         JScrollPane scroll = new JScrollPane(listing);
-        scroll.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Đối tượng (API gốc và / hoặc các Role)"));
+        scroll.setBorder(themythofcrawl.ui.kit.SectionBorder.of("Gửi bằng: tài khoản crawl và / hoặc vai trò"));
         scroll.getVerticalScrollBar().setUnitIncrement(16);
-        JCheckBox flagged = new JCheckBox("Chỉ lấy role đang Lỗi / Lệch / Nghi bypass (Vàng / Cam / Đỏ) ở từng API", mem.onlyFlagged());
-        JRadioButton compact = new JRadioButton("Tên tab gọn: G01•01_Admin (+ copy tên Group vào clipboard)", mem.compact());
+        JCheckBox flagged = new JCheckBox("Chỉ lấy vai trò đang Lỗi / Lệch / Nghi bypass (Vàng / Cam / Đỏ) ở từng API", mem.onlyFlagged());
+        JRadioButton compact = new JRadioButton("Tên tab gọn: G01•01_Admin (copy tên nhóm tab)", mem.compact());
         JRadioButton full = new JRadioButton("Tên tab đầy đủ: [G01:METHOD /path] 01_Admin", !mem.compact());
         ButtonGroup naming = new ButtonGroup();
         naming.add(compact);
@@ -136,8 +136,8 @@ public final class PushDialog {
             update.run();
         };
         JPanel quick = Ui.flow(FlowLayout.LEFT, Ui.button("Tất cả", () -> setAll.accept(true, true)),
-                Ui.button("Chỉ API gốc", () -> setAll.accept(true, false)),
-                Ui.button("Chỉ các Role", () -> setAll.accept(false, true)),
+                Ui.button("Chỉ tài khoản crawl", () -> setAll.accept(true, false)),
+                Ui.button("Chỉ các vai trò", () -> setAll.accept(false, true)),
                 Ui.button("Bỏ chọn hết", () -> setAll.accept(false, false)),
                 Ui.button("Đảo chọn", () -> {
                     orig.setSelected(!orig.isSelected());

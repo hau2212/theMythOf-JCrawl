@@ -51,7 +51,7 @@ public final class RoleStripRenderer extends JComponent implements TableCellRend
 
     private String tooltip() {
         if (group == null || results.isEmpty()) {
-            return "Không có role nào bật cho API này";
+            return "Không có vai trò nào bật cho API này";
         }
         StringBuilder sb = new StringBuilder();
         for (RoleResult r : results) {

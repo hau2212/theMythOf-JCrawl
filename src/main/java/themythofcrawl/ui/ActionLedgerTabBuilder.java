@@ -342,7 +342,7 @@ final class ActionLedgerTabBuilder {
 
         // Row 3: Stage + Explicit Proxy Effect (Chặng 1) + Explicit Replay Mode (Chặng 2)
         JLabel proxyEffectLbl = Ui.muted("Hành vi Proxy (Chặng 1):");
-        JLabel replayModeLbl = Ui.muted("Hành vi Replay (Chặng 2):");
+        JLabel replayModeLbl = Ui.muted("Khi gửi lại:");
         JPanel behaviorWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         behaviorWrap.setOpaque(false);
         behaviorWrap.add(proxyEffectLbl);
@@ -567,7 +567,7 @@ final class ActionLedgerTabBuilder {
                                 + " (" + pEv.effectiveProxyEffect().label + ")]"
                                 + (pEv.allMatched().size() > 1
                                         ? " · Ghi đè " + (pEv.allMatched().size() - 1) + " luật ưu tiên thấp hơn." : ".");
-                explainerText.setText(chain + "  |  Replay hiện tại: " + effReplay.shortTitle());
+                explainerText.setText(chain + "  |  Khi gửi lại: " + effReplay.shortTitle());
             }
             if (refreshBanner != null) refreshBanner.run();
         };

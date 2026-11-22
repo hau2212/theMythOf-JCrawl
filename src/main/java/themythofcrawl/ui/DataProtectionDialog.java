@@ -140,7 +140,7 @@ final class DataProtectionDialog {
         testSec.add(tResult, BorderLayout.SOUTH);
 
         // ---------------------------------------------------------------- question 2
-        JPanel q2 = section("2. Khi GỬI LẠI theo role mà ID trong request đã bị xóa / dùng hết:");
+        JPanel q2 = section("2. Khi GỬI LẠI theo vai trò mà ID trong request đã bị xóa / dùng hết:");
         JComboBox<DataProtection.Resend> defResend = new JComboBox<>(DataProtection.Resend.values());
         defResend.setSelectedItem(DataProtection.Resend.of(engine.config().actionMode));
         defResend.addActionListener(Ui.safe(e -> {
@@ -280,7 +280,7 @@ final class DataProtectionDialog {
         JPanel bottom = new JPanel(new BorderLayout(0, 8));
         bottom.add(testSec, BorderLayout.NORTH);
         bottom.add(q2, BorderLayout.CENTER);
-        JButton advanced = Ui.secondaryBtn("Nâng cao (Workbench cũ: Kho ID sống, Chuỗi tạo mới, Dò giao thức)...",
+        JButton advanced = Ui.secondaryBtn("Mở Chặn & gửi lại (Kho ID, Bằng chứng 200, Kiểm tra)...",
                 t -> Icons.workbench(t.fg, 13), () -> ActionWorkbenchDialog.show((JComponent) root, engine, focus, null,
                         ActionWorkbenchDialog.TAB_STRATEGY, onChanged));
         bottom.add(Ui.flow(FlowLayout.RIGHT, advanced), BorderLayout.SOUTH);

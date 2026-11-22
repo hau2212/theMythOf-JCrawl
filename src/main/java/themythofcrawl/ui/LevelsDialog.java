@@ -55,7 +55,7 @@ final class LevelsDialog {
             }
         });
         Runnable add = () -> {
-            Object v = JOptionPane.showInputDialog(Ui.ownerWindow(d), "Tên cấp mới (thêm sau cấp đang chọn):", "Subfolder_mới");
+            Object v = JOptionPane.showInputDialog(Ui.ownerWindow(d), "Tên cấp mới (thêm sau cấp đang chọn):", "nhánh_mới");
             if (v != null && !v.toString().isBlank()) {
                 int i = list.getSelectedIndex();
                 model.add(i < 0 ? model.size() : i + 1, v.toString().trim());

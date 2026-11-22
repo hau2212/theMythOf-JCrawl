@@ -429,7 +429,7 @@ public final class ProxyInterceptDialog {
         final long[] selectedId = {-1L};
         final Map<Long, String> draftEdits = new LinkedHashMap<>();
 
-        JButton forwardBtn = Ui.solidPrimary("Gửi lên Server (Forward)",
+        JButton forwardBtn = Ui.solidPrimary("Gửi lên server",
                 t -> Icons.send(t.accent.onSolid()), null);
         JButton holdSaveBtn = Ui.tonalBtn("Lưu nháp vào Cây & Giữ",
                 t -> Icons.strategyShield(t.warning.text(), 14), t -> t.warning, null);

@@ -219,13 +219,13 @@ class CoreTest {
         g.origResult().setStatus(200);
         Audit.recalc(g);
         assertEquals(AuditLevel.OK, g.auditLevel());
-        assertEquals("API gốc (200)", g.auditSummary());
+        assertEquals("Tài khoản crawl · 200", g.auditSummary());
         RoleResult admin = new RoleResult("01_Admin", "Admin", 0, false, false, List.of());
         RoleResult guest = new RoleResult("10_Guest", "Guest", 9, false, true, List.of());
         RoleResult user = new RoleResult("02_User", "User", 1, false, false, List.of());
         g.setResults(List.of(admin, user, guest));
         Audit.recalc(g);
-        assertEquals("Chưa Gửi (1 Gốc + 3 Role)", g.auditSummary());
+        assertEquals("Chưa gửi (3 vai trò)", g.auditSummary());
         admin.setStatus(200);
         admin.setLength(10);
         user.setStatus(403);
@@ -233,22 +233,22 @@ class CoreTest {
         guest.setLength(10);
         Audit.recalc(g);
         assertEquals(AuditLevel.WARN, guest.auditLevel());
-        assertEquals("INFO: Không đủ quyền (403)", user.auditBadge());
-        assertEquals("INFO: 2 OK / 1 Lỗi (403)", g.auditSummary());
+        assertEquals("Bị chặn 403", user.auditBadge());
+        assertEquals("2 gọi được · 1 lỗi (403)", g.auditSummary());
         user.setStatus(200);
         user.setLength(12);
         Audit.recalc(g);
-        assertEquals("INFO: 2xx lệch Body (+2B)", user.auditBadge());
-        assertEquals("INFO: Cả 3 Role 2xx (Lệch Body)", g.auditSummary());
+        assertEquals("Gọi được 200 · body khác +2B", user.auditBadge());
+        assertEquals("Cả 3 gọi được · body khác nhau", g.auditSummary());
         admin.setState(ResultState.ERROR);
         admin.setStatus(null);
         admin.setError("Connection refused by the remote server");
         Audit.recalc(g);
-        assertEquals("INFO: Lỗi gọi API (Connection refused by the remot...)", admin.auditBadge());
+        assertEquals("Lỗi kết nối: Connection refused by the remot...", admin.auditBadge());
         g.setPending(true);
         assertEquals(AuditLevel.PENDING, Audit.display(g));
         Audit.Verdict v = Audit.branch(List.of(g, group(2, "GET", "/x", "b")));
-        assertEquals("INFO: 1/2 API có Role lỗi/lệch", v.summary());
+        assertEquals("1/2 cần xem", v.summary());
     }
 
     // ------------------------------------------------------------------ roles

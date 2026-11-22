@@ -25,13 +25,13 @@ public final class Audit {
         Integer st = res.status();
         if (res.original()) {
             if (st == null) {
-                res.setAudit(AuditLevel.NONE, "API GỐC (Chưa có Response)");
+                res.setAudit(AuditLevel.NONE, "Tài khoản crawl · chưa có response");
             } else if (st >= 200 && st < 300) {
-                res.setAudit(AuditLevel.OK, "API GỐC (Acc Crawl: " + st + ")");
+                res.setAudit(AuditLevel.OK, "Tài khoản crawl · " + st);
             } else if (st >= 300 && st < 400) {
-                res.setAudit(AuditLevel.REDIRECT, "API GỐC (Redirect: " + st + ")");
+                res.setAudit(AuditLevel.REDIRECT, "Tài khoản crawl · chuyển hướng " + st);
             } else {
-                res.setAudit(AuditLevel.INFO, "API GỐC (Status: " + st + ")");
+                res.setAudit(AuditLevel.INFO, "Tài khoản crawl · " + st);
             }
             return;
         }
@@ -46,7 +46,7 @@ public final class Audit {
             if (msg.length() > 34) {
                 msg = msg.substring(0, 31) + "...";
             }
-            res.setAudit(AuditLevel.INFO, "INFO: Lỗi gọi API (" + msg + ")");
+            res.setAudit(AuditLevel.INFO, "Lỗi kết nối: " + msg);
             return;
         }
         if (st == null) {
@@ -55,15 +55,15 @@ public final class Audit {
         }
         int code = st;
         if (code == 401) {
-            res.setAudit(AuditLevel.INFO, "INFO: Chưa xác thực (401)");
+            res.setAudit(AuditLevel.INFO, "Chưa đăng nhập 401");
         } else if (code == 403) {
-            res.setAudit(AuditLevel.INFO, "INFO: Không đủ quyền (403)");
+            res.setAudit(AuditLevel.INFO, "Bị chặn 403");
         } else if (code >= 400 && code < 500) {
-            res.setAudit(AuditLevel.INFO, "INFO: Role gọi lỗi (" + code + ")");
+            res.setAudit(AuditLevel.INFO, "Lỗi " + code);
         } else if (code >= 500) {
-            res.setAudit(AuditLevel.INFO, "INFO: Lỗi Server (" + code + ")");
+            res.setAudit(AuditLevel.INFO, "Lỗi server " + code);
         } else if (code >= 300) {
-            res.setAudit(AuditLevel.REDIRECT, "INFO: Chuyển hướng (" + code + ")");
+            res.setAudit(AuditLevel.REDIRECT, "Chuyển hướng " + code);
         } else if (code >= 200) {
             List<RoleResult> results = group == null ? List.of() : group.results();
             boolean anyDenied = false;
@@ -74,7 +74,7 @@ public final class Audit {
                 }
             }
             if (res.strippedAuth() && anyDenied) {
-                res.setAudit(AuditLevel.WARN, "WARN: Guest trả về " + code + "!");
+                res.setAudit(AuditLevel.WARN, "Không đăng nhập vẫn gọi được " + code);
             } else {
                 Integer base = null;
                 for (RoleResult r : results) {
@@ -87,13 +87,13 @@ public final class Audit {
                     base = group.origLength();
                 }
                 if (base != null && res.length() != null && !res.length().equals(base)) {
-                    res.setAudit(AuditLevel.INFO, String.format("INFO: 2xx lệch Body (%+dB)", res.length() - base));
+                    res.setAudit(AuditLevel.INFO, String.format("Gọi được %d · body khác %+dB", code, res.length() - base));
                 } else {
-                    res.setAudit(AuditLevel.OK, "OK: Thành công (" + code + ")");
+                    res.setAudit(AuditLevel.OK, "Gọi được " + code);
                 }
             }
         } else {
-            res.setAudit(AuditLevel.INFO, "INFO: Status " + code);
+            res.setAudit(AuditLevel.INFO, "Mã " + code);
         }
     }
 
@@ -103,11 +103,11 @@ public final class Audit {
         if (results.isEmpty()) {
             Integer st = g.origResult().status();
             if (st == null) {
-                g.setAudit(AuditLevel.NONE, "API gốc (chưa có response)");
+                g.setAudit(AuditLevel.NONE, "Tài khoản crawl · chưa có response");
             } else {
                 AuditLevel lvl = st >= 200 && st < 300 ? AuditLevel.OK
                         : st >= 300 && st < 400 ? AuditLevel.REDIRECT : AuditLevel.INFO;
-                g.setAudit(lvl, "API gốc (" + st + ")");
+                g.setAudit(lvl, "Tài khoản crawl · " + st);
             }
             return;
         }
@@ -118,7 +118,7 @@ public final class Audit {
             }
         }
         if (done.isEmpty()) {
-            g.setAudit(AuditLevel.NONE, "Chưa Gửi (1 Gốc + " + results.size() + " Role)");
+            g.setAudit(AuditLevel.NONE, "Chưa gửi (" + results.size() + " vai trò)");
             return;
         }
         List<RoleResult> ok = new ArrayList<>();
@@ -146,8 +146,8 @@ public final class Audit {
             }
             String cs = String.join(",", codes.subList(0, Math.min(4, codes.size())));
             g.setAudit(AuditLevel.INFO, ok.isEmpty()
-                    ? "INFO: Cả " + err.size() + " Role lỗi (" + cs + ")"
-                    : "INFO: " + ok.size() + " OK / " + err.size() + " Lỗi (" + cs + ")");
+                    ? "Cả " + err.size() + " vai trò lỗi (" + cs + ")"
+                    : ok.size() + " gọi được · " + err.size() + " lỗi (" + cs + ")");
         } else if (!ok.isEmpty()) {
             Set<Integer> lengths = new HashSet<>();
             for (RoleResult r : ok) {
@@ -156,14 +156,14 @@ public final class Audit {
                 }
             }
             if (!redir.isEmpty()) {
-                g.setAudit(AuditLevel.INFO, "INFO: " + ok.size() + " OK / " + redir.size() + " Redirect (3xx)");
+                g.setAudit(AuditLevel.INFO, ok.size() + " gọi được · " + redir.size() + " chuyển hướng");
             } else if (lengths.size() > 1) {
-                g.setAudit(AuditLevel.INFO, "INFO: Cả " + ok.size() + " Role 2xx (Lệch Body)");
+                g.setAudit(AuditLevel.INFO, "Cả " + ok.size() + " gọi được · body khác nhau");
             } else {
-                g.setAudit(AuditLevel.OK, "OK: Cả " + ok.size() + " Role 2xx");
+                g.setAudit(AuditLevel.OK, "Cả " + ok.size() + " gọi được");
             }
         } else if (!redir.isEmpty()) {
-            g.setAudit(AuditLevel.REDIRECT, "INFO: " + redir.size() + " Role Redirect (3xx)");
+            g.setAudit(AuditLevel.REDIRECT, redir.size() + " chuyển hướng");
         } else {
             g.setAudit(AuditLevel.NONE, "Đang xử lý");
         }
@@ -224,12 +224,12 @@ public final class Audit {
             return new Verdict(AuditLevel.NONE, "-");
         }
         if (flagged > 0) {
-            return new Verdict(AuditLevel.INFO, "INFO: " + flagged + "/" + total + " API có Role lỗi/lệch");
+            return new Verdict(AuditLevel.INFO, flagged + "/" + total + " cần xem");
         }
         if (ok > 0) {
-            return new Verdict(AuditLevel.OK, "OK: " + ok + "/" + total + " API 2xx");
+            return new Verdict(AuditLevel.OK, ok + "/" + total + " gọi được");
         }
-        return new Verdict(AuditLevel.NONE, "Chưa Gửi (" + total + " API)");
+        return new Verdict(AuditLevel.NONE, "Chưa gửi (" + total + " API)");
     }
 
     public static Verdict branch(Collection<ApiGroup> groups) {

@@ -230,7 +230,7 @@ public final class RequestComposerDialog {
         JLabel titleLbl = Ui.h2("Trình Sửa & Gửi lại Request — " + Text.apiLabel(api.gid())
                 + " [" + api.method() + " " + Text.shortPath(api.path(), 56) + "]");
         JLabel subLbl = Ui.muted("Nhánh: " + api.branch()
-                + "  |  Chỉnh sửa tự do, chọn Role & chế độ Action cho riêng lần gửi này, xem Response tức thì hoặc Lưu đè / Tạo API mới.");
+                + "  |  Chỉnh sửa tự do, chọn vai trò & chế độ Action cho riêng lần gửi này, xem Response tức thì hoặc Lưu đè / Tạo API mới.");
         titleCol.add(titleLbl);
         titleCol.add(Box.createVerticalStrut(2));
         titleCol.add(subLbl);
@@ -294,11 +294,11 @@ public final class RequestComposerDialog {
 
         List<Role> allRoles = engine.roles().all();
         List<String> roleChoices = new ArrayList<>();
-        roleChoices.add("Raw (Vừa sửa — không áp luật Role)");
-        roleChoices.add("Profile API gốc (" + (engine.originalProfile().enabled() ? "Đang bật" : "Đang tắt") + ")");
-        roleChoices.add("Tất cả Role đang bật (" + engine.roles().enabled().size() + " roles)");
+        roleChoices.add("Raw (Vừa sửa — không áp luật vai trò)");
+        roleChoices.add("Profile tài khoản crawl (" + (engine.originalProfile().enabled() ? "Đang bật" : "Đang tắt") + ")");
+        roleChoices.add("Tất cả vai trò đang bật (" + engine.roles().enabled().size() + " Vai trò)");
         for (Role r : allRoles) {
-            roleChoices.add("Role: " + r.name() + (r.enabled() ? "" : " [Đang tắt]"));
+            roleChoices.add("Vai trò: " + r.name() + (r.enabled() ? "" : " [Đang tắt]"));
         }
         JComboBox<String> roleCombo = new JComboBox<>(roleChoices.toArray(new String[0]));
         roleCombo.setPreferredSize(new Dimension(265, 26));
@@ -410,7 +410,7 @@ public final class RequestComposerDialog {
         respTop.add(respScroll, BorderLayout.CENTER);
 
         DefaultTableModel histModel = new DefaultTableModel(
-                new String[] {"#", "Lúc", "Role / Chế độ", "HTTP", "Thời gian", "Body"}, 0) {
+                new String[] {"#", "Lúc", "Vai trò / Chế độ", "HTTP", "Thời gian", "Body"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable historyTable = new ThemedTable(histModel);
@@ -683,7 +683,7 @@ public final class RequestComposerDialog {
         repeaterBtn.addActionListener(Ui.safe(e -> {
             Service svc = currentService.get();
             byte[] reqBytes = currentRequestBytes.get();
-            String tabTitle = Text.groupId(api.gid()) + " Composer " + Text.shortPath(api.path(), 20);
+            String tabTitle = Text.groupId(api.gid()) + " Sửa & gửi " + Text.shortPath(api.path(), 20);
             engine.pushRawToRepeater(svc, reqBytes, tabTitle);
             if (ownerUi != null) {
                 ownerUi.flash("Đã đẩy Request vừa sửa sang Burp Repeater");

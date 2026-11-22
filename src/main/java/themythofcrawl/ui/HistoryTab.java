@@ -53,15 +53,15 @@ final class HistoryTab {
         });
         javax.swing.JButton[] actionRef = new javax.swing.JButton[1];
         javax.swing.JButton actionBtn = Ui.dropdown("Thao tác Nhánh", t -> Icons.withChevron(Icons.folder(t.fg), t.fg),
-                "Thêm Sub-folder, Đổi tên, Xem ở tab API, Mở/Thu gọn các nhánh", () -> {
+                "Thêm nhánh, Đổi tên, Xem ở tab API, Mở/Thu gọn các nhánh", () -> {
                     ui.useSource(tree);
                     javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
                     m.add(Ui.item("Xem mục đang chọn ở tab API", t -> Icons.search(t.info.text()),
                             () -> ui.jumpToGroup(BranchTree.groupOf(tree.selectedNode()))));
-                    m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target,
+                    m.add(Ui.item("Đẩy / Gửi có chọn vai trò...", Icons::target,
                             () -> ui.pushDialog(false, null, null)));
                     m.addSeparator();
-                    m.add(Ui.item("Thêm Sub-folder con...", Icons::plus,
+                    m.add(Ui.item("Thêm nhánh con...", Icons::plus,
                             () -> ui.addSubfolder(ui.selectedBranch())));
                     m.add(Ui.item("Thêm Nhánh mới cùng cấp...", Icons::plus, ui::nextSibling));
                     m.add(Ui.item("Đổi tên Nhánh...", Icons::edit, () -> {
@@ -146,7 +146,7 @@ final class HistoryTab {
                     javax.swing.JPopupMenu m = new javax.swing.JPopupMenu();
                     m.add(Ui.item("Xuất Excel (.xlsx)...", t -> Icons.excel(t.success.text()), ui::exportExcel));
                     m.add(Ui.item("Export Báo cáo (.txt/.md)...", t -> Icons.document(t.info.text()), ui::exportHistory));
-                    m.add(Ui.item("Ma trận Role x API (.json)...", t -> Icons.codeBraces(t.dup.text()), ui::exportMatrix));
+                    m.add(Ui.item("Ma trận vai trò x API (.json)...", t -> Icons.codeBraces(t.dup.text()), ui::exportMatrix));
                     m.show(ref[0], 0, ref[0].getHeight());
                 });
         ref[0] = b;

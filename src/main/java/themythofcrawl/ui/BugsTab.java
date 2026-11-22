@@ -49,7 +49,7 @@ final class BugsTab {
     private final JComboBox<Object> typeFilter = new JComboBox<>();
     private final JComboBox<Object> sevFilter = new JComboBox<>();
     private final JComboBox<Object> statusFilter = new JComboBox<>();
-    private final SearchField search = new SearchField("Tìm path, ghi chú, role...", 16);
+    private final SearchField search = new SearchField("Tìm path, ghi chú, vai trò...", 16);
     private List<Engine.BugRow> all = List.of();
     boolean stale = true;
 
@@ -99,7 +99,7 @@ final class BugsTab {
         Ui.widths(table, 56, 64, 300, 150, 130, 96, 104, 110, 260, 60, 110);
         Ui.onDoubleClick(table, this::openSelected);
         panel.add(MainPanel.scroll(table), BorderLayout.CENTER);
-        panel.add(Ui.muted("Đánh dấu lỗi: chuột phải 1 API ở tab Cây / API, hoặc nút \"Đánh dấu lỗi\" ở tab Ma trận Role."
+        panel.add(Ui.muted("Đánh dấu lỗi: chuột phải 1 API ở tab Cây / API, hoặc nút \"Đánh dấu lỗi\" ở tab Ma trận vai trò."
                 + " Nhấp đúp 1 dòng để mở API."), BorderLayout.SOUTH);
     }
 
@@ -238,7 +238,7 @@ final class BugsTab {
         }
         try {
             Files.write(f.toPath(), Xlsx.write(List.of(new Xlsx.OutSheet("Loi", List.of("API #", "Method", "Host", "Path",
-                    "Nhánh", "Loại", "OWASP", "Mức độ", "Trạng thái", "Role", "Ghi chú", "Người", "Lúc"), rows,
+                    "Nhánh", "Loại", "OWASP", "Mức độ", "Trạng thái", "Vai trò", "Ghi chú", "Người", "Lúc"), rows,
                     new int[] {8, 8, 22, 44, 30, 20, 26, 14, 14, 16, 50, 10, 18}))));
             ui.flash("Đã xuất " + rows.size() + " lỗi -> " + f.getName());
         } catch (Exception ex) {
@@ -266,7 +266,7 @@ final class BugsTab {
 
     // ------------------------------------------------------------------ table
     static final class Model extends AbstractTableModel {
-        static final String[] COLS = {"API #", "Method", "Path", "Nhánh", "Loại", "Mức độ", "Trạng thái", "Role", "Ghi chú",
+        static final String[] COLS = {"API #", "Method", "Path", "Nhánh", "Loại", "Mức độ", "Trạng thái", "Vai trò", "Ghi chú",
             "Người", "Lúc"};
         private List<Engine.BugRow> rows = List.of();
 
@@ -384,7 +384,7 @@ final class BugsTab {
             form.add(Ui.flow(FlowLayout.LEFT, new JLabel("Loại:"), typeBox));
             form.add(typeHelp);
             form.add(Ui.flow(FlowLayout.LEFT, new JLabel("Mức độ:"), sevBox, new JLabel("Trạng thái:"), stBox));
-            form.add(Ui.flow(FlowLayout.LEFT, new JLabel("Role tái hiện được:"), roleBox));
+            form.add(Ui.flow(FlowLayout.LEFT, new JLabel("Vai trò tái hiện được:"), roleBox));
             JPanel p = new JPanel(new BorderLayout(0, 6));
             p.add(form, BorderLayout.NORTH);
             p.add(new JLabel("Ghi chú / cách tái hiện:"), BorderLayout.CENTER);

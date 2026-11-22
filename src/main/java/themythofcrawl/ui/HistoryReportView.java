@@ -100,7 +100,7 @@ public final class HistoryReportView extends JPanel {
     private final SegmentedToggle modeToggle = new SegmentedToggle(
             new SegmentedToggle.Option("Thẻ", "Xem báo cáo theo từng nhánh chức năng", t -> t.accent,
                     t -> Icons.branch(t.fg, 12)),
-            new SegmentedToggle.Option("Ma trận", "Bảng ma trận Role x API", t -> t.accent,
+            new SegmentedToggle.Option("Ma trận", "Bảng ma trận vai trò x API", t -> t.accent,
                     t -> Icons.excel(t.fg, 12)),
             new SegmentedToggle.Option("Văn bản", "Bản văn bản thuần để đọc / copy", t -> t.accent,
                     t -> Icons.document(t.fg, 12)));
