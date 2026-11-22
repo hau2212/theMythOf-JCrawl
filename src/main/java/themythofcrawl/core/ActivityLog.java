@@ -28,9 +28,15 @@ import java.util.regex.Pattern;
  * Bearer tokens, JWTs, api keys, passwords. Never contains request / response bodies.
  */
 public final class ActivityLog {
-    public enum Kind { UI, TAB, SEND, CAPTURE, CONFIG, ENGINE, ERROR }
+    /** REPORT = the user's own "Báo lỗi" note; STALL = the UI did not respond for a while; SLOW = a click took long. */
+    public enum Kind { UI, TAB, SEND, CAPTURE, CONFIG, ENGINE, ERROR, REPORT, STALL, SLOW }
 
-    public record Event(long atMs, Kind kind, String text, String detail) {
+    /** @param ms how long the action took (click handler, send...), 0 when not measured */
+    public record Event(long atMs, Kind kind, String text, String detail, long ms) {
+        public Event(long atMs, Kind kind, String text, String detail) {
+            this(atMs, kind, text, detail, 0);
+        }
+
         public String time() {
             return LocalDateTime.ofInstant(Instant.ofEpochMilli(atMs), ZoneId.systemDefault()).format(TIME);
         }
@@ -71,7 +77,11 @@ public final class ActivityLog {
     }
 
     public static void add(Kind kind, String text, String detail) {
-        Event e = new Event(System.currentTimeMillis(), kind, cut(redact(text), 600), cut(redact(detail), 6000));
+        add(kind, text, detail, 0);
+    }
+
+    public static void add(Kind kind, String text, String detail, long ms) {
+        Event e = new Event(System.currentTimeMillis(), kind, cut(redact(text), 600), cut(redact(detail), 6000), ms);
         synchronized (RING) {
             RING.addLast(e);
             while (RING.size() > MAX) {
@@ -134,6 +144,102 @@ public final class ActivityLog {
         return m;
     }
 
+    /** A click that took {@code ms} on the UI thread; slow ones (>= 300 ms) are also kept as SLOW. */
+    public static void timed(String label, long ms) {
+        if (ms >= 300) {
+            add(Kind.SLOW, label + " (" + ms + " ms)", "", ms);
+        }
+        synchronized (RING) {
+            for (java.util.Iterator<Event> it = RING.descendingIterator(); it.hasNext(); ) {
+                Event e = it.next();
+                if (e.kind() == Kind.UI && label.startsWith(e.text().split(" \\[")[0])) {
+                    // attach the duration to the click event already recorded for this label
+                    RING.remove(e);
+                    RING.addLast(new Event(e.atMs(), e.kind(), e.text(), e.detail(), Math.max(1, ms)));
+                    break;
+                }
+                if (System.currentTimeMillis() - e.atMs() > 5000) {
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Feature use: label -> [count, total ms, max ms]. */
+    public static Map<String, long[]> usage() {
+        Map<String, long[]> m = new LinkedHashMap<>();
+        for (Event e : recent(MAX)) {
+            if (e.kind() != Kind.UI && e.kind() != Kind.TAB) {
+                continue;
+            }
+            String key = e.text().split(" \\[")[0];
+            long[] v = m.computeIfAbsent(key, k -> new long[3]);
+            v[0]++;
+            v[1] += e.ms();
+            v[2] = Math.max(v[2], e.ms());
+        }
+        return m;
+    }
+
+    /**
+     * Habits: sequences of 2 or 3 clicks done one after another (each step within 15 s) at least twice, most frequent
+     * first. A long sequence repeated often is a candidate for a one-click shortcut.
+     */
+    public static List<Map.Entry<String, Integer>> habits(int top) {
+        List<Event> ui = new ArrayList<>();
+        for (Event e : recent(MAX)) {
+            if (e.kind() == Kind.UI || e.kind() == Kind.TAB) {
+                ui.add(e);
+            }
+        }
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (int len = 2; len <= 3; len++) {
+            for (int i = 0; i + len <= ui.size(); i++) {
+                boolean close = true;
+                StringBuilder sb = new StringBuilder();
+                for (int k = 0; k < len; k++) {
+                    Event e = ui.get(i + k);
+                    if (k > 0 && e.atMs() - ui.get(i + k - 1).atMs() > 15000) {
+                        close = false;
+                        break;
+                    }
+                    sb.append(k == 0 ? "" : "  ->  ").append(e.text().split(" \\[")[0]);
+                }
+                if (close) {
+                    counts.merge(sb.toString(), 1, Integer::sum);
+                }
+            }
+        }
+        List<Map.Entry<String, Integer>> out = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (e.getValue() >= 2) {
+                out.add(e);
+            }
+        }
+        out.sort((a, b) -> b.getValue() != a.getValue().intValue() ? b.getValue() - a.getValue()
+                : Integer.compare(b.getKey().length(), a.getKey().length()));
+        return out.subList(0, Math.min(top, out.size()));
+    }
+
+    /** Every event as compact JSON lines (machine-readable, secrets already masked). */
+    public static String jsonl(int n) {
+        StringBuilder sb = new StringBuilder();
+        for (Event e : recent(n)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("t", e.atMs());
+            m.put("k", e.kind().name());
+            m.put("x", e.text());
+            if (e.ms() > 0) {
+                m.put("ms", e.ms());
+            }
+            if (!e.detail().isEmpty()) {
+                m.put("d", e.detail());
+            }
+            sb.append(Json.write(m)).append('\n');
+        }
+        return sb.toString();
+    }
+
     public static void clear() {
         synchronized (RING) {
             RING.clear();
@@ -171,6 +277,9 @@ public final class ActivityLog {
                 m.put("at", Instant.ofEpochMilli(e.atMs()).toString());
                 m.put("kind", e.kind().name());
                 m.put("text", e.text());
+                if (e.ms() > 0) {
+                    m.put("ms", e.ms());
+                }
                 if (!e.detail().isEmpty()) {
                     m.put("detail", e.detail());
                 }

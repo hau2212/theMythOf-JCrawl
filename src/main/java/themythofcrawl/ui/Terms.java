@@ -32,7 +32,8 @@ public final class Terms {
     public static final String ACTIVITY = "Hoạt động";
     /** Requests seen by the block rules (was: Nhật ký Cổng Action). */
     public static final String BLOCK_HISTORY = "Lịch sử chặn";
-    public static final String REPORT_TO_CLAUDE = "Báo lỗi cho Claude";
+    public static final String LOG = "Nhật ký";
+    public static final String REPORT_ISSUE = "Báo lỗi";
     public static final String NEEDS_ACTION = "Cần xử lý";
 
     /** "Lần 5 · gốc API 492". */

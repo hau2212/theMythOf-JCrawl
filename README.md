@@ -1,9 +1,58 @@
-# theMythOf-JCrawl (Java / Montoya) - V_9.4
+# theMythOf-JCrawl (Java / Montoya) - V_10.4
 
 Burp Suite extension viết bằng **Java 21 + Montoya API**: bản viết lại toàn bộ của
 [theMythOf-PCrawl](https://github.com/hau2212/theMythOfCrawl) (bản Python / Jython) - đủ mọi chức năng,
 nhanh hơn, có lưu dữ liệu ra đĩa (workspace), **không cần Jython**, và giao diện tự thích ứng cả
 **Light / Dark theme** của Burp Suite (icon vẽ hoàn toàn bằng Java2D, không phụ thuộc emoji).
+
+## Điểm mới V_10.4
+
+Theo `VERSIONING.md`: thêm kiến trúc họ workspace và đổi thuật toán khớp path -> tăng MAJOR (9.4 -> 10.4).
+
+### Crawl từng tài khoản (từ cao xuống thấp)
+
+- **Excel > Tài khoản > Tài khoản tiếp theo...** (hoặc menu Workspace): tạo **workspace con** cho tài khoản kế tiếp. Workspace con có sẵn
+  **cây nhánh, luật nhánh, kiểu node và file Excel** của tài khoản trên nhưng **không có API**, nên Cây chỉ chứa API của tài khoản đó
+  (không lẫn với hàng trăm API của tài khoản gốc). Workspace con nhớ workspace cha.
+- Trên Cây của workspace con, mỗi API có chip **Có ở <tài khoản trên>** hoặc **Mới so với <tài khoản trên>**.
+- **Excel > Tài khoản**: ma trận API x tài khoản (Có 200 / -), lọc "chỉ API không phải tài khoản nào cũng gọi được", nút **Mở tài khoản**
+  để chuyển giữa các workspace trong họ, **Xuất báo cáo tổng hợp** (.xlsx): Tổng quan · Ma trận tài khoản · API từng tài khoản · Q&A.
+
+### Hỏi đáp (Q&A / Info) có ảnh
+
+- Chuột phải API (Cây / API) -> **Hỏi đáp (Q&A / Info)...**: câu hỏi hoặc ghi chú, **nhiều ảnh** (thêm từ file hoặc **dán Ctrl+V** ảnh
+  chụp màn hình), trạng thái (Chờ trả lời / Đã trả lời / Đóng), ô **Khách hàng / dev trả lời**. API tự có tag **Q&A** / **INFO**.
+- **Excel > Hỏi đáp**: quản lý mọi câu hỏi (lọc loại, trạng thái, tìm), sửa / trả lời, mở API, **Xuất Excel Q&A**: ảnh được **chèn
+  thật vào ô** (mỗi ảnh một cột Ảnh 1, Ảnh 2...), có cột Khách hàng trả lời, Người trả lời, Ngày trả lời, Tài khoản khác gọi được;
+  xuất riêng tài khoản này hoặc mọi tài khoản, có thể kèm báo cáo tổng hợp.
+
+### Request bị chặn & Gửi riêng
+
+- Mỗi request đang chờ hiện **Loại**: **API mới** / **Trùng API 12 · 3 lần bắt · nhánh** / **Đã xóa trước đây · chỗ cũ** để quyết định trước khi gửi.
+- Gửi đồng loạt: chuột phải request chờ -> **Gửi N request đang chọn** / **Gửi tất cả N request đang chờ** (Hàng chặn cũng có **Gửi tất cả**).
+- **Gửi riêng (không qua Logger++)**: JCrawl tự mở kết nối gửi thẳng tới server, không qua Burp, nên Logger / Logger++ không ghi
+  (theo PortSwigger: request không đi qua networking của Burp thì Logger không thấy). Có ở menu **Gửi lại**, ở request đang chờ
+  (trình duyệt vẫn nhận response thật) và công tắc trong **Cài đặt > Gửi request** cho mọi lần gửi.
+
+### Khớp path với Excel
+
+- `{id}`, `{orderId}`, `:user_id`, `{uuid}` chỉ khớp giá trị **trông giống ID**: có chữ số (15, a1b2, ORD-2024), UUID, chuỗi hex dài,
+  chuỗi ngẫu nhiên dài. Từ thường như `new`, `old`, `export`, `me` **không** khớp, nên `/api/a/b/old` không bị gán vào dòng
+  `/api/a/b/{id}`. Dòng ghi path cụ thể vẫn luôn thắng dòng có placeholder. Đổi được trong **Excel > {...} Placeholder** (kiểu "Trông giống ID").
+
+### Cây
+
+- **Xóa API** (chuột phải / phím Delete): lần bắt trùng xóa luôn; **bản gốc** hỏi xác nhận rồi **lần bắt kế tiếp thành bản gốc**; API không
+  còn lần bắt nào khác cũng hỏi trước (vẫn giữ chỗ).
+- **Mở hết / Thu hết** trên thanh Cây; chuột phải nền Cây -> **Mở app: thu gọn hết Cây**.
+- **Nhóm** (trước là Cụm): gom API trong một nhánh cho gọn mà không tạo nhánh con (chuột phải API -> Nhóm).
+
+### Nhật ký
+
+- Đổi tên thành **Nhật ký** (Menu / Tùy chọn / Cài đặt). Ghi thời gian phản hồi của từng thao tác, thao tác **chậm** (>= 300 ms), lúc
+  **giao diện không phản hồi** (>= 0,8 s), **thói quen** (chuỗi 2–3 thao tác hay lặp lại để rút gọn sau này), tính năng dùng nhiều.
+- **Báo lỗi**: nút nhỏ ở đầu mọi cửa sổ, Menu, hoặc **Ctrl+Alt+E**: ghi vấn đề bằng lời của bạn, kèm nơi xảy ra và 15 thao tác vừa làm.
+- Xuất **Markdown** hoặc **JSONL** (mỗi dòng 1 sự kiện, dạng máy đọc). Chạy ngầm, giới hạn 4000 sự kiện, không làm chậm extension.
 
 ## Điểm mới V_9.4
 

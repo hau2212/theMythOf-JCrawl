@@ -86,14 +86,17 @@ jobs:
           ## theMythOf-JCrawl \`${TAG}\` (${CHANNEL})
 
           > Phát hành **bất biến (immutable)** từ commit \`${GITHUB_SHA:0:7}\`. Mọi bản phát hành trước đó được giữ nguyên tuyệt đối, không chỉnh sửa hay ghi đè.
-          > Theo \`VERSIONING.md\`: tính năng mới -> tăng MINOR: **\`V_9.4\`**, kênh stable.
+          > Theo \`VERSIONING.md\`: họ workspace + thuật toán khớp path mới -> **\`V_10.4\`** (kênh stable).
 
           ### Điểm mới trong \`${TAG}\`
 
-          1. **Tài khoản crawl = dòng 00 của tab Vai trò**: thêm / xóa / sửa header, cookie, token như vai trò khác; áp cho mọi request gốc (hỏi áp cả API đã bắt).
-          2. **Sửa request gốc an toàn**: giữ bản lúc bắt, Khôi phục đưa về đúng method / path / host / header / body ban đầu; chip "Đã sửa" trên Cây.
-          3. Nhãn lần bắt: "Gốc · còn 3 bản", "Lần 5 · gốc đã xóa · còn 2 bản".
-          4. Kế thừa V_9.3 (từ điển thống nhất, tab gọn, Chặn & gửi lại một cửa sổ) và V_9.2.
+          1. **Crawl từng tài khoản**: workspace con cho tài khoản tiếp theo (giữ cây nhánh + Excel), chip "Có ở / Mới so với", Excel > Tài khoản (ma trận, chuyển tài khoản, báo cáo tổng hợp).
+          2. **Hỏi đáp Q&A / Info**: câu hỏi, nhiều ảnh (dán Ctrl+V), câu trả lời của khách hàng; Excel Q&A có ảnh chèn thật.
+          3. **Request bị chặn**: nhãn API mới / Trùng / Đã xóa; gửi đồng loạt; **Gửi riêng** không qua Logger++.
+          4. **Khớp {id}** chỉ với giá trị trông giống ID (new / old / export không bị gán nhầm).
+          5. **Cây**: xóa API thông minh (bản gốc hỏi + chuyển gốc), Mở hết / Thu hết, Nhóm.
+          6. **Nhật ký**: thời gian phản hồi, chậm / đứng, thói quen, Báo lỗi ở mọi cửa sổ, xuất Markdown / JSONL.
+          7. Kế thừa V_9.4 (tài khoản crawl là dòng 00 của Vai trò, sửa request gốc an toàn) và V_9.3.
 
           Tải file \`${JAR}\` rồi nạp vào Burp (\`Extensions > Installed > Add > Java\`).
           EOF

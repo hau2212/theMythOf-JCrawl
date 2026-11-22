@@ -252,6 +252,7 @@ public final class MainPanel {
             tick(true);
         });
         installClickLog();
+        installStallWatch();
         FamilyTab.applyReference(this);
         reportTabs.addChangeListener(e -> tick(true));
         settingsTabs.addChangeListener(e -> tick(true));
@@ -405,6 +406,38 @@ public final class MainPanel {
      */
     private java.awt.event.AWTEventListener clickLog;
 
+    /** V_10.4: notices when the UI thread does not answer for a while (the extension "lag"), cheaply, off the UI thread. */
+    private volatile boolean watching;
+
+    private void installStallWatch() {
+        watching = true;
+        Thread t = new Thread(() -> {
+            long lastReport = 0;
+            while (watching) {
+                long t0 = System.currentTimeMillis();
+                java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+                javax.swing.SwingUtilities.invokeLater(done::countDown);
+                try {
+                    if (!done.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        done.await();
+                    }
+                    long lag = System.currentTimeMillis() - t0;
+                    if (lag >= 800 && System.currentTimeMillis() - lastReport > 2000) {
+                        lastReport = System.currentTimeMillis();
+                        themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.STALL,
+                                "Giao diện không phản hồi " + lag + " ms (tab " + selectedTabTitle() + ")", "", lag);
+                    }
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    return;
+                }
+            }
+        }, "jcrawl-ui-watch");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
+    }
+
     private void installClickLog() {
         clickLog = ev -> {
             if (!(ev instanceof java.awt.event.MouseEvent me) || me.getID() != java.awt.event.MouseEvent.MOUSE_RELEASED
@@ -458,6 +491,7 @@ public final class MainPanel {
     }
 
     public void dispose() {
+        watching = false;
         timer.stop();
         if (clickLog != null) {
             try {
@@ -897,7 +931,9 @@ public final class MainPanel {
         m.add(Ui.item("Tùy chọn...", Icons::gear, this::optionsMenu));
         m.add(Ui.item("Workspace: " + engine.workspaceName() + "...", Icons::folder, this::workspaceMenu));
         m.add(Ui.item(window != null ? "Gắn lại vào tab Burp" : "Tách cửa sổ riêng", Icons::window, this::toggleDetach));
-        m.add(Ui.item("Nhật ký cho Claude...", Icons::copy, this::openClaudeLog));
+        m.add(Ui.item("Nhật ký...", Icons::copy, this::openClaudeLog));
+        m.add(Ui.item("Báo lỗi... (Ctrl+Alt+E)", t -> Icons.alertMark(t.danger.text(), 13),
+                () -> ReportIssueDialog.open(root, "tab " + selectedTabTitle())));
         m.addSeparator();
         m.add(Ui.item(effectiveHeaderCompact ? "Mở rộng thanh trên" : "Thu gọn thanh trên",
                 t -> effectiveHeaderCompact ? Icons.chevronDown(t.fg, 12) : Icons.chevronUp(t.fg, 12),
@@ -1319,7 +1355,9 @@ public final class MainPanel {
         m.add(helpMenu);
         m.add(Ui.item("Mở tab Cấu hình chi tiết...", Icons::gear, () -> selectTab(settings.panel)));
         m.add(Ui.item("Reset Dedup Cache (Cho phép bắt lại API cũ)", Icons::refresh, engine::resetDedup));
-        m.add(Ui.item("Nhật ký cho Claude (báo lỗi / nhờ phân tích)...", Icons::copy, this::openClaudeLog));
+        m.add(Ui.item("Nhật ký...", Icons::copy, this::openClaudeLog));
+        m.add(Ui.item("Báo lỗi... (Ctrl+Alt+E)", t -> Icons.alertMark(t.danger.text(), 13),
+                () -> ReportIssueDialog.open(root, "Tùy chọn")));
         m.addSeparator();
         m.add(Ui.item(diagBadge.getText(), false, () -> { }));
         m.show(options, 0, options.getHeight());
@@ -2067,6 +2105,7 @@ public final class MainPanel {
                 push(gs);
             }
         });
+        registerRootShortcut("ctrl alt E", "tmoc.report", () -> ReportIssueDialog.open(root, "tab " + selectedTabTitle()));
         registerRootShortcut("DELETE", "tmoc.delete", () -> {
             if (spotlight.isVisible() || isTextEditingFocus()) {
                 return;
