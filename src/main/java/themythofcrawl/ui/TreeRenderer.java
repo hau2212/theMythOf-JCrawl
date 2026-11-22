@@ -802,6 +802,10 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         nl.statusColor = th.danger.text();
         nl.statusX = x;
         x = col(th, nl, TreeColumns.Col.ROLES, x);
+        // V_10.4: is it a new API or another capture of an existing one? (decide before sending)
+        String kind = engine != null ? engine.classifyHeld(pr) : "API mới";
+        Theme.Token kt = kind.startsWith("API mới") ? th.success : kind.startsWith("Trùng") ? th.dup : th.neutral;
+        x = addChip(th, nl, Text.shortPath(kind, 40), th.smallBoldFont, kt.fill(), kt.border(), kt.text(), null, false, x, gap);
         String host = pr.service() != null ? pr.service().hostLabel() : "";
         return addTail(nl, th, (host.isEmpty() ? "" : host + " · ") + pr.timeHms(), x, gap);
     }

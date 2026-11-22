@@ -1596,6 +1596,25 @@ public final class Engine {
         return themythofcrawl.core.AccessMatrix.build(this, gs);
     }
 
+    /** V_10.4: what a held request is, before the user decides: new API, another capture of API n, or a deleted place. */
+    public String classifyHeld(themythofcrawl.core.ProxyInterceptQueue.PendingRequest pr) {
+        if (pr == null || pr.service() == null) {
+            return "API mới";
+        }
+        String key = placeKey(pr.method(), pr.service(), pr.path());
+        List<ApiGroup> cps = copiesOf(key);
+        if (!cps.isEmpty()) {
+            ApiGroup o = originOf(key);
+            return "Trùng " + Text.apiLabel(o != null ? o.gid() : cps.get(0).gid()) + " · " + cps.size() + " lần bắt"
+                    + (o != null && !Text.blank(o.branch()) ? " · " + o.branch() : "");
+        }
+        themythofcrawl.place.PlacementBook.Record rec = book.get(key);
+        if (rec != null && !Text.blank(rec.place)) {
+            return "Đã xóa trước đây · chỗ cũ " + rec.place;
+        }
+        return "API mới";
+    }
+
     // =================================================================== capture
     public String placeKey(String method, Service s, String path) {
         return Text.dedupKey(method, s.protocol(), s.host(), s.port(), path, config.dedupNormalizeIds);
@@ -2363,9 +2382,13 @@ public final class Engine {
     }
     // =================================================================== sending
     /** A request waiting in / running from the send queue. */
-    public record Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw) {
+    public record Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw, boolean quiet) {
         public Work(ApiGroup group, RoleResult result) {
-            this(group, result, null, "", false);
+            this(group, result, null, "", false, false);
+        }
+
+        public Work(ApiGroup group, RoleResult result, byte[] override, String note, boolean forceRaw) {
+            this(group, result, override, note, forceRaw, false);
         }
     }
 
@@ -3126,6 +3149,15 @@ public final class Engine {
         replayInternal(g, results, false);
     }
 
+    /** V_10.4 "Gửi riêng": like a normal send but outside Burp, so Logger / Logger++ do not log it. */
+    public void replayQuiet(ApiGroup g, Collection<RoleResult> results) {
+        List<Work> works = new ArrayList<>();
+        for (RoleResult r : results) {
+            works.add(new Work(g, r, null, "", false, true));
+        }
+        submitWorks(g, works);
+    }
+
     /** forceRaw: send exactly the built request (the ID was already chosen), no automatic ID change / retry. */
     private void replayInternal(ApiGroup g, Collection<RoleResult> results, boolean forceRaw) {
         List<Work> works = new ArrayList<>();
@@ -3317,13 +3349,14 @@ public final class Engine {
             }
             byte[] request = work.override() != null ? work.override()
                     : forceRaw ? baseReq : prepareActionRequestBeforeSend(g, baseReq, mode);
-            Bridge.Sent sent = bridge.send(g.service(), request);
+            boolean quiet = work.quiet() || config.quietSend;
+            Bridge.Sent sent = quiet ? bridge.sendQuiet(g.service(), request) : bridge.send(g.service(), request);
             byte[] resp = sent.response();
             Integer firstSt = HttpBytes.statusCode(resp);
             if (!forceRaw && firstSt != null) {
                 byte[] healedReq = autoHealActionRequestOn4xx(g, request, firstSt, mode);
                 if (healedReq != null) {
-                    Bridge.Sent retrySent = bridge.send(g.service(), healedReq);
+                    Bridge.Sent retrySent = quiet ? bridge.sendQuiet(g.service(), healedReq) : bridge.send(g.service(), healedReq);
                     if (retrySent.response() != null && retrySent.response().length > 0) {
                         request = healedReq;
                         sent = retrySent;
@@ -3404,7 +3437,7 @@ public final class Engine {
                 Text.apiLabel(g.gid()) + " " + g.method() + " " + g.path() + " · " + (r.original() ? CRAWL_ACCOUNT : r.roleName())
                         + " -> " + (r.status() != null ? r.status() + " (" + r.length() + " B, " + r.elapsedMs() + " ms)" : r.state())
                         + (Text.blank(r.sentNote()) ? "" : " · " + r.sentNote()) + (Text.blank(r.error()) ? "" : " · lỗi: " + r.error())
-                        + " · chế độ " + mode.label,
+                        + " · chế độ " + mode.label + (work.quiet() || config.quietSend ? " · gửi riêng" : ""),
                 "");
         Audit.recalc(g);   // before done(): a retry of this row can only start after these colours are set
         boolean finished = dispatcher.done(job, status, retryAfter);

@@ -34,6 +34,7 @@ import burp.api.montoya.proxy.http.ProxyResponseReceivedAction;
 import burp.api.montoya.proxy.http.ProxyResponseToBeSentAction;
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
+import themythofcrawl.app.Bridge;
 import themythofcrawl.app.Engine;
 import themythofcrawl.app.Prefs;
 import themythofcrawl.core.ForwardDeliveryGuard;
@@ -224,6 +225,26 @@ public final class Extension implements BurpExtension {
                                     }
                                 });
                                 return ProxyRequestReceivedAction.doNotIntercept(finalReq);
+                            }
+                            case FORWARD_QUIET -> {
+                                // V_10.4: JCrawl sends it itself outside Burp's networking (Logger / Logger++ do not
+                                // log the server call), saves the API, and hands the REAL response to the browser.
+                                Bridge.Sent quiet = themythofcrawl.app.DirectHttp.send(service, finalBytes);
+                                byte[] respBytes = quiet.response();
+                                int st = themythofcrawl.core.HttpBytes.statusCode(respBytes) == null ? 0
+                                        : themythofcrawl.core.HttpBytes.statusCode(respBytes);
+                                engine.recordGateAuditOutcome(outcome.auditSeq(), "Gửi riêng -> HTTP " + st);
+                                engine.log("ĐÃ GỬI RIÊNG [" + method + " " + path + "] -> HTTP " + st
+                                        + (quiet.error() != null ? " (" + quiet.error() + ")" : "") + ".", null);
+                                if (respBytes != null) {
+                                    engine.onProxyMessage(new Engine.Message(service, finalBytes, respBytes, url));
+                                }
+                                if (respBytes != null && supportsSpoof()) {
+                                    recordPendingSpoof(pendingSpoofsExact, pendingSpoofsRoute, service, raw,
+                                            new String(respBytes, java.nio.charset.StandardCharsets.ISO_8859_1));
+                                    return ProxyRequestReceivedAction.doNotIntercept(req);
+                                }
+                                return ProxyRequestReceivedAction.drop();
                             }
                             case HOLD_AND_SPOOF -> {
                                 engine.recordGateAuditOutcome(outcome.auditSeq(), "Giữ lại + trả 200 ảo");

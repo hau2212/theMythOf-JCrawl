@@ -312,7 +312,7 @@ final class V35TreeFirstUxTest {
                         }
                         assertTrue(cols.contains("Nhánh đích"), "Columns must include Nhánh đích: " + cols);
                         assertTrue(cols.contains("Host"), "Columns must include Host: " + cols);
-                        assertTrue(cols.contains("Trạng thái"), "Columns must include Trạng thái: " + cols);
+                        assertTrue(cols.contains("Loại"), "Columns must include Loại (API mới / Trùng): " + cols);
                         assertFalse(findAll(pqPanel, MethodChipBar.class).isEmpty(), "Proxy Queue must use MethodChipBar");
                         assertFalse(findAll(pqPanel, ModernToggleSwitch.class).isEmpty(), "Proxy Queue must use ModernToggleSwitch");
                     } finally {

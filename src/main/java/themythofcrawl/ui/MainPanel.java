@@ -1595,6 +1595,21 @@ public final class MainPanel {
         }
     }
 
+    /** V_10.4: release many held requests at once (normally, or "Gửi riêng" outside Burp / Logger++). */
+    void forwardHeld(Collection<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> held, boolean quiet) {
+        int n = 0;
+        for (var pr : new ArrayList<>(held)) {
+            if (engine.proxyQueue().resolve(pr.id(), quiet
+                    ? themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD_QUIET
+                    : themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest())) {
+                n++;
+            }
+        }
+        syncHeader();
+        tick(true);
+        flash(n == 0 ? "Không còn request nào đang chờ" : (quiet ? "Đã gửi riêng " : "Đã gửi ") + n + " request đang chờ");
+    }
+
     /** Push with the Repeater mode chosen in the 'Burp Repeater' menu. */
     void push(ApiGroup g) {
         if (g == null) {

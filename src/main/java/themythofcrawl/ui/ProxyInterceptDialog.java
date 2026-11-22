@@ -335,7 +335,7 @@ public final class ProxyInterceptDialog {
         filterBar.add(filterSearch);
 
         DefaultTableModel tm = new DefaultTableModel(
-                new Object[]{"#", "Trạng thái", "Nhánh đích", "Host", "Method", "Đường dẫn", "Lý do chặn", "Lúc"}, 0) {
+                new Object[]{"#", "Loại", "Nhánh đích", "Host", "Method", "Đường dẫn", "Lý do chặn", "Lúc"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -431,20 +431,23 @@ public final class ProxyInterceptDialog {
 
         JButton forwardBtn = Ui.solidPrimary("Gửi lên server",
                 t -> Icons.send(t.accent.onSolid()), null);
+        JButton quietBtn = Ui.secondaryBtn("Gửi riêng", t -> Icons.send(t.info.text()));
+        quietBtn.setToolTipText("JCrawl tự gửi thẳng tới server (không qua Burp): Logger++ không ghi lần gửi này; trình duyệt nhận response thật");
         JButton holdSaveBtn = Ui.tonalBtn("Lưu nháp vào Cây & Giữ",
                 t -> Icons.strategyShield(t.warning.text(), 14), t -> t.warning, null);
         JButton dropBtn = Ui.dangerBtn("Hủy bỏ (Drop)",
                 t -> Icons.stop(t.danger.text()), null);
 
         JButton forwardAllBtn = Ui.secondaryBtn("Gửi tất cả", t -> Icons.sendAll(t.success.text()), null);
+        JButton quietAllBtn = Ui.secondaryBtn("Gửi riêng tất cả", t -> Icons.sendAll(t.info.text()), null);
         JButton dropAllBtn = Ui.dangerBtn("Hủy tất cả", t -> Icons.trash(t.danger.text()), null);
         JButton closeBtn = Ui.secondaryBtn("Đóng", null, onClose != null ? onClose : () -> { });
 
         JPanel bottomBar = new JPanel(new BorderLayout(8, 0));
         bottomBar.setOpaque(false);
         bottomBar.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_2, 0, Theme.SPACE_2));
-        bottomBar.add(Ui.flow(FlowLayout.LEFT, forwardBtn, holdSaveBtn, dropBtn), BorderLayout.WEST);
-        bottomBar.add(Ui.flow(FlowLayout.RIGHT, forwardAllBtn, dropAllBtn, closeBtn), BorderLayout.EAST);
+        bottomBar.add(Ui.flow(FlowLayout.LEFT, forwardBtn, quietBtn, holdSaveBtn, dropBtn), BorderLayout.WEST);
+        bottomBar.add(Ui.flow(FlowLayout.RIGHT, forwardAllBtn, quietAllBtn, dropAllBtn, closeBtn), BorderLayout.EAST);
         root.add(bottomBar, BorderLayout.SOUTH);
 
         // ------------------------------------------------------------------
@@ -598,7 +601,7 @@ public final class ProxyInterceptDialog {
                     String host = pr.service() != null ? pr.service().hostLabel() : "-";
                     tm.addRow(new Object[]{
                             "#" + pr.id(),
-                            "Chờ duyệt",
+                            ui != null ? ui.engine.classifyHeld(pr) : "Chờ duyệt",
                             pr.branchName(),
                             host,
                             pr.method(),
@@ -741,6 +744,17 @@ public final class ProxyInterceptDialog {
                 ResolutionKind.FORWARD, ui, refresh)));
         holdSaveBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
                 ResolutionKind.HOLD_AND_SPOOF, ui, refresh)));
+        quietBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
+                ResolutionKind.FORWARD_QUIET, ui, refresh)));
+        quietAllBtn.addActionListener(Ui.safe(e -> {
+            int n = queue.releaseAll(ResolutionKind.FORWARD_QUIET);
+            draftEdits.clear();
+            refresh.run();
+            if (ui != null) {
+                ui.syncHeader();
+                if (n > 0) ui.flash("Đã gửi riêng " + n + " request.");
+            }
+        }));
         dropBtn.addActionListener(Ui.safe(e -> resolveSelected(queue, displayed, queueTable, requestEditor, draftEdits,
                 ResolutionKind.DROP, ui, refresh)));
 
@@ -844,7 +858,7 @@ public final class ProxyInterceptDialog {
         }
         PendingRequest pr = displayed.get(row);
         byte[] payload = pr.originalRequest();
-        if (draftEdits.containsKey(pr.id()) || kind == ResolutionKind.FORWARD) {
+        if (draftEdits.containsKey(pr.id()) || kind == ResolutionKind.FORWARD || kind == ResolutionKind.FORWARD_QUIET) {
             String edited = editor.getText();
             if (edited != null && !edited.isBlank()) {
                 payload = normalizeRawHttpRequest(edited);

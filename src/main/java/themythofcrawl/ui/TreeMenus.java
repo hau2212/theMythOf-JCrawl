@@ -131,6 +131,29 @@ final class TreeMenus {
             case HELD_PENDING -> {
                 var pr = BranchTree.heldOf(n);
                 if (pr != null) {
+                    m.add(Ui.item(engine.classifyHeld(pr), false, () -> { }));
+                    m.addSeparator();
+                    m.add(Ui.item("Gửi riêng (không qua Logger++)", t -> Icons.send(t.info.text(), 13), () -> {
+                        engine.proxyQueue().resolve(pr.id(),
+                                themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD_QUIET, pr.originalRequest());
+                        ui.syncHeader();
+                        ui.flash("Đã gửi riêng: " + pr.method() + " " + Text.shortPath(pr.path(), 40));
+                    }));
+                    int heldAll = engine.proxyQueue().pendingCount();
+                    List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> heldSel = tree.selectedHeld();
+                    if (heldSel.size() > 1) {
+                        m.add(Ui.item("Gửi " + heldSel.size() + " request đang chọn", t -> Icons.sendAll(t.accent.text()),
+                                () -> ui.forwardHeld(heldSel, false)));
+                        m.add(Ui.item("Gửi riêng " + heldSel.size() + " request đang chọn", t -> Icons.sendAll(t.info.text()),
+                                () -> ui.forwardHeld(heldSel, true)));
+                    }
+                    if (heldAll > 1) {
+                        m.add(Ui.item("Gửi tất cả " + heldAll + " request đang chờ", t -> Icons.sendAll(t.accent.text()),
+                                () -> ui.forwardHeld(engine.proxyQueue().pending(), false)));
+                        m.add(Ui.item("Gửi riêng tất cả " + heldAll + " request đang chờ", t -> Icons.sendAll(t.info.text()),
+                                () -> ui.forwardHeld(engine.proxyQueue().pending(), true)));
+                    }
+                    m.addSeparator();
                     m.add(Ui.item("Gửi lên server ngay", t -> Icons.send(t.accent.text(), 13), () -> {
                         engine.proxyQueue().resolve(pr.id(),
                                 themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest());
