@@ -3330,6 +3330,13 @@ public final class Engine {
                         + config.maxRetries + ")");
             }
         }
+        try {
+            synchronized (g) {
+                themythofcrawl.core.AccessMatrix.refreshBadges(this, g);
+            }
+        } catch (RuntimeException ignored) {
+            // colours fall back to plain HTTP status
+        }
         themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.SEND,
                 Text.apiLabel(g.gid()) + " " + g.method() + " " + g.path() + " · " + (r.original() ? CRAWL_ACCOUNT : r.roleName())
                         + " -> " + (r.status() != null ? r.status() + " (" + r.length() + " B, " + r.elapsedMs() + " ms)" : r.state())
@@ -4144,6 +4151,22 @@ public final class Engine {
         }
     }
 
+    /** Append the activity log to the open workspace folder (on close / workspace switch / export). */
+    public void persistActivity() {
+        try {
+            Storage st;
+            synchronized (this) {
+                st = storage;
+            }
+            if (st != null && st.location() != null) {
+                java.nio.file.Path dir = java.nio.file.Path.of(st.location());
+                themythofcrawl.core.ActivityLog.persistTo(java.nio.file.Files.isDirectory(dir) ? dir : null);
+            }
+        } catch (RuntimeException ignored) {
+            // memory-only workspace or bad path: the in-memory log still has everything
+        }
+    }
+
     private void flushQuietly() {
         try {
             flush();
@@ -4191,6 +4214,7 @@ public final class Engine {
     public void open(Storage next) {
         cancelPending("Đổi workspace");
         flushQuietly();
+        persistActivity();
         Map<String, Object> m;
         try {
             String raw = next.loadState();
@@ -4227,12 +4251,6 @@ public final class Engine {
         synchronized (this) {
             old = storage;
             storage = next;
-            try {
-                java.nio.file.Path wsDir = java.nio.file.Path.of(next.location());
-                themythofcrawl.core.ActivityLog.attach(java.nio.file.Files.isDirectory(wsDir) ? wsDir : null);
-            } catch (RuntimeException ignored) {
-                themythofcrawl.core.ActivityLog.attach(null);
-            }
             themythofcrawl.core.ActivityLog.add(themythofcrawl.core.ActivityLog.Kind.ENGINE, "Mở workspace: " + next.name(), "");
             groups.clear();
             hidden.clear();
@@ -4392,6 +4410,7 @@ public final class Engine {
         proxyQueue.releaseAll(ProxyInterceptQueue.ResolutionKind.DROP);
         dispatcher.cancelAll();
         flushQuietly();
+        persistActivity();
         captureExec.shutdownNow();
         loggerExec.shutdownNow();
         sendExec.shutdownNow();

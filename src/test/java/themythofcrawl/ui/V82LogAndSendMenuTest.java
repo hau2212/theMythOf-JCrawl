@@ -53,8 +53,8 @@ class V82LogAndSendMenuTest {
                 assertTrue(labels.stream().anyMatch(s -> s.startsWith("Mỗi vai trò 1 bản ghi")), "DELETE offers per-role objects: " + labels);
                 // clicking a menu item is recorded
                 m.getItem(2).doClick();
-                assertTrue(ActivityLog.recent(20).stream().anyMatch(ev -> ev.kind() == ActivityLog.Kind.UI
-                        && ev.text().contains("Chỉ tài khoản crawl")), ActivityLog.recent(20).toString());
+                assertTrue(ActivityLog.recent(4000).stream().anyMatch(ev -> ev.kind() == ActivityLog.Kind.UI
+                        && ev.text().contains("Chỉ tài khoản crawl")), "click recorded");
             } finally {
                 ui.dispose();
             }

@@ -17,8 +17,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 /**
@@ -26,7 +24,7 @@ import java.util.regex.Pattern;
  * so the user can hand ONE file to Claude (or a teammate) and it can replay what happened and why it broke.
  *
  * <p>Kept in memory (last {@value #MAX} events) and appended to {@code activity.jsonl} in the workspace folder
- * (rotated at 4 MB). Secrets are masked BEFORE anything is stored: Authorization / Cookie / Set-Cookie values,
+ * when the workspace is closed / switched or the log is exported (rotated at 4 MB). Secrets are masked BEFORE anything is stored: Authorization / Cookie / Set-Cookie values,
  * Bearer tokens, JWTs, api keys, passwords. Never contains request / response bodies.
  */
 public final class ActivityLog {
@@ -42,12 +40,7 @@ public final class ActivityLog {
     private static final long ROTATE_BYTES = 4L * 1024 * 1024;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final ArrayDeque<Event> RING = new ArrayDeque<>();
-    private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "jcrawl-activity-log");
-        t.setDaemon(true);
-        return t;
-    });
-    private static volatile Path file;
+    private static final List<Event> UNSAVED = new ArrayList<>();   // written by persistTo() with the workspace
     private static volatile String lastUi = "";
     private static volatile long lastUiAt;
 
@@ -85,9 +78,11 @@ public final class ActivityLog {
                 RING.removeFirst();
             }
         }
-        Path f = file;
-        if (f != null) {
-            WRITER.execute(() -> write(f, e));
+        synchronized (UNSAVED) {
+            UNSAVED.add(e);
+            if (UNSAVED.size() > MAX) {
+                UNSAVED.remove(0);
+            }
         }
     }
 
@@ -143,34 +138,45 @@ public final class ActivityLog {
         synchronized (RING) {
             RING.clear();
         }
+        synchronized (UNSAVED) {
+            UNSAVED.clear();
+        }
     }
 
-    /** Start appending to {@code <dir>/activity.jsonl}; null stops writing to disk. */
-    public static void attach(Path dir) {
+    /**
+     * Append the events not saved yet to {@code <dir>/activity.jsonl} (rotated at 4 MB). Called by the engine
+     * when the workspace is closed / switched and when the log is exported, so the file always goes to the
+     * workspace that was open while the events happened.
+     */
+    public static void persistTo(Path dir) {
+        List<Event> batch;
+        synchronized (UNSAVED) {
+            if (UNSAVED.isEmpty()) {
+                return;
+            }
+            batch = new ArrayList<>(UNSAVED);
+            UNSAVED.clear();
+        }
         if (dir == null || !Files.isDirectory(dir)) {
-            file = null;
             return;
         }
-        file = dir.resolve("activity.jsonl");
-    }
-
-    public static Path file() {
-        return file;
-    }
-
-    private static void write(Path f, Event e) {
+        Path f = dir.resolve("activity.jsonl");
         try {
             if (Files.exists(f) && Files.size(f) > ROTATE_BYTES) {
                 Files.move(f, f.resolveSibling("activity.1.jsonl"), StandardCopyOption.REPLACE_EXISTING);
             }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("at", Instant.ofEpochMilli(e.atMs()).toString());
-            m.put("kind", e.kind().name());
-            m.put("text", e.text());
-            if (!e.detail().isEmpty()) {
-                m.put("detail", e.detail());
+            StringBuilder sb = new StringBuilder();
+            for (Event e : batch) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("at", Instant.ofEpochMilli(e.atMs()).toString());
+                m.put("kind", e.kind().name());
+                m.put("text", e.text());
+                if (!e.detail().isEmpty()) {
+                    m.put("detail", e.detail());
+                }
+                sb.append(Json.write(m)).append('\n');
             }
-            Files.writeString(f, Json.write(m) + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            Files.writeString(f, sb.toString(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException | RuntimeException ignored) {
             // the in-memory log still has it
         }

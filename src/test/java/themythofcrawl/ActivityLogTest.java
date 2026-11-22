@@ -29,20 +29,17 @@ class ActivityLogTest {
     @Test
     void eventsAreKeptAndWrittenToWorkspace(@TempDir Path dir) throws Exception {
         ActivityLog.clear();
-        ActivityLog.attach(dir);
         ActivityLog.ui("Bấm: Gửi lại [tab Cây]");
         ActivityLog.ui("Bấm: Gửi lại");   // same click seen by a second hook
         ActivityLog.add(ActivityLog.Kind.SEND, "API #3 DELETE /api/orders/91 · R1 -> 200", "");
         ActivityLog.error("Lỗi khi bấm \"X\"", new IllegalStateException("boom"));
-        List<ActivityLog.Event> ev = ActivityLog.recent(10);
-        assertEquals(3, ev.size(), ev.toString());
-        assertEquals(ActivityLog.Kind.ERROR, ev.get(2).kind());
-        assertTrue(ev.get(2).detail().contains("IllegalStateException"));
-        for (int i = 0; i < 50 && (!Files.exists(dir.resolve("activity.jsonl"))
-                || Files.readAllLines(dir.resolve("activity.jsonl")).size() < 3); i++) {
-            Thread.sleep(20);
-        }
-        assertEquals(3, Files.readAllLines(dir.resolve("activity.jsonl")).size());
-        ActivityLog.attach(null);
+        // (other tests' background threads may add events too: check ours, not exact totals)
+        List<ActivityLog.Event> ev = ActivityLog.recent(4000);
+        assertEquals(1, ev.stream().filter(x -> x.text().startsWith("Bấm: Gửi lại")).count(), "one click, two hooks -> one event");
+        assertTrue(ev.stream().anyMatch(x -> x.kind() == ActivityLog.Kind.ERROR && x.detail().contains("IllegalStateException")));
+        ActivityLog.persistTo(dir);
+        List<String> lines = Files.readAllLines(dir.resolve("activity.jsonl"));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("DELETE /api/orders/91")), lines.toString());
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\"kind\":\"ERROR\"")), lines.toString());
     }
 }

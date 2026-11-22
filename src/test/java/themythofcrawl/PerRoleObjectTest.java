@@ -166,4 +166,39 @@ class PerRoleObjectTest {
             e.close();
         }
     }
+
+    @Test
+    void sharedIdGives404MarkedNotConcluded() throws Exception {
+        Server server = new Server();
+        server.alive.add("55");
+        Engine e = new Engine(server, Prefs.memory(), null);
+        e.open(new MemoryStorage());
+        try {
+            Config c = e.config().copy();
+            c.captureEnabled = true;
+            c.autoSend = false;
+            c.confirmNewApis = false;
+            c.sendProfile = Config.SendProfile.CUSTOM;
+            c.sendDelayMs = 0;
+            c.sendJitterPct = 0;
+            c.hostConcurrency = 1;
+            e.applyConfig(c);
+            e.roles().setAll(List.of(new Role("A", true, List.of(HeaderRule.of("X-Role", "a", "REPLACE"))),
+                    new Role("B", true, List.of(HeaderRule.of("X-Role", "b", "REPLACE")))));
+            e.setDestination("Orders");
+            ApiGroup del = e.process(msg("DELETE", "/api/orders/55", "", resp(200, "{}")), "Proxy", true, e.activeBranch().id());
+            e.replay(del, e.defaultTargets(del, false));   // mode Tắt: both roles share ID 55
+            waitIdle(e);
+            long stale = del.results().stream().filter(r -> r.accessBadge() != null && r.accessBadge().startsWith("Chưa kết luận")).count();
+            assertTrue(stale >= 1, "a 404 caused by a used ID is not a 'blocked' verdict: "
+                    + del.results().stream().map(r -> r.status() + " " + r.accessBadge()).toList());
+            for (RoleResult r : del.results()) {
+                if (r.accessBadge() != null && r.accessBadge().startsWith("Chưa kết luận")) {
+                    assertEquals(themythofcrawl.core.AuditLevel.INFO, r.auditLevel());
+                }
+            }
+        } finally {
+            e.close();
+        }
+    }
 }

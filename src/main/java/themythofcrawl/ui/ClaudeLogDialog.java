@@ -129,6 +129,7 @@ final class ClaudeLogDialog {
     }
 
     static void show(Component owner, Engine engine) {
+        engine.persistActivity();
         JDialog dlg = new JDialog(Ui.ownerWindow(owner), "Nhật ký cho Claude", java.awt.Dialog.ModalityType.MODELESS);
         JTextArea area = new JTextArea(build(engine, 1500));
         area.setEditable(false);
