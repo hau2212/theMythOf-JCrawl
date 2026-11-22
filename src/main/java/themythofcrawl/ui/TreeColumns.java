@@ -34,7 +34,7 @@ public final class TreeColumns {
         PATH("Path", 380, 120),
         STATUS("Status", 60, 44),
         LENGTH("Length", 70, 44),
-        ROLES("Kết quả Role", 150, 60),
+        ROLES("Kết quả vai trò", 150, 60),
         VERDICT("Đánh giá · Tag", 260, 80);
 
         public final String title;

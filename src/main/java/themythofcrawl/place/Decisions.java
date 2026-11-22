@@ -17,10 +17,10 @@ import themythofcrawl.model.PlaceHint;
 /** The 'Cần xử lý', 'Giữ chỗ', 'API trùng & ẩn' and 'Nhật ký' rows and clear Vietnamese advice for the Audit tab. */
 public final class Decisions {
     public enum Kind {
-        DUP("Trùng ở vị trí mới"),
-        RETURN_MISSING("Quay về chỗ cũ (đã xóa nhánh)"),
-        RETURN("Quay về chỗ cũ"),
-        NEW("API mới cần xác nhận");
+        DUP("Trùng ở chỗ mới"),
+        RETURN_MISSING("Về chỗ cũ (nhánh đã xóa)"),
+        RETURN("Về chỗ cũ"),
+        NEW("API mới");
 
         public final String label;
 
@@ -152,7 +152,7 @@ public final class Decisions {
             String origWhere = origin != null
                     ? Text.apiLabel(origin.gid()) + " tại " + origin.branch()
                     : (rec != null && rec.originBranch != null ? rec.originBranch + " (đã xóa)" : "Chưa xác định");
-            String badge = isOrig ? "BẢN GỐC #1" : "BẢN TRÙNG #" + g.dupNo() + "/" + copies.size();
+            String badge = isOrig ? "Bản gốc" : "Lần " + g.dupNo() + " / " + copies.size();
             String head = isOrig
                     ? "Đây là Bản Gốc (#1) — có thêm " + Math.max(0, copies.size() - 1) + " lần xuất hiện lại ở nơi khác"
                     : "API này đã có Bản Gốc (#1), vừa xuất hiện lại lần #" + g.dupNo() + " ở vị trí mới";
@@ -331,7 +331,7 @@ public final class Decisions {
     public record Row<T>(T payload, AuditLevel level, List<Object> cells) {
     }
 
-    public static final List<String> DECIDE_COLS = List.of("Loại xử lý", "API", "Endpoint", "Đang đặt tại", "Đích lúc bắt");
+    public static final List<String> DECIDE_COLS = List.of("Loại xử lý", "API", "Endpoint", "Đang đặt tại", "Nhánh lúc bắt");
     public static final List<String> DUP_COLS = List.of("Endpoint", "Bản", "Vai trò", "Mã API", "Vị trí trong cây", "Trạng thái", "Nhãn", "STT / Excel", "Bắt lúc");
     public static final List<String> PLACE_COLS = List.of("Method", "Path", "Host", "Vị trí giữ chỗ", "API hiện tại",
             "Trạng thái", "Đã xóa (lần)", "Lần gặp", "Bỏ qua do trùng", "Gặp lần cuối", "Gặp lần cuối tại (đích lúc đó)",

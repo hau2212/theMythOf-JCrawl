@@ -57,7 +57,7 @@ final class ExcelTab {
     final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final MainPanel ui;
     private final Engine engine;
-    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt trong DS");
+    private final JCheckBox targetOnly = new JCheckBox("Chỉ bắt API có trong file");
     private final List<Pill> filterPills = new ArrayList<>();
     private int filterIndex;
     private final JButton clear;
@@ -238,8 +238,8 @@ final class ExcelTab {
 
         inventoryBoard = new InventoryBoardPanel(ui);
         javax.swing.JTabbedPane excelModeTabs = new javax.swing.JTabbedPane();
-        excelModeTabs.addTab("1. Tổng hợp & Đồng bộ (7 Ngữ cảnh · Auto-Inventory)", inventoryBoard);
-        excelModeTabs.addTab("2. Đối chiếu File Excel & Timeline", deck);
+        excelModeTabs.addTab("Xuất & làm việc nhóm", inventoryBoard);
+        excelModeTabs.addTab("Đối chiếu file Excel", deck);
         panel.add(excelModeTabs, BorderLayout.CENTER);
 
         controls(engine.groups());
@@ -556,7 +556,7 @@ final class ExcelTab {
                     ids.append(i > 0 ? ", " : "").append(Text.apiLabel(found.get(i).gid()));
                 }
                 if (found.size() > 4) {
-                    ids.append(" ...");
+                    ids.append("...");
                 }
                 String copied = found.stream().map(ApiGroup::copiedLabel).filter(java.util.Objects::nonNull).findFirst().orElse("");
                 String hint = "";

@@ -35,7 +35,7 @@ final class LoggerPushDialog {
         Engine engine = ui.engine;
         JCheckBox only2xx = new JCheckBox("Chỉ API có response gốc 2xx", true);
         JCheckBox actions = new JCheckBox("Cho phép cả POST / PUT / PATCH / DELETE (có thể thay đổi dữ liệu thật!)", false);
-        JCheckBox roles = new JCheckBox("Gửi cả bản của từng Role (mặc định chỉ bản gốc)", false);
+        JCheckBox roles = new JCheckBox("Gửi cả bản của từng vai trò (mặc định chỉ bản gốc)", false);
         JCheckBox marker = new JCheckBox("Gắn header " + Engine.MARKER_HEADER + ": API#..;role=..;branch=.. để lọc trong Logger++",
                 "1".equals(ui.uiPrefs.get(PREF_MARKER)));
         marker.setToolTipText("Tắt nếu không muốn để lại dấu vết header lạ trong log của server mục tiêu. Khi tắt, lọc "
@@ -61,7 +61,7 @@ final class LoggerPushDialog {
             Engine.LoggerPushOptions opt = new Engine.LoggerPushOptions(only2xx.isSelected(), actions.isSelected(),
                     roles.isSelected(), marker.isSelected(), ((Number) delay.getValue()).longValue());
             engine.pushToLogger(groups, opt, null);
-            ui.flash("Đang đẩy " + groups.size() + " API sang Logger++ (xem kết quả ở tab Log)");
+            ui.flash("Đang đẩy " + groups.size() + " API sang Logger++ (xem kết quả ở Cài đặt > Hoạt động)");
         } else if (choice == 1) {
             File f = ui.save("JCrawl_apis.har", "HAR", "har");
             if (f == null) {

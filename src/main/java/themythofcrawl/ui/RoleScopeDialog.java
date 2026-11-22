@@ -43,21 +43,21 @@ final class RoleScopeDialog {
     record Result(List<String> roles, boolean enable, RoleScopes.Scope scope, List<?> targets, boolean applyExisting) {
     }
 
-    private static final String[] SCOPE_LABELS = {"Toàn bộ (cờ Enabled của role - mọi API)",
-        "Chỉ các nhánh chọn bên dưới (gồm nhánh con, cả API bắt sau này)", "Chỉ các API gốc chọn bên dưới"};
+    private static final String[] SCOPE_LABELS = {"Toàn bộ (cờ Enabled của vai trò - mọi API)",
+        "Chỉ các nhánh chọn bên dưới (gồm nhánh con, cả API bắt sau này)", "Chỉ các API chọn bên dưới"};
 
     private final Engine engine;
     private final List<ApiGroup> groups;
     private final JDialog dialog;
-    private final JRadioButton on = new JRadioButton("BẬT role");
-    private final JRadioButton off = new JRadioButton("TẮT role");
+    private final JRadioButton on = new JRadioButton("Bật vai trò");
+    private final JRadioButton off = new JRadioButton("Tắt vai trò");
     private final JRadioButton[] scopes = new JRadioButton[3];
     private final CheckList<String> roleList;
     private final CheckList<String> branchList;
     private final CheckList<Integer> apiList;
     private final JTabbedPane targets = new JTabbedPane();
     private final JPanel rulesBox = new JPanel();
-    private final JCheckBox existing = new JCheckBox("Cập nhật luôn các API đã bắt (dòng role của role đang bật giữ nguyên kết quả "
+    private final JCheckBox existing = new JCheckBox("Cập nhật luôn các API đã bắt (dòng vai trò của vai trò đang bật giữ nguyên kết quả "
             + "đã nhận). Bỏ chọn = chỉ áp dụng cho API bắt sau này.", true);
     private final JLabel summary = new JLabel(" ");
     private final JButton ok;
@@ -74,7 +74,7 @@ final class RoleScopeDialog {
         this.groups = new ArrayList<>(engine.groups());
         groups.sort(Comparator.comparingInt(ApiGroup::gid));
         java.awt.Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
-        dialog = new JDialog(Ui.ownerWindow(owner), "Bật / Tắt Role theo phạm vi", JDialog.ModalityType.APPLICATION_MODAL);
+        dialog = new JDialog(Ui.ownerWindow(owner), "Bật / Tắt vai trò theo phạm vi", JDialog.ModalityType.APPLICATION_MODAL);
         dialog.setLayout(new BorderLayout(6, 6));
         ok = Ui.accent("Áp dụng", t -> Icons.check(t.accent.onSolid()), t -> t.accent, () -> {
             result = choice();
@@ -83,8 +83,8 @@ final class RoleScopeDialog {
 
         JPanel head = new JPanel();
         head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
-        JPanel hdr = Ui.dialogHeader("Bật / Tắt Role theo phạm vi",
-                "Chọn role, thao tác BẬT / TẮT và phạm vi áp dụng (Toàn bộ, Nhánh hoặc API)");
+        JPanel hdr = Ui.dialogHeader("Bật / Tắt vai trò theo phạm vi",
+                "Chọn vai trò, thao tác bật / tắt và phạm vi áp dụng (Toàn bộ, Nhánh hoặc API)");
         hdr.setAlignmentX(0f);
         head.add(hdr);
 
@@ -120,8 +120,8 @@ final class RoleScopeDialog {
             roleItems.add(new CheckList.Item<>(r.name(), r.name() + "   " + (r.enabled() ? "(đang bật)" : "(đang tắt)")));
             allNames.add(r.name());
         }
-        roleList = new CheckList<>(roleItems, roleNames != null ? roleNames : allNames, this::update, "Lọc role theo tên");
-        roleList.setBorder(themythofcrawl.ui.kit.SectionBorder.of("1. Role áp dụng"));
+        roleList = new CheckList<>(roleItems, roleNames != null ? roleNames : allNames, this::update, "Lọc vai trò theo tên");
+        roleList.setBorder(themythofcrawl.ui.kit.SectionBorder.of("1. Vai trò áp dụng"));
         roleList.setPreferredSize(new Dimension(250, 300));
 
         List<CheckList.Item<String>> branchItems = new ArrayList<>();
@@ -145,7 +145,7 @@ final class RoleScopeDialog {
                 "Lọc API theo #, method, path, nhánh");
         targets.putClientProperty("JTabbedPane.tabType", "card");
         targets.addTab("Nhánh", branchList);
-        targets.addTab("API gốc", apiList);
+        targets.addTab("API", apiList);
         targets.addTab("Ngoại lệ đã đặt", rulesPanel());
         targets.setBorder(themythofcrawl.ui.kit.SectionBorder.of("2. Nhánh / API (khi phạm vi không phải Toàn bộ)"));
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, roleList, targets);
@@ -185,7 +185,7 @@ final class RoleScopeDialog {
     private static String onOff(Map<String, Boolean> m) {
         List<String> offs = m.entrySet().stream().filter(e -> !e.getValue()).map(Map.Entry::getKey).sorted().toList();
         List<String> ons = m.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).sorted().toList();
-        return (offs.isEmpty() ? "" : "TẮT: " + String.join(", ", offs)) + (ons.isEmpty() ? "" : "   BẬT: " + String.join(", ", ons));
+        return (offs.isEmpty() ? "" : "Tắt: " + String.join(", ", offs)) + (ons.isEmpty() ? "" : "   Bật: " + String.join(", ", ons));
     }
 
     private void fillRules() {
@@ -194,7 +194,7 @@ final class RoleScopeDialog {
         rules.sort(Comparator.comparing(r -> r.prefix().toLowerCase(java.util.Locale.ROOT)));
         List<ApiGroup> over = groups.stream().filter(g -> !g.roleOverrides().isEmpty()).toList();
         if (rules.isEmpty() && over.isEmpty()) {
-            rulesBox.add(new JLabel("   Chưa có ngoại lệ - mọi API dùng cờ Enabled của từng role."));
+            rulesBox.add(new JLabel("   Chưa có ngoại lệ - mọi API dùng cờ Enabled của từng vai trò."));
         }
         for (BranchRule r : rules) {
             JLabel lbl = new JLabel(" " + r.prefix() + "   " + onOff(r.roles()));
@@ -261,11 +261,11 @@ final class RoleScopeDialog {
 
     private void update() {
         Result c = choice();
-        String verb = c.enable() ? "BẬT" : "TẮT";
+        String verb = c.enable() ? "Bật" : "Tắt";
         boolean good;
         String msg;
         if (c.roles().isEmpty()) {
-            msg = "Chọn ít nhất 1 role.";
+            msg = "Chọn ít nhất 1 vai trò.";
             good = false;
         } else if (c.scope() != RoleScopes.Scope.GLOBAL && c.targets().isEmpty()) {
             msg = "Chọn ít nhất 1 " + (c.scope() == RoleScopes.Scope.BRANCH ? "nhánh" : "API") + " ở khung bên phải.";
@@ -277,11 +277,11 @@ final class RoleScopeDialog {
                 case BRANCH -> c.targets().size() + " nhánh";
                 case API -> c.targets().size() + " API";
             };
-            msg = verb + " " + c.roles().size() + " role cho " + where;
+            msg = verb + " " + c.roles().size() + " Vai trò cho " + where;
             if (c.applyExisting()) {
                 RoleScopes.Preview p = RoleScopes.preview(engine.roles().all(), groups, engine.branchRules(), c.roles(), c.enable(),
                         c.scope(), (Collection<?>) c.targets());
-                msg += "  ·  " + p.changed() + " API đã bắt thay đổi (+" + p.added() + " / -" + p.removed() + " dòng role)";
+                msg += "  ·  " + p.changed() + " API đã bắt thay đổi (+" + p.added() + " / -" + p.removed() + " dòng vai trò)";
             } else {
                 msg += "  ·  chỉ áp dụng cho API bắt sau này";
             }

@@ -11,6 +11,7 @@ import themythofcrawl.excel.TargetEntry;
 import themythofcrawl.model.ApiGroup;
 import themythofcrawl.model.HeaderRule;
 import themythofcrawl.model.PlaceHint;
+import themythofcrawl.model.Role;
 import themythofcrawl.model.RoleResult;
 import themythofcrawl.model.Service;
 
@@ -206,7 +207,10 @@ public final class GroupCodec {
         RoleResult orig = g.origResult();
         fill(orig, om, st, gid);
         orig.setRules(rules(om));
-        orig.setRoleName(Json.str(om, "name", orig.roleName()));
+        String origName = Json.str(om, "name", orig.roleName());
+        // V_9.3: old label "[API GỐC] 00_Original (Acc Crawl)..." -> "Tài khoản crawl..." (keeps the "+ profile" suffix)
+        orig.setRoleName(origName.startsWith("[API GỐC]") ? Role.ORIGINAL_LABEL + origName.replaceFirst("^\\[API GỐC\\][^+]*", " ").stripTrailing()
+                : origName);
         List<RoleResult> results = new ArrayList<>();
         for (Object o : Json.list(m, "results")) {
             Map<String, Object> rm = (Map<String, Object>) o;

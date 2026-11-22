@@ -72,7 +72,7 @@ public final class BranchTree {
 
     public BranchTree(Engine engine) {
         this.engine = engine;
-        Node root = new Node(Node.Kind.ROOT, "", "Tất cả Group & API", AuditLevel.NONE, "ROOT", 0);
+        Node root = new Node(Node.Kind.ROOT, "", "Tất cả nhánh & API", AuditLevel.NONE, "ROOT", 0);
         model = new DefaultTreeModel(root);
         tree = new ThemedTree(model, new TreeRenderer(engine));
         tree.setRowHeight(themythofcrawl.ui.theme.Theme.ROW_TREE);
@@ -363,7 +363,7 @@ public final class BranchTree {
 
     // ------------------------------------------------------------------ labels
     public static String rolesLabel(ApiGroup g) {
-        return g.results().isEmpty() ? "API gốc" : "1 gốc + " + g.results().size() + " role";
+        return g.results().isEmpty() ? "Tài khoản crawl" : "Tài khoản crawl + " + g.results().size() + " vai trò";
     }
 
     public static String excelBadge(ApiGroup g) {
@@ -383,7 +383,7 @@ public final class BranchTree {
         if (g.pending()) {
             text = text + "   ·   " + Icons.stripLeadingSymbol(Decisions.pendingLabel(g));
         }
-        if (summary != null && !summary.startsWith("API gốc")) {
+        if (summary != null && !summary.startsWith("Tài khoản crawl")) {
             text += "   ·   " + summary;
         } else if (summary != null && g.results().isEmpty() && summary.contains("(")) {
             text += "   ·   " + summary.substring(summary.indexOf('('));
@@ -457,14 +457,14 @@ public final class BranchTree {
         }
         String heldNote = heldPending.isEmpty() ? "" : " · " + heldPending.size() + " chờ duyệt";
         Node.FolderMeta rootMeta = focusPath == null
-                ? new Node.FolderMeta("Tất cả Group & API", null,
-                        branches.size() + " Nhánh · " + groups.size() + " API" + heldNote, null, null, null)
+                ? new Node.FolderMeta("Tất cả nhánh & API", null,
+                        branches.size() + " nhánh · " + groups.size() + " API" + heldNote, null, null, null)
                 : new Node.FolderMeta("Tập trung: " + focusPath, null,
                         groups.size() + " API" + heldNote + (focusRecursive ? " (kèm nhánh con)" : " (chỉ nhánh này)"),
                         null, null, null);
         Node root = new Node(Node.Kind.ROOT, focusPath == null ? "" : focusPath,
                 focusPath == null
-                        ? "Tất cả Group & API (" + branches.size() + " Nhánh | " + groups.size() + " API" + heldNote + ")"
+                        ? "Tất cả nhánh & API (" + branches.size() + " Nhánh | " + groups.size() + " API" + heldNote + ")"
                         : "Tập trung: " + focusPath + " (" + groups.size() + " API" + heldNote + ")",
                 AuditLevel.NONE, "ROOT", 0, rootMeta);
         Map<Object, Node> nodes = new HashMap<>();
@@ -522,7 +522,7 @@ public final class BranchTree {
             }
             String hostLbl = pr.service() != null ? pr.service().hostLabel() : "";
             Node hn = new Node(Node.Kind.HELD_PENDING, pr,
-                    "[CHỜ DUYỆT] " + pr.method() + " " + Text.shortPath(pr.path(), 48)
+                    "[Chờ duyệt] " + pr.method() + " " + Text.shortPath(pr.path(), 48)
                             + (hostLbl.isEmpty() ? "" : " · " + hostLbl),
                     AuditLevel.WARN, "H" + pr.id(), 0);
             nodes.put(hn.key, hn);
@@ -616,8 +616,8 @@ public final class BranchTree {
                 Integer gCount = ghostCount.get(k);
                 String name = parts.get(i);
                 Node.FolderMeta meta = new Node.FolderMeta(name, "Cấp " + (i + 1), c[0] + " API", v.summary(),
-                        pCount != null && pCount > 0 ? String.valueOf(pCount) : null,
-                        gCount != null && gCount > 0 ? String.valueOf(gCount) : null);
+                        pCount != null && pCount > 0 ? pCount + " chờ" : null,
+                        gCount != null && gCount > 0 ? gCount + " đã xóa" : null);
                 n = new Node(Node.Kind.FOLDER, Hierarchy.join(parts.subList(0, i + 1)),
                         name + " · " + c[0] + " API · " + v.summary(), v.level(), "F" + k, i + 1, meta);
                 nodes.put(n.key, n);
@@ -764,9 +764,9 @@ public final class BranchTree {
         }
         Audit.Verdict v = Audit.branch(gs);
         String count = gs.size() + " API";
-        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "CỤM", count, v.summary(),
-                pending > 0 ? String.valueOf(pending) : null, null);
-        return new Node(Node.Kind.CLUSTER, cl, "[CỤM] " + cl.name() + " · " + count, v.level(),
+        Node.FolderMeta meta = new Node.FolderMeta(cl.name(), "Cụm", count, v.summary(),
+                pending > 0 ? pending + " chờ" : null, null);
+        return new Node(Node.Kind.CLUSTER, cl, "[Cụm] " + cl.name() + " · " + count, v.level(),
                 "C" + cl.id(), folder.depth, meta);
     }
 
@@ -788,7 +788,7 @@ public final class BranchTree {
         Audit.Verdict v = Audit.branch(gs);
         String count = gs.size() + " API" + (held > 0 ? " · " + held + " chờ duyệt" : "");
         Node.FolderMeta meta = new Node.FolderMeta("API của nhánh", null, count, v.summary(),
-                pending > 0 ? String.valueOf(pending) : null, null);
+                pending > 0 ? pending + " chờ" : null, null);
         return new Node(Node.Kind.APIS, folder.payload, "API của nhánh · " + count + " · " + v.summary(), v.level(),
                 bucketKey(folder.key), folder.depth, meta);
     }

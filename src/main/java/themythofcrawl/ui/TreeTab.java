@@ -60,7 +60,7 @@ final class TreeTab {
     private JLabel focusLabel;
     private SegmentedToggle focusScopeToggle;
 
-    private final JLabel reqLabel = Ui.bold(" Request — chọn 1 API / Role hoặc mục [CHỜ DUYỆT] trong cây");
+    private final JLabel reqLabel = Ui.bold(" Request — chọn 1 API / vai trò hoặc mục [Chờ duyệt] trong cây");
     private final JLabel respLabel = Ui.bold(" Response");
     private final UiHost.Viewer req;
     private final UiHost.Viewer resp;
@@ -68,7 +68,7 @@ final class TreeTab {
     // Contextual inline action bar right above the Request/Response editors
     private final CardLayout inlineCardLayout = new CardLayout();
     private final JPanel inlineActionBar = new JPanel(inlineCardLayout);
-    private final Pill heldBadge = new Pill("CHỜ DUYỆT · CHƯA GỬI", t -> t.danger, t -> Icons.strategyShield(t.danger.text(), 12));
+    private final Pill heldBadge = new Pill("Chờ duyệt · Chưa gửi", t -> t.danger, t -> Icons.strategyShield(t.danger.text(), 12));
     private final JLabel heldMeta = Ui.muted("");
     private final JButton quickSendBtn;
     private final JButton quickSaveBtn;
@@ -110,7 +110,7 @@ final class TreeTab {
         headerBreadcrumb.onSegmentClick(seg -> tree.selectBranchPath(seg));
 
         JButton sendSelBtn = Ui.solidPrimary("Gửi mục chọn", t -> Icons.send(t.accent.onSolid()));
-        sendSelBtn.setToolTipText("Gửi lên Server các mục đang chọn (gồm cả [CHỜ DUYỆT] và API đã lưu)");
+        sendSelBtn.setToolTipText("Gửi lên Server các mục đang chọn (gồm cả [Chờ duyệt] và API đã lưu)");
         sendSelBtn.addActionListener(Ui.safe(e -> sendSelectedItems()));
 
         JButton focusTreeBtn = Ui.secondaryBtn("Tập trung", t -> Icons.focus(t.accent.text(), 13));
@@ -130,7 +130,8 @@ final class TreeTab {
         JPanel leftBar = Ui.flow(FlowLayout.LEFT, headerBreadcrumb, headerMeta);
         javax.swing.JComboBox<String> crawlRole = AccessMatrixTab.crawlRoleCombo(engine);
         crawlRole.setPrototypeDisplayValue("Tự nhận diện (token/cookie)");
-        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn, more, windowBtn);
+        JPanel rightBar = Ui.flow(FlowLayout.RIGHT, ui.newTreeViewSwitch(), Ui.muted("Crawl bằng:"), crawlRole, focusTreeBtn, sendSelBtn,
+                more, windowBtn);
 
         JPanel head = new JPanel(new BorderLayout(Theme.SPACE_1, 0));
         head.setOpaque(false);
@@ -168,8 +169,8 @@ final class TreeTab {
         resetApiBtn.addActionListener(Ui.safe(e -> restoreOriginalRequest()));
 
         JButton[] qaRef = new JButton[1];
-        quickActionBtn = Ui.secondaryBtn("Bảo vệ dữ liệu", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
-        quickActionBtn.setToolTipText("Bật/Tắt nhanh Chặn chờ duyệt, Tắt chặn hoặc mở Luật chặn cho API này");
+        quickActionBtn = Ui.secondaryBtn("Chặn & gửi lại", t -> Icons.withChevron(Icons.strategyShield(t.accent.text(), 12), t.fg));
+        quickActionBtn.setToolTipText("Chờ duyệt, Giữ lại, Cho đi thẳng cho API này, hoặc mở Chặn & gửi lại");
         quickActionBtn.addActionListener(Ui.safe(e -> {
             JPopupMenu m = new JPopupMenu();
             if (shownGroup != null) {
@@ -185,8 +186,8 @@ final class TreeTab {
         }));
         qaRef[0] = quickActionBtn;
 
-        quickComposerBtn = Ui.secondaryBtn("Chi tiết (Composer)...", t -> Icons.edit(t.info.text(), 12));
-        quickComposerBtn.setToolTipText("Mở trình sửa chi tiết (chọn nhiều Role, đổi Host/Port, So với Gốc, Lịch sử phiên)");
+        quickComposerBtn = Ui.secondaryBtn("Sửa & gửi...", t -> Icons.edit(t.info.text(), 12));
+        quickComposerBtn.setToolTipText("Mở trình sửa chi tiết (chọn nhiều vai trò, đổi Host/Port, So với Gốc, Lịch sử phiên)");
         quickComposerBtn.addActionListener(Ui.safe(e -> {
             if (shownGroup != null) {
                 RequestComposerDialog.showFloating(panel, engine, shownGroup, shown, () -> {
@@ -219,12 +220,12 @@ final class TreeTab {
 
         // ---- Card 2: Live HELD_PENDING inline quick-resolve bar (NO popup needed!)
         JButton heldForwardBtn = Ui.solidPrimary("Gửi Server", t -> Icons.send(t.accent.onSolid(), 12));
-        heldForwardBtn.setToolTipText("Gửi lên Server (Forward) — đẩy ngay request này kèm mọi chỉnh sửa bên dưới lên Server thật");
+        heldForwardBtn.setToolTipText("Gửi lên server — đẩy ngay request này kèm mọi chỉnh sửa bên dưới lên Server thật");
         heldForwardBtn.addActionListener(Ui.safe(e -> resolveShownHeld(ResolutionKind.FORWARD)));
 
         JButton heldSaveDraftBtn = Ui.tonalBtn("Lưu nháp",
                 t -> Icons.strategyShield(t.warning.text(), 12), t -> t.warning);
-        heldSaveDraftBtn.setToolTipText("Lưu request vào Cây để xem/gửi sau, KHÔNG gửi lên Server ngay");
+        heldSaveDraftBtn.setToolTipText("Lưu request vào Cây để xem/gửi sau, không gửi lên Server ngay");
         heldSaveDraftBtn.addActionListener(Ui.safe(e -> resolveShownHeld(ResolutionKind.HOLD_AND_SPOOF)));
 
         JButton heldDropBtn = Ui.dangerBtn("Hủy (Drop)", t -> Icons.stop(t.danger.text(), 12));
@@ -303,7 +304,7 @@ final class TreeTab {
         if ("0".equals(ui.uiPrefs.get(KEY_TREE_DETAIL))) {
             bottomPane.setVisible(false);
         }
-        placeholder.add(new JLabel("Cây Sub-folder đang mở ở cửa sổ riêng."));
+        placeholder.add(new JLabel("Cây nhánh đang mở ở cửa sổ riêng."));
         placeholder.add(Ui.secondaryBtn("Gắn lại vào tab", null));
         ((JButton) placeholder.getComponent(1)).addActionListener(Ui.safe(e -> closeWindow()));
         panel.add(content, BorderLayout.CENTER);
@@ -312,7 +313,7 @@ final class TreeTab {
     }
 
     private JPanel buildFocusBanner() {
-        focusLabel = new JLabel("TẬP TRUNG");
+        focusLabel = new JLabel("Tập trung");
         focusLabel.setIcon(Icons.themed(t -> Icons.focus(t.accent.text(), 14)));
         focusLabel.setIconTextGap(6);
         focusScopeToggle = new SegmentedToggle(
@@ -367,7 +368,7 @@ final class TreeTab {
         }
         String clean = themythofcrawl.core.Hierarchy.normalize(path);
         tree.setFocus(clean, recursive);
-        focusLabel.setText("TẬP TRUNG: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
+        focusLabel.setText("Tập trung: " + clean + (recursive ? "  (Kèm nhánh con)" : "  (Chỉ nhánh này)"));
         focusScopeToggle.setSelectedIndex(recursive ? 1 : 0);
         focusBanner.setVisible(true);
         tree.rebuild(engine.config().showGhosts);
@@ -461,7 +462,7 @@ final class TreeTab {
             ui.flash("Đã gửi lên Server " + forwarded + " request chờ duyệt"
                     + (!groupSel.isEmpty() ? " + " + groupSel.size() + " API" : "") + ".");
         } else if (groupSel.isEmpty()) {
-            ui.flash("Hãy chọn ít nhất 1 mục [CHỜ DUYỆT], API hoặc Nhánh trên cây để gửi.");
+            ui.flash("Hãy chọn ít nhất 1 mục [Chờ duyệt], API hoặc Nhánh trên cây để gửi.");
         }
     }
 
@@ -560,7 +561,7 @@ final class TreeTab {
             req.show(shownGroup.service(), RequestComposerDialog.recalculateContentLength(
                     pretty.getBytes(StandardCharsets.ISO_8859_1)));
         } else {
-            ui.flash("Chọn 1 API / Role (hoặc mục [CHỜ DUYỆT]) trong cây trước rồi bấm Format JSON.");
+            ui.flash("Chọn 1 API / vai trò (hoặc mục [Chờ duyệt]) trong cây trước rồi bấm Format JSON.");
         }
     }
 
@@ -573,20 +574,20 @@ final class TreeTab {
             req.show(shownGroup.service(), engine.shownRequestOf(shownGroup, r));
             ui.flash("Đã khôi phục Request gốc của " + Text.apiLabel(shownGroup.gid()) + ".");
         } else {
-            ui.flash("Chọn 1 API / Role trong cây trước rồi bấm Khôi phục.");
+            ui.flash("Chọn 1 API / vai trò trong cây trước rồi bấm Khôi phục.");
         }
     }
 
     private void menu() {
         ui.useSource(tree);
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Gửi mục đang chọn (nhánh / API / role / chờ duyệt)", t -> Icons.send(t.critical.text()),
+        m.add(Ui.item("Gửi mục đang chọn (nhánh / API / vai trò / chờ duyệt)", t -> Icons.send(t.critical.text()),
                 this::sendSelectedItems));
         m.add(Ui.item("Đẩy mục đang chọn -> Burp Repeater", Icons::repeater, () -> ui.push(ui.scope().groups())));
-        m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target, () -> ui.pushDialog(false, null, null)));
+        m.add(Ui.item("Đẩy / Gửi có chọn vai trò...", Icons::target, () -> ui.pushDialog(false, null, null)));
         m.add(Ui.item("Copy STT + Path (Ctrl+Shift+C)", t -> Icons.copy(t.muted), () -> ui.copy(ui.scope().groups())));
         m.add(Ui.item("Copy path nhánh", t -> Icons.copy(t.muted), ui::copyBranchPath));
-        m.add(Ui.item("Bật / Tắt Role cho mục đang chọn...", Icons::sliders, () -> {
+        m.add(Ui.item("Bật / Tắt vai trò cho mục đang chọn...", Icons::sliders, () -> {
             Node n = tree.selectedNode();
             if (n != null && n.kind == Node.Kind.FOLDER) {
                 ui.roleScopeDialog(false, themythofcrawl.model.RoleScopes.Scope.BRANCH, List.of((String) n.payload), null, null);
@@ -595,12 +596,12 @@ final class TreeTab {
             }
         }));
         m.addSeparator();
-        m.add(Ui.item("Đặt nhánh đang chọn làm ĐÍCH cho request mới", Icons::arrowRight, ui::destinationFromTree));
+        m.add(Ui.item("Đặt nhánh đang chọn làm đích cho request mới", Icons::arrowRight, ui::destinationFromTree));
         m.add(Ui.item("Xác nhận vị trí các API đang chọn / trong nhánh", t -> Icons.check(t.success.text()),
                 () -> engine.confirm(tree.selectedGroups(), "")));
         m.add(Ui.item("Chuyển các API đang chọn sang đường dẫn khác...", Icons::move, () -> ui.moveDialog(tree.selectedGroups())));
         m.add(Ui.item("Đưa các API đang chọn về vị trí trước", Icons::undo, () -> ui.revert(tree.selectedGroups())));
-        m.add(Ui.item("Thêm Sub-folder con...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
+        m.add(Ui.item("Thêm nhánh con...", Icons::plus, () -> ui.addSubfolder(ui.selectedBranch())));
         m.add(Ui.item("Đổi tên nhánh...", Icons::edit, () -> {
             String b = ui.selectedBranch();
             if (b != null) {
@@ -654,7 +655,7 @@ final class TreeTab {
         heldMeta.setText(meta);
         heldMeta.setToolTipText(meta);
         inlineCardLayout.show(inlineActionBar, CARD_HELD);
-        reqLabel.setText(" Request [CHỜ DUYỆT #" + pr.id() + " — Chỉnh sửa trực tiếp rồi bấm Gửi Server]  " + pr.url());
+        reqLabel.setText(" Request [Chờ duyệt #" + pr.id() + " — Chỉnh sửa trực tiếp rồi bấm Gửi Server]  " + pr.url());
         respLabel.setText(" Response [Chưa gửi lên Server — đang giữ tại Proxy]");
         req.show(pr.service(), pr.originalRequest());
         resp.show(pr.service(), heldPreviewBytes(pr));
@@ -670,12 +671,12 @@ final class TreeTab {
         String branch = asciiSafe(pr.branchName());
         String reason = asciiSafe(pr.reason());
         String preview = "HTTP/1.1 000 HELD AT PROXY\r\n"
-                + "X-JCrawl-Status: HELD_PENDING (CHUA GUI LEN SERVER)\r\n"
+                + "X-JCrawl-Status: HELD_PENDING (CHUA GUI LEN server)\r\n"
                 + "X-JCrawl-Branch: " + branch + "\r\n"
                 + (host.isEmpty() ? "" : "X-JCrawl-Host: " + asciiSafe(host) + "\r\n")
                 + "X-JCrawl-Rule: " + reason + "\r\n"
                 + "\r\n"
-                + "[REQUEST DANG DUOC GIU TAI PROXY - CHUA GUI LEN SERVER]\n"
+                + "[REQUEST DANG DUOC GIU TAI PROXY - CHUA GUI LEN server]\n"
                 + "Nhanh dich : " + branch + "\n"
                 + (host.isEmpty() ? "" : "Host       : " + asciiSafe(host) + "\n")
                 + "Ly do chan : " + reason + "\n"
@@ -722,7 +723,7 @@ final class TreeTab {
         int held = engine.proxyQueue().pendingCount();
         headerMeta.setText(engine.branches().size() + " nhánh, " + engine.groups().size() + " API"
                 + (held > 0 ? ", " + held + " chờ duyệt" : "")
-                + "  ·  Đích mới: " + engine.activeBranch().name());
+                + "  ·  Nhánh đang crawl: " + engine.activeBranch().name());
         if (window != null) {
             window.setTitle(detachedTitle());
         }
@@ -740,7 +741,7 @@ final class TreeTab {
             }
             PendingRequest pr = BranchTree.heldOf(n);
             if (pr != null) {
-                return pr.branchName() + " > [CHỜ DUYỆT] " + pr.method() + " " + Text.shortPath(pr.path(), 32);
+                return pr.branchName() + " > [Chờ duyệt] " + pr.method() + " " + Text.shortPath(pr.path(), 32);
             }
             ApiGroup g = BranchTree.groupOf(n);
             if (g != null) {
@@ -793,7 +794,7 @@ final class TreeTab {
                 if (shownGroup != null && shown != null) {
                     showEntry(shownGroup, shown);
                 } else {
-                    reqLabel.setText(" Request — chọn 1 API / Role hoặc mục [CHỜ DUYỆT] trong cây");
+                    reqLabel.setText(" Request — chọn 1 API / vai trò hoặc mục [Chờ duyệt] trong cây");
                     respLabel.setText(" Response");
                     syncQuickButtons();
                 }

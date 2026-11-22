@@ -100,7 +100,7 @@ final class ActionGuideTabBuilder {
                 + "         |\n"
                 + "         v\n"
                 + border + "\n"
-                + boxLine(" LÚC 1 - KHI CRAWL (request đi qua Burp, trước khi tới server)", boxW) + "\n"
+                + boxLine(" Lúc 1 - Khi CRAWL (request đi qua Burp, trước khi tới server)", boxW) + "\n"
                 + boxLine("  - Chờ duyệt: dừng ở Burp, hiện trong Hàng chặn, bạn bấm Gửi mới đi.", boxW) + "\n"
                 + boxLine("  - Giữ lại: trình duyệt nhận 200 giả, server không đổi gì.", boxW) + "\n"
                 + boxLine("  - Cho qua: luật ưu tiên, đi thẳng server (login, telemetry...).", boxW) + "\n"
@@ -108,10 +108,10 @@ final class ActionGuideTabBuilder {
                 + "         |\n"
                 + "         v   (API đã lưu vào Cây)\n"
                 + border + "\n"
-                + boxLine(" LÚC 2 - KHI GỬI LẠI (bấm Gửi / test N vai trò)", boxW) + "\n"
+                + boxLine(" Lúc 2 - Khi gửi lại (bấm Gửi / test N vai trò)", boxW) + "\n"
                 + boxLine("  - Tắt: gửi y nguyên (đã xóa rồi thì server báo 400 / 404).", boxW) + "\n"
                 + boxLine("  - Bằng chứng 200: giữ response 200 đầu tiên để báo cáo.", boxW) + "\n"
-                + boxLine("  - Đổi ID: thay ID đã dùng bằng ID còn sống CÙNG họ API.", boxW) + "\n"
+                + boxLine("  - Đổi ID: thay ID đã dùng bằng ID còn sống cùng họ API.", boxW) + "\n"
                 + boxLine("  - Tạo trước: gọi API tạo (POST cùng họ) lấy ID mới rồi mới gửi.", boxW) + "\n"
                 + border);
         diagram.setEditable(false);
@@ -141,7 +141,7 @@ final class ActionGuideTabBuilder {
                 "Ví dụ: Gửi DELETE /orders/10 lần 1 ra 200, gửi lại lần 2 ra 400/404 đúng thực tế Server."));
 
         modesGrid.add(modeCard("Chờ duyệt", "Lúc crawl - khuyên dùng", t -> t.danger,
-                "Request từ trình duyệt dừng ngay trên Cây [CHỜ DUYỆT · CHƯA GỬI]. Bạn sửa xong mới bấm Gửi lên Server.",
+                "Request từ trình duyệt dừng ngay trên Cây [Chờ duyệt · Chưa gửi]. Bạn sửa xong mới bấm Gửi lên Server.",
                 "Ví dụ: Bấm nút 'Lưu cấu hình' trên web -> Request hiện trong nhánh Cây -> bạn đổi roleId=1 -> bấm Gửi."));
 
         modesGrid.add(modeCard("Giữ lại", "Lúc crawl - an toàn", t -> t.warning,
@@ -153,8 +153,8 @@ final class ActionGuideTabBuilder {
                 "Ví dụ: Đã test xong API duyệt đơn 200 OK; khi chạy lại cả nhánh không muốn mất trạng thái 200 OK này."));
 
         modesGrid.add(modeCard("Đổi ID", "Lúc gửi lại - nhiều vai trò", t -> t.success,
-                "Lấy ID từ response 2xx CÙNG họ API (POST tạo, GET danh sách / chi tiết) rồi thay vào request Xóa / Sửa.",
-                "Ví dụ: Test DELETE /orders/{id} với 3 Role (Admin, Staff, User) -> mỗi Role tự nhận 1 ID tươi khác nhau."));
+                "Lấy ID từ response 2xx cùng họ API (POST tạo, GET danh sách / chi tiết) rồi thay vào request Xóa / Sửa.",
+                "Ví dụ: Test DELETE /orders/{id} với 3 vai trò (Admin, Staff, User) -> mỗi vai trò tự nhận 1 ID tươi khác nhau."));
 
         modesGrid.add(modeCard("Tạo trước", "Lúc gửi lại - gửi nhiều lần", t -> t.accent,
                 "Trước DELETE / PUT, tự gọi POST cùng họ API để tạo bản ghi mới, lấy ID trả về rồi mới gửi.",
@@ -173,7 +173,7 @@ final class ActionGuideTabBuilder {
 
         content.add(playbookCard(
                 "Kịch bản A — Bấm nút trên Web -> Dừng ngay trên Cây đợi tôi chỉnh sửa & gửi",
-                "Bước 1: Bật Chặn chờ duyệt (POST/PUT/PATCH/DELETE). Bước 2: Bấm nút Save/Xóa trên Web. Bước 3: Bấm dòng [CHỜ DUYỆT] ngay dưới nhánh trên Cây, sửa Raw HTTP bên dưới rồi bấm 'Gửi lên Server'.",
+                "Bước 1: Bật Chặn chờ duyệt (POST/PUT/PATCH/DELETE). Bước 2: Bấm nút Save/Xóa trên Web. Bước 3: Bấm dòng [Chờ duyệt] ngay dưới nhánh trên Cây, sửa Raw HTTP bên dưới rồi bấm 'Gửi lên Server'.",
                 "Áp dụng mẫu A ngay",
                 t -> t.danger,
                 () -> {

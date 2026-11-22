@@ -47,7 +47,7 @@ final class AccessMatrixTab {
     private final Engine engine;
     private final MatrixModel model = new MatrixModel();
     final JTable table = new ThemedTable(model);
-    private final JCheckBox onlyFindings = new JCheckBox("Chỉ hiện NGHI BAC / Vi phạm");
+    private final JCheckBox onlyFindings = new JCheckBox("Chỉ hiện Nghi BAC / Vi phạm");
     private final JLabel summary = Ui.muted(" ");
     private final JLabel explain = new JLabel(" ");
     private AccessMatrix matrix;
@@ -64,16 +64,16 @@ final class AccessMatrixTab {
                     rebuild();
                     ui.flash("Đã tính lại: " + matrix.rows().size() + " API, " + matrix.findings().size() + " nghi BAC / vi phạm");
                 }),
-                Ui.button("Gửi role chưa gửi", t -> Icons.sendAll(t.fg), "Gửi mọi role còn 'Chưa gửi' để có cột Gọi được",
+                Ui.button("Gửi vai trò chưa gửi", t -> Icons.sendAll(t.fg), "Gửi mọi vai trò còn 'Chưa gửi' để có cột Gọi được",
                         () -> {
                             int n = engine.sendAllUnsent();
-                            ui.flash("Đã xếp hàng " + n + " request role chưa gửi");
+                            ui.flash("Đã xếp hàng " + n + " request vai trò chưa gửi");
                         }),
                 onlyFindings);
         onlyFindings.setOpaque(false);
         onlyFindings.addActionListener(Ui.safe(e -> applyFilter()));
         JPanel right = Ui.flow(FlowLayout.RIGHT,
-                Ui.button("Quyền mong đợi...", t -> Icons.sliders(t.fg), "Khai báo nhánh nào chỉ dành cho role nào",
+                Ui.button("Quyền mong đợi...", t -> Icons.sliders(t.fg), "Khai báo nhánh nào chỉ dành cho vai trò nào",
                         this::editExpected),
                 Ui.button("Xuất test case Excel", t -> Icons.excel(t.fg, 13), "Ma trận + danh sách test case BAC (.xlsx)",
                         this::exportExcel),
@@ -89,12 +89,12 @@ final class AccessMatrixTab {
         for (AccessMatrix.Verdict v : new AccessMatrix.Verdict[] {AccessMatrix.Verdict.SEEN_OK, AccessMatrix.Verdict.DENIED_OK,
             AccessMatrix.Verdict.BAC, AccessMatrix.Verdict.VIOLATION, AccessMatrix.Verdict.DIFF, AccessMatrix.Verdict.SEEN_DENIED,
             AccessMatrix.Verdict.UNKNOWN_OK}) {
-            JLabel l = new JLabel(" " + v.shortLabel + " = " + v.label + " ");
+            JLabel l = new JLabel(" " + v.shortLabel + " ");
             l.setOpaque(true);
             Theme th = Theme.current();
             l.setBackground(th.audit(v.level).fill());
             l.setForeground(th.audit(v.level).text());
-            l.setToolTipText(v.explain);
+            l.setToolTipText(v.label + ": " + v.explain);
             legend.add(l);
         }
         JPanel north = new JPanel(new BorderLayout());
@@ -137,8 +137,8 @@ final class AccessMatrixTab {
             box.setModel(m);
         };
         fill.run();
-        box.setToolTipText("Role của tài khoản bạn đang dùng để crawl. Tự nhận diện = so token/cookie của request với rule"
-                + " từng Role. API đã có mà role khác cũng thấy sẽ chỉ được ghi thêm vào 'Thấy bởi', không tạo bản trùng.");
+        box.setToolTipText("Vai trò của tài khoản bạn đang dùng để crawl. Tự nhận diện = so token/cookie của request với rule"
+                + " từng vai trò. API đã có mà vai trò khác cũng thấy sẽ chỉ được ghi thêm vào 'Thấy bởi', không tạo bản trùng.");
         boolean[] filling = {false};
         box.addPopupMenuListener(new PopupMenuListener() {
             @Override
@@ -189,9 +189,9 @@ final class AccessMatrixTab {
             }
         }
         Set<String> crawled = matrix.crawledRoles();
-        summary.setText(matrix.rows().size() + " API · " + matrix.roles().size() + " role · Đã crawl bằng: "
+        summary.setText(matrix.rows().size() + " API · " + matrix.roles().size() + " Vai trò · Đã crawl bằng: "
                 + (crawled.isEmpty() ? "(chưa có)" : String.join(", ", crawled))
-                + " · NGHI BAC: " + bac + " · Vi phạm quyền mong đợi: " + vio
+                + " · Nghi BAC: " + bac + " · Vi phạm: " + vio
                 + " · " + engine.expectedAccess().rules().size() + " luật quyền mong đợi");
     }
 
@@ -275,7 +275,7 @@ final class AccessMatrixTab {
         p.add(new JScrollPane(cur), BorderLayout.NORTH);
         JPanel form = new JPanel(new BorderLayout(4, 4));
         form.add(Ui.flow(FlowLayout.LEFT, new JLabel("Nhánh (kèm nhánh con):"), branchBox), BorderLayout.NORTH);
-        form.add(new JLabel("Chỉ những role được dùng nhánh này (Ctrl+click chọn nhiều; bỏ trống + OK = xóa luật):"),
+        form.add(new JLabel("Chỉ những vai trò được dùng nhánh này (Ctrl+click chọn nhiều; bỏ trống + OK = xóa luật):"),
                 BorderLayout.CENTER);
         form.add(new JScrollPane(roleList), BorderLayout.SOUTH);
         p.add(form, BorderLayout.CENTER);
@@ -310,7 +310,7 @@ final class AccessMatrixTab {
             List<Xlsx.OutSheet> sheets = List.of(
                     new Xlsx.OutSheet("Test case BAC", AccessMatrix.findingHeader(), matrix.findingRows(),
                             new int[] {22, 18, 8, 8, 22, 44, 30, 18, 24, 8, 10, 60, 12, 14}),
-                    new Xlsx.OutSheet("Ma trận Role", matrix.matrixHeader(), matrix.matrixRows(),
+                    new Xlsx.OutSheet("Ma trận vai trò", matrix.matrixHeader(), matrix.matrixRows(),
                             matrixWidths(matrix.matrixHeader().size())));
             Files.write(f.toPath(), Xlsx.write(sheets));
             ui.flash("Đã xuất " + matrix.findings().size() + " test case -> " + f.getName());

@@ -132,7 +132,7 @@ final class DupPopup {
                 () -> act.accept("keepOriginOnly")));
         btns.add(Ui.button("Mở bảng đầy đủ...", Icons::lineageGraph, () -> act.accept("lineage")));
         btns.add(Ui.button("Đặt làm Bản Gốc", Icons::star, () -> act.accept("promote")));
-        btns.add(Ui.button("Nhãn Tự tải lại", Icons::refresh, () -> act.accept("refresh")));
+        btns.add(Ui.button("Gắn tag Tải lại", Icons::refresh, () -> act.accept("refresh")));
         btns.add(Ui.button("Mở API", theme -> Icons.search(theme.info.text()), () -> act.accept("open")));
         btns.add(Ui.button("Ẩn", theme -> Icons.hide(theme.muted), () -> act.accept("hide")));
         btns.add(Ui.button("Xóa", theme -> Icons.trash(theme.danger.text()), () -> act.accept("delete")));

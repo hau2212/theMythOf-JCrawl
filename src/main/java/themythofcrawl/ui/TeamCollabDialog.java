@@ -296,7 +296,7 @@ final class TeamCollabDialog {
                 BorderLayout.NORTH);
         folderCard.add(Ui.flow(FlowLayout.LEFT, Ui.muted("Thư mục:"), folderField, pickFolder, startFolder, readNow),
                 BorderLayout.CENTER);
-        folderCard.add(Ui.muted("Burp KHÔNG mở cổng, KHÔNG gọi mạng: mỗi người ghi file riêng jcrawl-team/<tên>.jsonl, "
+        folderCard.add(Ui.muted("Burp không mở cổng, không gọi mạng: mỗi người ghi file riêng jcrawl-team/<tên>.jsonl, "
                 + "client đồng bộ của công ty lo phần còn lại. Chỉ chia sẻ metadata (không token / cookie)."),
                 BorderLayout.SOUTH);
         startFolder.addActionListener(Ui.safe(e -> {

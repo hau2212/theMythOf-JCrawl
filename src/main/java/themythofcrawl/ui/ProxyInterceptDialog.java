@@ -269,7 +269,7 @@ public final class ProxyInterceptDialog {
         final boolean[] syncingUi = {false};
 
         ModernToggleSwitch masterSwitch = new ModernToggleSwitch(ae.isInterceptWaitEnabled(), true)
-                .labels("ĐANG CHẶN", "Đang tắt");
+                .labels("Đang chặn", "Đang tắt");
         masterSwitch.setToolTipText("Bật hoặc tắt Chặn chờ duyệt (Mode #5 — giữ request lại đợi thao tác)");
 
         JCheckBox allScopeChk = new JCheckBox("Toàn bộ nhánh", ae.isInterceptWaitAllScope());
@@ -295,7 +295,7 @@ public final class ProxyInterceptDialog {
 
         JButton pinBranchBtn = Ui.secondaryBtn("+ Chặn nhánh hiện tại", t -> Icons.branch(t.accent.text()), null);
         JButton pinApiBtn = Ui.secondaryBtn("+ Chặn API đang chọn", t -> Icons.api(t.warning.text()), null);
-        JButton rulesBtn = Ui.secondaryBtn("Luật chặn...", t -> Icons.sliders(t.fg), null);
+        JButton rulesBtn = Ui.secondaryBtn("Chặn & gửi lại...", t -> Icons.sliders(t.fg), null);
 
         JPanel row2 = new JPanel(new BorderLayout(8, 0));
         row2.setOpaque(false);
@@ -361,7 +361,7 @@ public final class ProxyInterceptDialog {
                 BorderFactory.createMatteBorder(1, 0, 0, 0, t0.info.border()),
                 BorderFactory.createEmptyBorder(6, 10, 6, 10)));
         WrappedText emptyHintText = WrappedText.body(
-                "Chưa có request nào đang đợi. Bật công tắc ĐANG CHẶN ở trên (hoặc ghim nhánh/API cần chặn), sau đó thao tác trên trình duyệt (VD: bấm Save) — request sẽ dừng ngay trên Cây và tại bảng này đợi bạn bấm Gửi lên Server.",
+                "Chưa có request nào đang đợi. Bật công tắc đang chặn ở trên (hoặc ghim nhánh/API cần chặn), sau đó thao tác trên trình duyệt (VD: bấm Save) — request sẽ dừng ngay trên Cây và tại bảng này đợi bạn bấm Gửi lên Server.",
                 460);
         emptyHintBar.add(emptyHintText, BorderLayout.CENTER);
 
@@ -429,7 +429,7 @@ public final class ProxyInterceptDialog {
         final long[] selectedId = {-1L};
         final Map<Long, String> draftEdits = new LinkedHashMap<>();
 
-        JButton forwardBtn = Ui.solidPrimary("Gửi lên Server (Forward)",
+        JButton forwardBtn = Ui.solidPrimary("Gửi lên server",
                 t -> Icons.send(t.accent.onSolid()), null);
         JButton holdSaveBtn = Ui.tonalBtn("Lưu nháp vào Cây & Giữ",
                 t -> Icons.strategyShield(t.warning.text(), 14), t -> t.warning, null);
@@ -598,7 +598,7 @@ public final class ProxyInterceptDialog {
                     String host = pr.service() != null ? pr.service().hostLabel() : "-";
                     tm.addRow(new Object[]{
                             "#" + pr.id(),
-                            "CHỜ DUYỆT",
+                            "Chờ duyệt",
                             pr.branchName(),
                             host,
                             pr.method(),
@@ -628,11 +628,11 @@ public final class ProxyInterceptDialog {
                     liveStatusPill.setToken(t -> t.danger);
                     liveStatusPill.setIcon(t -> Icons.strategyShield(t.danger.text(), 12));
                 } else if (on) {
-                    liveStatusPill.setText("Đang BẬT (0 chờ)");
+                    liveStatusPill.setText("Đang bật (0 chờ)");
                     liveStatusPill.setToken(t -> t.success);
                     liveStatusPill.setIcon(t -> Icons.strategyShield(t.success.text(), 12));
                 } else {
-                    liveStatusPill.setText("Đang TẮT");
+                    liveStatusPill.setText("Đang tắt");
                     liveStatusPill.setToken(t -> t.neutral);
                     liveStatusPill.setIcon(t -> Icons.strategyShield(t.muted, 12));
                 }

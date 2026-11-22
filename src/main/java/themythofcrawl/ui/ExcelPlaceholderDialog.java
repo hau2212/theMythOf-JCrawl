@@ -119,7 +119,7 @@ public final class ExcelPlaceholderDialog {
         JCheckBox idsAsParamsChk = new JCheckBox("Tự nhận diện số/UUID trong mẫu", engine.config().targetIdsAsParams);
         idsAsParamsChk.setOpaque(false);
 
-        Pill verdictPill = new Pill("CHƯA KIỂM TRA", th -> th.neutral);
+        Pill verdictPill = new Pill("Chưa KIỂM TRA", th -> th.neutral);
         verdictPill.setSolidWhenActive(false);
         verdictPill.setActive(true);
         JLabel verdictNote = Ui.muted("Nhập mẫu và đường dẫn thực tế để xác minh.");
@@ -155,7 +155,7 @@ public final class ExcelPlaceholderDialog {
             PathMatch.MatchVerification res = PathMatch.verifyMatch(
                     tpl, smp, prefixChk.isSelected(), idsAsParamsChk.isSelected(), engine.placeholders());
             if (res.matched()) {
-                verdictPill.setText(res.exact() ? "KHỚP CHÍNH XÁC" : "KHỚP TIỀN TỐ");
+                verdictPill.setText(res.exact() ? "Khớp CHÍNH XÁC" : "Khớp TIỀN TỐ");
                 verdictPill.setToken(th -> res.exact() ? th.success : th.info);
                 int nCap = res.capturedValues().size();
                 verdictNote.setText(nCap > 0
@@ -163,7 +163,7 @@ public final class ExcelPlaceholderDialog {
                         : "Đường dẫn thực tế khớp mẫu cố định (không chứa placeholder).");
                 captureModel.set(res.capturedValues());
             } else {
-                verdictPill.setText("KHÔNG KHỚP");
+                verdictPill.setText("Không khớp");
                 verdictPill.setToken(th -> th.danger);
                 verdictNote.setText("Không khớp với mẫu hiện tại. Hãy kiểm tra lại số đoạn '/' hoặc kiểu Regex của {placeholder}.");
                 captureModel.set(Map.of());

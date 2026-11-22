@@ -55,10 +55,10 @@ public final class Config {
 
     /** Chính sách xử lý các API gắn tag REFRESH (GET tự tải lại sau hành động POST/PUT/DELETE). */
     public enum RefreshPolicy {
-        TAG_ONLY("M1: Chỉ gắn nhãn [REFRESH] hiển thị (giữ nguyên luồng crawl)"),
-        AUTO_SKIP_DUP("M2: Tự giữ duy nhất GỐC #1, bỏ qua bản lặp ở nhánh mới (Khuyên dùng)"),
-        AUTO_CLUSTER("M3: Tự gom các API [REFRESH] vào Cụm [≡ Auto-Refresh] trong nhánh"),
-        AUTO_HIDE("M4: Tự ẩn bản lặp [REFRESH] khỏi màn hình crawl (vẫn lưu Audit)");
+        TAG_ONLY("Chỉ gắn tag Tải lại (không đổi gì khác)"),
+        AUTO_SKIP_DUP("Chỉ giữ bản gốc, bỏ qua lần bắt lại ở nhánh khác (khuyên dùng)"),
+        AUTO_CLUSTER("Gom API tải lại vào 1 cụm trong nhánh"),
+        AUTO_HIDE("Ẩn lần bắt lại của API tải lại (vẫn lưu ở Cần xử lý)");
 
         public final String label;
 

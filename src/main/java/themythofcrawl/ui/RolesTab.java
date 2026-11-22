@@ -108,7 +108,7 @@ final class RolesTab {
     };
     private final Card profileCard = new Card(t -> t.orig, true);
     private final JLabel profileState = Ui.muted(" ");
-    private final Pill profileBadge = new Pill("00_API GỐC", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
+    private final Pill profileBadge = new Pill("Tài khoản crawl", t -> t.orig, t -> Icons.pin(t.orig.text(), 11));
     private final JLabel summaryTotal = makeSummaryCell("0 vai trò", false);
     private final JLabel summaryActive = makeSummaryCell("0 bật", false);
     private final JLabel summaryWarn = makeSummaryCell("0 hết hạn", false);
@@ -181,18 +181,18 @@ final class RolesTab {
 
         profileBadge.setFixedHeight(24).onClick(this::editOriginal);
         profileCard.setPadding(Theme.SPACE_2, Theme.SPACE_3, Theme.SPACE_2, Theme.SPACE_3);
-        profileCard.setHeader(Role.ORIGINAL_PROFILE_NAME, "Profile áp lên request API gốc (Acc Crawl)", profileBadge);
+        profileCard.setHeader(Role.ORIGINAL_PROFILE_NAME, "Header áp lên request của tài khoản crawl", profileBadge);
         profileCard.setBody(profileState);
 
         JButton[] moreRef = new JButton[1];
         JButton more = Ui.dropdown("Thao tác", t -> Icons.withChevron(Icons.gear(t.fg), t.fg),
-                "Quản lý Role, Ping Session, So sánh 2 Role, Bật/Tắt phạm vi, Import/Export",
+                "Quản lý vai trò, Ping Session, So sánh 2 vai trò, Bật/Tắt phạm vi, Import/Export",
                 () -> roleMenu(false).show(moreRef[0], 0, moreRef[0].getHeight()));
         moreRef[0] = more;
-        JButton pingBtn = Ui.secondaryBtn("Ping", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
-        pingBtn.setToolTipText("Ping kiểm tra Session còn sống (200 LIVE) hay hết hạn (401 DEAD) trên tất cả Role đang bật");
+        JButton pingBtn = Ui.secondaryBtn("Kiểm tra phiên", t -> Icons.bolt(t.info.text()), this::pingRolesDialog);
+        pingBtn.setToolTipText("Gửi thử 1 request bằng mỗi vai trò đang bật: phiên còn dùng được (2xx) hay đã hết hạn (401)");
         JButton diffBtn = Ui.secondaryBtn("So sánh", Icons::compare, this::compareRolesDialog);
-        diffBtn.setToolTipText("So sánh trực tiếp bảng Header/Cookie giữa 2 Role bất kỳ");
+        diffBtn.setToolTipText("So sánh trực tiếp bảng Header/Cookie giữa 2 vai trò bất kỳ");
 
         JPanel topLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         topLeft.setOpaque(false);
@@ -253,7 +253,7 @@ final class RolesTab {
         name.setPreferredSize(new Dimension(168, 26));
         name.setMinimumSize(new Dimension(120, 26));
         tierBox.setPreferredSize(new Dimension(132, 26));
-        tierBox.setToolTipText("Phân tầng cấp quyền dự kiến của Role (ADM / MGR / STF / USR / GST / CUS)");
+        tierBox.setToolTipText("Phân tầng cấp quyền dự kiến của vai trò (ADM / MGR / STF / USR / GST / CUS)");
         tierBox.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean sel, boolean focus) {
@@ -271,7 +271,7 @@ final class RolesTab {
         }));
 
         enabledToggle.setOn(true, false);
-        enabledToggle.setToolTipText("Bật hoặc tắt Role này khi chạy kiểm thử phân quyền");
+        enabledToggle.setToolTipText("Bật hoặc tắt vai trò này khi chạy kiểm thử phân quyền");
         enabledToggle.onChange(on -> {
             enabledState = on;
             markDirty();
@@ -732,12 +732,12 @@ final class RolesTab {
         int n = p.rules().size();
         boolean active = p.enabled() && n > 0;
         String badgeText = p.enabled() ? (n > 0 ? "Tài khoản crawl: " + n + " luật" : "Tài khoản crawl: giữ nguyên") : "Tài khoản crawl: tắt";
-        String stateText = !p.enabled() || n == 0 ? "Chưa có rule đang bật - API gốc được gửi đúng như lúc bắt"
-                : "Đang áp dụng " + n + " rule cho API gốc (API bắt từ giờ; API cũ: 'Rebuild Roles')";
+        String stateText = !p.enabled() || n == 0 ? "Chưa có luật: request của tài khoản crawl gửi đúng như lúc bắt"
+                : "Đang áp dụng " + n + " luật cho tài khoản crawl (API bắt từ giờ; API cũ: 'Tạo lại dòng vai trò')";
         profileBadge.setToken(active ? t -> t.orig : t -> t.neutral)
                 .setIcon(t -> Icons.pin(active ? t.orig.text() : t.muted, 11))
                 .setText(badgeText);
-        profileBadge.setToolTipText(stateText + " (Bấm để sửa profile 00_API GỐC)");
+        profileBadge.setToolTipText(stateText + " (bấm để sửa)");
         profileState.setText(stateText);
     }
 
@@ -795,11 +795,11 @@ final class RolesTab {
         if (editing == -2) {
             engine.saveOriginalProfile(new Role(Role.ORIGINAL_PROFILE_NAME, enabledState, clean, Role.Tier.CUSTOM));
             refreshProfile();
-            ui.flash("Đã lưu profile API gốc (" + clean.size() + " rule)");
+            ui.flash("Đã lưu profile tài khoản crawl (" + clean.size() + " rule)");
         } else if (editing >= 0) {
             String n = name.getText().trim();
             if (n.isEmpty()) {
-                ui.info("Tên role không được để trống.");
+                ui.info("Tên vai trò không được để trống.");
                 return;
             }
             Role.Tier chosenTier = tierBox.getSelectedItem() instanceof Role.Tier tr ? tr : Role.Tier.infer(n, clean);
@@ -807,14 +807,14 @@ final class RolesTab {
             engine.saveRoles();
             reload();
             MainPanel.selectRow(table, editing);
-            ui.flash("Đã lưu role " + n + " [" + chosenTier.badge + "] (" + clean.size() + " rule)");
+            ui.flash("Đã lưu vai trò " + n + " [" + chosenTier.badge + "] (" + clean.size() + " rule)");
         }
         dirty.setIcon(Icons.themed(t -> Icons.check(t.success.text(), 12)));
         dirty.setText("đã lưu");
     }
 
     private void addRole() {
-        String n = ui.ask("Tên role mới:", String.format("%02d_NewRole", engine.roles().count() + 1));
+        String n = ui.ask("Tên vai trò mới:", String.format("%02d_NewRole", engine.roles().count() + 1));
         if (n != null && !n.isBlank()) {
             int i = engine.roles().add(new Role(n.trim(), true, List.of()));
             engine.saveRoles();
@@ -825,7 +825,7 @@ final class RolesTab {
 
     private void deleteRoles() {
         int[] rows = table.getSelectedRows();
-        if (rows.length == 0 || !ui.confirmDialog("Xóa " + rows.length + " role?")) {
+        if (rows.length == 0 || !ui.confirmDialog("Xóa " + rows.length + " Vai trò?")) {
             return;
         }
         List<Integer> idx = new ArrayList<>();
@@ -877,10 +877,10 @@ final class RolesTab {
                 JDialog.ModalityType.APPLICATION_MODAL);
         JPanel body = new JPanel(new BorderLayout(6, 6));
         body.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        body.add(Ui.muted("Tìm thấy " + found.size() + " credential trong request/response đã bắt. Chọn 1 hoặc nhiều dòng để thêm vào Role đang sửa:"),
+        body.add(Ui.muted("Tìm thấy " + found.size() + " credential trong request/response đã bắt. Chọn 1 hoặc nhiều dòng để thêm vào vai trò đang sửa:"),
                 BorderLayout.NORTH);
         body.add(MainPanel.scroll(t), BorderLayout.CENTER);
-        JButton applyBtn = Ui.accent("Thêm vào Role đang sửa", t0 -> Icons.check(t0.accent.onSolid()), t0 -> t0.accent, () -> {
+        JButton applyBtn = Ui.accent("Thêm vào vai trò đang sửa", t0 -> Icons.check(t0.accent.onSolid()), t0 -> t0.accent, () -> {
             int[] rows = t.getSelectedRows();
             if (rows.length == 0) {
                 return;
@@ -1029,7 +1029,7 @@ final class RolesTab {
 
         List<Role> enabledRoles = engine.roles().all().stream().filter(Role::enabled).toList();
         if (enabledRoles.isEmpty()) {
-            ui.info("Chưa có Role nào đang bật để Ping.");
+            ui.info("Chưa có vai trò nào đang bật để Ping.");
             return;
         }
 
@@ -1045,7 +1045,7 @@ final class RolesTab {
             });
         }
         AbstractTableModel tm = new AbstractTableModel() {
-            private final String[] cols = {"Role", "Cấp", "Trạng thái Session", "Thời gian", "Ghi chú / Lỗi"};
+            private final String[] cols = {"Vai trò", "Cấp", "Trạng thái Session", "Thời gian", "Ghi chú / Lỗi"};
             @Override public int getRowCount() { return rows.size(); }
             @Override public int getColumnCount() { return cols.length; }
             @Override public String getColumnName(int c) { return cols[c]; }
@@ -1063,13 +1063,13 @@ final class RolesTab {
                 setFont(th.smallBoldFont);
                 setHorizontalAlignment(CENTER);
                 if (!sel) {
-                    if (s.contains("LIVE")) {
+                    if (s.startsWith("Còn hạn")) {
                         setBackground(th.success.fill());
                         setForeground(th.success.text());
-                    } else if (s.contains("DEAD") || s.contains("ERR")) {
+                    } else if (s.startsWith("Hết hạn") || s.startsWith("Lỗi")) {
                         setBackground(th.danger.fill());
                         setForeground(th.danger.text());
-                    } else if (s.contains("DENY")) {
+                    } else if (s.startsWith("Bị chặn")) {
                         setBackground(th.warning.fill());
                         setForeground(th.warning.text());
                     } else {
@@ -1081,10 +1081,10 @@ final class RolesTab {
             }
         });
 
-        JLabel statusLbl = Ui.muted("Chọn API GET mẫu (VD: /profile, /me) và bấm 'Chạy Ping' để kiểm tra toàn bộ " + enabledRoles.size() + " Role đang bật.");
-        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "Ping / Kiểm tra Session của các Role",
+        JLabel statusLbl = Ui.muted("Chọn API GET mẫu (VD: /profile, /me) và bấm 'Chạy Ping' để kiểm tra toàn bộ " + enabledRoles.size() + " Vai trò đang bật.");
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "Ping / Kiểm tra Session của các vai trò",
                 JDialog.ModalityType.APPLICATION_MODAL);
-        JButton runBtn = Ui.accent("Chạy Ping (" + enabledRoles.size() + " Role)",
+        JButton runBtn = Ui.accent("Chạy Ping (" + enabledRoles.size() + " Vai trò)",
                 t -> Icons.bolt(t.accent.onSolid()), t -> t.accent, null);
         runBtn.addActionListener(Ui.safe(e -> {
             ApiGroup sample = (ApiGroup) apiPicker.getSelectedItem();
@@ -1093,7 +1093,7 @@ final class RolesTab {
             }
             runBtn.setEnabled(false);
             AtomicInteger done = new AtomicInteger();
-            statusLbl.setText("Đang Ping " + enabledRoles.size() + " Role với " + sample.method() + " " + sample.path() + "...");
+            statusLbl.setText("Đang Ping " + enabledRoles.size() + " Vai trò với " + sample.method() + " " + sample.path() + "...");
             for (int i = 0; i < enabledRoles.size(); i++) {
                 int idx = i;
                 Role role = enabledRoles.get(i);
@@ -1112,7 +1112,7 @@ final class RolesTab {
                             Engine.ProbeResult p = probeResults.get(r.name());
                             return p != null && p.alive();
                         }).count();
-                        statusLbl.setText("Hoàn tất Ping: " + alive + "/" + enabledRoles.size() + " Role LIVE (2xx/3xx).");
+                        statusLbl.setText("Hoàn tất Ping: " + alive + "/" + enabledRoles.size() + " Vai trò LIVE (2xx/3xx).");
                     }
                 }));
             }
@@ -1142,7 +1142,7 @@ final class RolesTab {
         choices.add(engine.originalProfile());
         choices.addAll(engine.roles().all());
         if (choices.size() < 2) {
-            ui.info("Cần ít nhất 2 Role để so sánh.");
+            ui.info("Cần ít nhất 2 vai trò để so sánh.");
             return;
         }
         JComboBox<Role> pickA = new JComboBox<>(choices.toArray(new Role[0]));
@@ -1164,7 +1164,7 @@ final class RolesTab {
 
         List<String[]> diffRows = new ArrayList<>();
         AbstractTableModel tm = new AbstractTableModel() {
-            private final String[] cols = {"Header / Cookie Key", "Role A", "Role B", "Trạng thái"};
+            private final String[] cols = {"Header / Cookie Key", "Vai trò A", "Vai trò B", "Trạng thái"};
             @Override public int getRowCount() { return diffRows.size(); }
             @Override public int getColumnCount() { return cols.length; }
             @Override public String getColumnName(int c) { return cols[c]; }
@@ -1190,11 +1190,11 @@ final class RolesTab {
                 String sb = rb == null ? "—" : rb.mode().name() + ": " + rb.value();
                 String st;
                 if (ra != null && rb != null) {
-                    st = (ra.mode() == rb.mode() && ra.value().equals(rb.value())) ? "KHỚP" : "KHÁC GIÁ TRỊ";
+                    st = (ra.mode() == rb.mode() && ra.value().equals(rb.value())) ? "Khớp" : "Khác giá trị";
                 } else if (ra != null) {
-                    st = "CHỈ Ở A";
+                    st = "Chỉ Ở A";
                 } else {
-                    st = "CHỈ Ở B";
+                    st = "Chỉ Ở B";
                 }
                 diffRows.add(new String[] {k, sa, sb, st});
             }
@@ -1217,8 +1217,8 @@ final class RolesTab {
                 setHorizontalAlignment(CENTER);
                 if (!sel) {
                     switch (s) {
-                        case "KHỚP" -> { setBackground(th.success.fill()); setForeground(th.success.text()); }
-                        case "KHÁC GIÁ TRỊ" -> { setBackground(th.warning.fill()); setForeground(th.warning.text()); }
+                        case "Khớp" -> { setBackground(th.success.fill()); setForeground(th.success.text()); }
+                        case "Khác giá trị" -> { setBackground(th.warning.fill()); setForeground(th.warning.text()); }
                         default -> { setBackground(th.info.fill()); setForeground(th.info.text()); }
                     }
                 }
@@ -1226,14 +1226,14 @@ final class RolesTab {
             }
         });
 
-        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "So sánh 2 Role (Diff Rules)",
+        JDialog dlg = new JDialog(Ui.ownerWindow(SwingUtilities.getWindowAncestor(panel)), "So sánh 2 vai trò ",
                 JDialog.ModalityType.APPLICATION_MODAL);
         JPanel pickBar = new JPanel(new GridLayout(1, 2, 8, 0));
         JPanel pA = new JPanel(new BorderLayout(4, 0));
-        pA.add(Ui.bold("Role A:"), BorderLayout.WEST);
+        pA.add(Ui.bold("Vai trò A:"), BorderLayout.WEST);
         pA.add(pickA, BorderLayout.CENTER);
         JPanel pB = new JPanel(new BorderLayout(4, 0));
-        pB.add(Ui.bold("Role B:"), BorderLayout.WEST);
+        pB.add(Ui.bold("Vai trò B:"), BorderLayout.WEST);
         pB.add(pickB, BorderLayout.CENTER);
         pickBar.add(pA);
         pickBar.add(pB);
@@ -1267,7 +1267,7 @@ final class RolesTab {
         m.add(Ui.item("+ Trích xuất Token / Cookie từ API đã bắt...", t -> Icons.key(t.accent.text(), 13), this::extractTokenDialog));
         m.addSeparator();
         m.add(Ui.item("+ Strip Header ([REMOVE])...", Icons::minus, () -> {
-            String n = ui.ask("Header cần xóa khỏi request của role:", "Authorization");
+            String n = ui.ask("Header cần xóa khỏi request của vai trò:", "Authorization");
             HeaderRule r = n == null ? null : HeaderRule.of(n, RuleMode.REMOVE_TOKEN, "REMOVE");
             if (r != null) {
                 rules.add(r);
@@ -1294,18 +1294,18 @@ final class RolesTab {
 
     private JPopupMenu roleMenu(boolean onTable) {
         JPopupMenu m = new JPopupMenu();
-        m.add(Ui.item("Ping / Kiểm tra Session của các Role...", t -> Icons.bolt(t.info.text()), this::pingRolesDialog));
-        m.add(Ui.item("So sánh 2 Role (Diff Rules)...", Icons::compare, this::compareRolesDialog));
+        m.add(Ui.item("Ping / Kiểm tra Session của các vai trò...", t -> Icons.bolt(t.info.text()), this::pingRolesDialog));
+        m.add(Ui.item("So sánh 2 vai trò...", Icons::compare, this::compareRolesDialog));
         m.add(Ui.item("Trích xuất Token / Cookie từ API đã bắt...", t -> Icons.key(t.accent.text(), 13), this::extractTokenDialog));
         m.addSeparator();
-        m.add(Ui.item("Sửa profile 00_API GỐC (Acc Crawl)...", t -> Icons.pin(t.orig.text()), this::editOriginal));
-        m.add(Ui.item("Bật / Tắt profile 00_API GỐC", Icons::sliders, () -> {
+        m.add(Ui.item("Sửa profile tài khoản crawl...", t -> Icons.pin(t.orig.text()), this::editOriginal));
+        m.add(Ui.item("Bật / tắt profile tài khoản crawl", Icons::sliders, () -> {
             Role p = engine.originalProfile();
             engine.saveOriginalProfile(p.withEnabled(!p.enabled()));
             refreshProfile();
         }));
         m.addSeparator();
-        m.add(Ui.item("Nhân bản Role đang chọn (Duplicate)", t -> Icons.copy(t.muted), () -> {
+        m.add(Ui.item("Nhân bản vai trò đang chọn", t -> Icons.copy(t.muted), () -> {
             int r = table.getSelectedRow();
             if (r >= 0) {
                 Role src = engine.roles().get(r);
@@ -1316,26 +1316,26 @@ final class RolesTab {
             }
         }));
         if (onTable) {
-            m.add(Ui.item("Xóa Role đang chọn", t -> Icons.trash(t.danger.text()), this::deleteRoles));
+            m.add(Ui.item("Xóa vai trò đang chọn", t -> Icons.trash(t.danger.text()), this::deleteRoles));
         }
         m.addSeparator();
         m.add(Ui.item("Di chuyển lên (Move Up)", Icons::arrowUp, () -> moveRole(-1)));
         m.add(Ui.item("Di chuyển xuống (Move Down)", Icons::arrowDown, () -> moveRole(1)));
         m.addSeparator();
-        m.add(Ui.item("Bật / Tắt Role theo phạm vi (nhánh / API)...", Icons::sliders,
+        m.add(Ui.item("Bật / Tắt vai trò theo phạm vi (nhánh / API)...", Icons::sliders,
                 () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null, null)));
-        m.add(Ui.item("Bật tất cả Role (Enable All)...", t -> Icons.check(t.success.text()),
+        m.add(Ui.item("Bật tất cả vai trò...", t -> Icons.check(t.success.text()),
                 () -> ui.roleScopeDialog(true, RoleScopes.Scope.GLOBAL, null, null,
                         engine.roles().all().stream().map(Role::name).toList())));
-        m.add(Ui.item("Tắt tất cả Role (Disable All)...", Icons::minus,
+        m.add(Ui.item("Tắt tất cả vai trò...", Icons::minus,
                 () -> ui.roleScopeDialog(false, RoleScopes.Scope.GLOBAL, null, null,
                         engine.roles().all().stream().map(Role::name).toList())));
         if (!onTable) {
             m.addSeparator();
-            m.add(Ui.item("Import Roles từ JSON...", Icons::folder, this::importRoles));
-            m.add(Ui.item("Export Roles ra JSON...", Icons::export, this::exportRoles));
-            m.add(Ui.item("Nạp mẫu 10 Roles chuẩn (Load 10-Role Template)", t -> Icons.bolt(t.warning.text()), () -> {
-                if (ui.confirmDialog("Thay danh sách role bằng mẫu 10 role chuẩn?")) {
+            m.add(Ui.item("Import vai trò từ JSON...", Icons::folder, this::importRoles));
+            m.add(Ui.item("Export vai trò ra JSON...", Icons::export, this::exportRoles));
+            m.add(Ui.item("Nạp mẫu 10 vai trò chuẩn", t -> Icons.bolt(t.warning.text()), () -> {
+                if (ui.confirmDialog("Thay danh sách vai trò bằng mẫu 10 vai trò chuẩn?")) {
                     engine.roles().setAll(Roles.template());
                     engine.saveRoles();
                     reload();
@@ -1366,7 +1366,7 @@ final class RolesTab {
         try {
             List<Role> list = Roles.fromJson(Files.readString(fc.getSelectedFile().toPath(), StandardCharsets.UTF_8));
             Object[] opts = {"Thay toàn bộ", "Thêm vào cuối", "Hủy"};
-            int c = JOptionPane.showOptionDialog(Ui.ownerWindow(panel), "Nạp " + list.size() + " role:", "Import", JOptionPane.DEFAULT_OPTION,
+            int c = JOptionPane.showOptionDialog(Ui.ownerWindow(panel), "Nạp " + list.size() + " Vai trò:", "Import", JOptionPane.DEFAULT_OPTION,
                     JOptionPane.QUESTION_MESSAGE, null, opts, opts[0]);
             if (c == 0) {
                 engine.roles().setAll(list);
@@ -1658,7 +1658,7 @@ final class RolesTab {
             this.on = on;
             this.selected = selected;
             this.row = row;
-            setToolTipText(on ? "Role đang BẬT — bấm để tắt" : "Role đang TẮT — bấm để bật");
+            setToolTipText(on ? "Vai trò đang bật — bấm để tắt" : "Vai trò đang tắt — bấm để bật");
         }
 
         @Override

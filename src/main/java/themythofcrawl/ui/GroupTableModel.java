@@ -24,9 +24,9 @@ import themythofcrawl.place.Decisions;
 
 /** The API list: one row per captured API, filtered by branch / audit chips. Rows are added incrementally. */
 public final class GroupTableModel extends AbstractTableModel implements AuditRows {
-    public static final String[] COLS = {"API #", "Group", "Group Path", "Đánh giá (Info)",
-        "Method", "Host", "Path", "Status", "Length", "1 Gốc + Roles", "Đã gửi", "Source", "Time", "Đã copy", "Copy",
-        "Excel", "Trùng", "Kết quả Role", "Cách gửi lại"};
+    public static final String[] COLS = {"API #", "Mã Repeater", "Nhánh", "Kết quả",
+        "Method", "Host", "Path", "Status", "Length", "Gửi bằng", "Đã gửi", "Nguồn", "Lúc", "Đã copy", "Copy",
+        "Excel", "Trùng", "Kết quả vai trò", "Cách gửi lại"};
     public static final int PATH_COL = 2;
     public static final int COPY_COL = 14;
     public static final int EXCEL_COL = 15;
@@ -308,7 +308,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
         ApiGroup g = at(r);
         if (g != null && c == PATH_COL && v != null && !String.valueOf(v).isBlank()
                 && !Hierarchy.same(String.valueOf(v), g.branch())) {
-            engine.moveToPath(List.of(g), String.valueOf(v), "sửa ô Group Path");
+            engine.moveToPath(List.of(g), String.valueOf(v), "sửa ô Nhánh");
         }
     }
 
@@ -329,14 +329,14 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
         ApiGroup g = rows.get(r);
         return switch (c) {
             case 0 -> g.gid();
-            case 1 -> Text.groupId(g.gid());
+            case 1 -> Text.groupId(g.gid());   // Repeater group name (G01), header "Mã Repeater"
             case 2 -> g.branch();
             case 3 -> {
                 String base = g.pending() ? Decisions.pendingLabel(g) + " · " + Audit.summary(g) : Audit.summary(g);
                 if (!g.tags().isEmpty()) {
                     base = "[" + String.join("][", g.tags()) + "] " + base;
                 } else if (g.suspectedRefresh()) {
-                    base = "[? Refresh] " + base;
+                    base = "[Tải lại?] " + base;
                 }
                 yield base;
             }
@@ -366,7 +366,7 @@ public final class GroupTableModel extends AbstractTableModel implements AuditRo
                     yield "";
                 }
                 if (engine.isOrigin(g)) {
-                    yield "GỐC · " + g.dupTotal();
+                    yield "Gốc · " + g.dupTotal();
                 }
                 ApiGroup orig = engine.originOf(g.bookKey());
                 yield orig != null && orig.gid() != g.gid()

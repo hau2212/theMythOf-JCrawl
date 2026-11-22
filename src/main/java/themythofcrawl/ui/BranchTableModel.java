@@ -16,7 +16,7 @@ import themythofcrawl.model.Branch;
 
 /** Row 0 = [all branches], then one row per branch (name editable). */
 public final class BranchTableModel extends AbstractTableModel implements AuditRows {
-    static final String[] COLS = {"#", "Tên chức năng", "Số API", "Trạng thái Role (Màu)", "Danh sách API"};
+    static final String[] COLS = {"#", "Tên chức năng", "Số API", "Trạng thái vai trò (Màu)", "Danh sách API"};
 
     private record Row(List<Object> cells, AuditLevel level, Branch branch) {
     }

@@ -90,7 +90,7 @@ public final class ActionMenus {
         addSep(menuContainer);
 
         // 1. Open visual 6-tab Action Workbench (Strategy + Ledger + Audit + Pool + Chain + Lock200)
-        JMenuItem openWb = new JMenuItem("Luật chặn cho API này (Chế độ, Kho ID, Bằng chứng 200)...",
+        JMenuItem openWb = new JMenuItem("Chặn & gửi lại cho API này...",
                 Icons.workbench(th.accent.text(), 14));
         openWb.addActionListener(Ui.safe(e -> DataProtectionDialog.show(parent, engine, g, onAfterAction)));
         addItem(menuContainer, openWb);
@@ -194,7 +194,7 @@ public final class ActionMenus {
         }));
         proxyMenu.add(releaseApiItem);
 
-        JMenuItem openLedgerItem = new JMenuItem("Mở Luật chặn cho API này...", Icons.sliders(th.accent.text()));
+        JMenuItem openLedgerItem = new JMenuItem("Luật của API này...", Icons.sliders(th.accent.text()));
         openLedgerItem.addActionListener(Ui.safe(e -> ActionWorkbenchDialog.show(parent, engine, g, targets,
                 ActionWorkbenchDialog.TAB_LEDGER, onAfterAction)));
         proxyMenu.add(openLedgerItem);
@@ -223,18 +223,13 @@ public final class ActionMenus {
             }
         }));
         menu.add(gate);
-        JMenuItem protect = new JMenuItem("Bảo vệ dữ liệu: 2 câu hỏi + danh sách luật + Thử luật...",
-                Icons.strategyShield(th.accent.text(), 14));
+        JMenuItem protect = new JMenuItem("Chặn & gửi lại...", Icons.strategyShield(th.accent.text(), 14));
+        protect.setToolTipText("Tổng quan, chế độ gửi lại, luật, kiểm tra, Kho ID, hướng dẫn");
         protect.addActionListener(Ui.safe(e -> DataProtectionDialog.show(parent, engine, active, onAfterAction)));
         menu.add(protect);
-        JMenuItem openWorkbench = new JMenuItem("Luật chặn: Chế độ, Kho ID, Kiểm tra...",
-                Icons.workbench(th.accent.text(), 14));
-        openWorkbench.addActionListener(Ui.safe(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
-                ActionWorkbenchDialog.TAB_STRATEGY, onAfterAction)));
-        menu.add(openWorkbench);
 
         int ledgerActive = engine.actionEngine().policyLedger().activeCount();
-        JMenuItem openLedger = new JMenuItem("Luật chặn (" + ledgerActive + " đang bật)...",
+        JMenuItem openLedger = new JMenuItem("Luật (" + ledgerActive + " đang bật)...",
                 Icons.sliders(th.accent.text()));
         openLedger.addActionListener(Ui.safe(e -> ActionWorkbenchDialog.show(parent, engine, active, null,
                 ActionWorkbenchDialog.TAB_LEDGER, onAfterAction)));

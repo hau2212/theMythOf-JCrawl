@@ -331,7 +331,7 @@ final class V35TreeFirstUxTest {
                     List<JTabbedPane> tabPanes = findAll(wbPanel, JTabbedPane.class);
                     assertFalse(tabPanes.isEmpty());
                     JTabbedPane mainTabs = tabPanes.get(0);
-                    assertEquals(5, mainTabs.getTabCount(), "Action Workbench must be streamlined to 5 tabs");
+                    assertEquals(6, mainTabs.getTabCount(), "Chặn & gửi lại: Tổng quan + 5 tabs");
                     assertEquals(ActionWorkbenchDialog.TAB_LEDGER, mainTabs.getSelectedIndex());
 
                     // Legacy TAB_CHAIN must route into Tab 4 (TAB_ADVANCED)

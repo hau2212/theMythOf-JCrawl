@@ -51,7 +51,7 @@ final class TreeMenus {
                                     }
                                 }));
                     }
-                    m.add(Ui.item("Đặt \"" + title + "\" làm ĐÍCH cho request mới", Icons::arrowRight,
+                    m.add(Ui.item("Đặt \"" + title + "\" làm đích cho request mới", Icons::arrowRight,
                             () -> ui.setDestination(prefix)));
                     m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus,
                             () -> ui.addSubfolder(prefix)));
@@ -73,7 +73,7 @@ final class TreeMenus {
                     m.add(Ui.item("Thêm mục con (Folder / Link / Button / Icon...)...", Icons::plus,
                             () -> ui.addSubfolder(null)));
                 }
-                m.add(Ui.item("Gửi (Replay) toàn bộ Nhánh \"" + title + "\"", t -> Icons.send(t.critical.text()), () -> {
+                m.add(Ui.item("Gửi cả nhánh \"" + title + "\"", t -> Icons.send(t.critical.text()), () -> {
                     List<themythofcrawl.core.ProxyInterceptQueue.PendingRequest> held = tree.selectedHeld();
                     int forwarded = 0;
                     for (var pr : held) {
@@ -98,14 +98,14 @@ final class TreeMenus {
                     m.add(Ui.item("Đổi tên Nhánh \"" + title + "\" (Cập nhật cả cấp con)...", Icons::edit,
                             () -> ui.renameBranchDialog(prefix)));
                     m.add(Ui.item("Đẩy Nhánh \"" + title + "\" sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
-                    m.add(Ui.item("Đẩy / Gửi Nhánh \"" + title + "\" có chọn Role...", Icons::target,
+                    m.add(Ui.item("Đẩy / Gửi Nhánh \"" + title + "\" có chọn vai trò...", Icons::target,
                             () -> ui.pushDialog(false, many, "Nhánh \"" + title + "\"")));
                     m.add(Ui.item("Copy path nhánh \"" + title + "\"", t -> Icons.copy(t.muted), () -> {
                         Ui.copyToClipboard(prefix);
                         ui.flash("Đã copy path nhánh: " + prefix);
                     }));
                     m.add(Ui.item("Copy STT + Path của các API trong nhánh", t -> Icons.copy(t.muted), () -> ui.copy(many)));
-                    m.add(Ui.item("Bật / Tắt Role cho nhánh \"" + title + "\"...", Icons::sliders,
+                    m.add(Ui.item("Bật / Tắt vai trò cho nhánh \"" + title + "\"...", Icons::sliders,
                             () -> ui.roleScopeDialog(false, RoleScopes.Scope.BRANCH, List.of(prefix), null, null)));
                     boolean branchWait = engine.actionEngine().isBranchInterceptWait(prefix)
                             && engine.actionEngine().isInterceptWaitEnabled();
@@ -118,10 +118,10 @@ final class TreeMenus {
                                 engine.toggleBranchInterceptWait(prefix, next);
                                 ui.syncHeader();
                                 ui.flash(next
-                                        ? "Đã BẬT Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [CHỜ DUYỆT]!"
-                                        : "Đã TẮT Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
+                                        ? "Đã bật Chặn chờ duyệt cho nhánh \"" + prefix + "\" — request khớp sẽ hiện ngay trên Cây ở trạng thái [Chờ duyệt]!"
+                                        : "Đã tắt Chặn chờ duyệt cho nhánh \"" + prefix + "\"");
                             }));
-                    m.add(Ui.item("Luật chặn cho nhánh \"" + Hierarchy.leaf(prefix) + "\" (CRUD)...", Icons::strategyShield,
+                    m.add(Ui.item("Luật cho nhánh \"" + Hierarchy.leaf(prefix) + "\"...", Icons::strategyShield,
                             () -> ActionWorkbenchDialog.showForBranch(c, engine, prefix, () -> ui.tick(true))));
                     m.addSeparator();
                     m.add(Ui.item("Xóa Nhánh \"" + title + "\"...", t -> Icons.trash(t.danger.text()),
@@ -131,7 +131,7 @@ final class TreeMenus {
             case HELD_PENDING -> {
                 var pr = BranchTree.heldOf(n);
                 if (pr != null) {
-                    m.add(Ui.item("Gửi lên Server ngay (Forward)", t -> Icons.send(t.accent.text(), 13), () -> {
+                    m.add(Ui.item("Gửi lên server ngay", t -> Icons.send(t.accent.text(), 13), () -> {
                         engine.proxyQueue().resolve(pr.id(),
                                 themythofcrawl.core.ProxyInterceptQueue.ResolutionKind.FORWARD, pr.originalRequest());
                         ui.syncHeader();
@@ -170,10 +170,10 @@ final class TreeMenus {
                 m.add(Ui.item("Gửi " + many.size() + " API trực tiếp của \"" + title + "\"", t -> Icons.send(t.critical.text()),
                         () -> ui.send(many)));
                 m.add(Ui.item("Đẩy " + many.size() + " API sang Burp Repeater", Icons::repeater, () -> ui.push(many)));
-                m.add(Ui.item("Đẩy / Gửi có chọn Role...", Icons::target,
+                m.add(Ui.item("Đẩy / Gửi có chọn vai trò...", Icons::target,
                         () -> ui.pushDialog(false, many, "API của nhánh \"" + title + "\"")));
                 m.add(Ui.item("Copy STT + Path của " + many.size() + " API", t -> Icons.copy(t.muted), () -> ui.copy(many)));
-                m.add(Ui.item("Bật / Tắt Role cho các API này...", Icons::sliders,
+                m.add(Ui.item("Bật / Tắt vai trò cho các API này...", Icons::sliders,
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, many, null)));
                 m.addSeparator();
                 m.add(ui.clusterMenu(many));
@@ -212,7 +212,7 @@ final class TreeMenus {
                         : "Gửi API #" + g.gid() + " (" + g.results().size() + " vai trò)", t -> Icons.send(t.critical.text()),
                         () -> ui.send(targetGs)));
                 m.add(SendMenus.build(ui, targetGs, nodeRole));
-                m.add(Ui.item("Sửa Request & Gửi lại (Composer)...", t -> Icons.edit(t.info.text()),
+                m.add(Ui.item("Sửa & gửi...", t -> Icons.edit(t.info.text()),
                         () -> RequestComposerDialog.showFloating(c, engine, g, nodeRole, () -> ui.tick(true))));
                 m.add(ActionMenus.buildForApi(c, engine, g, nodeRole != null ? List.of(nodeRole) : null, () -> ui.tick(true)));
                 m.add(Ui.item("Đánh dấu lỗi..." + (g.openBugCount() > 0 ? "   (đang có " + g.openBugCount() + ")" : ""),
@@ -222,14 +222,14 @@ final class TreeMenus {
                 String label = engine.copyLabel(g, false);
                 m.add(Ui.item("Copy STT + Path   (" + (label.length() > 60 ? label.substring(0, 60) : label) + ")",
                         t -> Icons.copy(t.muted), () -> ui.copy(targetGs)));
-                m.add(Ui.item("Đẩy / Gửi API #" + g.gid() + " có chọn Role...", Icons::target,
+                m.add(Ui.item("Đẩy / Gửi API #" + g.gid() + " có chọn vai trò...", Icons::target,
                         () -> ui.pushDialog(false, List.of(g), Text.apiLabel(g.gid()))));
-                m.add(Ui.item("Bật / Tắt Role cho API #" + g.gid() + "...", Icons::sliders,
+                m.add(Ui.item("Bật / Tắt vai trò cho API #" + g.gid() + "...", Icons::sliders,
                         () -> ui.roleScopeDialog(false, RoleScopes.Scope.API, null, targetGs, null)));
                 m.addSeparator();
                 m.add(ui.clusterMenu(targetGs));
                 m.add(ui.tagMenu(targetGs));
-                m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, () -> ui.openLineage(g, c, x, y)));
+                m.add(Ui.item("Các lần bắt...", Icons::dup, () -> ui.openLineage(g, c, x, y)));
                 m.addSeparator();
                 ui.placeItems(m, targetGs);
             }
@@ -245,10 +245,10 @@ final class TreeMenus {
                             () -> engine.moveToPath(List.of(g), place, "chọn nơi vừa gặp")));
                 }
                 m.add(Ui.item("Chuyển sang đường dẫn khác...", Icons::move, () -> ui.moveDialog(List.of(g))));
-                m.add(Ui.item("Xem chuỗi Gốc & Trùng (Lineage)...", Icons::dup, () -> ui.openLineage(g, c, x, y)));
+                m.add(Ui.item("Các lần bắt...", Icons::dup, () -> ui.openLineage(g, c, x, y)));
                 m.add(Ui.item("Lịch sử vị trí của API này", Icons::compass, () -> ui.showPlaceOf(g.bookKey())));
             }
-            case GHOSTS -> m.add(Ui.item("Xem các API đã xóa trong tab Audit > Giữ chỗ", Icons::compass, () -> {
+            case GHOSTS -> m.add(Ui.item("Xem API đã xóa trong Cần xử lý > Giữ chỗ", Icons::compass, () -> {
                 ui.showPlaceOf(null);
                 ui.audit.placeView(2);
             }));

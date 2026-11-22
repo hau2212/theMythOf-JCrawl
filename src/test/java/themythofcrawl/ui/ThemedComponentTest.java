@@ -417,15 +417,15 @@ class ThemedComponentTest {
             panel.api.showGroup(gOk);
             JTable res = panel.api.results;
             res.getRowSorter().toggleSortOrder(4); // Status ASC
-            assertEquals("GỐC", res.getValueAt(0, 0));
+            assertEquals("Crawl", res.getValueAt(0, 0));
             res.getRowSorter().toggleSortOrder(4); // Status DESC
-            assertEquals("GỐC", res.getValueAt(0, 0));
+            assertEquals("Crawl", res.getValueAt(0, 0));
             res.getRowSorter().toggleSortOrder(5); // Body Len ASC
-            assertEquals("GỐC", res.getValueAt(0, 0));
+            assertEquals("Crawl", res.getValueAt(0, 0));
             res.getRowSorter().toggleSortOrder(5); // Body Len DESC
-            assertEquals("GỐC", res.getValueAt(0, 0));
+            assertEquals("Crawl", res.getValueAt(0, 0));
             res.getRowSorter().toggleSortOrder(6); // Delta DESC
-            assertEquals("GỐC", res.getValueAt(0, 0));
+            assertEquals("Crawl", res.getValueAt(0, 0));
 
             // BranchTree chip hit testing (Copy, Excel, Dup badges)
             BranchTree bt = panel.api.tree;

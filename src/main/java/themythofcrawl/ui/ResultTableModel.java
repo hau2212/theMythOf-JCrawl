@@ -12,8 +12,8 @@ import themythofcrawl.model.RoleResult;
 
 /** Row 0 = the API gốc, rows 1..N = the roles of the selected API. */
 public final class ResultTableModel extends AbstractTableModel implements AuditRows {
-    static final String[] COLS = {"#", "Loại / Role", "Đánh giá Role", "State", "Status", "Body Len", "Delta",
-        "Time (ms)", "Sends", "Ghi chú (ID dùng / lỗi / tab)"};
+    static final String[] COLS = {"Dòng", "Vai trò", "Kết quả", "Trạng thái", "Mã", "Độ dài", "Chênh",
+        "Thời gian (ms)", "Lần gửi", "Ghi chú"};
     private ApiGroup group;
     private List<RoleResult> entries = List.of();
 
@@ -82,7 +82,7 @@ public final class ResultTableModel extends AbstractTableModel implements AuditR
     public Object getValueAt(int r, int c) {
         RoleResult res = entries.get(r);
         return switch (c) {
-            case 0 -> res.original() ? "GỐC" : "Role " + r;
+            case 0 -> res.original() ? "Crawl" : String.valueOf(r);
             case 1 -> res.roleName();
             case 2 -> Audit.badge(group, res);
             case 3 -> res.state();

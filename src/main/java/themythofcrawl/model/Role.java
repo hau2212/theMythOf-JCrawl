@@ -11,7 +11,8 @@ import themythofcrawl.core.Text;
 /** A role profile (01_Admin, 10_Guest ...) or the API gốc profile. Immutable. */
 public record Role(String name, boolean enabled, List<HeaderRule> rules, Tier tier) {
     public static final String ORIGINAL_PROFILE_NAME = "00_API GỐC (Acc Crawl)";
-    public static final String ORIGINAL_LABEL = "[API GỐC] 00_Original (Acc Crawl)";
+    /** Display name of the crawl account row (V_9.3; old workspaces stored "[API GỐC] 00_Original (Acc Crawl)"). */
+    public static final String ORIGINAL_LABEL = "Tài khoản crawl";
 
     /** Cấp quyền dự kiến của Role (dùng để nhận diện nhanh & phân tầng trong bảng Role). */
     public enum Tier {
