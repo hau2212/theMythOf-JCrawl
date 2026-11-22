@@ -145,7 +145,8 @@ public final class PathMatch {
 
     public static Segment segment(String seg, boolean idsAsParams, PlaceholderCatalog catalog) {
         if (seg.startsWith(":") && seg.length() > 1) {
-            String rx = catalog != null ? catalog.regexForToken(seg.substring(1)) : "[^/]+";
+            String rx = catalog != null ? catalog.regexForToken(seg.substring(1))
+                    : PlaceholderCatalog.idLikeName(seg.substring(1)) ? "(?:" + PlaceholderCatalog.ID_LIKE_REGEX + ")" : "[^/]+";
             return new Segment(rx, false);
         }
         if (idsAsParams && Text.isIdSegment(seg)) {
@@ -164,7 +165,8 @@ public final class PathMatch {
                 String cleanName = PlaceholderCatalog.sanitizeName(token);
                 sb.append(cleanName.isEmpty() ? "[^/]+" : catalog.regexForToken(cleanName));
             } else {
-                sb.append("[^/]+");
+                String cleanName = PlaceholderCatalog.sanitizeName(token);
+                sb.append(PlaceholderCatalog.idLikeName(cleanName) ? "(?:" + PlaceholderCatalog.ID_LIKE_REGEX + ")" : "[^/]+");
             }
             pos = m.end();
             param = true;
