@@ -219,6 +219,17 @@ public final class ProjectData {
         return locals;
     }
 
+    /** What this machine's own account workspaces found, per row and letter (what gets pushed to the team). */
+    public record LocalCell(String rowId, String letter, AccStatus status, Integer http, int apis, String method, String path,
+                            String host, String branch, long at) {
+    }
+
+    private final List<LocalCell> localCells = new ArrayList<>();
+
+    public List<LocalCell> localCells() {
+        return localCells;
+    }
+
     public List<SyncRecord> conflicts() {
         return conflicts;
     }
@@ -657,7 +668,27 @@ public final class ProjectData {
                 r.stt = (std.isEmpty() ? "" : "+") + n;
             }
         }
-        return new ProjectData(cfg, accounts, ordered, locals, conflicts);
+        ProjectData built = new ProjectData(cfg, accounts, ordered, locals, conflicts);
+        Map<String, LocalCell> lc = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Obs>> e : obs.entrySet()) {
+            for (Obs o : e.getValue()) {
+                if (o.remote()) {
+                    continue;
+                }
+                String k = e.getKey() + "|" + o.letter();
+                LocalCell cur = lc.get(k);
+                Row r = rows.get(e.getKey());
+                if (cur == null) {
+                    lc.put(k, new LocalCell(e.getKey(), o.letter(), o.status(), o.http(), 1, r.method, r.path, r.host, r.branch, o.at()));
+                } else {
+                    boolean better = rank(o.status()) > rank(cur.status());
+                    lc.put(k, new LocalCell(e.getKey(), o.letter(), better ? o.status() : cur.status(), better ? o.http() : cur.http(),
+                            cur.apis() + 1, cur.method(), cur.path(), cur.host(), cur.branch(), Math.max(cur.at(), o.at())));
+                }
+            }
+        }
+        built.localCells.addAll(lc.values());
+        return built;
     }
 
     static AccStatus parseName(String s) {

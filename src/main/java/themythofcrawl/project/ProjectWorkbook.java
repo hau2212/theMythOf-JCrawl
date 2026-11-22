@@ -37,10 +37,31 @@ public final class ProjectWorkbook {
     static final String IN_LIST = "Trong danh sách";
     static final String REACHED_N = "Số TK gọi được (số)";
 
+    /**
+     * @param imageLink when set (team sheet), image cells become links to the screenshot instead of embedded pictures
+     */
     public record Options(List<String> letters, String profile, boolean images, int maxImagePx, boolean forClient,
-                          List<Map<String, Object>> log, BiFunction<ProjectData.QaRef, String, byte[]> remoteImage, String title) {
+                          List<Map<String, Object>> log, BiFunction<ProjectData.QaRef, String, byte[]> remoteImage, String title,
+                          BiFunction<ProjectData.QaRef, String, String> imageLink) {
+        public Options(List<String> letters, String profile, boolean images, int maxImagePx, boolean forClient,
+                       List<Map<String, Object>> log, BiFunction<ProjectData.QaRef, String, byte[]> remoteImage, String title) {
+            this(letters, profile, images, maxImagePx, forClient, log, remoteImage, title, null);
+        }
+
         public static Options internal(ProjectData d) {
             return new Options(d.letters(), "Nội bộ", true, 320, false, List.of(), null, d.config().name);
+        }
+
+        public Options withLog(List<Map<String, Object>> l) {
+            return new Options(letters, profile, images, maxImagePx, forClient, l, remoteImage, title, imageLink);
+        }
+
+        public Options withRemote(BiFunction<ProjectData.QaRef, String, byte[]> r) {
+            return new Options(letters, profile, images, maxImagePx, forClient, log, r, title, imageLink);
+        }
+
+        public Options forSheet(BiFunction<ProjectData.QaRef, String, String> link) {
+            return new Options(letters, profile, false, maxImagePx, forClient, log, remoteImage, title, link);
         }
     }
 
@@ -667,7 +688,7 @@ public final class ProjectWorkbook {
         for (ProjectData.QaRef q : items) {
             maxImg = Math.max(maxImg, q.item().imgs().size());
         }
-        if (!o.images()) {
+        if (!o.images() && o.imageLink() == null) {
             maxImg = 0;
         }
         List<String> header = new ArrayList<>(List.of("Mã", "Mã Q&A", "Loại", "Tài khoản", "STT", "Method", "Path", "Nhánh",
@@ -693,7 +714,17 @@ public final class ProjectWorkbook {
             for (int k = 0; k < maxImg; k++) {
                 if (k < ims.size()) {
                     QaItem.QaImage im = ims.get(k);
-                    row.add(StyledCell.of(im.caption() + (im.desc().isEmpty() ? "" : " - " + im.desc()), CellTone.WRAP));
+                    String cap = im.caption() + (im.desc().isEmpty() ? "" : " - " + im.desc());
+                    String link = o.imageLink() == null ? null : o.imageLink().apply(q, im.name());
+                    if (link != null && !link.isEmpty()) {
+                        row.add(new Formula("HYPERLINK(\"" + link.replace("\"", "") + "\",\"" + cap.replace("\"", "'") + "\")", cap,
+                                CellTone.LINK));
+                        continue;
+                    }
+                    row.add(StyledCell.of(cap, CellTone.WRAP));
+                    if (!o.images()) {
+                        continue;
+                    }
                     Xlsx.Picture p = picture(imageBytes(q, im.name(), o), rows.size(), firstImg + k, o.maxImagePx(),
                             o.maxImagePx() * 2 / 3, 34);
                     if (p != null) {
@@ -738,6 +769,15 @@ public final class ProjectWorkbook {
             rows.add(List.of("", StyledCell.of("Chi tiết", CellTone.BOLD), "Mức độ: " + it.severity().label + " · Cần ai trả lời: "
                     + it.askTo().label + (it.due().isEmpty() ? "" : " · Hạn: " + it.due()) + " · Trạng thái: " + it.status().label
                     + " · Người hỏi: " + it.by() + " (" + ProjectStore.time(it.atMs()) + ")"));
+            if (!o.images() && o.imageLink() != null) {
+                for (QaItem.QaImage im : it.orderedImages()) {
+                    String link = o.imageLink().apply(q, im.name());
+                    rows.add(List.of("", StyledCell.of(im.caption(), CellTone.BOLD), link == null || link.isEmpty()
+                            ? StyledCell.of(im.desc(), CellTone.WRAP)
+                            : new Formula("HYPERLINK(\"" + link.replace("\"", "") + "\",\"" + (im.desc().isEmpty() ? "Xem ảnh" : im.desc())
+                                    .replace("\"", "'") + "\")", im.desc(), CellTone.LINK)));
+                }
+            }
             if (o.images()) {
                 for (QaItem.QaImage im : it.orderedImages()) {
                     rows.add(List.of("", StyledCell.of(im.caption(), CellTone.BOLD), StyledCell.of(im.desc(), CellTone.WRAP)));
