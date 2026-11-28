@@ -84,6 +84,14 @@ public final class Config {
     public boolean dupNewPlace = true;
     /** V_10.4: JCrawl's own sends go outside Burp (Logger / Logger++ do not see them). */
     public boolean quietSend = false;
+    /** V_11.6: "Gửi lên Server" on a held request: false = JCrawl sends it via Burp (always reaches the server and Logger++), true = hand it back to the Proxy. */
+    public boolean heldForwardViaProxy = false;
+    /** V_11.6 Chặn - phạm vi thêm (see GateScope): Scope Burp, host list, exclude list, path patterns, Excel only. */
+    public boolean gateBurpScope = false;
+    public String gateHosts = "";
+    public String gateExclude = "";
+    public String gatePaths = "";
+    public boolean gateExcelOnly = false;
     public boolean showGhosts = true;
     // sending
     public boolean autoRepeater = false;
@@ -166,6 +174,12 @@ public final class Config {
         m.put("restore_known_place", restoreKnownPlace);
         m.put("dup_new_place", dupNewPlace);
         m.put("quiet_send", quietSend);
+        m.put("held_forward_via_proxy", heldForwardViaProxy);
+        m.put("gate_burp_scope", gateBurpScope);
+        m.put("gate_hosts", gateHosts);
+        m.put("gate_exclude", gateExclude);
+        m.put("gate_paths", gatePaths);
+        m.put("gate_excel_only", gateExcelOnly);
         m.put("show_ghosts", showGhosts);
         m.put("auto_repeater", autoRepeater);
         m.put("auto_send", autoSend);
@@ -215,6 +229,12 @@ public final class Config {
         c.restoreKnownPlace = b(m, "restore_known_place", c.restoreKnownPlace);
         c.dupNewPlace = b(m, "dup_new_place", c.dupNewPlace);
         c.quietSend = b(m, "quiet_send", c.quietSend);
+        c.heldForwardViaProxy = b(m, "held_forward_via_proxy", c.heldForwardViaProxy);
+        c.gateBurpScope = b(m, "gate_burp_scope", c.gateBurpScope);
+        c.gateHosts = s(m, "gate_hosts", c.gateHosts);
+        c.gateExclude = s(m, "gate_exclude", c.gateExclude);
+        c.gatePaths = s(m, "gate_paths", c.gatePaths);
+        c.gateExcelOnly = b(m, "gate_excel_only", c.gateExcelOnly);
         c.showGhosts = b(m, "show_ghosts", c.showGhosts);
         c.autoRepeater = b(m, "auto_repeater", c.autoRepeater);
         c.autoSend = b(m, "auto_send", c.autoSend);

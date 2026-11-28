@@ -154,6 +154,8 @@ public final class MainPanel {
     private final Pill infoChip = new Pill("0 lệch", t -> t.warning, t -> Icons.warn(t.warning.text(), 12));
     private final Pill hiddenChip = new Pill("0 ẩn", t -> t.pending, t -> Icons.hide(t.muted, 12));
     private final Pill skippedChip = new Pill("Bỏ qua 0", t -> t.neutral, t -> Icons.filter(t.muted, 12));
+    /** V_11.6: always-visible warning while "Gửi riêng" is on (Logger++ / the logging server see nothing). */
+    private final Pill quietChip = new Pill("Gửi riêng: Logger++ không thấy", t -> t.warning, t -> Icons.warn(t.warning.text(), 12));
     private final Pill excelChip = new Pill("Excel 0/0", t -> t.info, t -> Icons.excel(t.info.text(), 12));
     private final JLabel diagBadge = Ui.muted("");
 
@@ -829,6 +831,19 @@ public final class MainPanel {
         headerRightFull = new JPanel();
         headerRightFull.setLayout(new BoxLayout(headerRightFull, BoxLayout.X_AXIS));
         headerRightFull.setOpaque(false);
+        quietChip.setAlignmentY(Component.CENTER_ALIGNMENT);
+        quietChip.setPadding(1, 7, 1, 7);
+        quietChip.setVisible(false);
+        quietChip.setToolTipText("Mọi lần gửi của JCrawl đang đi thẳng tới server, ngoài Burp: Logger / Logger++ không ghi. Bấm để tắt Gửi riêng.");
+        quietChip.onClick(() -> {
+            Config nc = engine.config().copy();
+            nc.quietSend = false;
+            engine.applyConfig(nc);
+            syncHeader();
+            flash("Đã tắt Gửi riêng: từ giờ JCrawl gửi qua Burp (Logger++ thấy).");
+        });
+        headerRightFull.add(quietChip);
+        headerRightFull.add(Box.createHorizontalStrut(2));
         headerRightFull.add(status);
         headerRightFull.add(Box.createHorizontalStrut(2));
         headerRightFull.add(todo);
@@ -1172,6 +1187,7 @@ public final class MainPanel {
         workspace.setText(wsName.length() <= 8 ? wsName : wsName.substring(0, 7) + "..");
         workspace.setToolTipText(diag + " | Workspace: " + engine.workspaceLocation());
 
+        quietChip.setVisible(engine.config().quietSend);
         rolesChip.setText("Vai trò " + engine.roles().enabledCount() + "/" + engine.roles().count());
         branchChip.setText("Nhánh " + st.branches());
         status.setText("API " + st.apis() + " · " + st.branches() + " nhánh");

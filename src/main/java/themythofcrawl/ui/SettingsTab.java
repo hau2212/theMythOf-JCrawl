@@ -101,6 +101,7 @@ final class SettingsTab {
     private final JTextField threads = new JTextField(6);
     private final JLabel pacing = Ui.muted(" ");
     private final JCheckBox sendOriginal = new JCheckBox("Khi tự gửi: gửi cả tài khoản crawl cùng các vai trò");
+    private final JCheckBox heldViaProxy = new JCheckBox("Chặn chờ duyệt -> Gửi lên Server: trả về Proxy Burp tự gửi (cũ). Tắt = JCrawl tự gửi qua Burp, luôn tới server và Logger++");
     private final JCheckBox quietSend = new JCheckBox("Gửi riêng: mọi lần gửi của JCrawl đi thẳng tới server, Logger / Logger++ không thấy");
     private final JComboBox<String> actionModeBox = new JComboBox<>();
     private final JComboBox<String> lock2xxStrategyBox = new JComboBox<>();
@@ -230,6 +231,9 @@ pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternD
                 field("Tự gửi lại 429/503:", retries, null), field("Tổng luồng gửi:", threads, null),
                 row(sendOriginal),
                 row(quietSend),
+                row(heldViaProxy),
+                pair(Ui.button("Kiểm tra Logger++", Icons::send, this::checkLogger),
+                        Ui.muted("gửi 1 GET vô hại có ?jcrawl-check=... rồi tìm trong Logger++")),
                 field("Chế độ thao tác:", actionModeBox, Ui.muted("rê chuột để xem")),
                 field("Gửi lại khi có 200:", lock2xxStrategyBox, null),
                 row(holdActionProxyChk),
@@ -338,7 +342,7 @@ pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternD
         });
 
         for (JCheckBox b : new JCheckBox[] {scope, ignoreStatic, regexOn, options, dedup, dedupIds, dedupBranch, confirmNew, restore, dupNew,
-            ghosts, autoDetectRefreshChk, sendOriginal, quietSend, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
+            ghosts, autoDetectRefreshChk, sendOriginal, quietSend, heldViaProxy, holdActionProxyChk, number, branchInTab, targetOnly, targetPosition, targetPrefix, targetIds, positionCopy}) {
             b.addActionListener(Ui.safe(e -> apply()));
             b.setOpaque(false);
         }
@@ -543,6 +547,7 @@ pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternD
             threads.setText(String.valueOf(c.threads));
             sendOriginal.setSelected(c.autoSendOriginal);
             quietSend.setSelected(c.quietSend);
+            heldViaProxy.setSelected(c.heldForwardViaProxy);
             actionModeBox.setSelectedIndex(c.actionMode.ordinal());
             lock2xxStrategyBox.setSelectedIndex(c.lock2xxStrategy.ordinal());
             holdActionProxyChk.setSelected(c.holdActionAtProxy);
@@ -644,6 +649,7 @@ pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternD
         c.threads = num(threads, c.threads);
         c.autoSendOriginal = sendOriginal.isSelected();
         c.quietSend = quietSend.isSelected();
+        c.heldForwardViaProxy = heldViaProxy.isSelected();
         c.actionMode = themythofcrawl.core.ActionEngine.ActionMode.values()[Math.max(0, actionModeBox.getSelectedIndex())];
         c.lock2xxStrategy = themythofcrawl.core.ActionEngine.Lock2xxStrategy.values()[Math.max(0, lock2xxStrategyBox.getSelectedIndex())];
         c.holdActionAtProxy = holdActionProxyChk.isSelected();
@@ -721,6 +727,37 @@ pair(Ui.button("Mẫu path (ID dạng chữ)...", Icons::dup, () -> PathPatternD
     }
 
     // ------------------------------------------------------------------ layout
+    /** V_11.6: sends a harmless GET the same way JCrawl sends everything, so the user can look for it in Logger++. */
+    private void checkLogger() {
+        themythofcrawl.model.ApiGroup g = ui.api != null ? ui.api.currentGroup() : null;
+        String def = g != null && g.service() != null ? (g.service().secure() ? "https://" : "http://") + g.service().host()
+                + (g.service().port() == (g.service().secure() ? 443 : 80) ? "" : ":" + g.service().port()) : "https://";
+        Object in = javax.swing.JOptionPane.showInputDialog(panel, "Gửi 1 GET vô hại tới host nào?", "Kiểm tra Logger++",
+                javax.swing.JOptionPane.QUESTION_MESSAGE, null, null, def);
+        if (in == null || in.toString().isBlank()) {
+            return;
+        }
+        String tag = Long.toString(System.currentTimeMillis() % 1_000_000L);
+        Thread t = new Thread(() -> {
+            String res = engine.sendLoggerCheck(in.toString().trim(), tag);
+            javax.swing.SwingUtilities.invokeLater(() -> showLoggerCheck(res, tag));
+        }, "JCrawl-logger-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void showLoggerCheck(String res, String tag) {
+        {
+            String via = engine.config().quietSend ? themythofcrawl.app.Engine.ROUTE_QUIET : themythofcrawl.app.Engine.ROUTE_BURP;
+            javax.swing.JOptionPane.showMessageDialog(panel, "Đã gửi " + via + ": " + res
+                    + "\n\nMở Logger++ và tìm: jcrawl-check=" + tag
+                    + "\n• Thấy: đường gửi của JCrawl tới được Logger++ / server."
+                    + "\n• Không thấy: trong Logger++ -> Options bật ghi tool \"Extensions\" (Log Extensions / Other tools);"
+                    + "\n  nếu \"Gửi riêng\" đang bật thì tắt nó (Gửi riêng cố ý đi ngoài Burp).",
+                    "Kiểm tra Logger++", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
     private static Object[] row(JComponent c) {
         return new Object[] {"row", c};
     }

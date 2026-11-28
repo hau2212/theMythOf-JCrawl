@@ -82,6 +82,42 @@ public final class ForwardDeliveryGuard implements AutoCloseable {
         return handled != null && handled.compareAndSet(false, true);
     }
 
+    /**
+     * V_11.6: Burp is about to send it - but it can still be thrown away when the browser side is already closed.
+     * Keeps the guard armed and waits up to {@code responseWaitMs} for {@link #markResponse(int)}; the fallback runs
+     * once if no response came. Returns false when nothing was armed.
+     */
+    public boolean markSent(int messageId, long responseWaitMs, Runnable fallback) {
+        AtomicBoolean handled = pending.get(messageId);
+        if (handled == null || closed || fallback == null) {
+            return false;
+        }
+        AtomicBoolean waiting = new AtomicBoolean(false);
+        if (!pending.replace(messageId, handled, waiting) || !handled.compareAndSet(false, true)) {
+            return false;
+        }
+        try {
+            scheduler.schedule(() -> {
+                pending.remove(messageId, waiting);
+                if (!closed && waiting.compareAndSet(false, true)) {
+                    try {
+                        fallback.run();
+                    } catch (Throwable ignored) {
+                        // caller logs its own errors
+                    }
+                }
+            }, Math.max(50L, responseWaitMs), TimeUnit.MILLISECONDS);
+        } catch (RuntimeException rejected) {
+            pending.remove(messageId, waiting);
+        }
+        return true;
+    }
+
+    /** V_11.6: the server answered through the Proxy: the request really went out, no fallback. */
+    public boolean markResponse(int messageId) {
+        return markProxyDispatched(messageId);
+    }
+
     public int pendingCount() {
         return pending.size();
     }

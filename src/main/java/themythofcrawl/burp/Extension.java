@@ -166,6 +166,7 @@ public final class Extension implements BurpExtension {
         ConcurrentHashMap<String, TimedSpoof> pendingSpoofsRoute = new ConcurrentHashMap<>();
         // Guarantees FORWARD always reaches the Server & Logger++ even if the browser closed/timed out its Proxy socket
         ForwardDeliveryGuard forwardGuard = new ForwardDeliveryGuard();
+        ConcurrentHashMap<Integer, Runnable> heldFallbacks = new ConcurrentHashMap<>();
 
         // Primary Proxy Request Handler — works across ALL Burp Suite Montoya versions (2023 -> 2026.7+)
         api.proxy().registerRequestHandler(new ProxyRequestHandler() {
@@ -207,23 +208,51 @@ public final class Extension implements BurpExtension {
                                 engine.log("ĐÃ GỬI LÊN SERVER [" + method + " " + path + "] từ Hàng chờ Chặn.", null);
                                 int msgId = req.messageId();
                                 byte[] fallbackBytes = Arrays.copyOf(finalBytes, finalBytes.length);
-                                forwardGuard.arm(msgId, () -> {
-                                    try {
-                                        HttpRequest directReq = MontoyaBridge.request(service, fallbackBytes);
-                                        HttpRequestResponse rr = api.http().sendRequest(directReq);
-                                        byte[] respBytes = (rr != null && rr.hasResponse())
-                                                ? rr.response().toByteArray().getBytes() : null;
-                                        int st = (rr != null && rr.hasResponse()) ? rr.response().statusCode() : 0;
-                                        engine.recordGateAuditOutcome(outcome.auditSeq(),
-                                                "Gửi trực tiếp (Proxy socket đóng) -> HTTP " + st);
-                                        engine.log("Proxy kết nối trình duyệt đã đóng -> Tự động đẩy thẳng lên Server ["
-                                                + method + " " + path + "] -> HTTP " + st + ".", null);
+                                if (!engine.config().heldForwardViaProxy) {
+                                    // V_11.6: JCrawl sends it itself through Burp's HTTP client (like a re-send of a
+                                    // finished API): it always reaches the server and Logger++ (tool Extensions),
+                                    // even when the browser already gave up on the held connection.
+                                    boolean quietAll = engine.config().quietSend;
+                                    Bridge.Sent sent = quietAll ? themythofcrawl.app.DirectHttp.send(service, fallbackBytes)
+                                            : sendViaBurp(api, service, fallbackBytes);
+                                    byte[] respBytes = sent.response();
+                                    Integer stc = respBytes == null ? null : themythofcrawl.core.HttpBytes.statusCode(respBytes);
+                                    int st = stc == null ? 0 : stc;
+                                    String via = quietAll ? Engine.ROUTE_QUIET : Engine.ROUTE_BURP;
+                                    engine.recordGateAuditOutcome(outcome.auditSeq(), "Đã gửi lên Server " + via + " -> HTTP " + st);
+                                    engine.log("ĐÃ GỬI LÊN SERVER [" + method + " " + path + "] " + via + " -> HTTP " + st
+                                            + (sent.error() != null ? " (" + sent.error() + ")" : "") + ".", null);
+                                    if (respBytes != null) {
                                         engine.onProxyMessage(new Engine.Message(service, fallbackBytes, respBytes, url));
+                                    }
+                                    if (respBytes != null && supportsSpoof()) {
+                                        recordPendingSpoof(pendingSpoofsExact, pendingSpoofsRoute, service, raw,
+                                                new String(markSentByJCrawl(respBytes), java.nio.charset.StandardCharsets.ISO_8859_1));
+                                        return ProxyRequestReceivedAction.doNotIntercept(req);
+                                    }
+                                    return ProxyRequestReceivedAction.drop();
+                                }
+                                Runnable fallback = () -> {
+                                    heldFallbacks.remove(msgId);
+                                    try {
+                                        Bridge.Sent rr = sendViaBurp(api, service, fallbackBytes);
+                                        byte[] respBytes = rr.response();
+                                        Integer stc = respBytes == null ? null : themythofcrawl.core.HttpBytes.statusCode(respBytes);
+                                        int st = stc == null ? 0 : stc;
+                                        engine.recordGateAuditOutcome(outcome.auditSeq(),
+                                                "Proxy không gửi được -> JCrawl gửi bù qua Burp -> HTTP " + st);
+                                        engine.log("Proxy không đưa request tới server (trình duyệt đã đóng kết nối) -> JCrawl gửi bù ["
+                                                + method + " " + path + "] " + Engine.ROUTE_BURP + " -> HTTP " + st + ".", null);
+                                        if (respBytes != null) {
+                                            engine.onProxyMessage(new Engine.Message(service, fallbackBytes, respBytes, url));
+                                        }
                                     } catch (Throwable ex) {
                                         api.logging().logToError(Text.EXT_NAME + " forward-fallback: " + ex);
-                                        engine.log("Lỗi đẩy trực tiếp [" + method + " " + path + "]: " + ex.getMessage(), null);
+                                        engine.log("Lỗi gửi bù [" + method + " " + path + "]: " + ex.getMessage(), null);
                                     }
-                                });
+                                };
+                                heldFallbacks.put(msgId, fallback);
+                                forwardGuard.arm(msgId, fallback);
                                 return ProxyRequestReceivedAction.doNotIntercept(finalReq);
                             }
                             case FORWARD_QUIET -> {
@@ -241,7 +270,7 @@ public final class Extension implements BurpExtension {
                                 }
                                 if (respBytes != null && supportsSpoof()) {
                                     recordPendingSpoof(pendingSpoofsExact, pendingSpoofsRoute, service, raw,
-                                            new String(respBytes, java.nio.charset.StandardCharsets.ISO_8859_1));
+                                            new String(markSentByJCrawl(respBytes), java.nio.charset.StandardCharsets.ISO_8859_1));
                                     return ProxyRequestReceivedAction.doNotIntercept(req);
                                 }
                                 return ProxyRequestReceivedAction.drop();
@@ -295,7 +324,10 @@ public final class Extension implements BurpExtension {
             @Override
             public ProxyRequestToBeSentAction handleRequestToBeSent(InterceptedRequest req) {
                 try {
-                    forwardGuard.markProxyDispatched(req.messageId());
+                    Runnable fb = heldFallbacks.get(req.messageId());
+                    if (fb == null || !forwardGuard.markSent(req.messageId(), HELD_RESPONSE_WAIT_MS, fb)) {
+                        forwardGuard.markProxyDispatched(req.messageId());
+                    }
                 } catch (Throwable ignored) {
                     // never break Proxy request sending
                 }
@@ -340,13 +372,20 @@ public final class Extension implements BurpExtension {
         api.proxy().registerResponseHandler(new ProxyResponseHandler() {
             @Override
             public ProxyResponseReceivedAction handleResponseReceived(InterceptedResponse r) {
+                try {
+                    if (heldFallbacks.remove(r.messageId()) != null) {
+                        forwardGuard.markResponse(r.messageId());
+                    }
+                } catch (Throwable ignored) {
+                    // never break the Proxy
+                }
                 return ProxyResponseReceivedAction.continueWith(r);
             }
 
             @Override
             public ProxyResponseToBeSentAction handleResponseToBeSent(InterceptedResponse r) {
                 try {
-                    if ("true".equalsIgnoreCase(r.headerValue("X-JCrawl-Held"))) {
+                    if ("true".equalsIgnoreCase(r.headerValue("X-JCrawl-Held")) || r.headerValue(SENT_BY_JCRAWL) != null) {
                         return ProxyResponseToBeSentAction.continueWith(r);
                     }
                     var req = r.initiatingRequest();
@@ -408,6 +447,44 @@ public final class Extension implements BurpExtension {
             engine.close();
         });
         engine.log(loadLine[0] != null ? loadLine[0] : themythofcrawl.ui.Diagnostics.loadLogLine(), null);
+    }
+
+    /** V_11.6: header on a response JCrawl already captured itself (the Proxy copy handed to the browser is not captured twice). */
+    static final String SENT_BY_JCRAWL = "X-JCrawl-Sent";
+    /** V_11.6: "qua Proxy" mode - how long to wait for the server's answer before JCrawl sends it itself. */
+    static final long HELD_RESPONSE_WAIT_MS = 20_000L;
+
+    static byte[] markSentByJCrawl(byte[] resp) {
+        int end = -1;
+        for (int i = 0; i + 1 < resp.length; i++) {
+            if (resp[i] == '\r' && resp[i + 1] == '\n') {
+                end = i;
+                break;
+            }
+        }
+        if (end < 0) {
+            return resp;
+        }
+        byte[] h = ("\r\n" + SENT_BY_JCRAWL + ": 1").getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        byte[] out = new byte[resp.length + h.length];
+        System.arraycopy(resp, 0, out, 0, end);
+        System.arraycopy(h, 0, out, end, h.length);
+        System.arraycopy(resp, end, out, end + h.length, resp.length - end);
+        return out;
+    }
+
+    private static Bridge.Sent sendViaBurp(MontoyaApi api, Service service, byte[] req) {
+        long t0 = System.currentTimeMillis();
+        try {
+            HttpRequestResponse rr = api.http().sendRequest(MontoyaBridge.request(service, req));
+            long ms = System.currentTimeMillis() - t0;
+            if (rr == null || !rr.hasResponse()) {
+                return new Bridge.Sent(null, ms, "No response (timeout / connection failure)");
+            }
+            return new Bridge.Sent(rr.response().toByteArray().getBytes(), ms, null);
+        } catch (RuntimeException e) {
+            return new Bridge.Sent(null, System.currentTimeMillis() - t0, String.valueOf(e.getMessage() != null ? e.getMessage() : e));
+        }
     }
 
     private static void recordPendingSpoof(

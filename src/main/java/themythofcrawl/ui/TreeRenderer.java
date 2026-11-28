@@ -738,6 +738,14 @@ public final class TreeRenderer extends JComponent implements TreeCellRenderer, 
         if (note == null || note.isBlank() || r.status() == null) {
             return x;
         }
+        if (note.contains(themythofcrawl.app.Engine.ROUTE_QUIET)) {
+            Theme.Token w = th.warning;
+            x = addChip(th, nl, "Gửi riêng", th.smallFont, w.fill(), w.border(), w.text(), null, false, x, th.scaled(4));
+        }
+        if (note.startsWith(themythofcrawl.app.Engine.ROUTE_BURP) || note.startsWith(themythofcrawl.app.Engine.ROUTE_PROXY)
+                || note.startsWith(themythofcrawl.app.Engine.ROUTE_QUIET)) {
+            return x;
+        }
         int cut = note.indexOf(" · ");
         String shortNote = cut > 0 ? note.substring(0, cut) : note;
         Theme.Token tok = th.info;

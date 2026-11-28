@@ -1,5 +1,7 @@
 package themythofcrawl.ui;
 
+import themythofcrawl.core.Text;
+
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -94,6 +96,13 @@ final class ProxyGateDialog {
         final themythofcrawl.ui.kit.WrappedText effectWhen = themythofcrawl.ui.kit.WrappedText.muted(" ", 560);
         final JLabel getWarn = new JLabel(" ");
         JPanel extraPanel;
+        // V_11.6: extra scope (GateScope)
+        final JCheckBox gsBurp = new JCheckBox("Trong Scope của Burp (Target -> Scope)");
+        final javax.swing.JTextArea gsHosts = new javax.swing.JTextArea(3, 26);
+        final javax.swing.JTextArea gsExclude = new javax.swing.JTextArea(2, 26);
+        final JTextField gsPaths = new JTextField(26);
+        final JCheckBox gsExcel = new JCheckBox("Chỉ API có trong file Excel chuẩn");
+        final JLabel gsSkip = new JLabel(" ");
         private ProxyGate.Scope shownScope;
         private final Engine engine;
         private final Runnable onChanged;
@@ -158,6 +167,76 @@ final class ProxyGateDialog {
                 @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { changed(); }
             });
             add(step("Bước 1 — Chặn request nào?", scope));
+
+            // ---- step 1b (V_11.6): extra scope, all optional
+            gsHosts.setToolTipText("Mỗi dòng 1 host: api.shop.vn · *.shop.vn (mọi subdomain + shop.vn) · shop.vn:8443 (đúng cổng)");
+            gsExclude.setToolTipText("Không bao giờ chặn: *.google-analytics.com · cdn.* · sentry.io");
+            gsPaths.setToolTipText("Ngăn cách bằng dấu phẩy: /api/* (mọi path dưới /api) · /admin/** · /api/orders");
+            JPanel extraScope = new JPanel(new java.awt.GridBagLayout());
+            java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
+            gc.anchor = java.awt.GridBagConstraints.NORTHWEST;
+            gc.insets = new java.awt.Insets(2, 0, 2, 8);
+            gc.gridx = 0;
+            gc.gridy = 0;
+            gc.gridwidth = 2;
+            extraScope.add(gsBurp, gc);
+            gc.gridy++;
+            gc.gridwidth = 1;
+            extraScope.add(Ui.muted("Hoặc host / domain:"), gc);
+            gc.gridx = 1;
+            gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+            gc.weightx = 1;
+            extraScope.add(new javax.swing.JScrollPane(gsHosts), gc);
+            gc.gridx = 0;
+            gc.gridy++;
+            gc.fill = java.awt.GridBagConstraints.NONE;
+            gc.weightx = 0;
+            extraScope.add(Ui.muted("Chỉ path:"), gc);
+            gc.gridx = 1;
+            gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+            extraScope.add(gsPaths, gc);
+            gc.gridx = 0;
+            gc.gridy++;
+            gc.fill = java.awt.GridBagConstraints.NONE;
+            extraScope.add(Ui.muted("Loại trừ (không chặn):"), gc);
+            gc.gridx = 1;
+            gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+            extraScope.add(new javax.swing.JScrollPane(gsExclude), gc);
+            gc.gridx = 0;
+            gc.gridy++;
+            gc.gridwidth = 2;
+            extraScope.add(gsExcel, gc);
+            gc.gridy++;
+            JButton fillHosts = Ui.secondaryBtn("Thêm các host đã bắt", null, () -> {
+                java.util.Set<String> cur = new java.util.LinkedHashSet<>(themythofcrawl.core.GateScope.lines(gsHosts.getText()));
+                cur.addAll(hosts);
+                gsHosts.setText(String.join("\n", cur));
+                changed();
+            });
+            JButton clearScope = Ui.secondaryBtn("Xóa phạm vi thêm", null, () -> {
+                gsBurp.setSelected(false);
+                gsExcel.setSelected(false);
+                gsHosts.setText("");
+                gsExclude.setText("");
+                gsPaths.setText("");
+                changed();
+            });
+            extraScope.add(Ui.flow(FlowLayout.LEFT, fillHosts, clearScope), gc);
+            gc.gridy++;
+            gsSkip.setForeground(th.muted);
+            extraScope.add(gsSkip, gc);
+            for (JCheckBox cb : new JCheckBox[] {gsBurp, gsExcel}) {
+                cb.addActionListener(Ui.safe(e -> changed()));
+            }
+            javax.swing.event.DocumentListener dl = new javax.swing.event.DocumentListener() {
+                @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+                @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+                @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+            };
+            gsHosts.getDocument().addDocumentListener(dl);
+            gsExclude.getDocument().addDocumentListener(dl);
+            gsPaths.getDocument().addDocumentListener(dl);
+            add(step("Bước 1b — Phạm vi thêm (tùy chọn, để trống = như Bước 1)", extraScope));
 
             // ---- step 2: methods
             JPanel methods = new JPanel(new WrapLayout(FlowLayout.LEFT, 4, 2));
@@ -304,6 +383,12 @@ final class ProxyGateDialog {
                     branch == null ? "" : branch.toString(), ms, eff);
         }
 
+        themythofcrawl.core.GateScope formScope() {
+            return new themythofcrawl.core.GateScope(gsBurp.isSelected(), themythofcrawl.core.GateScope.lines(gsHosts.getText()),
+                    themythofcrawl.core.GateScope.lines(gsExclude.getText()), themythofcrawl.core.GateScope.lines(gsPaths.getText()),
+                    gsExcel.isSelected());
+        }
+
         void load() {
             loading = true;
             try {
@@ -323,6 +408,12 @@ final class ProxyGateDialog {
                     e.getValue().setSelected(s.methods().contains(e.getKey()));
                 }
                 effectButtons.get(s.effect()).setSelected(true);
+                themythofcrawl.core.Config c = engine.config();
+                gsBurp.setSelected(c.gateBurpScope);
+                gsExcel.setSelected(c.gateExcelOnly);
+                gsHosts.setText(String.join("\n", themythofcrawl.core.GateScope.lines(c.gateHosts)));
+                gsExclude.setText(String.join("\n", themythofcrawl.core.GateScope.lines(c.gateExclude)));
+                gsPaths.setText(String.join(", ", themythofcrawl.core.GateScope.lines(c.gatePaths)));
             } finally {
                 loading = false;
             }
@@ -341,7 +432,10 @@ final class ProxyGateDialog {
             Theme th = Theme.current();
             status.setText(s.on() ? "Cổng chặn: Đang bật" : "Cổng chặn: Tắt");
             status.setForeground(s.on() ? th.warning.text() : th.fg);
-            sentence.setText(s.sentence());
+            themythofcrawl.core.GateScope gs = formScope();
+            sentence.setText(s.sentence() + (s.on() && gs.active() ? " " + gs.sentence() + "." : ""));
+            String last = engine.lastGateSkip();
+            gsSkip.setText(Text.blank(last) ? " " : "Vừa cho qua vì phạm vi thêm: " + Text.shortPath(last, 90));
             diagram.show(s.on(), s.effect());
             String p = s.on() ? s.problem() : null;
             problem.setText(p == null ? " " : p);
@@ -398,6 +492,14 @@ final class ProxyGateDialog {
                 return;
             }
             engine.setProxyGate(s);
+            themythofcrawl.core.GateScope gs = formScope();
+            themythofcrawl.core.Config nc = engine.config().copy();
+            nc.gateBurpScope = gs.burpScope();
+            nc.gateExcelOnly = gs.excelOnly();
+            nc.gateHosts = String.join("\n", gs.hosts());
+            nc.gateExclude = String.join("\n", gs.exclude());
+            nc.gatePaths = String.join("\n", gs.paths());
+            engine.applyConfig(nc);
             refreshView(false);
             runTest();
             notifyChanged();

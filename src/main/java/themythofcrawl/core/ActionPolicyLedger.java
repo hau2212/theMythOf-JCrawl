@@ -748,9 +748,19 @@ public final class ActionPolicyLedger {
      */
     public synchronized EvaluationResult evaluateProxy(
             String activeBranch, String host, String method, String rawPath, Integer apiGid) {
+        return evaluateProxy(activeBranch, host, method, rawPath, apiGid, null);
+    }
+
+    /** V_11.6: {@code skip} leaves a matching policy out (the Chặn gate whose extra scope rejects the request). */
+    public synchronized EvaluationResult evaluateProxy(
+            String activeBranch, String host, String method, String rawPath, Integer apiGid,
+            java.util.function.Predicate<ActionPolicy> skip) {
         List<ActionPolicy> matched = new ArrayList<>();
         for (ActionPolicy p : policies) {
             if (!p.enabled() || !p.stage().appliesToProxy()) {
+                continue;
+            }
+            if (skip != null && skip.test(p)) {
                 continue;
             }
             if (p.matches(activeBranch, host, method, rawPath, apiGid)) {

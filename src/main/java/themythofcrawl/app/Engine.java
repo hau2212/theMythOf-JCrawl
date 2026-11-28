@@ -26,6 +26,7 @@ import themythofcrawl.core.ActionPolicyLedger;
 import themythofcrawl.core.Audit;
 import themythofcrawl.core.AuditLevel;
 import themythofcrawl.core.Config;
+import themythofcrawl.core.GateScope;
 import themythofcrawl.core.CopyFormat;
 import themythofcrawl.core.Hierarchy;
 import themythofcrawl.core.HttpBytes;
@@ -1978,6 +1979,28 @@ public final class Engine {
      * Đồng thời mọi request thuộc giao thức Action (hoặc khớp chính sách) đều được ghi vào
      * {@link ActionGateAuditLog} (cả Bị Chặn lẫn Cho Qua) để người dùng dò &amp; căn chỉnh chính xác.
      */
+    private volatile String lastGateSkip = "";
+
+    /** V_11.6: the last request the Chặn gate let through because of its extra scope, and why. */
+    public String lastGateSkip() {
+        return lastGateSkip;
+    }
+
+    /** V_11.6: would the gate's extra scope hold this request? Null = yes, else the reason it passes. */
+    public String gateScopeCheck(String method, String host, int port, String path, String url) {
+        return GateScope.of(config).rejects(host, port, path, new GateScope.Facts() {
+            @Override
+            public boolean inBurpScope() {
+                return url != null && bridge.inScope(url);
+            }
+
+            @Override
+            public boolean inExcel() {
+                return targetMatch(method, path, host) != null;
+            }
+        });
+    }
+
     public ProxyInterceptOutcome evaluateProxyIntercept(Service svc, byte[] request, String url) {
         Config c = config;
         if (closed || svc == null || request == null) {
@@ -1994,8 +2017,27 @@ public final class Engine {
         ActionGateAuditLog auditLog = actionEngine.gateAuditLog();
 
         // 1. Evaluate Unified ActionPolicyLedger FIRST (deterministic priority + explicit ALLOW cuts off all lower rules)
+        GateScope gs = GateScope.of(c);
+        java.util.function.Predicate<ActionPolicy> skipGate = null;
+        if (gs.active()) {
+            String why = gs.rejects(svc.host(), svc.port(), path, new GateScope.Facts() {
+                @Override
+                public boolean inBurpScope() {
+                    return url != null && bridge.inScope(url);
+                }
+
+                @Override
+                public boolean inExcel() {
+                    return targetMatch(method, path, svc.host()) != null;
+                }
+            });
+            if (why != null) {
+                lastGateSkip = method + " " + Text.stripQuery(path) + ": " + why;
+                skipGate = p -> themythofcrawl.core.ProxyGate.ID.equals(p.id());
+            }
+        }
         ActionPolicyLedger.EvaluationResult ledgerEval = actionEngine.policyLedger()
-                .evaluateProxy(activeBranchName, svc.host(), method, path, null);
+                .evaluateProxy(activeBranchName, svc.host(), method, path, null, skipGate);
         if (ledgerEval.matched()) {
             ActionPolicy win = ledgerEval.winningPolicy();
             if (c.ignoreStatic && "GET".equalsIgnoreCase(method) && Text.isStaticPath(path, staticExts)
@@ -2110,10 +2152,16 @@ public final class Engine {
         Config c = config;
         String m = Text.nz(method).trim().toUpperCase(java.util.Locale.ROOT);
         String b = Text.blank(branch) ? activeBranch().name() : branch;
-        ActionPolicyLedger.EvaluationResult ev = actionEngine.policyLedger().evaluateProxy(b, Text.nz(host), m, path, null);
+        String scopeWhy = Text.blank(host) ? null : gateScopeCheck(m, host, 443, path, "https://" + host + Text.nz(path));
+        ActionPolicyLedger.EvaluationResult ev = actionEngine.policyLedger().evaluateProxy(b, Text.nz(host), m, path, null,
+                scopeWhy == null ? null : p -> themythofcrawl.core.ProxyGate.ID.equals(p.id()));
+        String scopeNote = scopeWhy == null ? "" : " (Cổng chặn chung bỏ qua: " + scopeWhy + ")";
+        if (!ev.matched() && scopeWhy != null) {
+            return "Cho đi bình thường" + scopeNote;
+        }
         if (ev.matched()) {
             ActionPolicy win = ev.winningPolicy();
-            return themythofcrawl.core.DataProtection.Choice.of(win.proxyEffect()).label + " — theo luật: \""
+            return themythofcrawl.core.DataProtection.Choice.of(win.proxyEffect()).label + scopeNote + " — theo luật: \""
                     + themythofcrawl.core.DataProtection.sentence(win) + "\""
                     + (ev.allMatched().size() > 1 ? " (thắng " + (ev.allMatched().size() - 1) + " luật khác khớp nhưng ưu tiên thấp hơn)" : "");
         }
@@ -3606,6 +3654,41 @@ public final class Engine {
         return null;
     }
 
+    /** V_11.6: which way a request went out (shown next to every send, so a missing Logger++ line is explained). */
+    public static final String ROUTE_BURP = "qua Burp (Logger++ thấy)";
+    public static final String ROUTE_PROXY = "qua Proxy";
+    public static final String ROUTE_QUIET = "gửi riêng (Logger++ KHÔNG thấy)";
+
+    /** V_11.6 "Kiểm tra Logger++": a harmless GET {@code /?jcrawl-check=tag} sent the way every JCrawl send goes. */
+    public String sendLoggerCheck(String base, String tag) {
+        try {
+            java.net.URI u = java.net.URI.create(base.contains("://") ? base : "https://" + base);
+            boolean tls = !"http".equalsIgnoreCase(u.getScheme());
+            int port = u.getPort() > 0 ? u.getPort() : tls ? 443 : 80;
+            String host = u.getHost();
+            if (Text.blank(host)) {
+                return "host không hợp lệ";
+            }
+            String hostHdr = host + (port == (tls ? 443 : 80) ? "" : ":" + port);
+            byte[] req = ("GET /?jcrawl-check=" + tag + " HTTP/1.1\r\nHost: " + hostHdr
+                    + "\r\nUser-Agent: JCrawl-check\r\nAccept: */*\r\nConnection: close\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+            Service s = new Service(host, port, tls);
+            Bridge.Sent sent = config.quietSend ? bridge.sendQuiet(s, req) : bridge.send(s, req);
+            Integer st = HttpBytes.statusCode(sent.response());
+            log("Kiểm tra Logger++: GET " + hostHdr + "/?jcrawl-check=" + tag + " -> "
+                    + (st != null ? "HTTP " + st : Text.nz(sent.error())), null);
+            return st != null ? "HTTP " + st : "không có phản hồi (" + Text.nz(sent.error()) + ")";
+        } catch (RuntimeException e) {
+            return "lỗi: " + e.getMessage();
+        }
+    }
+
+    static String withRoute(String note, String via) {
+        String n = Text.nz(note).trim();
+        return n.isEmpty() ? via : n + " · " + via;
+    }
+
     private void runJob(SendDispatcher.Job<Work> job) {
         ApiGroup g = job.payload.group();
         RoleResult r = job.payload.result();
@@ -3648,12 +3731,13 @@ public final class Engine {
             r.incSent();
             // V_8.2: keep what was REALLY sent when it differs from the built request (ID swapped, unique refresh...),
             // so the viewer, HAR and Repeater show the request that produced this response.
+            String via = quiet ? ROUTE_QUIET : ROUTE_BURP;
             if (java.util.Arrays.equals(request, baseReq)) {
                 r.setSentRequest(null);
-                r.setSentNote(work.note());
+                r.setSentNote(withRoute(work.note(), via));
             } else {
                 r.setSentRequest(storage.put(g.gid(), GroupCodec.sentReqName(r), request));
-                r.setSentNote(!Text.blank(work.note()) ? work.note() : Text.nz(g.activeIdNote()));
+                r.setSentNote(withRoute(!Text.blank(work.note()) ? work.note() : Text.nz(g.activeIdNote()), via));
             }
             Blob stored = resp == null || resp.length == 0 ? null : storage.put(g.gid(), GroupCodec.respName(r), resp);
             synchronized (g) {   // a result is written whole before anyone evaluates it (see Audit.recalc)
