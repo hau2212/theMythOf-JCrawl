@@ -101,8 +101,7 @@ Sửa:
 
 Sửa:
 
-1. **Gộp theo dòng Excel trước tiên**: request nào khớp cùng một dòng Excel thì khóa gộp = `METHOD + "row:" + số dòng`, bỏ qua host, cổng, tiền tố và query. Đúng ý "chỉ về cùng 1 dòng Excel là 1 API".
-   - Có công tắc "Tách theo host" (mặc định tắt) nếu bạn muốn mỗi host riêng.
+1. **Gộp theo dòng Excel trước tiên**: request nào khớp cùng một dòng Excel **trên cùng host** thì khóa gộp = `METHOD + host:cổng + "row:" + số dòng`, bỏ qua tiền tố và query. **Đã chốt: khác host thì luôn tách riêng.**
 2. Tiền tố: các đoạn trông như ID trong tiền tố cũng thay bằng `{id}`.
 3. Query của dòng Excel chỉ dùng để **chọn dòng** khi có nhiều dòng cùng path. Không có dòng khác thì vẫn khớp.
 4. Tải lại Excel hoặc mở workspace thì **luôn regroup**, có thông báo "Đã gộp N API vào M dòng Excel". Mỗi API hoàn tác được bằng "Tách ra".
@@ -234,7 +233,7 @@ Thứ tự làm (mỗi bước build + test):
 ## G. Cần bạn chọn
 
 1. "Gửi lên Server" khi chặn: mặc định **JCrawl tự gửi qua Burp** (khuyên dùng) hay giữ "Trả về Proxy"?
-2. Gộp API theo dòng Excel: **bỏ qua host** (khuyên dùng) hay tách theo host?
+2. ~~Gộp API theo dòng Excel bỏ qua host~~ — **Đã chốt: khác host thì tách riêng.**
 3. Bấm trái chip Excel: **mở Excel tại dòng** (khuyên dùng) hay xem dòng ngay trong JCrawl?
 4. Ẩn "Đồng đội (cũ)" và "Phòng LAN" vào Nâng cao: **đồng ý** (khuyên dùng) hay xóa hẳn?
 5. Tài khoản web mới: **chỉ thông báo cho PIC** (khuyên dùng) hay bắt buộc PIC duyệt?
